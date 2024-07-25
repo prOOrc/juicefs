@@ -58,6 +58,7 @@ var logger = utils.GetLogger("juicefs")
 
 type Config struct {
 	MultiBucket bool
+	Bucket      string
 	KeepEtag    bool
 	Umask       uint16
 	ObjTag      bool
@@ -170,14 +171,14 @@ func (n *jfsObjects) isValidBucketName(bucket string) error {
 	if s3utils.CheckValidBucketNameStrict(bucket) != nil {
 		return minio.BucketNameInvalid{Bucket: bucket}
 	}
-	if !n.gConf.MultiBucket && bucket != n.conf.Format.Name {
+	if !n.gConf.MultiBucket && bucket != n.gConf.Bucket {
 		return minio.BucketNotFound{Bucket: bucket}
 	}
 	return nil
 }
 
 func (n *jfsObjects) path(p ...string) string {
-	if !n.gConf.MultiBucket && len(p) > 0 && p[0] == n.conf.Format.Name {
+	if !n.gConf.MultiBucket && len(p) > 0 && p[0] == n.gConf.Bucket {
 		p = p[1:]
 	}
 	return sep + minio.PathJoin(p...)
@@ -258,7 +259,7 @@ func (n *jfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 			return nil, jfsToObjectErr(ctx, eno)
 		}
 		buckets = []minio.BucketInfo{{
-			Name:    n.conf.Format.Name,
+			Name:    n.gConf.Bucket,
 			Created: time.Unix(fi.Atime()/1000, 0),
 		}}
 		return buckets, nil
