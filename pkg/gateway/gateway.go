@@ -440,21 +440,21 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 		listDir = func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []*minio.Entry, delayIsLeaf bool) {
 			emptyDir, entries, delayIsLeaf = originListDir(bucket, prefixDir, prefixEntry)
 			filteredEntries := make([]*minio.Entry, 0, len(entries))
-			argsList := make([]iampolicy.Args, len(entries))
+			objectNames := make([]string, len(entries))
 			for i, entry := range entries {
 				objectName := prefixDir + entry.Name
-				argsList[i] = iampolicy.Args{
-					AccountName:     cred.AccessKey,
-					Groups:          cred.Groups,
-					Action:          iampolicy.Action(action),
-					BucketName:      bucket,
-					ConditionValues: conditionValues,
-					ObjectName:      objectName,
-					IsOwner:         isOwner,
-					Claims:          claims,
-				}
+				objectNames[i] = objectName
 			}
-			isAllowedList := globalIAMSys.IsAllowedBatch(argsList)
+			args := iampolicy.Args{
+				AccountName:     cred.AccessKey,
+				Groups:          cred.Groups,
+				Action:          iampolicy.Action(action),
+				BucketName:      bucket,
+				ConditionValues: conditionValues,
+				IsOwner:         isOwner,
+				Claims:          claims,
+			}
+			isAllowedList := globalIAMSys.IsAllowedBatch(args, objectNames)
 			for i, entry := range entries {
 				isAllowed := isAllowedList[i]
 				if isAllowed {
