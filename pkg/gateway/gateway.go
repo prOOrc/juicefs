@@ -34,7 +34,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/pkg/bucket/policy"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
 
 	"github.com/google/uuid"
@@ -416,50 +415,7 @@ func (n *jfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 	if maxKeys == 0 {
 		maxKeys = -1 // list as many objects as possible
 	}
-	originListDir := n.listDirFactory()
-	var listDir minio.ListDirFunc
-	isOwner := minio.GetIsOwner(ctx)
-	enabled := !isOwner
-	// enabled := false
-	if enabled {
-		globalIAMSys := minio.GetGlobalIAMSys()
-		cred := minio.GetCredentials(ctx)
-		conditionValues := minio.GetConditionValues(ctx)
-		claims := minio.GetClaims(ctx)
-		action := iampolicy.GetObjectAction
-		listDir = func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []*minio.Entry, delayIsLeaf bool) {
-			emptyDir, entries, delayIsLeaf = originListDir(bucket, prefixDir, prefixEntry)
-			filteredEntries := make([]*minio.Entry, 0, len(entries))
-			objectNames := make([]string, len(entries))
-			for i, entry := range entries {
-				objectName := prefixDir + entry.Name
-				objectNames[i] = objectName
-			}
-			args := iampolicy.Args{
-				AccountName:     cred.AccessKey,
-				Groups:          cred.Groups,
-				Action:          iampolicy.Action(action),
-				BucketName:      bucket,
-				ConditionValues: conditionValues,
-				IsOwner:         isOwner,
-				Claims:          claims,
-			}
-			isAllowedList := globalIAMSys.IsAllowedBatch(args, objectNames)
-			for i, entry := range entries {
-				isAllowed := isAllowedList[i]
-				if isAllowed {
-					filteredEntries = append(filteredEntries, entry)
-				}
-			}
-			if !emptyDir && len(filteredEntries) == 0 {
-				emptyDir = true
-			}
-			return emptyDir, filteredEntries, delayIsLeaf
-		}
-	} else {
-		listDir = originListDir
-	}
-	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, listDir, n.isLeaf, n.isLeafDir, getObjectInfo, getObjectInfo)
+	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), n.isLeaf, n.isLeafDir, getObjectInfo, getObjectInfo)
 }
 
 // ListObjectsV2 lists all blobs in JFS bucket filtered by prefix
