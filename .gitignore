@@ -37,3 +37,5 @@ pkg/meta/testdata
 /juicefs.exe
 /juicefs.lite
 dist/
+.env
+
