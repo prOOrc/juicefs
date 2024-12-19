@@ -536,6 +536,12 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	}
 	dst := n.path(dstBucket, dstObject)
 	src := n.path(srcBucket, srcObject)
+
+	err = n.setObjMeta(dst, srcInfo.UserDefined)
+	if err != nil {
+		logger.Errorf("set object metadata error, path: %s error %s", dst, err)
+	}
+
 	if minio.IsStringEqual(src, dst) {
 		return n.GetObjectInfo(ctx, srcBucket, srcObject, minio.ObjectOptions{})
 	}
@@ -598,10 +604,6 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 				logger.Errorf("set object tags error, path: %s,value: %s error %s", dst, tagStr, eno)
 			}
 		}
-	}
-	err = n.setObjMeta(dst, srcInfo.UserDefined)
-	if err != nil {
-		logger.Errorf("set object metadata error, path: %s error %s", dst, err)
 	}
 
 	return minio.ObjectInfo{
@@ -1195,7 +1197,7 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	var objMeta map[string]string
 	if n.gConf.ObjMeta {
 		if objMeta, err = n.getObjMeta(n.upath(bucket, uploadID)); err != nil {
-			logger.Errorf("get object meta error, path: %s, error: %s", n.upath(bucket, uploadID), eno)
+			logger.Errorf("get object meta error, path: %s, error: %s", n.upath(bucket, uploadID), err)
 		} else if err = n.setObjMeta(name, objMeta); err != nil {
 			logger.Errorf("set object meta error, path: %s, error: %s", name, err)
 		}
