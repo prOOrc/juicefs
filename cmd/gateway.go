@@ -98,6 +98,10 @@ func cmdGateway() *cli.Command {
 			Name:  "hide-dir-object",
 			Usage: "hide the directories created by PUT Object API",
 		},
+		&cli.BoolFlag{
+			Name:  "use-meta-mtime",
+			Usage: "use modtime from object metadata",
+		},
 		&cli.StringFlag{
 			Name:  "domain",
 			Usage: "domain for virtual-host-style requests",
@@ -183,15 +187,16 @@ func gateway(c *cli.Context) error {
 		jfs,
 		conf,
 		&jfsgateway.Config{
-			MultiBucket: c.Bool("multi-buckets"),
-			Bucket:      bucket,
-			KeepEtag:    c.Bool("keep-etag"),
-			Umask:       uint16(umask),
-			ObjTag:      c.Bool("object-tag"),
-			ObjMeta:     c.Bool("object-meta"),
-			HeadDir:     c.Bool("head-dir"),
-			HideDir:     c.Bool("hide-dir-object"),
-			ReadOnly:    readonly,
+			MultiBucket:    c.Bool("multi-buckets"),
+			Bucket:         bucket,
+			KeepEtag:       c.Bool("keep-etag"),
+			Umask:          uint16(umask),
+			ObjTag:         c.Bool("object-tag"),
+			ObjMeta:        c.Bool("object-meta"),
+			HeadDir:        c.Bool("head-dir"),
+			HideDir:        c.Bool("hide-dir-object"),
+			ReadOnly:       readonly,
+			UseMetaModTime: c.Bool("use-meta-mtime"),
 		},
 	)
 	if err != nil {
