@@ -88,6 +88,10 @@ func cmdGateway() *cli.Command {
 			Name:  "object-meta",
 			Usage: "enable object metadata api",
 		},
+		&cli.BoolFlag{
+			Name:  "use-meta-mtime",
+			Usage: "use modtime from object metadata",
+		},
 		&cli.StringFlag{
 			Name:  "domain",
 			Usage: "domain for virtual-host-style requests",
@@ -160,12 +164,13 @@ func gateway(c *cli.Context) error {
 		jfs,
 		conf,
 		&jfsgateway.Config{
-			MultiBucket: c.Bool("multi-buckets"),
-			Bucket:      bucket,
-			KeepEtag:    c.Bool("keep-etag"),
-			Umask:       uint16(umask),
-			ObjTag:      c.Bool("object-tag"),
-			ObjMeta:     c.Bool("object-meta"),
+			MultiBucket:    c.Bool("multi-buckets"),
+			Bucket:         bucket,
+			KeepEtag:       c.Bool("keep-etag"),
+			Umask:          uint16(umask),
+			ObjTag:         c.Bool("object-tag"),
+			ObjMeta:        c.Bool("object-meta"),
+			UseMetaModTime: c.Bool("use-meta-mtime"),
 		},
 	)
 	if err != nil {
