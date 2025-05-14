@@ -248,7 +248,7 @@ require (
 	xorm.io/builder v0.3.7 // indirect
 )
 
-replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/prOOrc/minio v0.0.0-20250323102424-b2d9bdab04b9
+replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/prOOrc/minio v0.0.0-20250514143853-50976ef921b7
 
 replace github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8 => github.com/juicedata/go-fuse/v2 v2.1.1-0.20241120081217-1d367e67855d
 
