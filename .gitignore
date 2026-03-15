@@ -47,3 +47,8 @@ test*.bak
 dist/
 juicefs.egg-info/
 pkg/meta/jfs-load-dump/
+# AI work folder (session-specific, not for version control)
+.ai
+.aider*
+.opencode/plans/
+.opencode/promts/
