@@ -40,3 +40,9 @@ pkg/meta/testdata
 /juicefsd.exe~
 /juicefs.lite
 dist/
+
+# AI work folder (session-specific, not for version control)
+.ai
+.aider*
+.opencode/plans/
+.opencode/promts/
