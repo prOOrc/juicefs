@@ -332,6 +332,15 @@ func metaFlags() []cli.Flag {
 			Name:  "network-interfaces",
 			Usage: "comma-separated list of network interfaces to use for IP discovery (e.g. eth0,en0), empty means all",
 		},
+		&cli.BoolFlag{
+			Name:  "outbox-enabled",
+			Usage: "enable outbox for writing filesystem events to Redis stream (use outbox command to publish to Kafka)",
+		},
+		&cli.StringFlag{
+			Name:  "outbox-stream",
+			Value: "juicefs:outbox",
+			Usage: "Redis stream name for outbox events (requires --outbox-enabled)",
+		},
 	})
 }
 

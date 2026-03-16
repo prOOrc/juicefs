@@ -94,6 +94,7 @@ type redisMeta struct {
 	shaLookup  string // The SHA returned by Redis for the loaded `scriptLookup`
 	shaResolve string // The SHA returned by Redis for the loaded `scriptResolve`
 	cache      *redisCache
+	outbox     *RedisOutbox
 }
 
 var _ Meta = (*redisMeta)(nil)
@@ -105,20 +106,39 @@ func init() {
 	Register("unix", newRedisMeta)
 }
 
-// newRedisMeta return a meta store using Redis.
-func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
-	uri := driver + "://" + addr
-	u, err := url.Parse(uri)
-	if err != nil {
-		return nil, fmt.Errorf("url parse %s: %s", uri, err)
+// redisOptionsResult holds the result of createRedisOptions
+type redisOptionsResult struct {
+	Options            *redis.Options
+	MinRetryBackoff    time.Duration
+	MaxRetryBackoff    time.Duration
+	ReadTimeout        time.Duration
+	WriteTimeout       time.Duration
+	ClientCache        bool
+	ClientCacheSize    int
+	ClientCacheExpiry  time.Duration
+	ClientCachePreload int
+}
+
+// createRedisOptions parses a Redis URL and returns configured redis.Options
+// It handles password from environment variables, TLS configuration, and other options.
+func createRedisOptions(redisURL string, conf *Config) (*redisOptionsResult, error) {
+	// Ensure URL has a scheme
+	if !strings.Contains(redisURL, "://") {
+		redisURL = "redis://" + redisURL
 	}
+
+	u, err := url.Parse(redisURL)
+	if err != nil {
+		return nil, fmt.Errorf("url parse %s: %s", redisURL, err)
+	}
+
+	// Parse query parameters for timeout and retry settings
 	values := u.Query()
 	query := queryMap{&values}
 	minRetryBackoff := query.duration("min-retry-backoff", "min_retry_backoff", time.Millisecond*20)
 	maxRetryBackoff := query.duration("max-retry-backoff", "max_retry_backoff", time.Second*10)
 	readTimeout := query.duration("read-timeout", "read_timeout", time.Second*30)
 	writeTimeout := query.duration("write-timeout", "write_timeout", time.Second*5)
-	routeRead := query.pop("route-read")
 	skipVerify := query.pop("insecure-skip-verify")
 	certFile := query.pop("tls-cert-file")
 	keyFile := query.pop("tls-key-file")
@@ -134,13 +154,14 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 	clientCachePreload := query.getInt("client-cache-preload", "client_cache_preload", 0) // may cause conflict
 	u.RawQuery = values.Encode()
 
-	hosts := u.Host
 	opt, err := redis.ParseURL(u.String())
 	if err != nil {
-		return nil, fmt.Errorf("redis parse %s: %s", uri, err)
+		return nil, fmt.Errorf("redis parse %s: %s", redisURL, err)
 	}
+
+	// Configure TLS if needed
 	if opt.TLSConfig != nil {
-		opt.TLSConfig.ServerName = tlsServerName // use the host of each connection as ServerName
+		opt.TLSConfig.ServerName = tlsServerName
 		opt.TLSConfig.InsecureSkipVerify = skipVerify != ""
 		if certFile != "" {
 			cert, err := tls.LoadX509KeyPair(certFile, keyFile)
@@ -159,6 +180,8 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 			opt.TLSConfig.RootCAs = caCertPool
 		}
 	}
+
+	// Set password from environment variables if not already set
 	if opt.Password == "" {
 		opt.Password = os.Getenv("REDIS_PASSWORD")
 	}
@@ -175,15 +198,91 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 			}
 		}
 	}
-	opt.MaxRetries = conf.Retries
-	if opt.MaxRetries == 0 {
-		opt.MaxRetries = -1 // Redis use -1 to disable retries
-	}
 	opt.MinRetryBackoff = minRetryBackoff
 	opt.MaxRetryBackoff = maxRetryBackoff
 	opt.ReadTimeout = readTimeout
 	opt.WriteTimeout = writeTimeout
 	opt.MaintNotificationsConfig = &maintnotifications.Config{Mode: maintnotifications.ModeDisabled}
+
+	// Set MaxRetries from config if provided
+	if conf != nil {
+		opt.MaxRetries = conf.Retries
+		if opt.MaxRetries == 0 {
+			opt.MaxRetries = -1 // Redis use -1 to disable retries
+		}
+	}
+
+	return &redisOptionsResult{
+		Options:            opt,
+		MinRetryBackoff:    minRetryBackoff,
+		MaxRetryBackoff:    maxRetryBackoff,
+		ReadTimeout:        readTimeout,
+		WriteTimeout:       writeTimeout,
+		ClientCache:        clientCache,
+		ClientCacheSize:    clientCacheSize,
+		ClientCacheExpiry:  clientCacheExpiry,
+		ClientCachePreload: clientCachePreload,
+	}, nil
+}
+
+// CreateRedisClient creates a Redis client with proper configuration from a URL.
+// It handles password from environment variables, TLS configuration, and other options
+// similar to how meta configures its Redis connection.
+func CreateRedisClient(redisURL string) (redis.UniversalClient, error) {
+	result, err := createRedisOptions(redisURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	opt := result.Options
+
+	// Parse URL to get hosts for sentinel detection
+	if !strings.Contains(redisURL, "://") {
+		redisURL = "redis://" + redisURL
+	}
+	u, _ := url.Parse(redisURL)
+	hosts := u.Host
+
+	if strings.Contains(hosts, ",") && strings.Index(hosts, ",") < strings.Index(hosts, ":") {
+		// Sentinel mode
+		var fopt redis.FailoverOptions
+		ps := strings.Split(hosts, ",")
+		fopt.MasterName = ps[0]
+		fopt.SentinelAddrs = ps[1:]
+		fopt.Username = opt.Username
+		fopt.Password = opt.Password
+		fopt.TLSConfig = opt.TLSConfig
+		fopt.MinRetryBackoff = result.MinRetryBackoff
+		fopt.MaxRetryBackoff = result.MaxRetryBackoff
+		fopt.ReadTimeout = result.ReadTimeout
+		fopt.WriteTimeout = result.WriteTimeout
+		return redis.NewFailoverClient(&fopt), nil
+	}
+
+	// Single node mode
+	return redis.NewClient(opt), nil
+}
+
+// newRedisMeta return a meta store using Redis.
+func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
+	uri := driver + "://" + addr
+	u, err := url.Parse(uri)
+	if err != nil {
+		return nil, fmt.Errorf("url parse %s: %s", uri, err)
+	}
+	values := u.Query()
+	query := queryMap{&values}
+	routeRead := query.pop("route-read")
+	u.RawQuery = values.Encode()
+
+	hosts := u.Host
+
+	// Use createRedisOptions to get configured redis.Options
+	result, err := createRedisOptions(u.String(), conf)
+	if err != nil {
+		return nil, err
+	}
+	opt := result.Options
+
 	var prefix string
 	var rdb redis.UniversalClient
 
@@ -210,11 +309,11 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		fopt.Password = opt.Password
 		fopt.TLSConfig = opt.TLSConfig
 		fopt.MaxRetries = opt.MaxRetries
-		fopt.MinRetryBackoff = opt.MinRetryBackoff
-		fopt.MaxRetryBackoff = opt.MaxRetryBackoff
+		fopt.MinRetryBackoff = result.MinRetryBackoff
+		fopt.MaxRetryBackoff = result.MaxRetryBackoff
 		fopt.DialTimeout = opt.DialTimeout
-		fopt.ReadTimeout = opt.ReadTimeout
-		fopt.WriteTimeout = opt.WriteTimeout
+		fopt.ReadTimeout = result.ReadTimeout
+		fopt.WriteTimeout = result.WriteTimeout
 		fopt.PoolFIFO = opt.PoolFIFO               // default: false
 		fopt.PoolSize = opt.PoolSize               // default: GOMAXPROCS * 10
 		fopt.PoolTimeout = opt.PoolTimeout         // default: ReadTimeout + 1 second.
@@ -246,11 +345,11 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 			copt.Password = opt.Password
 			copt.TLSConfig = opt.TLSConfig
 			copt.MaxRetries = opt.MaxRetries
-			copt.MinRetryBackoff = opt.MinRetryBackoff
-			copt.MaxRetryBackoff = opt.MaxRetryBackoff
+			copt.MinRetryBackoff = result.MinRetryBackoff
+			copt.MaxRetryBackoff = result.MaxRetryBackoff
 			copt.DialTimeout = opt.DialTimeout
-			copt.ReadTimeout = opt.ReadTimeout
-			copt.WriteTimeout = opt.WriteTimeout
+			copt.ReadTimeout = result.ReadTimeout
+			copt.WriteTimeout = result.WriteTimeout
 			copt.PoolFIFO = opt.PoolFIFO               // default: false
 			copt.PoolSize = opt.PoolSize               // default: GOMAXPROCS * 10
 			copt.PoolTimeout = opt.PoolTimeout         // default: ReadTimeout + 1 second.
@@ -280,9 +379,10 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		baseMeta: newBaseMeta(addr, conf),
 		rdb:      rdb,
 		prefix:   prefix,
+		outbox:   NewRedisOutbox(rdb, conf.Outbox),
 	}
-	if clientCache {
-		m.cache = newRedisCache(prefix, clientCacheSize, clientCacheExpiry, clientCachePreload)
+	if result.ClientCache {
+		m.cache = newRedisCache(prefix, result.ClientCacheSize, result.ClientCacheExpiry, result.ClientCachePreload)
 		if err = m.cache.init(m.rdb); err != nil {
 			logger.Warnf("Failed to setup client-side caching: %v", err)
 			m.cache = nil
@@ -1322,6 +1422,7 @@ func (m *redisMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, 
 				}
 			}
 			pipe.IncrBy(ctx, m.usedSpaceKey(), align4K(length)-align4K(old))
+			m.publishFileWrittenToPipe(ctx, pipe, inode, length)
 			return nil
 		})
 		if err == nil {
@@ -1557,6 +1658,11 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			}
 			pipe.IncrBy(ctx, m.usedSpaceKey(), align4K(0))
 			pipe.Incr(ctx, m.totalInodesKey())
+			if _type == TypeDirectory {
+				m.publishDirCreatedToPipe(ctx, pipe, *inode, parent, name, mode&0777)
+			} else {
+				m.publishFileCreatedToPipe(ctx, pipe, *inode, parent, name, mode&0777)
+			}
 			return nil
 		})
 		return err
@@ -1702,6 +1808,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 					pipe.Del(ctx, m.parentKey(inode))
 				}
 			}
+			m.publishFileDeletedToPipe(ctx, pipe, inode, parent, name)
 			return nil
 		})
 
@@ -2187,6 +2294,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 			pipe.HDel(ctx, m.dirQuotaKey(), field)
 			pipe.HDel(ctx, m.dirQuotaUsedSpaceKey(), field)
 			pipe.HDel(ctx, m.dirQuotaUsedInodesKey(), field)
+			m.publishDirDeletedToPipe(ctx, pipe, inode, parent, name)
 			return nil
 		})
 		return err
@@ -2499,6 +2607,7 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 			if dupdate {
 				pipe.Set(ctx, m.inodeKey(parentDst), m.marshal(&dattr), 0)
 			}
+			m.publishFileMovedToPipe(ctx, pipe, *inode, parentDst, nameDst, parentSrc, nameSrc)
 			return nil
 		})
 		return err
@@ -2908,6 +3017,7 @@ func (m *redisMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, sli
 			if delta.space > 0 {
 				pipe.IncrBy(ctx, m.usedSpaceKey(), delta.space)
 			}
+			m.publishFileWrittenToPipe(ctx, pipe, inode, attr.Length)
 			return nil
 		})
 		if err == nil {
