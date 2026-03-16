@@ -91,6 +91,7 @@ func Main(args []string) error {
 			cmdMetaProxy(),
 			cmdReencrypt(),
 			cmdEnableEncryption(),
+			cmdOutbox(),
 		},
 	}
 

@@ -141,3 +141,169 @@ When fixing a bug, add a regression test that fails before the fix and passes af
 - Match existing conventions in the file you are editing.
 - Confirm before destructive or hard-to-reverse actions (deleting files, force pushes,
   schema/data changes).
+
+### Types and Naming
+- Use `syscall.Errno` for error codes throughout the codebase
+- Type aliases for meta types: `type Ino = meta.Ino`, `type Attr = meta.Attr`
+- Function names: camelCase (e.g., `IsExist`, `checkInodeName`)
+- Exported types/functions: PascalCase
+- Private variables: lowercase with package context
+- Constants: `const` for compile-time, `var` for runtime values
+
+### Error Handling
+- Use `syscall.Errno` for POSIX-style errors
+- Wrap errors with context using `github.com/pkg/errors`
+- Define custom errors in `pkg/utils/errors.go`
+- Check errors immediately; don't defer error handling
+
+```go
+err := someFunction()
+if err != nil {
+    return err
+}
+```
+
+### Logging
+- Use the centralized logger from `pkg/utils`:
+```go
+var logger = utils.GetLogger("juicefs")
+logger.Info("message")
+logger.Error(err)
+logger.Fatal(err)
+```
+
+### Testing
+- Test files: `*_test.go`
+- Test functions: `Test*` prefix
+- Use table-driven tests for multiple cases
+- Mock external dependencies with `github.com/agiledragon/gomonkey/v2`
+- Include coverage annotations: `// mutate_test_job_number: N`
+
+```go
+func TestExample(t *testing.T) {
+    cases := []struct {
+        name     string
+        input    string
+        expected int
+    }{
+        {"case1", "input1", 1},
+        {"case2", "input2", 2},
+    }
+    for _, c := range cases {
+        t.Run(c.name, func(t *testing.T) {
+            result := function(c.input)
+            if result != c.expected {
+                t.Fatalf("expected %d, got %d", c.expected, result)
+            }
+        })
+    }
+}
+```
+
+### Concurrency
+- Use `sync.Mutex` or `sync.RWMutex` for synchronization
+- Use `sync/atomic` for atomic operations
+- Use `errgroup` from `golang.org/x/sync/errgroup` for concurrent tasks
+- Always handle context cancellation in goroutines
+
+### Build Tags
+Use build tags for optional features:
+- `ceph`, `fdb`, `gluster` for storage backends
+- `nogateway`, `nowebdav`, etc. for excluding features
+- Platform-specific: `_linux.go`, `_windows.go`, `_darwin.go`
+
+## Architecture
+
+JuiceFS is a distributed filesystem with three primary layers:
+
+**1. Access Layer** (`cmd/`, `pkg/fuse/`, `pkg/vfs/`, `pkg/gateway/`)
+- CLI entry: `main.go` → `cmd.Main()` using `urfave/cli/v2`
+- 27 CLI commands including `mount`, `gateway`, `webdav`, `sync`, `gc`, `fsck`, `dump`, `load`, `outbox`
+- FUSE mount via `hanwen/go-fuse/v2`; S3-compatible gateway via MinIO; WebDAV server
+
+**2. Metadata Layer** (`pkg/meta/`)
+- `interface.go` defines the `Meta` interface — all filesystem operations go through it
+- Pluggable backends: Redis, MySQL, PostgreSQL, SQLite, TiKV, BadgerDB, FoundationDB, Etcd
+- `base.go` provides shared logic; each backend (e.g. `redis.go`, `sql.go`, `badger.go`) implements the `Meta` interface
+- `base_test.go` contains the core test suite used across all backends
+
+**3. Data Layer** (`pkg/chunk/`, `pkg/object/`, `pkg/compress/`)
+- Files split into Chunks (64 MiB default) → Slices → Blocks (4 MiB default)
+- Blocks stored in object storage; metadata stored in a metadata engine
+- `pkg/object/interface.go` abstracts over S3, Azure, GCS, Alibaba OSS, Ceph, MinIO, and many more
+- `pkg/compress/` provides LZ4 and Zstandard compression
+
+**Key packages:**
+
+| Package | Role |
+|---|---|
+| `pkg/meta` | Metadata interface + all backend implementations |
+| `pkg/fs` | Core FS logic bridging VFS and chunk/meta layers |
+| `pkg/vfs` | Virtual filesystem abstraction |
+| `pkg/fuse` | FUSE mount integration |
+| `pkg/chunk` | Chunk management, caching, read/write pipeline |
+| `pkg/object` | Object storage abstraction layer |
+| `pkg/gateway` | S3-compatible HTTP gateway |
+| `pkg/sync` | Cross-filesystem synchronization |
+| `pkg/acl` | Access control lists |
+| `pkg/metric` | Prometheus metrics |
+| `pkg/meta/events.go` | `JuiceFsEvent` struct and `EventType` constants (FileCreated, FileDeleted, FileMoved, FileWritten, DirCreated, DirDeleted) |
+| `pkg/meta/redis_outbox.go` | Redis Streams outbox — writes events to stream, consumer group, retry logic, dead-letter queue |
+| `pkg/meta/redis_event.go` | Helper functions that publish events from meta operations (doMknod, doRename, doUnlink, doRmdir, doWrite, doFallocate) |
+| `pkg/meta/watermill_kafka.go` | Kafka publisher via Watermill + Sarama; reads from Redis stream, publishes to `juicefs.events` topic |
+
+## Outbox Feature
+
+Filesystem events (file/dir create, delete, move, write) are published via Redis Streams to Kafka.
+
+**Mount flags** (writes events to Redis stream):
+```bash
+--outbox-enabled                  # Enable event publishing
+--outbox-stream juicefs:outbox    # Redis stream name (default: juicefs:outbox)
+```
+
+**Standalone consumer** (reads stream → publishes to Kafka topic `juicefs.events`):
+```bash
+juicefs outbox REDIS-URL --kafka-brokers localhost:9092 [--kafka-topic juicefs.events] [--consumer-group outbox]
+```
+
+**Local testing environment** (`docker-compose.test.yml` — Kafka, Redis, TiKV, MySQL):
+```bash
+docker compose -f docker-compose.test.yml up -d
+```
+
+Docs: `docs/en/deployment/outbox.md`
+
+## Common Patterns
+
+### Context handling
+```go
+ctx, trace := context.WithTrace(context.Background(), "operation")
+defer trace.Finish()
+```
+
+### Error type checking
+```go
+func IsExist(err error) bool {
+    return err == syscall.EEXIST || err == syscall.EACCES || err == syscall.EPERM
+}
+```
+
+### Constants definition
+```go
+const (
+    inodeBatch     = 1 << 10
+    sliceIdBatch   = 4 << 10
+    maxSymCacheNum = int32(10000)
+)
+```
+
+## CI/CD
+
+Tests run in GitHub Actions (`unittests.yml`) on `ubuntu-22.04` with external services (Redis, MySQL, PostgreSQL, TiKV, Etcd, MinIO, SFTP, CIFS, NFS, Gluster, HDFS). Coverage is tracked to S3-compatible storage. Integration tests for S3 gateway and WebDAV are in `integration/Makefile`.
+
+## Contributing
+- Search existing issues before starting work
+- Major features require design documents
+- PRs need unit tests and maintainer approval
+- Sign CLA on first contribution
