@@ -35,6 +35,16 @@ import (
 )
 
 // Config for clients.
+type OutboxConfig struct {
+	Enabled       bool
+	StreamName    string
+	ConsumerGroup string
+	KafkaBrokers  []string
+	KafkaTopic    string
+	MaxRetries    int
+	TrimMaxLen    int64
+}
+
 type Config struct {
 	Retries            int
 	MaxDeletes         int
@@ -54,10 +64,25 @@ type Config struct {
 	SortDir            bool
 	FastStatfs         bool
 	NetworkInterfaces  []string // list of network interfaces to use for IP discovery (empty means all)
+	Outbox             OutboxConfig
 }
 
 func DefaultConf() *Config {
-	return &Config{Retries: 10, MaxDeletes: 2, Heartbeat: 12 * time.Second, AtimeMode: NoAtime, DirStatFlushPeriod: 1 * time.Second}
+	return &Config{
+		Retries:            10,
+		MaxDeletes:         2,
+		Heartbeat:          12 * time.Second,
+		AtimeMode:          NoAtime,
+		DirStatFlushPeriod: 1 * time.Second,
+		Outbox: OutboxConfig{
+			Enabled:       false,
+			StreamName:    "juicefs:outbox",
+			ConsumerGroup: "outbox",
+			KafkaTopic:    "juicefs.events",
+			MaxRetries:    10,
+			TrimMaxLen:    10000,
+		},
+	}
 }
 
 func (c *Config) SelfCheck() {
