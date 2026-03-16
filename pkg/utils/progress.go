@@ -215,6 +215,10 @@ func (p *Progress) Done() {
 	SetOutput(os.Stderr)
 }
 
+func (p *Progress) Write(b []byte) (n int, err error) {
+	return os.Stderr.Write(b)
+}
+
 func MockProgress() (*Progress, *Bar) {
 	progress := NewProgress(true)
 	bar := progress.AddCountBar("Mock", 0)
