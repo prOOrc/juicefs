@@ -178,7 +178,7 @@ JuiceFS is a distributed filesystem with three primary layers:
 
 **1. Access Layer** (`cmd/`, `pkg/fuse/`, `pkg/vfs/`, `pkg/gateway/`)
 - CLI entry: `main.go` → `cmd.Main()` using `urfave/cli/v2`
-- 26 CLI commands including `mount`, `gateway`, `webdav`, `sync`, `gc`, `fsck`, `dump`, `load`
+- 27 CLI commands including `mount`, `gateway`, `webdav`, `sync`, `gc`, `fsck`, `dump`, `load`, `outbox`
 - FUSE mount via `hanwen/go-fuse/v2`; S3-compatible gateway via MinIO; WebDAV server
 
 **2. Metadata Layer** (`pkg/meta/`)
@@ -207,6 +207,32 @@ JuiceFS is a distributed filesystem with three primary layers:
 | `pkg/sync` | Cross-filesystem synchronization |
 | `pkg/acl` | Access control lists |
 | `pkg/metric` | Prometheus metrics |
+| `pkg/meta/events.go` | `JuiceFsEvent` struct and `EventType` constants (FileCreated, FileDeleted, FileMoved, FileWritten, DirCreated, DirDeleted) |
+| `pkg/meta/redis_outbox.go` | Redis Streams outbox — writes events to stream, consumer group, retry logic, dead-letter queue |
+| `pkg/meta/redis_event.go` | Helper functions that publish events from meta operations (doMknod, doRename, doUnlink, doRmdir, doWrite, doFallocate) |
+| `pkg/meta/watermill_kafka.go` | Kafka publisher via Watermill + Sarama; reads from Redis stream, publishes to `juicefs.events` topic |
+
+## Outbox Feature
+
+Filesystem events (file/dir create, delete, move, write) are published via Redis Streams to Kafka.
+
+**Mount flags** (writes events to Redis stream):
+```bash
+--outbox-enabled                  # Enable event publishing
+--outbox-stream juicefs:outbox    # Redis stream name (default: juicefs:outbox)
+```
+
+**Standalone consumer** (reads stream → publishes to Kafka topic `juicefs.events`):
+```bash
+juicefs outbox REDIS-URL --kafka-brokers localhost:9092 [--kafka-topic juicefs.events] [--consumer-group outbox]
+```
+
+**Local testing environment** (`docker-compose.test.yml` — Kafka, Redis, TiKV, MySQL):
+```bash
+docker compose -f docker-compose.test.yml up -d
+```
+
+Docs: `docs/en/deployment/outbox.md`
 
 ## Common Patterns
 

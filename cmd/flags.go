@@ -313,6 +313,15 @@ func metaFlags() []cli.Flag {
 			Value: false,
 			Usage: "Use local counters for statfs instead of querying metadata service",
 		},
+		&cli.BoolFlag{
+			Name:  "outbox-enabled",
+			Usage: "enable outbox for writing filesystem events to Redis stream (use outbox command to publish to Kafka)",
+		},
+		&cli.StringFlag{
+			Name:  "outbox-stream",
+			Value: "juicefs:outbox",
+			Usage: "Redis stream name for outbox events (requires --outbox-enabled)",
+		},
 	})
 }
 

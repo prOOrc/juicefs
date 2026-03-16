@@ -340,6 +340,13 @@ func getMetaConf(c *cli.Context, mp string, readOnly bool) *meta.Config {
 		atimeMode = meta.NoAtime
 	}
 	conf.AtimeMode = atimeMode
+
+	// Parse outbox configuration
+	conf.Outbox.Enabled = c.Bool("outbox-enabled")
+	if c.IsSet("outbox-stream") {
+		conf.Outbox.StreamName = c.String("outbox-stream")
+	}
+
 	return conf
 }
 
