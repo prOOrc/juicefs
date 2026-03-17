@@ -1,0 +1,992 @@
+/*
+ * JuiceFS, Copyright 2021 Juicedata, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+syntax = "proto3";
+package meta;
+option go_package = "github.com/juicedata/juicefs/pkg/meta/grpc";
+
+// MetaContext carries uid/gid/pid for permission checks
+message MetaContext {
+  uint32 uid = 1;
+  uint32 gid = 2;
+  repeated uint32 gids = 3;
+  uint32 pid = 4;
+  bool check_permission = 5;
+}
+
+// Attr represents file/directory attributes
+message ProtoAttr {
+  uint32 flags = 1;
+  uint32 typ = 2;
+  uint32 mode = 3;
+  uint32 uid = 4;
+  uint32 gid = 5;
+  uint32 rdev = 6;
+  int64 atime = 7;
+  int64 mtime = 8;
+  int64 ctime = 9;
+  uint32 atimensec = 10;
+  uint32 mtimensec = 11;
+  uint32 ctimensec = 12;
+  uint32 nlink = 13;
+  uint64 length = 14;
+  uint64 parent = 15;
+  bool full = 16;
+  bool keep_cache = 17;
+  uint32 access_acl = 18;
+  uint32 default_acl = 19;
+}
+
+// Slice represents a chunk slice
+message ProtoSlice {
+  uint64 id = 1;
+  uint32 size = 2;
+  uint32 off = 3;
+  uint32 len = 4;
+}
+
+// SliceMapEntry for map of inodes to slices
+message SliceMapEntry {
+  uint64 inode = 1;
+  repeated ProtoSlice slices = 2;
+}
+
+// Entry represents a directory entry
+message ProtoEntry {
+  uint64 inode = 1;
+  bytes name = 2;
+  ProtoAttr attr = 3;
+}
+
+// Summary represents directory summary
+message ProtoSummary {
+  uint64 length = 1;
+  uint64 size = 2;
+  uint64 files = 3;
+  uint64 dirs = 4;
+}
+
+// TreeSummary for recursive summary
+message ProtoTreeSummary {
+  uint64 inode = 1;
+  string path = 2;
+  uint32 type = 3;
+  uint64 size = 4;
+  uint64 files = 5;
+  uint64 dirs = 6;
+  repeated ProtoTreeSummary children = 7;
+}
+
+// SessionInfo for session details
+message ProtoSessionInfo {
+  string version = 1;
+  string host_name = 2;
+  repeated string ip_addrs = 3;
+  string mount_point = 4;
+  int64 mount_time = 5;
+  int32 process_id = 6;
+}
+
+// Flock for file locks
+message ProtoFlock {
+  uint64 inode = 1;
+  uint64 owner = 2;
+  string ltype = 3;
+}
+
+// PlockRecord for range locks
+message ProtoPlockRecord {
+  uint32 type = 1;
+  uint32 pid = 2;
+  uint64 start = 3;
+  uint64 end = 4;
+}
+
+// Plock for range locks
+message ProtoPlock {
+  uint64 inode = 1;
+  uint64 owner = 2;
+  repeated ProtoPlockRecord records = 3;
+}
+
+// Session for client sessions
+message ProtoSession {
+  uint64 sid = 1;
+  int64 expire = 2;
+  ProtoSessionInfo info = 3;
+  repeated uint64 sustained = 4;
+  repeated ProtoFlock flocks = 5;
+  repeated ProtoPlock plocks = 6;
+}
+
+// Format for volume format
+message ProtoFormat {
+  string name = 1;
+  string uuid = 2;
+  string storage = 3;
+  string storage_class = 4;
+  string bucket = 5;
+  string access_key = 6;
+  string secret_key = 7;
+  string session_token = 8;
+  int32 block_size = 9;
+  string compression = 10;
+  int32 shards = 11;
+  bool hash_prefix = 12;
+  uint64 capacity = 13;
+  uint64 inodes = 14;
+  string encrypt_key = 15;
+  string encrypt_algo = 16;
+  bool key_encrypted = 17;
+  int64 upload_limit = 18;
+  int64 download_limit = 19;
+  int32 trash_days = 20;
+  int32 meta_version = 21;
+  string min_client_version = 22;
+  string max_client_version = 23;
+  bool dir_stats = 24;
+  bool user_group_quota = 25;
+  bool enable_acl = 26;
+  string ranger_rest_url = 27;
+  string ranger_service = 28;
+  string kerb_conf = 29;
+}
+
+// Quota for quota management
+message ProtoQuota {
+  int64 max_space = 1;
+  int64 max_inodes = 2;
+  int64 used_space = 3;
+  int64 used_inodes = 4;
+}
+
+// DirHandler handle
+message DirHandlerHandle {
+  uint64 handle_id = 1;
+}
+
+// ACL Rule
+message ProtoACLRule {
+  uint32 id = 1;
+  uint32 type = 2;
+  uint32 perms = 3;
+  repeated uint32 entries = 4;
+}
+
+// =====================================================
+// Core FUSE Path RPCs
+// =====================================================
+
+service MetaService {
+  // --- Lifecycle ---
+  rpc Init(InitRequest) returns (InitResponse);
+  rpc Load(LoadRequest) returns (LoadResponse);
+  rpc NewSession(NewSessionRequest) returns (NewSessionResponse);
+  rpc CloseSession(CloseSessionRequest) returns (CloseSessionResponse);
+  rpc FlushSession(FlushSessionRequest) returns (FlushSessionResponse);
+  rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
+  rpc Reset(ResetRequest) returns (ResetResponse);
+  rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+  rpc CleanStaleSessions(CleanStaleSessionsRequest) returns (CleanStaleSessionsResponse);
+
+  // --- Core operations ---
+  rpc StatFS(StatFSRequest) returns (StatFSResponse);
+  rpc Lookup(LookupRequest) returns (LookupResponse);
+  rpc Resolve(ResolveRequest) returns (ResolveResponse);
+  rpc Access(AccessRequest) returns (AccessResponse);
+  rpc GetAttr(GetAttrRequest) returns (GetAttrResponse);
+  rpc SetAttr(SetAttrRequest) returns (SetAttrResponse);
+  rpc CheckSetAttr(CheckSetAttrRequest) returns (CheckSetAttrResponse);
+  rpc Mknod(MknodRequest) returns (MknodResponse);
+  rpc Mkdir(MkdirRequest) returns (MkdirResponse);
+  rpc Create(CreateRequest) returns (CreateResponse);
+  rpc Open(OpenRequest) returns (OpenResponse);
+  rpc Close(CloseRequest) returns (CloseResponse);
+  rpc Unlink(UnlinkRequest) returns (UnlinkResponse);
+  rpc Rmdir(RmdirRequest) returns (RmdirResponse);
+  rpc Rename(RenameRequest) returns (RenameResponse);
+  rpc Link(LinkRequest) returns (LinkResponse);
+  rpc Symlink(SymlinkRequest) returns (SymlinkResponse);
+  rpc ReadLink(ReadLinkRequest) returns (ReadLinkResponse);
+  rpc Truncate(TruncateRequest) returns (TruncateResponse);
+  rpc Fallocate(FallocateRequest) returns (FallocateResponse);
+  rpc Readdir(ReaddirRequest) returns (ReaddirResponse);
+
+  // --- Data path ---
+  rpc Read(ReadRequest) returns (ReadResponse);
+  rpc Write(WriteRequest) returns (WriteResponse);
+  rpc NewSlice(NewSliceRequest) returns (NewSliceResponse);
+  rpc InvalidateChunkCache(InvalidateChunkCacheRequest) returns (InvalidateChunkCacheResponse);
+  rpc CopyFileRange(CopyFileRangeRequest) returns (CopyFileRangeResponse);
+
+  // --- Locks ---
+  rpc Flock(FlockRequest) returns (FlockResponse);
+  rpc Getlk(GetlkRequest) returns (GetlkResponse);
+  rpc Setlk(SetlkRequest) returns (SetlkResponse);
+  rpc ListLocks(ListLocksRequest) returns (ListLocksResponse);
+
+  // --- Xattrs ---
+  rpc GetXattr(GetXattrRequest) returns (GetXattrResponse);
+  rpc SetXattr(SetXattrRequest) returns (SetXattrResponse);
+  rpc RemoveXattr(RemoveXattrRequest) returns (RemoveXattrResponse);
+  rpc ListXattr(ListXattrRequest) returns (ListXattrResponse);
+
+  // --- Directory ---
+  rpc GetParents(GetParentsRequest) returns (GetParentsResponse);
+  rpc GetDirStat(GetDirStatRequest) returns (GetDirStatResponse);
+
+  // --- ACL ---
+  rpc SetFacl(SetFaclRequest) returns (SetFaclResponse);
+  rpc GetFacl(GetFaclRequest) returns (GetFaclResponse);
+
+  // --- Tokens ---
+  rpc StoreToken(StoreTokenRequest) returns (StoreTokenResponse);
+  rpc UpdateToken(UpdateTokenRequest) returns (UpdateTokenResponse);
+  rpc LoadToken(LoadTokenRequest) returns (LoadTokenResponse);
+  rpc DeleteTokens(DeleteTokensRequest) returns (DeleteTokensResponse);
+  rpc ListTokens(ListTokensRequest) returns (ListTokensResponse);
+
+  // --- Admin operations ---
+  rpc GetFormat(GetFormatRequest) returns (GetFormatResponse);
+  rpc Remove(RemoveRequest) returns (RemoveResponse);
+  rpc BatchUnlink(BatchUnlinkRequest) returns (BatchUnlinkResponse);
+  rpc GetSummary(GetSummaryRequest) returns (GetSummaryResponse);
+  rpc GetTreeSummary(GetTreeSummaryRequest) returns (GetTreeSummaryResponse);
+  rpc Clone(CloneRequest) returns (CloneResponse);
+  rpc GetPaths(GetPathsRequest) returns (GetPathsResponse);
+  rpc Check(CheckRequest) returns (CheckResponse);
+  rpc CompactAll(CompactAllRequest) returns (CompactAllResponse);
+  rpc Compact(CompactRequest) returns (CompactResponse);
+  rpc ListSlices(ListSlicesRequest) returns (ListSlicesResponse);
+  rpc HandleQuota(HandleQuotaRequest) returns (HandleQuotaResponse);
+  rpc ScanUserGroupUsage(ScanUserGroupUsageRequest) returns (ScanUserGroupUsageResponse);
+  rpc Chroot(ChrootRequest) returns (ChrootResponse);
+  rpc CleanupTrashBefore(CleanupTrashBeforeRequest) returns (CleanupTrashBeforeResponse);
+  rpc CleanupDetachedNodesBefore(CleanupDetachedNodesBeforeRequest) returns (CleanupDetachedNodesBeforeResponse);
+
+  // --- DirHandler (stateful) ---
+  rpc NewDirHandler(NewDirHandlerRequest) returns (NewDirHandlerResponse);
+  rpc DirHandlerList(DirHandlerListRequest) returns (DirHandlerListResponse);
+  rpc DirHandlerInsert(DirHandlerInsertRequest) returns (DirHandlerInsertResponse);
+  rpc DirHandlerDelete(DirHandlerDeleteRequest) returns (DirHandlerDeleteResponse);
+  rpc DirHandlerClose(DirHandlerCloseRequest) returns (DirHandlerCloseResponse);
+
+  // --- Streaming Dump/Load ---
+  rpc DumpMeta(DumpMetaRequest) returns (stream DumpMetaChunk);
+  rpc LoadMeta(stream LoadMetaChunk) returns (LoadMetaResponse);
+  rpc DumpMetaV2(DumpMetaV2Request) returns (stream DumpMetaV2Chunk);
+  rpc LoadMetaV2(stream LoadMetaV2Chunk) returns (LoadMetaV2Response);
+}
+
+// =====================================================
+// Request/Response Messages
+// =====================================================
+
+// --- Lifecycle ---
+message InitRequest {
+  ProtoFormat format = 1;
+  bool force = 2;
+}
+message InitResponse { uint32 errno = 1; }
+
+message LoadRequest { bool check_version = 1; }
+message LoadResponse {
+  uint32 errno = 1;
+  ProtoFormat format = 2;
+}
+
+message NewSessionRequest { bool record = 1; }
+message NewSessionResponse { uint32 errno = 1; }
+
+message CloseSessionRequest { }
+message CloseSessionResponse { uint32 errno = 1; }
+
+message FlushSessionRequest { }
+message FlushSessionResponse { uint32 errno = 1; }
+
+message ShutdownRequest { }
+message ShutdownResponse { uint32 errno = 1; }
+
+message ResetRequest { }
+message ResetResponse { uint32 errno = 1; }
+
+message GetSessionRequest {
+  uint64 sid = 1;
+  bool detail = 2;
+}
+message GetSessionResponse {
+  uint32 errno = 1;
+  ProtoSession session = 2;
+}
+
+message ListSessionsRequest { }
+message ListSessionsResponse {
+  uint32 errno = 1;
+  repeated ProtoSession sessions = 2;
+}
+
+message CleanStaleSessionsRequest { MetaContext ctx = 1; }
+message CleanStaleSessionsResponse { uint32 errno = 1; }
+
+// --- Core operations ---
+message StatFSRequest {
+  MetaContext ctx = 1;
+  uint64 ino = 2;
+}
+message StatFSResponse {
+  uint32 errno = 1;
+  uint64 total_space = 2;
+  uint64 avail_space = 3;
+  uint64 iused = 4;
+  uint64 iavail = 5;
+}
+
+message LookupRequest {
+  MetaContext ctx = 1;
+  uint64 parent = 2;
+  string name = 3;
+  bool check_permission = 4;
+}
+message LookupResponse {
+  uint32 errno = 1;
+  uint64 inode = 2;
+  ProtoAttr attr = 3;
+}
+
+message ResolveRequest {
+  MetaContext ctx = 1;
+  uint64 parent = 2;
+  string path = 3;
+}
+message ResolveResponse {
+  uint32 errno = 1;
+  uint64 inode = 2;
+  ProtoAttr attr = 3;
+}
+
+message AccessRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  uint32 modemask = 3;
+}
+message AccessResponse {
+  uint32 errno = 1;
+  ProtoAttr attr = 2;
+}
+
+message GetAttrRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+}
+message GetAttrResponse {
+  uint32 errno = 1;
+  ProtoAttr attr = 2;
+}
+
+message SetAttrRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  uint32 set = 3;
+  uint32 sggidclearmode = 4;
+  ProtoAttr attr = 5;
+}
+message SetAttrResponse { uint32 errno = 1; }
+
+message CheckSetAttrRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  uint32 set = 3;
+  ProtoAttr attr = 4;
+}
+message CheckSetAttrResponse { uint32 errno = 1; }
+
+message MknodRequest {
+  MetaContext ctx = 1;
+  uint64 parent = 2;
+  string name = 3;
+  uint32 type = 4;
+  uint32 mode = 5;
+  uint32 cumask = 6;
+  uint32 rdev = 7;
+  string path = 8;
+}
+message MknodResponse {
+  uint32 errno = 1;
+  uint64 inode = 2;
+  ProtoAttr attr = 3;
+}
+
+message MkdirRequest {
+  MetaContext ctx = 1;
+  uint64 parent = 2;
+  string name = 3;
+  uint32 mode = 4;
+  uint32 cumask = 5;
+  uint32 copysgid = 6;
+}
+message MkdirResponse {
+  uint32 errno = 1;
+  uint64 inode = 2;
+  ProtoAttr attr = 3;
+}
+
+message CreateRequest {
+  MetaContext ctx = 1;
+  uint64 parent = 2;
+  string name = 3;
+  uint32 mode = 4;
+  uint32 cumask = 5;
+  uint32 flags = 6;
+}
+message CreateResponse {
+  uint32 errno = 1;
+  uint64 inode = 2;
+  ProtoAttr attr = 3;
+}
+
+message OpenRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  uint32 flags = 3;
+}
+message OpenResponse {
+  uint32 errno = 1;
+  ProtoAttr attr = 2;
+}
+
+message CloseRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+}
+message CloseResponse { uint32 errno = 1; }
+
+message UnlinkRequest {
+  MetaContext ctx = 1;
+  uint64 parent = 2;
+  string name = 3;
+  bool skip_check_trash = 4;
+}
+message UnlinkResponse { uint32 errno = 1; }
+
+message RmdirRequest {
+  MetaContext ctx = 1;
+  uint64 parent = 2;
+  string name = 3;
+  bool skip_check_trash = 4;
+}
+message RmdirResponse { uint32 errno = 1; }
+
+message RenameRequest {
+  MetaContext ctx = 1;
+  uint64 parent_src = 2;
+  string name_src = 3;
+  uint64 parent_dst = 4;
+  string name_dst = 5;
+  uint32 flags = 6;
+}
+message RenameResponse {
+  uint32 errno = 1;
+  uint64 inode = 2;
+  ProtoAttr attr = 3;
+}
+
+message LinkRequest {
+  MetaContext ctx = 1;
+  uint64 inode_src = 2;
+  uint64 parent = 3;
+  string name = 4;
+}
+message LinkResponse {
+  uint32 errno = 1;
+  ProtoAttr attr = 2;
+}
+
+message SymlinkRequest {
+  MetaContext ctx = 1;
+  uint64 parent = 2;
+  string name = 3;
+  string path = 4;
+}
+message SymlinkResponse {
+  uint32 errno = 1;
+  uint64 inode = 2;
+  ProtoAttr attr = 3;
+}
+
+message ReadLinkRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+}
+message ReadLinkResponse {
+  uint32 errno = 1;
+  bytes path = 2;
+}
+
+message TruncateRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  uint32 flags = 3;
+  uint64 length = 4;
+  bool skip_perm_check = 5;
+}
+message TruncateResponse {
+  uint32 errno = 1;
+  ProtoAttr attr = 2;
+}
+
+message FallocateRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  uint32 mode = 3;
+  uint64 off = 4;
+  uint64 size = 5;
+}
+message FallocateResponse {
+  uint32 errno = 1;
+  uint64 length = 2;
+}
+
+message ReaddirRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  uint32 wantattr = 3;
+}
+message ReaddirResponse {
+  uint32 errno = 1;
+  repeated ProtoEntry entries = 2;
+}
+
+// --- Data path ---
+message ReadRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  uint32 indx = 3;
+}
+message ReadResponse {
+  uint32 errno = 1;
+  repeated ProtoSlice slices = 2;
+}
+
+message WriteRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  uint32 indx = 3;
+  uint32 off = 4;
+  ProtoSlice slice = 5;
+  int64 mtime = 6;
+}
+message WriteResponse { uint32 errno = 1; }
+
+message NewSliceRequest { MetaContext ctx = 1; }
+message NewSliceResponse {
+  uint32 errno = 1;
+  uint64 id = 2;
+}
+
+message InvalidateChunkCacheRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  uint32 indx = 3;
+}
+message InvalidateChunkCacheResponse { uint32 errno = 1; }
+
+message CopyFileRangeRequest {
+  MetaContext ctx = 1;
+  uint64 fin = 2;
+  uint64 off_in = 3;
+  uint64 fout = 4;
+  uint64 off_out = 5;
+  uint64 size = 6;
+  uint32 flags = 7;
+}
+message CopyFileRangeResponse {
+  uint32 errno = 1;
+  uint64 copied = 2;
+  uint64 out_length = 3;
+}
+
+// --- Locks ---
+message FlockRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  uint64 owner = 3;
+  uint32 ltype = 4;
+  bool block = 5;
+}
+message FlockResponse { uint32 errno = 1; }
+
+message GetlkRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  uint64 owner = 3;
+  uint32 ltype = 4;
+  uint64 start = 5;
+  uint64 end = 6;
+}
+message GetlkResponse {
+  uint32 errno = 1;
+  uint32 ltype = 2;
+  uint64 start = 3;
+  uint64 end = 4;
+  uint32 pid = 5;
+}
+
+message SetlkRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  uint64 owner = 3;
+  bool block = 4;
+  uint32 ltype = 5;
+  uint64 start = 6;
+  uint64 end = 7;
+  uint32 pid = 8;
+}
+message SetlkResponse { uint32 errno = 1; }
+
+message ListLocksRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+}
+message ListLocksResponse {
+  uint32 errno = 1;
+  repeated ProtoPlock plocks = 2;
+  repeated ProtoFlock flocks = 3;
+}
+
+// --- Xattrs ---
+message GetXattrRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  string name = 3;
+}
+message GetXattrResponse {
+  uint32 errno = 1;
+  bytes value = 2;
+}
+
+message SetXattrRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  string name = 3;
+  bytes value = 4;
+  uint32 flags = 5;
+}
+message SetXattrResponse { uint32 errno = 1; }
+
+message RemoveXattrRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  string name = 3;
+}
+message RemoveXattrResponse { uint32 errno = 1; }
+
+message ListXattrRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+}
+message ListXattrResponse {
+  uint32 errno = 1;
+  bytes names = 2;
+}
+
+// --- Directory ---
+message GetParentsRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+}
+message GetParentsResponse {
+  uint32 errno = 1;
+  map<uint64, int32> parents = 2;
+}
+
+message GetDirStatRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+}
+message GetDirStatResponse {
+  uint32 errno = 1;
+  int64 length = 2;
+  int64 space = 3;
+  int64 inodes = 4;
+}
+
+// --- ACL ---
+message SetFaclRequest {
+  MetaContext ctx = 1;
+  uint64 ino = 2;
+  uint32 acl_type = 3;
+  ProtoACLRule rule = 4;
+}
+message SetFaclResponse { uint32 errno = 1; }
+
+message GetFaclRequest {
+  MetaContext ctx = 1;
+  uint64 ino = 2;
+  uint32 acl_type = 3;
+}
+message GetFaclResponse {
+  uint32 errno = 1;
+  ProtoACLRule rule = 2;
+}
+
+// --- Tokens ---
+message StoreTokenRequest {
+  MetaContext ctx = 1;
+  bytes token = 2;
+}
+message StoreTokenResponse {
+  uint32 errno = 1;
+  uint32 id = 2;
+}
+
+message UpdateTokenRequest {
+  MetaContext ctx = 1;
+  uint32 id = 2;
+  bytes token = 3;
+}
+message UpdateTokenResponse { uint32 errno = 1; }
+
+message LoadTokenRequest {
+  MetaContext ctx = 1;
+  uint32 id = 2;
+}
+message LoadTokenResponse {
+  uint32 errno = 1;
+  bytes token = 2;
+}
+
+message DeleteTokensRequest {
+  MetaContext ctx = 1;
+  repeated uint32 ids = 2;
+}
+message DeleteTokensResponse { uint32 errno = 1; }
+
+message ListTokensRequest { MetaContext ctx = 1; }
+message ListTokensResponse {
+  uint32 errno = 1;
+  map<uint32, bytes> tokens = 2;
+}
+
+// --- Admin operations ---
+message GetFormatRequest { }
+message GetFormatResponse {
+  uint32 errno = 1;
+  ProtoFormat format = 2;
+}
+
+message RemoveRequest {
+  MetaContext ctx = 1;
+  uint64 parent = 2;
+  string name = 3;
+  bool skip_trash = 4;
+  int32 num_threads = 5;
+}
+message RemoveResponse {
+  uint32 errno = 1;
+  uint64 count = 2;
+}
+
+message BatchUnlinkRequest {
+  MetaContext ctx = 1;
+  uint64 parent = 2;
+  repeated ProtoEntry entries = 3;
+  bool skip_check_trash = 4;
+}
+message BatchUnlinkResponse {
+  uint32 errno = 1;
+  uint64 count = 2;
+}
+
+message GetSummaryRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  bool recursive = 3;
+  bool strict = 4;
+}
+message GetSummaryResponse {
+  uint32 errno = 1;
+  ProtoSummary summary = 2;
+}
+
+message GetTreeSummaryRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  uint32 depth = 3;
+  uint32 top_n = 4;
+  bool strict = 5;
+}
+message GetTreeSummaryResponse {
+  uint32 errno = 1;
+  ProtoTreeSummary tree = 2;
+}
+
+message CloneRequest {
+  MetaContext ctx = 1;
+  uint64 src_parent_ino = 2;
+  uint64 src_ino = 3;
+  uint64 dst_parent_ino = 4;
+  string dst_name = 5;
+  uint32 cmode = 6;
+  uint32 cumask = 7;
+  uint32 concurrency = 8;
+}
+message CloneResponse {
+  uint32 errno = 1;
+  uint64 count = 2;
+  uint64 total = 3;
+}
+
+message GetPathsRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+}
+message GetPathsResponse {
+  uint32 errno = 1;
+  repeated string paths = 2;
+}
+
+message CheckRequest {
+  MetaContext ctx = 1;
+  string fpath = 2;
+  bool repair = 3;
+  bool recursive = 4;
+  bool sync_dir_stat = 5;
+  uint32 repair_dir_mode = 6;
+}
+message CheckResponse { uint32 errno = 1; }
+
+message CompactAllRequest {
+  MetaContext ctx = 1;
+  int32 threads = 2;
+}
+message CompactAllResponse { uint32 errno = 1; }
+
+message CompactRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  int32 concurrency = 3;
+}
+message CompactResponse { uint32 errno = 1; }
+
+message ListSlicesRequest {
+  MetaContext ctx = 1;
+  repeated SliceMapEntry slices = 2;
+  bool scan_pending = 3;
+  bool delete = 4;
+}
+message ListSlicesResponse {
+  uint32 errno = 1;
+  repeated SliceMapEntry slices = 2;
+}
+
+message HandleQuotaRequest {
+  MetaContext ctx = 1;
+  uint32 cmd = 2;
+  string dpath = 3;
+  uint32 uid = 4;
+  uint32 gid = 5;
+  map<string, ProtoQuota> quotas = 6;
+  bool strict = 7;
+  bool repair = 8;
+  bool create = 9;
+}
+message HandleQuotaResponse { uint32 errno = 1; }
+
+message ScanUserGroupUsageRequest { MetaContext ctx = 1; }
+message ScanUserGroupUsageResponse { uint32 errno = 1; }
+
+message ChrootRequest {
+  MetaContext ctx = 1;
+  string subdir = 2;
+}
+message ChrootResponse { uint32 errno = 1; }
+
+message CleanupTrashBeforeRequest {
+  MetaContext ctx = 1;
+  int64 edge = 2;
+}
+message CleanupTrashBeforeResponse {
+  uint32 errno = 1;
+  int64 deleted_files = 2;
+}
+
+message CleanupDetachedNodesBeforeRequest {
+  MetaContext ctx = 1;
+  int64 edge = 2;
+}
+message CleanupDetachedNodesBeforeResponse { uint32 errno = 1; }
+
+// --- DirHandler ---
+message NewDirHandlerRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  bool plus = 3;
+  repeated ProtoEntry init_entries = 4;
+}
+message NewDirHandlerResponse {
+  uint32 errno = 1;
+  DirHandlerHandle handle = 2;
+}
+
+message DirHandlerListRequest {
+  DirHandlerHandle handle = 1;
+  int32 offset = 2;
+}
+message DirHandlerListResponse {
+  uint32 errno = 1;
+  repeated ProtoEntry entries = 2;
+}
+
+message DirHandlerInsertRequest {
+  DirHandlerHandle handle = 1;
+  uint64 inode = 2;
+  string name = 3;
+  ProtoAttr attr = 4;
+}
+message DirHandlerInsertResponse { uint32 errno = 1; }
+
+message DirHandlerDeleteRequest {
+  DirHandlerHandle handle = 1;
+  string name = 2;
+}
+message DirHandlerDeleteResponse { uint32 errno = 1; }
+
+message DirHandlerCloseRequest { DirHandlerHandle handle = 1; }
+message DirHandlerCloseResponse { uint32 errno = 1; }
+
+// --- Streaming Dump/Load ---
+message DumpMetaRequest {
+  uint64 root = 1;
+  int32 threads = 2;
+  bool keep_secret = 3;
+  bool fast = 4;
+  bool skip_trash = 5;
+}
+message DumpMetaChunk { bytes data = 1; }
+
+message LoadMetaChunk { bytes data = 1; }
+message LoadMetaResponse { uint32 errno = 1; }
+
+message DumpMetaV2Request {
+  MetaContext ctx = 1;
+  bool keep_secret = 2;
+  int32 threads = 3;
+}
+message DumpMetaV2Chunk { bytes data = 1; }
+
+message LoadMetaV2Chunk { bytes data = 1; }
+message LoadMetaV2Response { uint32 errno = 1; }
