@@ -21,63 +21,64 @@ import (
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
-func (s *MetaProxyServer) NewDirHandler(ctx context.Context, req *NewDirHandlerRequest) (*NewDirHandlerResponse, error) {
+func (s *MetaProxyServer) NewDirHandler(ctx context.Context, req *pb.NewDirHandlerRequest) (*pb.NewDirHandlerResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	initEntries := ProtoToEntries(req.InitEntries)
 	handler, errno := s.meta.NewDirHandler(mctx, meta.Ino(req.Inode), req.Plus, initEntries)
 	if errno != 0 {
-		return &NewDirHandlerResponse{Errno: uint32(errno)}, nil
+		return &pb.NewDirHandlerResponse{Errno: uint32(errno)}, nil
 	}
 	s.mu.Lock()
 	handleID := s.nextHandle
 	s.nextHandle++
 	s.handlers[handleID] = handler
 	s.mu.Unlock()
-	return &NewDirHandlerResponse{
+	return &pb.NewDirHandlerResponse{
 		Errno:  0,
-		Handle: &DirHandlerHandle{HandleId: handleID},
+		Handle: &pb.DirHandlerHandle{HandleId: handleID},
 	}, nil
 }
 
-func (s *MetaProxyServer) DirHandlerList(ctx context.Context, req *DirHandlerListRequest) (*DirHandlerListResponse, error) {
+func (s *MetaProxyServer) DirHandlerList(ctx context.Context, req *pb.DirHandlerListRequest) (*pb.DirHandlerListResponse, error) {
 	s.mu.Lock()
 	handler, ok := s.handlers[req.Handle.HandleId]
 	s.mu.Unlock()
 	if !ok {
-		return &DirHandlerListResponse{Errno: uint32(syscall.EBADF)}, nil
+		return &pb.DirHandlerListResponse{Errno: uint32(syscall.EBADF)}, nil
 	}
 	entries, errno := handler.List(meta.Background(), int(req.Offset))
-	return &DirHandlerListResponse{
+	return &pb.DirHandlerListResponse{
 		Errno:   uint32(errno),
 		Entries: EntriesToProto(entries),
 	}, nil
 }
 
-func (s *MetaProxyServer) DirHandlerInsert(ctx context.Context, req *DirHandlerInsertRequest) (*DirHandlerInsertResponse, error) {
+func (s *MetaProxyServer) DirHandlerInsert(ctx context.Context, req *pb.DirHandlerInsertRequest) (*pb.DirHandlerInsertResponse, error) {
 	s.mu.Lock()
 	handler, ok := s.handlers[req.Handle.HandleId]
 	s.mu.Unlock()
 	if !ok {
-		return &DirHandlerInsertResponse{Errno: uint32(syscall.EBADF)}, nil
+		return &pb.DirHandlerInsertResponse{Errno: uint32(syscall.EBADF)}, nil
 	}
 	handler.Insert(meta.Ino(req.Inode), req.Name, ProtoToAttr(req.Attr))
-	return &DirHandlerInsertResponse{Errno: 0}, nil
+	return &pb.DirHandlerInsertResponse{Errno: 0}, nil
 }
 
-func (s *MetaProxyServer) DirHandlerDelete(ctx context.Context, req *DirHandlerDeleteRequest) (*DirHandlerDeleteResponse, error) {
+func (s *MetaProxyServer) DirHandlerDelete(ctx context.Context, req *pb.DirHandlerDeleteRequest) (*pb.DirHandlerDeleteResponse, error) {
 	s.mu.Lock()
 	handler, ok := s.handlers[req.Handle.HandleId]
 	s.mu.Unlock()
 	if !ok {
-		return &DirHandlerDeleteResponse{Errno: uint32(syscall.EBADF)}, nil
+		return &pb.DirHandlerDeleteResponse{Errno: uint32(syscall.EBADF)}, nil
 	}
 	handler.Delete(req.Name)
-	return &DirHandlerDeleteResponse{Errno: 0}, nil
+	return &pb.DirHandlerDeleteResponse{Errno: 0}, nil
 }
 
-func (s *MetaProxyServer) DirHandlerClose(ctx context.Context, req *DirHandlerCloseRequest) (*DirHandlerCloseResponse, error) {
+func (s *MetaProxyServer) DirHandlerClose(ctx context.Context, req *pb.DirHandlerCloseRequest) (*pb.DirHandlerCloseResponse, error) {
 	s.mu.Lock()
 	handler, ok := s.handlers[req.Handle.HandleId]
 	delete(s.handlers, req.Handle.HandleId)
@@ -85,5 +86,5 @@ func (s *MetaProxyServer) DirHandlerClose(ctx context.Context, req *DirHandlerCl
 	if ok {
 		handler.Close()
 	}
-	return &DirHandlerCloseResponse{Errno: 0}, nil
+	return &pb.DirHandlerCloseResponse{Errno: 0}, nil
 }

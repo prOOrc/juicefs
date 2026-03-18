@@ -21,17 +21,18 @@ import (
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
-func (s *MetaProxyServer) SetFacl(ctx context.Context, req *SetFaclRequest) (*SetFaclResponse, error) {
+func (s *MetaProxyServer) SetFacl(ctx context.Context, req *pb.SetFaclRequest) (*pb.SetFaclResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	errno := s.meta.SetFacl(mctx, meta.Ino(req.Ino), uint8(req.AclType), nil)
-	return &SetFaclResponse{Errno: uint32(errno)}, nil
+	return &pb.SetFaclResponse{Errno: uint32(errno)}, nil
 }
 
-func (s *MetaProxyServer) GetFacl(ctx context.Context, req *GetFaclRequest) (*GetFaclResponse, error) {
+func (s *MetaProxyServer) GetFacl(ctx context.Context, req *pb.GetFaclRequest) (*pb.GetFaclResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var rule aclAPI.Rule
 	errno := s.meta.GetFacl(mctx, meta.Ino(req.Ino), uint8(req.AclType), &rule)
-	return &GetFaclResponse{Errno: uint32(errno)}, nil
+	return &pb.GetFaclResponse{Errno: uint32(errno)}, nil
 }

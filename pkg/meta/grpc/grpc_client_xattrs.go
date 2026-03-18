@@ -21,6 +21,7 @@ import (
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // --- Xattrs operations ---
@@ -30,7 +31,7 @@ func (c *Client) GetXattr(ctx meta.Context, ino meta.Ino, name string, vbuff *[]
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.GetXattr(grpcCtx, &GetXattrRequest{
+	resp, err := c.client.GetXattr(grpcCtx, &pb.GetXattrRequest{
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 		Name:  name,
@@ -52,7 +53,7 @@ func (c *Client) SetXattr(ctx meta.Context, ino meta.Ino, name string, value []b
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.SetXattr(grpcCtx, &SetXattrRequest{
+	resp, err := c.client.SetXattr(grpcCtx, &pb.SetXattrRequest{
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 		Name:  name,
@@ -70,7 +71,7 @@ func (c *Client) RemoveXattr(ctx meta.Context, ino meta.Ino, name string) syscal
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.RemoveXattr(grpcCtx, &RemoveXattrRequest{
+	resp, err := c.client.RemoveXattr(grpcCtx, &pb.RemoveXattrRequest{
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 		Name:  name,
@@ -86,7 +87,7 @@ func (c *Client) ListXattr(ctx meta.Context, ino meta.Ino, names *[]byte) syscal
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.ListXattr(grpcCtx, &ListXattrRequest{
+	resp, err := c.client.ListXattr(grpcCtx, &pb.ListXattrRequest{
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 	})

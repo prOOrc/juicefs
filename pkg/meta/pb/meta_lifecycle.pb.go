@@ -17,9 +17,9 @@
 // versions:
 // 	protoc-gen-go v1.36.9
 // 	protoc        v6.30.2
-// source: meta_lifecycle.proto
+// source: pb/meta_lifecycle.proto
 
-package grpc
+package pb
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -46,7 +46,7 @@ type InitRequest struct {
 
 func (x *InitRequest) Reset() {
 	*x = InitRequest{}
-	mi := &file_meta_lifecycle_proto_msgTypes[0]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58,7 +58,7 @@ func (x *InitRequest) String() string {
 func (*InitRequest) ProtoMessage() {}
 
 func (x *InitRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[0]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71,7 +71,7 @@ func (x *InitRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InitRequest.ProtoReflect.Descriptor instead.
 func (*InitRequest) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{0}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *InitRequest) GetFormat() *ProtoFormat {
@@ -97,7 +97,7 @@ type InitResponse struct {
 
 func (x *InitResponse) Reset() {
 	*x = InitResponse{}
-	mi := &file_meta_lifecycle_proto_msgTypes[1]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -109,7 +109,7 @@ func (x *InitResponse) String() string {
 func (*InitResponse) ProtoMessage() {}
 
 func (x *InitResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[1]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -122,7 +122,7 @@ func (x *InitResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InitResponse.ProtoReflect.Descriptor instead.
 func (*InitResponse) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{1}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *InitResponse) GetErrno() uint32 {
@@ -141,7 +141,7 @@ type LoadRequest struct {
 
 func (x *LoadRequest) Reset() {
 	*x = LoadRequest{}
-	mi := &file_meta_lifecycle_proto_msgTypes[2]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -153,7 +153,7 @@ func (x *LoadRequest) String() string {
 func (*LoadRequest) ProtoMessage() {}
 
 func (x *LoadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[2]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -166,7 +166,7 @@ func (x *LoadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoadRequest.ProtoReflect.Descriptor instead.
 func (*LoadRequest) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{2}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *LoadRequest) GetCheckVersion() bool {
@@ -186,7 +186,7 @@ type LoadResponse struct {
 
 func (x *LoadResponse) Reset() {
 	*x = LoadResponse{}
-	mi := &file_meta_lifecycle_proto_msgTypes[3]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -198,7 +198,7 @@ func (x *LoadResponse) String() string {
 func (*LoadResponse) ProtoMessage() {}
 
 func (x *LoadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[3]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -211,7 +211,7 @@ func (x *LoadResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoadResponse.ProtoReflect.Descriptor instead.
 func (*LoadResponse) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{3}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *LoadResponse) GetErrno() uint32 {
@@ -237,7 +237,7 @@ type NewSessionRequest struct {
 
 func (x *NewSessionRequest) Reset() {
 	*x = NewSessionRequest{}
-	mi := &file_meta_lifecycle_proto_msgTypes[4]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -249,7 +249,7 @@ func (x *NewSessionRequest) String() string {
 func (*NewSessionRequest) ProtoMessage() {}
 
 func (x *NewSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[4]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -262,7 +262,7 @@ func (x *NewSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NewSessionRequest.ProtoReflect.Descriptor instead.
 func (*NewSessionRequest) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{4}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *NewSessionRequest) GetRecord() bool {
@@ -281,7 +281,7 @@ type NewSessionResponse struct {
 
 func (x *NewSessionResponse) Reset() {
 	*x = NewSessionResponse{}
-	mi := &file_meta_lifecycle_proto_msgTypes[5]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -293,7 +293,7 @@ func (x *NewSessionResponse) String() string {
 func (*NewSessionResponse) ProtoMessage() {}
 
 func (x *NewSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[5]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -306,7 +306,7 @@ func (x *NewSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NewSessionResponse.ProtoReflect.Descriptor instead.
 func (*NewSessionResponse) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{5}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *NewSessionResponse) GetErrno() uint32 {
@@ -324,7 +324,7 @@ type CloseSessionRequest struct {
 
 func (x *CloseSessionRequest) Reset() {
 	*x = CloseSessionRequest{}
-	mi := &file_meta_lifecycle_proto_msgTypes[6]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -336,7 +336,7 @@ func (x *CloseSessionRequest) String() string {
 func (*CloseSessionRequest) ProtoMessage() {}
 
 func (x *CloseSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[6]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -349,7 +349,7 @@ func (x *CloseSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CloseSessionRequest.ProtoReflect.Descriptor instead.
 func (*CloseSessionRequest) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{6}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{6}
 }
 
 type CloseSessionResponse struct {
@@ -361,7 +361,7 @@ type CloseSessionResponse struct {
 
 func (x *CloseSessionResponse) Reset() {
 	*x = CloseSessionResponse{}
-	mi := &file_meta_lifecycle_proto_msgTypes[7]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -373,7 +373,7 @@ func (x *CloseSessionResponse) String() string {
 func (*CloseSessionResponse) ProtoMessage() {}
 
 func (x *CloseSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[7]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -386,7 +386,7 @@ func (x *CloseSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CloseSessionResponse.ProtoReflect.Descriptor instead.
 func (*CloseSessionResponse) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{7}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *CloseSessionResponse) GetErrno() uint32 {
@@ -404,7 +404,7 @@ type FlushSessionRequest struct {
 
 func (x *FlushSessionRequest) Reset() {
 	*x = FlushSessionRequest{}
-	mi := &file_meta_lifecycle_proto_msgTypes[8]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -416,7 +416,7 @@ func (x *FlushSessionRequest) String() string {
 func (*FlushSessionRequest) ProtoMessage() {}
 
 func (x *FlushSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[8]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -429,7 +429,7 @@ func (x *FlushSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FlushSessionRequest.ProtoReflect.Descriptor instead.
 func (*FlushSessionRequest) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{8}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{8}
 }
 
 type FlushSessionResponse struct {
@@ -441,7 +441,7 @@ type FlushSessionResponse struct {
 
 func (x *FlushSessionResponse) Reset() {
 	*x = FlushSessionResponse{}
-	mi := &file_meta_lifecycle_proto_msgTypes[9]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -453,7 +453,7 @@ func (x *FlushSessionResponse) String() string {
 func (*FlushSessionResponse) ProtoMessage() {}
 
 func (x *FlushSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[9]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -466,7 +466,7 @@ func (x *FlushSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FlushSessionResponse.ProtoReflect.Descriptor instead.
 func (*FlushSessionResponse) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{9}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *FlushSessionResponse) GetErrno() uint32 {
@@ -484,7 +484,7 @@ type ShutdownRequest struct {
 
 func (x *ShutdownRequest) Reset() {
 	*x = ShutdownRequest{}
-	mi := &file_meta_lifecycle_proto_msgTypes[10]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -496,7 +496,7 @@ func (x *ShutdownRequest) String() string {
 func (*ShutdownRequest) ProtoMessage() {}
 
 func (x *ShutdownRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[10]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -509,7 +509,7 @@ func (x *ShutdownRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShutdownRequest.ProtoReflect.Descriptor instead.
 func (*ShutdownRequest) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{10}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{10}
 }
 
 type ShutdownResponse struct {
@@ -521,7 +521,7 @@ type ShutdownResponse struct {
 
 func (x *ShutdownResponse) Reset() {
 	*x = ShutdownResponse{}
-	mi := &file_meta_lifecycle_proto_msgTypes[11]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -533,7 +533,7 @@ func (x *ShutdownResponse) String() string {
 func (*ShutdownResponse) ProtoMessage() {}
 
 func (x *ShutdownResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[11]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -546,7 +546,7 @@ func (x *ShutdownResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShutdownResponse.ProtoReflect.Descriptor instead.
 func (*ShutdownResponse) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{11}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ShutdownResponse) GetErrno() uint32 {
@@ -564,7 +564,7 @@ type ResetRequest struct {
 
 func (x *ResetRequest) Reset() {
 	*x = ResetRequest{}
-	mi := &file_meta_lifecycle_proto_msgTypes[12]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -576,7 +576,7 @@ func (x *ResetRequest) String() string {
 func (*ResetRequest) ProtoMessage() {}
 
 func (x *ResetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[12]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -589,7 +589,7 @@ func (x *ResetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetRequest.ProtoReflect.Descriptor instead.
 func (*ResetRequest) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{12}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{12}
 }
 
 type ResetResponse struct {
@@ -601,7 +601,7 @@ type ResetResponse struct {
 
 func (x *ResetResponse) Reset() {
 	*x = ResetResponse{}
-	mi := &file_meta_lifecycle_proto_msgTypes[13]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -613,7 +613,7 @@ func (x *ResetResponse) String() string {
 func (*ResetResponse) ProtoMessage() {}
 
 func (x *ResetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[13]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -626,7 +626,7 @@ func (x *ResetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetResponse.ProtoReflect.Descriptor instead.
 func (*ResetResponse) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{13}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ResetResponse) GetErrno() uint32 {
@@ -646,7 +646,7 @@ type GetSessionRequest struct {
 
 func (x *GetSessionRequest) Reset() {
 	*x = GetSessionRequest{}
-	mi := &file_meta_lifecycle_proto_msgTypes[14]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -658,7 +658,7 @@ func (x *GetSessionRequest) String() string {
 func (*GetSessionRequest) ProtoMessage() {}
 
 func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[14]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -671,7 +671,7 @@ func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSessionRequest.ProtoReflect.Descriptor instead.
 func (*GetSessionRequest) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{14}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *GetSessionRequest) GetSid() uint64 {
@@ -698,7 +698,7 @@ type GetSessionResponse struct {
 
 func (x *GetSessionResponse) Reset() {
 	*x = GetSessionResponse{}
-	mi := &file_meta_lifecycle_proto_msgTypes[15]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -710,7 +710,7 @@ func (x *GetSessionResponse) String() string {
 func (*GetSessionResponse) ProtoMessage() {}
 
 func (x *GetSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[15]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -723,7 +723,7 @@ func (x *GetSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSessionResponse.ProtoReflect.Descriptor instead.
 func (*GetSessionResponse) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{15}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *GetSessionResponse) GetErrno() uint32 {
@@ -748,7 +748,7 @@ type ListSessionsRequest struct {
 
 func (x *ListSessionsRequest) Reset() {
 	*x = ListSessionsRequest{}
-	mi := &file_meta_lifecycle_proto_msgTypes[16]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -760,7 +760,7 @@ func (x *ListSessionsRequest) String() string {
 func (*ListSessionsRequest) ProtoMessage() {}
 
 func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[16]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -773,7 +773,7 @@ func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionsRequest.ProtoReflect.Descriptor instead.
 func (*ListSessionsRequest) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{16}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{16}
 }
 
 type ListSessionsResponse struct {
@@ -786,7 +786,7 @@ type ListSessionsResponse struct {
 
 func (x *ListSessionsResponse) Reset() {
 	*x = ListSessionsResponse{}
-	mi := &file_meta_lifecycle_proto_msgTypes[17]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -798,7 +798,7 @@ func (x *ListSessionsResponse) String() string {
 func (*ListSessionsResponse) ProtoMessage() {}
 
 func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[17]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -811,7 +811,7 @@ func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionsResponse.ProtoReflect.Descriptor instead.
 func (*ListSessionsResponse) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{17}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ListSessionsResponse) GetErrno() uint32 {
@@ -837,7 +837,7 @@ type CleanStaleSessionsRequest struct {
 
 func (x *CleanStaleSessionsRequest) Reset() {
 	*x = CleanStaleSessionsRequest{}
-	mi := &file_meta_lifecycle_proto_msgTypes[18]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -849,7 +849,7 @@ func (x *CleanStaleSessionsRequest) String() string {
 func (*CleanStaleSessionsRequest) ProtoMessage() {}
 
 func (x *CleanStaleSessionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[18]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -862,7 +862,7 @@ func (x *CleanStaleSessionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CleanStaleSessionsRequest.ProtoReflect.Descriptor instead.
 func (*CleanStaleSessionsRequest) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{18}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *CleanStaleSessionsRequest) GetCtx() *MetaContext {
@@ -881,7 +881,7 @@ type CleanStaleSessionsResponse struct {
 
 func (x *CleanStaleSessionsResponse) Reset() {
 	*x = CleanStaleSessionsResponse{}
-	mi := &file_meta_lifecycle_proto_msgTypes[19]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -893,7 +893,7 @@ func (x *CleanStaleSessionsResponse) String() string {
 func (*CleanStaleSessionsResponse) ProtoMessage() {}
 
 func (x *CleanStaleSessionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_lifecycle_proto_msgTypes[19]
+	mi := &file_pb_meta_lifecycle_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -906,7 +906,7 @@ func (x *CleanStaleSessionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CleanStaleSessionsResponse.ProtoReflect.Descriptor instead.
 func (*CleanStaleSessionsResponse) Descriptor() ([]byte, []int) {
-	return file_meta_lifecycle_proto_rawDescGZIP(), []int{19}
+	return file_pb_meta_lifecycle_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *CleanStaleSessionsResponse) GetErrno() uint32 {
@@ -916,21 +916,21 @@ func (x *CleanStaleSessionsResponse) GetErrno() uint32 {
 	return 0
 }
 
-var File_meta_lifecycle_proto protoreflect.FileDescriptor
+var File_pb_meta_lifecycle_proto protoreflect.FileDescriptor
 
-const file_meta_lifecycle_proto_rawDesc = "" +
+const file_pb_meta_lifecycle_proto_rawDesc = "" +
 	"\n" +
-	"\x14meta_lifecycle.proto\x12\x04meta\x1a\x11meta_common.proto\"N\n" +
-	"\vInitRequest\x12)\n" +
-	"\x06format\x18\x01 \x01(\v2\x11.meta.ProtoFormatR\x06format\x12\x14\n" +
+	"\x17pb/meta_lifecycle.proto\x12\x02pb\x1a\x14pb/meta_common.proto\"L\n" +
+	"\vInitRequest\x12'\n" +
+	"\x06format\x18\x01 \x01(\v2\x0f.pb.ProtoFormatR\x06format\x12\x14\n" +
 	"\x05force\x18\x02 \x01(\bR\x05force\"$\n" +
 	"\fInitResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\"2\n" +
 	"\vLoadRequest\x12#\n" +
-	"\rcheck_version\x18\x01 \x01(\bR\fcheckVersion\"O\n" +
+	"\rcheck_version\x18\x01 \x01(\bR\fcheckVersion\"M\n" +
 	"\fLoadResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12)\n" +
-	"\x06format\x18\x02 \x01(\v2\x11.meta.ProtoFormatR\x06format\"+\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\x12'\n" +
+	"\x06format\x18\x02 \x01(\v2\x0f.pb.ProtoFormatR\x06format\"+\n" +
 	"\x11NewSessionRequest\x12\x16\n" +
 	"\x06record\x18\x01 \x01(\bR\x06record\"*\n" +
 	"\x12NewSessionResponse\x12\x14\n" +
@@ -949,63 +949,63 @@ const file_meta_lifecycle_proto_rawDesc = "" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\"=\n" +
 	"\x11GetSessionRequest\x12\x10\n" +
 	"\x03sid\x18\x01 \x01(\x04R\x03sid\x12\x16\n" +
-	"\x06detail\x18\x02 \x01(\bR\x06detail\"X\n" +
+	"\x06detail\x18\x02 \x01(\bR\x06detail\"V\n" +
 	"\x12GetSessionResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12,\n" +
-	"\asession\x18\x02 \x01(\v2\x12.meta.ProtoSessionR\asession\"\x15\n" +
-	"\x13ListSessionsRequest\"\\\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\x12*\n" +
+	"\asession\x18\x02 \x01(\v2\x10.pb.ProtoSessionR\asession\"\x15\n" +
+	"\x13ListSessionsRequest\"Z\n" +
 	"\x14ListSessionsResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12.\n" +
-	"\bsessions\x18\x02 \x03(\v2\x12.meta.ProtoSessionR\bsessions\"@\n" +
-	"\x19CleanStaleSessionsRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\"2\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\x12,\n" +
+	"\bsessions\x18\x02 \x03(\v2\x10.pb.ProtoSessionR\bsessions\">\n" +
+	"\x19CleanStaleSessionsRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\"2\n" +
 	"\x1aCleanStaleSessionsResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errnoB,Z*github.com/juicedata/juicefs/pkg/meta/grpcb\x06proto3"
+	"\x05errno\x18\x01 \x01(\rR\x05errnoB\x06Z\x04./pbb\x06proto3"
 
 var (
-	file_meta_lifecycle_proto_rawDescOnce sync.Once
-	file_meta_lifecycle_proto_rawDescData []byte
+	file_pb_meta_lifecycle_proto_rawDescOnce sync.Once
+	file_pb_meta_lifecycle_proto_rawDescData []byte
 )
 
-func file_meta_lifecycle_proto_rawDescGZIP() []byte {
-	file_meta_lifecycle_proto_rawDescOnce.Do(func() {
-		file_meta_lifecycle_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_meta_lifecycle_proto_rawDesc), len(file_meta_lifecycle_proto_rawDesc)))
+func file_pb_meta_lifecycle_proto_rawDescGZIP() []byte {
+	file_pb_meta_lifecycle_proto_rawDescOnce.Do(func() {
+		file_pb_meta_lifecycle_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pb_meta_lifecycle_proto_rawDesc), len(file_pb_meta_lifecycle_proto_rawDesc)))
 	})
-	return file_meta_lifecycle_proto_rawDescData
+	return file_pb_meta_lifecycle_proto_rawDescData
 }
 
-var file_meta_lifecycle_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
-var file_meta_lifecycle_proto_goTypes = []any{
-	(*InitRequest)(nil),                // 0: meta.InitRequest
-	(*InitResponse)(nil),               // 1: meta.InitResponse
-	(*LoadRequest)(nil),                // 2: meta.LoadRequest
-	(*LoadResponse)(nil),               // 3: meta.LoadResponse
-	(*NewSessionRequest)(nil),          // 4: meta.NewSessionRequest
-	(*NewSessionResponse)(nil),         // 5: meta.NewSessionResponse
-	(*CloseSessionRequest)(nil),        // 6: meta.CloseSessionRequest
-	(*CloseSessionResponse)(nil),       // 7: meta.CloseSessionResponse
-	(*FlushSessionRequest)(nil),        // 8: meta.FlushSessionRequest
-	(*FlushSessionResponse)(nil),       // 9: meta.FlushSessionResponse
-	(*ShutdownRequest)(nil),            // 10: meta.ShutdownRequest
-	(*ShutdownResponse)(nil),           // 11: meta.ShutdownResponse
-	(*ResetRequest)(nil),               // 12: meta.ResetRequest
-	(*ResetResponse)(nil),              // 13: meta.ResetResponse
-	(*GetSessionRequest)(nil),          // 14: meta.GetSessionRequest
-	(*GetSessionResponse)(nil),         // 15: meta.GetSessionResponse
-	(*ListSessionsRequest)(nil),        // 16: meta.ListSessionsRequest
-	(*ListSessionsResponse)(nil),       // 17: meta.ListSessionsResponse
-	(*CleanStaleSessionsRequest)(nil),  // 18: meta.CleanStaleSessionsRequest
-	(*CleanStaleSessionsResponse)(nil), // 19: meta.CleanStaleSessionsResponse
-	(*ProtoFormat)(nil),                // 20: meta.ProtoFormat
-	(*ProtoSession)(nil),               // 21: meta.ProtoSession
-	(*MetaContext)(nil),                // 22: meta.MetaContext
+var file_pb_meta_lifecycle_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_pb_meta_lifecycle_proto_goTypes = []any{
+	(*InitRequest)(nil),                // 0: pb.InitRequest
+	(*InitResponse)(nil),               // 1: pb.InitResponse
+	(*LoadRequest)(nil),                // 2: pb.LoadRequest
+	(*LoadResponse)(nil),               // 3: pb.LoadResponse
+	(*NewSessionRequest)(nil),          // 4: pb.NewSessionRequest
+	(*NewSessionResponse)(nil),         // 5: pb.NewSessionResponse
+	(*CloseSessionRequest)(nil),        // 6: pb.CloseSessionRequest
+	(*CloseSessionResponse)(nil),       // 7: pb.CloseSessionResponse
+	(*FlushSessionRequest)(nil),        // 8: pb.FlushSessionRequest
+	(*FlushSessionResponse)(nil),       // 9: pb.FlushSessionResponse
+	(*ShutdownRequest)(nil),            // 10: pb.ShutdownRequest
+	(*ShutdownResponse)(nil),           // 11: pb.ShutdownResponse
+	(*ResetRequest)(nil),               // 12: pb.ResetRequest
+	(*ResetResponse)(nil),              // 13: pb.ResetResponse
+	(*GetSessionRequest)(nil),          // 14: pb.GetSessionRequest
+	(*GetSessionResponse)(nil),         // 15: pb.GetSessionResponse
+	(*ListSessionsRequest)(nil),        // 16: pb.ListSessionsRequest
+	(*ListSessionsResponse)(nil),       // 17: pb.ListSessionsResponse
+	(*CleanStaleSessionsRequest)(nil),  // 18: pb.CleanStaleSessionsRequest
+	(*CleanStaleSessionsResponse)(nil), // 19: pb.CleanStaleSessionsResponse
+	(*ProtoFormat)(nil),                // 20: pb.ProtoFormat
+	(*ProtoSession)(nil),               // 21: pb.ProtoSession
+	(*MetaContext)(nil),                // 22: pb.MetaContext
 }
-var file_meta_lifecycle_proto_depIdxs = []int32{
-	20, // 0: meta.InitRequest.format:type_name -> meta.ProtoFormat
-	20, // 1: meta.LoadResponse.format:type_name -> meta.ProtoFormat
-	21, // 2: meta.GetSessionResponse.session:type_name -> meta.ProtoSession
-	21, // 3: meta.ListSessionsResponse.sessions:type_name -> meta.ProtoSession
-	22, // 4: meta.CleanStaleSessionsRequest.ctx:type_name -> meta.MetaContext
+var file_pb_meta_lifecycle_proto_depIdxs = []int32{
+	20, // 0: pb.InitRequest.format:type_name -> pb.ProtoFormat
+	20, // 1: pb.LoadResponse.format:type_name -> pb.ProtoFormat
+	21, // 2: pb.GetSessionResponse.session:type_name -> pb.ProtoSession
+	21, // 3: pb.ListSessionsResponse.sessions:type_name -> pb.ProtoSession
+	22, // 4: pb.CleanStaleSessionsRequest.ctx:type_name -> pb.MetaContext
 	5,  // [5:5] is the sub-list for method output_type
 	5,  // [5:5] is the sub-list for method input_type
 	5,  // [5:5] is the sub-list for extension type_name
@@ -1013,27 +1013,27 @@ var file_meta_lifecycle_proto_depIdxs = []int32{
 	0,  // [0:5] is the sub-list for field type_name
 }
 
-func init() { file_meta_lifecycle_proto_init() }
-func file_meta_lifecycle_proto_init() {
-	if File_meta_lifecycle_proto != nil {
+func init() { file_pb_meta_lifecycle_proto_init() }
+func file_pb_meta_lifecycle_proto_init() {
+	if File_pb_meta_lifecycle_proto != nil {
 		return
 	}
-	file_meta_common_proto_init()
+	file_pb_meta_common_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meta_lifecycle_proto_rawDesc), len(file_meta_lifecycle_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_meta_lifecycle_proto_rawDesc), len(file_pb_meta_lifecycle_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_meta_lifecycle_proto_goTypes,
-		DependencyIndexes: file_meta_lifecycle_proto_depIdxs,
-		MessageInfos:      file_meta_lifecycle_proto_msgTypes,
+		GoTypes:           file_pb_meta_lifecycle_proto_goTypes,
+		DependencyIndexes: file_pb_meta_lifecycle_proto_depIdxs,
+		MessageInfos:      file_pb_meta_lifecycle_proto_msgTypes,
 	}.Build()
-	File_meta_lifecycle_proto = out.File
-	file_meta_lifecycle_proto_goTypes = nil
-	file_meta_lifecycle_proto_depIdxs = nil
+	File_pb_meta_lifecycle_proto = out.File
+	file_pb_meta_lifecycle_proto_goTypes = nil
+	file_pb_meta_lifecycle_proto_depIdxs = nil
 }

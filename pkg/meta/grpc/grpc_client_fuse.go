@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // --- Core FUSE operations ---
@@ -31,7 +32,7 @@ func (c *Client) StatFS(ctx meta.Context, ino meta.Ino, totalspace, availspace, 
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.StatFS(grpcCtx, &StatFSRequest{
+	resp, err := c.client.StatFS(grpcCtx, &pb.StatFSRequest{
 		Ctx: toProtoContext(ctx),
 		Ino: uint64(ino),
 	})
@@ -61,7 +62,7 @@ func (c *Client) Lookup(ctx meta.Context, parent meta.Ino, name string, inode *m
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Lookup(grpcCtx, &LookupRequest{
+	resp, err := c.client.Lookup(grpcCtx, &pb.LookupRequest{
 		Ctx:             toProtoContext(ctx),
 		Parent:          uint64(parent),
 		Name:            name,
@@ -87,7 +88,7 @@ func (c *Client) Resolve(ctx meta.Context, parent meta.Ino, path string, inode *
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Resolve(grpcCtx, &ResolveRequest{
+	resp, err := c.client.Resolve(grpcCtx, &pb.ResolveRequest{
 		Ctx:    toProtoContext(ctx),
 		Parent: uint64(parent),
 		Path:   path,
@@ -112,7 +113,7 @@ func (c *Client) Access(ctx meta.Context, ino meta.Ino, mode uint8, attr *meta.A
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Access(grpcCtx, &AccessRequest{
+	resp, err := c.client.Access(grpcCtx, &pb.AccessRequest{
 		Ctx:      toProtoContext(ctx),
 		Inode:    uint64(ino),
 		Modemask: uint32(mode),
@@ -134,7 +135,7 @@ func (c *Client) GetAttr(ctx meta.Context, ino meta.Ino, attr *meta.Attr) syscal
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.GetAttr(grpcCtx, &GetAttrRequest{
+	resp, err := c.client.GetAttr(grpcCtx, &pb.GetAttrRequest{
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 	})
@@ -155,7 +156,7 @@ func (c *Client) SetAttr(ctx meta.Context, ino meta.Ino, set uint16, sggidclearm
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	req := &SetAttrRequest{
+	req := &pb.SetAttrRequest{
 		Ctx:            toProtoContext(ctx),
 		Inode:          uint64(ino),
 		Set:            uint32(set),
@@ -174,7 +175,7 @@ func (c *Client) CheckSetAttr(ctx meta.Context, ino meta.Ino, set uint16, attr m
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.CheckSetAttr(grpcCtx, &CheckSetAttrRequest{
+	resp, err := c.client.CheckSetAttr(grpcCtx, &pb.CheckSetAttrRequest{
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 		Set:   uint32(set),
@@ -191,7 +192,7 @@ func (c *Client) Mknod(ctx meta.Context, parent meta.Ino, name string, typ uint8
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Mknod(grpcCtx, &MknodRequest{
+	resp, err := c.client.Mknod(grpcCtx, &pb.MknodRequest{
 		Ctx:    toProtoContext(ctx),
 		Parent: uint64(parent),
 		Name:   name,
@@ -221,7 +222,7 @@ func (c *Client) Mkdir(ctx meta.Context, parent meta.Ino, name string, mode, cum
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Mkdir(grpcCtx, &MkdirRequest{
+	resp, err := c.client.Mkdir(grpcCtx, &pb.MkdirRequest{
 		Ctx:      toProtoContext(ctx),
 		Parent:   uint64(parent),
 		Name:     name,
@@ -249,7 +250,7 @@ func (c *Client) Create(ctx meta.Context, parent meta.Ino, name string, mode, cu
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Create(grpcCtx, &CreateRequest{
+	resp, err := c.client.Create(grpcCtx, &pb.CreateRequest{
 		Ctx:    toProtoContext(ctx),
 		Parent: uint64(parent),
 		Name:   name,
@@ -277,7 +278,7 @@ func (c *Client) Open(ctx meta.Context, ino meta.Ino, flags uint32, attr *meta.A
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Open(grpcCtx, &OpenRequest{
+	resp, err := c.client.Open(grpcCtx, &pb.OpenRequest{
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 		Flags: flags,
@@ -299,7 +300,7 @@ func (c *Client) Close(ctx meta.Context, ino meta.Ino) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Close(grpcCtx, &CloseRequest{
+	resp, err := c.client.Close(grpcCtx, &pb.CloseRequest{
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 	})
@@ -319,7 +320,7 @@ func (c *Client) Unlink(ctx meta.Context, parent meta.Ino, name string, skipChec
 		skip = skipCheckTrash[0]
 	}
 
-	resp, err := c.client.Unlink(grpcCtx, &UnlinkRequest{
+	resp, err := c.client.Unlink(grpcCtx, &pb.UnlinkRequest{
 		Ctx:            toProtoContext(ctx),
 		Parent:         uint64(parent),
 		Name:           name,
@@ -341,7 +342,7 @@ func (c *Client) Rmdir(ctx meta.Context, parent meta.Ino, name string, skipCheck
 		skip = skipCheckTrash[0]
 	}
 
-	resp, err := c.client.Rmdir(grpcCtx, &RmdirRequest{
+	resp, err := c.client.Rmdir(grpcCtx, &pb.RmdirRequest{
 		Ctx:            toProtoContext(ctx),
 		Parent:         uint64(parent),
 		Name:           name,
@@ -358,7 +359,7 @@ func (c *Client) Rename(ctx meta.Context, srcParent meta.Ino, srcName string, ds
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Rename(grpcCtx, &RenameRequest{
+	resp, err := c.client.Rename(grpcCtx, &pb.RenameRequest{
 		Ctx:       toProtoContext(ctx),
 		ParentSrc: uint64(srcParent),
 		NameSrc:   srcName,
@@ -386,7 +387,7 @@ func (c *Client) Link(ctx meta.Context, srcIno, parent meta.Ino, name string, at
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Link(grpcCtx, &LinkRequest{
+	resp, err := c.client.Link(grpcCtx, &pb.LinkRequest{
 		Ctx:      toProtoContext(ctx),
 		InodeSrc: uint64(srcIno),
 		Parent:   uint64(parent),
@@ -409,7 +410,7 @@ func (c *Client) Symlink(ctx meta.Context, parent meta.Ino, name, path string, i
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Symlink(grpcCtx, &SymlinkRequest{
+	resp, err := c.client.Symlink(grpcCtx, &pb.SymlinkRequest{
 		Ctx:    toProtoContext(ctx),
 		Parent: uint64(parent),
 		Name:   name,
@@ -435,7 +436,7 @@ func (c *Client) ReadLink(ctx meta.Context, ino meta.Ino, path *[]byte) syscall.
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.ReadLink(grpcCtx, &ReadLinkRequest{
+	resp, err := c.client.ReadLink(grpcCtx, &pb.ReadLinkRequest{
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 	})
@@ -456,7 +457,7 @@ func (c *Client) Truncate(ctx meta.Context, ino meta.Ino, flags uint8, length ui
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Truncate(grpcCtx, &TruncateRequest{
+	resp, err := c.client.Truncate(grpcCtx, &pb.TruncateRequest{
 		Ctx:           toProtoContext(ctx),
 		Inode:         uint64(ino),
 		Flags:         uint32(flags),
@@ -480,7 +481,7 @@ func (c *Client) Fallocate(ctx meta.Context, ino meta.Ino, mode uint8, off, size
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Fallocate(grpcCtx, &FallocateRequest{
+	resp, err := c.client.Fallocate(grpcCtx, &pb.FallocateRequest{
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 		Mode:  uint32(mode),
@@ -504,7 +505,7 @@ func (c *Client) Readdir(ctx meta.Context, ino meta.Ino, wantAttr uint8, entries
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Readdir(grpcCtx, &ReaddirRequest{
+	resp, err := c.client.Readdir(grpcCtx, &pb.ReaddirRequest{
 		Ctx:      toProtoContext(ctx),
 		Inode:    uint64(ino),
 		Wantattr: uint32(wantAttr),
@@ -530,7 +531,7 @@ func (c *Client) Read(ctx meta.Context, ino meta.Ino, indx uint32, slices *[]met
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Read(grpcCtx, &ReadRequest{
+	resp, err := c.client.Read(grpcCtx, &pb.ReadRequest{
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 		Indx:  indx,
@@ -561,12 +562,12 @@ func (c *Client) Write(ctx meta.Context, ino meta.Ino, indx, off uint32, slice m
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Write(grpcCtx, &WriteRequest{
+	resp, err := c.client.Write(grpcCtx, &pb.WriteRequest{
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 		Indx:  indx,
 		Off:   off,
-		Slice: &ProtoSlice{
+		Slice: &pb.ProtoSlice{
 			Id:   slice.Id,
 			Size: slice.Size,
 			Off:  slice.Off,
@@ -585,7 +586,7 @@ func (c *Client) NewSlice(ctx meta.Context, id *uint64) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.NewSlice(grpcCtx, &NewSliceRequest{
+	resp, err := c.client.NewSlice(grpcCtx, &pb.NewSliceRequest{
 		Ctx: toProtoContext(ctx),
 	})
 	if err != nil {
@@ -605,7 +606,7 @@ func (c *Client) InvalidateChunkCache(ctx meta.Context, ino meta.Ino, indx uint3
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.InvalidateChunkCache(grpcCtx, &InvalidateChunkCacheRequest{
+	resp, err := c.client.InvalidateChunkCache(grpcCtx, &pb.InvalidateChunkCacheRequest{
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 		Indx:  indx,
@@ -621,7 +622,7 @@ func (c *Client) CopyFileRange(ctx meta.Context, fin, offIn, fout, offOut, size 
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.CopyFileRange(grpcCtx, &CopyFileRangeRequest{
+	resp, err := c.client.CopyFileRange(grpcCtx, &pb.CopyFileRangeRequest{
 		Ctx:    toProtoContext(ctx),
 		Fin:    fin,
 		OffIn:  offIn,

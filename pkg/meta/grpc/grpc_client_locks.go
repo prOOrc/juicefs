@@ -21,6 +21,7 @@ import (
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // --- Locks operations ---
@@ -30,7 +31,7 @@ func (c *Client) Flock(ctx meta.Context, ino meta.Ino, owner uint64, ltype uint3
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Flock(grpcCtx, &FlockRequest{
+	resp, err := c.client.Flock(grpcCtx, &pb.FlockRequest{
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 		Owner: owner,
@@ -48,7 +49,7 @@ func (c *Client) Getlk(ctx meta.Context, ino meta.Ino, owner uint64, ltype uint3
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Getlk(grpcCtx, &GetlkRequest{
+	resp, err := c.client.Getlk(grpcCtx, &pb.GetlkRequest{
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 		Owner: owner,
@@ -67,7 +68,7 @@ func (c *Client) Setlk(ctx meta.Context, ino meta.Ino, owner uint64, block bool,
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Setlk(grpcCtx, &SetlkRequest{
+	resp, err := c.client.Setlk(grpcCtx, &pb.SetlkRequest{
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 		Owner: owner,

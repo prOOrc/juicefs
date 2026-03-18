@@ -21,15 +21,16 @@ import (
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // Attr conversion
 
-func AttrToProto(a *meta.Attr) *ProtoAttr {
+func AttrToProto(a *meta.Attr) *pb.ProtoAttr {
 	if a == nil {
 		return nil
 	}
-	return &ProtoAttr{
+	return &pb.ProtoAttr{
 		Flags:      uint32(a.Flags),
 		Typ:        uint32(a.Typ),
 		Mode:       uint32(a.Mode),
@@ -52,7 +53,7 @@ func AttrToProto(a *meta.Attr) *ProtoAttr {
 	}
 }
 
-func ProtoToAttr(p *ProtoAttr) *meta.Attr {
+func ProtoToAttr(p *pb.ProtoAttr) *meta.Attr {
 	if p == nil {
 		return nil
 	}
@@ -81,8 +82,8 @@ func ProtoToAttr(p *ProtoAttr) *meta.Attr {
 
 // Slice conversion
 
-func SliceToProto(s meta.Slice) *ProtoSlice {
-	return &ProtoSlice{
+func SliceToProto(s meta.Slice) *pb.ProtoSlice {
+	return &pb.ProtoSlice{
 		Id:   s.Id,
 		Size: s.Size,
 		Off:  s.Off,
@@ -90,7 +91,7 @@ func SliceToProto(s meta.Slice) *ProtoSlice {
 	}
 }
 
-func ProtoToSlice(p *ProtoSlice) meta.Slice {
+func ProtoToSlice(p *pb.ProtoSlice) meta.Slice {
 	if p == nil {
 		return meta.Slice{}
 	}
@@ -102,18 +103,18 @@ func ProtoToSlice(p *ProtoSlice) meta.Slice {
 	}
 }
 
-func SlicesToProto(ss []meta.Slice) []*ProtoSlice {
+func SlicesToProto(ss []meta.Slice) []*pb.ProtoSlice {
 	if ss == nil {
 		return nil
 	}
-	result := make([]*ProtoSlice, len(ss))
+	result := make([]*pb.ProtoSlice, len(ss))
 	for i, s := range ss {
 		result[i] = SliceToProto(s)
 	}
 	return result
 }
 
-func ProtoToSlices(pp []*ProtoSlice) []meta.Slice {
+func ProtoToSlices(pp []*pb.ProtoSlice) []meta.Slice {
 	if pp == nil {
 		return nil
 	}
@@ -126,18 +127,18 @@ func ProtoToSlices(pp []*ProtoSlice) []meta.Slice {
 
 // Entry conversion
 
-func EntryToProto(e *meta.Entry) *ProtoEntry {
+func EntryToProto(e *meta.Entry) *pb.ProtoEntry {
 	if e == nil {
 		return nil
 	}
-	return &ProtoEntry{
+	return &pb.ProtoEntry{
 		Inode: uint64(e.Inode),
 		Name:  e.Name,
 		Attr:  AttrToProto(e.Attr),
 	}
 }
 
-func ProtoToEntry(p *ProtoEntry) *meta.Entry {
+func ProtoToEntry(p *pb.ProtoEntry) *meta.Entry {
 	if p == nil {
 		return nil
 	}
@@ -148,18 +149,18 @@ func ProtoToEntry(p *ProtoEntry) *meta.Entry {
 	}
 }
 
-func EntriesToProto(ees []*meta.Entry) []*ProtoEntry {
+func EntriesToProto(ees []*meta.Entry) []*pb.ProtoEntry {
 	if ees == nil {
 		return nil
 	}
-	result := make([]*ProtoEntry, len(ees))
+	result := make([]*pb.ProtoEntry, len(ees))
 	for i, e := range ees {
 		result[i] = EntryToProto(e)
 	}
 	return result
 }
 
-func ProtoToEntries(pp []*ProtoEntry) []*meta.Entry {
+func ProtoToEntries(pp []*pb.ProtoEntry) []*meta.Entry {
 	if pp == nil {
 		return nil
 	}
@@ -172,11 +173,11 @@ func ProtoToEntries(pp []*ProtoEntry) []*meta.Entry {
 
 // Summary conversion
 
-func SummaryToProto(s *meta.Summary) *ProtoSummary {
+func SummaryToProto(s *meta.Summary) *pb.ProtoSummary {
 	if s == nil {
 		return nil
 	}
-	return &ProtoSummary{
+	return &pb.ProtoSummary{
 		Length: s.Length,
 		Size:   s.Size,
 		Files:  s.Files,
@@ -184,7 +185,7 @@ func SummaryToProto(s *meta.Summary) *ProtoSummary {
 	}
 }
 
-func ProtoToSummary(p *ProtoSummary) *meta.Summary {
+func ProtoToSummary(p *pb.ProtoSummary) *meta.Summary {
 	if p == nil {
 		return nil
 	}
@@ -198,15 +199,15 @@ func ProtoToSummary(p *ProtoSummary) *meta.Summary {
 
 // TreeSummary conversion
 
-func TreeSummaryToProto(t *meta.TreeSummary) *ProtoTreeSummary {
+func TreeSummaryToProto(t *meta.TreeSummary) *pb.ProtoTreeSummary {
 	if t == nil {
 		return nil
 	}
-	children := make([]*ProtoTreeSummary, len(t.Children))
+	children := make([]*pb.ProtoTreeSummary, len(t.Children))
 	for i, c := range t.Children {
 		children[i] = TreeSummaryToProto(c)
 	}
-	return &ProtoTreeSummary{
+	return &pb.ProtoTreeSummary{
 		Inode:    uint64(t.Inode),
 		Path:     t.Path,
 		Type:     uint32(t.Type),
@@ -217,7 +218,7 @@ func TreeSummaryToProto(t *meta.TreeSummary) *ProtoTreeSummary {
 	}
 }
 
-func ProtoToTreeSummary(p *ProtoTreeSummary) *meta.TreeSummary {
+func ProtoToTreeSummary(p *pb.ProtoTreeSummary) *meta.TreeSummary {
 	if p == nil {
 		return nil
 	}
@@ -238,15 +239,15 @@ func ProtoToTreeSummary(p *ProtoTreeSummary) *meta.TreeSummary {
 
 // Format conversion - handle both pointer and value
 
-func FormatToProto(f meta.Format) *ProtoFormat {
+func FormatToProto(f meta.Format) *pb.ProtoFormat {
 	return FormatToProtoPtr(&f)
 }
 
-func FormatToProtoPtr(f *meta.Format) *ProtoFormat {
+func FormatToProtoPtr(f *meta.Format) *pb.ProtoFormat {
 	if f == nil {
 		return nil
 	}
-	return &ProtoFormat{
+	return &pb.ProtoFormat{
 		Name:             f.Name,
 		Uuid:             f.UUID,
 		Storage:          f.Storage,
@@ -279,7 +280,7 @@ func FormatToProtoPtr(f *meta.Format) *ProtoFormat {
 	}
 }
 
-func ProtoToFormat(p *ProtoFormat) *meta.Format {
+func ProtoToFormat(p *pb.ProtoFormat) *meta.Format {
 	if p == nil {
 		return nil
 	}
@@ -318,11 +319,11 @@ func ProtoToFormat(p *ProtoFormat) *meta.Format {
 
 // Quota conversion
 
-func QuotaToProto(q *meta.Quota) *ProtoQuota {
+func QuotaToProto(q *meta.Quota) *pb.ProtoQuota {
 	if q == nil {
 		return nil
 	}
-	return &ProtoQuota{
+	return &pb.ProtoQuota{
 		MaxSpace:   q.MaxSpace,
 		MaxInodes:  q.MaxInodes,
 		UsedSpace:  q.UsedSpace,
@@ -330,7 +331,7 @@ func QuotaToProto(q *meta.Quota) *ProtoQuota {
 	}
 }
 
-func ProtoToQuota(p *ProtoQuota) *meta.Quota {
+func ProtoToQuota(p *pb.ProtoQuota) *meta.Quota {
 	if p == nil {
 		return nil
 	}
@@ -344,14 +345,14 @@ func ProtoToQuota(p *ProtoQuota) *meta.Quota {
 
 // SliceMapEntry conversion
 
-func SliceMapToProto(m map[meta.Ino][]meta.Slice) []*SliceMapEntry {
+func SliceMapToProto(m map[meta.Ino][]meta.Slice) []*pb.SliceMapEntry {
 	if m == nil {
 		return nil
 	}
-	result := make([]*SliceMapEntry, 0, len(m))
+	result := make([]*pb.SliceMapEntry, 0, len(m))
 	for ino, slices := range m {
 		protoSlices := SlicesToProto(slices)
-		result = append(result, &SliceMapEntry{
+		result = append(result, &pb.SliceMapEntry{
 			Inode:  uint64(ino),
 			Slices: protoSlices,
 		})
@@ -359,7 +360,7 @@ func SliceMapToProto(m map[meta.Ino][]meta.Slice) []*SliceMapEntry {
 	return result
 }
 
-func ProtoToSliceMap(pp []*SliceMapEntry) map[meta.Ino][]meta.Slice {
+func ProtoToSliceMap(pp []*pb.SliceMapEntry) map[meta.Ino][]meta.Slice {
 	if pp == nil {
 		return nil
 	}
@@ -372,11 +373,11 @@ func ProtoToSliceMap(pp []*SliceMapEntry) map[meta.Ino][]meta.Slice {
 
 // Session conversion
 
-func SessionToProto(s *meta.Session) *ProtoSession {
+func SessionToProto(s *meta.Session) *pb.ProtoSession {
 	if s == nil {
 		return nil
 	}
-	info := &ProtoSessionInfo{
+	info := &pb.ProtoSessionInfo{
 		Version:    s.Version,
 		HostName:   s.HostName,
 		IpAddrs:    s.IPAddrs,
@@ -384,26 +385,26 @@ func SessionToProto(s *meta.Session) *ProtoSession {
 		MountTime:  s.MountTime.Unix(),
 		ProcessId:  int32(s.ProcessID),
 	}
-	flocks := make([]*ProtoFlock, len(s.Flocks))
+	flocks := make([]*pb.ProtoFlock, len(s.Flocks))
 	for i, f := range s.Flocks {
-		flocks[i] = &ProtoFlock{
+		flocks[i] = &pb.ProtoFlock{
 			Inode: uint64(f.Inode),
 			Owner: f.Owner,
 			Ltype: f.Ltype,
 		}
 	}
-	plocks := make([]*ProtoPlock, len(s.Plocks))
+	plocks := make([]*pb.ProtoPlock, len(s.Plocks))
 	for i, p := range s.Plocks {
-		records := make([]*ProtoPlockRecord, len(p.Records))
+		records := make([]*pb.ProtoPlockRecord, len(p.Records))
 		for j, r := range p.Records {
-			records[j] = &ProtoPlockRecord{
+			records[j] = &pb.ProtoPlockRecord{
 				Type:  r.Type,
 				Pid:   r.Pid,
 				Start: r.Start,
 				End:   r.End,
 			}
 		}
-		plocks[i] = &ProtoPlock{
+		plocks[i] = &pb.ProtoPlock{
 			Inode:   uint64(p.Inode),
 			Owner:   p.Owner,
 			Records: records,
@@ -413,7 +414,7 @@ func SessionToProto(s *meta.Session) *ProtoSession {
 	for i, ino := range s.Sustained {
 		sustained[i] = uint64(ino)
 	}
-	return &ProtoSession{
+	return &pb.ProtoSession{
 		Sid:       s.Sid,
 		Expire:    s.Expire.Unix(),
 		Info:      info,
@@ -423,7 +424,7 @@ func SessionToProto(s *meta.Session) *ProtoSession {
 	}
 }
 
-func ProtoToSession(p *ProtoSession) *meta.Session {
+func ProtoToSession(p *pb.ProtoSession) *meta.Session {
 	if p == nil {
 		return nil
 	}
@@ -460,22 +461,22 @@ func ProtoToSession(p *ProtoSession) *meta.Session {
 
 // Alias functions for simpler names used in grpc_client.go
 
-func toProtoAttr(a *meta.Attr) *ProtoAttr {
+func toProtoAttr(a *meta.Attr) *pb.ProtoAttr {
 	return AttrToProto(a)
 }
 
-func fromProtoAttr(p *ProtoAttr) *meta.Attr {
+func fromProtoAttr(p *pb.ProtoAttr) *meta.Attr {
 	return ProtoToAttr(p)
 }
 
-func toProtoSlice(s *meta.Slice) *ProtoSlice {
+func toProtoSlice(s *meta.Slice) *pb.ProtoSlice {
 	if s == nil {
 		return nil
 	}
 	return SliceToProto(*s)
 }
 
-func fromProtoSlice(p *ProtoSlice) *meta.Slice {
+func fromProtoSlice(p *pb.ProtoSlice) *meta.Slice {
 	if p == nil {
 		return nil
 	}
@@ -487,66 +488,66 @@ func fromProtoSlice(p *ProtoSlice) *meta.Slice {
 	}
 }
 
-func toProtoEntry(e *meta.Entry) *ProtoEntry {
+func toProtoEntry(e *meta.Entry) *pb.ProtoEntry {
 	return EntryToProto(e)
 }
 
-func fromProtoEntry(p *ProtoEntry) *meta.Entry {
+func fromProtoEntry(p *pb.ProtoEntry) *meta.Entry {
 	return ProtoToEntry(p)
 }
 
-func toProtoSummary(s *meta.Summary) *ProtoSummary {
+func toProtoSummary(s *meta.Summary) *pb.ProtoSummary {
 	return SummaryToProto(s)
 }
 
-func fromProtoSummary(p *ProtoSummary) *meta.Summary {
+func fromProtoSummary(p *pb.ProtoSummary) *meta.Summary {
 	return ProtoToSummary(p)
 }
 
-func toProtoTreeSummary(t *meta.TreeSummary) *ProtoTreeSummary {
+func toProtoTreeSummary(t *meta.TreeSummary) *pb.ProtoTreeSummary {
 	return TreeSummaryToProto(t)
 }
 
-func fromProtoTreeSummary(p *ProtoTreeSummary) *meta.TreeSummary {
+func fromProtoTreeSummary(p *pb.ProtoTreeSummary) *meta.TreeSummary {
 	return ProtoToTreeSummary(p)
 }
 
-func toProtoFormat(f *meta.Format) *ProtoFormat {
+func toProtoFormat(f *meta.Format) *pb.ProtoFormat {
 	return FormatToProtoPtr(f)
 }
 
-func fromProtoFormat(p *ProtoFormat) *meta.Format {
+func fromProtoFormat(p *pb.ProtoFormat) *meta.Format {
 	return ProtoToFormat(p)
 }
 
-func toProtoQuota(q *meta.Quota) *ProtoQuota {
+func toProtoQuota(q *meta.Quota) *pb.ProtoQuota {
 	return QuotaToProto(q)
 }
 
-func fromProtoQuota(p *ProtoQuota) *meta.Quota {
+func fromProtoQuota(p *pb.ProtoQuota) *meta.Quota {
 	return ProtoToQuota(p)
 }
 
-func toProtoSession(s *meta.Session) *ProtoSession {
+func toProtoSession(s *meta.Session) *pb.ProtoSession {
 	return SessionToProto(s)
 }
 
-func fromProtoSession(p *ProtoSession) *meta.Session {
+func fromProtoSession(p *pb.ProtoSession) *meta.Session {
 	return ProtoToSession(p)
 }
 
-func toProtoFlock(f *meta.Flock) *ProtoFlock {
+func toProtoFlock(f *meta.Flock) *pb.ProtoFlock {
 	if f == nil {
 		return nil
 	}
-	return &ProtoFlock{
+	return &pb.ProtoFlock{
 		Inode: uint64(f.Inode),
 		Owner: f.Owner,
 		Ltype: f.Ltype,
 	}
 }
 
-func fromProtoFlock(p *ProtoFlock) *meta.Flock {
+func fromProtoFlock(p *pb.ProtoFlock) *meta.Flock {
 	if p == nil {
 		return nil
 	}
@@ -557,27 +558,27 @@ func fromProtoFlock(p *ProtoFlock) *meta.Flock {
 	}
 }
 
-func toProtoPlock(plock *meta.Plock) *ProtoPlock {
+func toProtoPlock(plock *meta.Plock) *pb.ProtoPlock {
 	if plock == nil {
 		return nil
 	}
-	records := make([]*ProtoPlockRecord, len(plock.Records))
+	records := make([]*pb.ProtoPlockRecord, len(plock.Records))
 	for i, r := range plock.Records {
-		records[i] = &ProtoPlockRecord{
+		records[i] = &pb.ProtoPlockRecord{
 			Type:  r.Type,
 			Pid:   r.Pid,
 			Start: r.Start,
 			End:   r.End,
 		}
 	}
-	return &ProtoPlock{
+	return &pb.ProtoPlock{
 		Inode:   uint64(plock.Inode),
 		Owner:   plock.Owner,
 		Records: records,
 	}
 }
 
-func fromProtoPlock(p *ProtoPlock) *meta.Plock {
+func fromProtoPlock(p *pb.ProtoPlock) *meta.Plock {
 	if p == nil {
 		return nil
 	}
@@ -592,11 +593,11 @@ func fromProtoPlock(p *ProtoPlock) *meta.Plock {
 
 // ACL conversion
 
-func toProtoACLRule(rule *aclAPI.Rule) *ProtoACLRule {
+func toProtoACLRule(rule *aclAPI.Rule) *pb.ProtoACLRule {
 	if rule == nil {
 		return nil
 	}
-	return &ProtoACLRule{
+	return &pb.ProtoACLRule{
 		Id:      uint32(rule.Owner),
 		Type:    uint32(rule.Group),
 		Perms:   uint32(rule.Mask),
@@ -604,7 +605,7 @@ func toProtoACLRule(rule *aclAPI.Rule) *ProtoACLRule {
 	}
 }
 
-func fromProtoACLRule(p *ProtoACLRule) *aclAPI.Rule {
+func fromProtoACLRule(p *pb.ProtoACLRule) *aclAPI.Rule {
 	if p == nil {
 		return nil
 	}

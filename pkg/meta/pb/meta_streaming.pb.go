@@ -17,9 +17,9 @@
 // versions:
 // 	protoc-gen-go v1.36.9
 // 	protoc        v6.30.2
-// source: meta_streaming.proto
+// source: pb/meta_streaming.proto
 
-package grpc
+package pb
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -49,7 +49,7 @@ type DumpMetaRequest struct {
 
 func (x *DumpMetaRequest) Reset() {
 	*x = DumpMetaRequest{}
-	mi := &file_meta_streaming_proto_msgTypes[0]
+	mi := &file_pb_meta_streaming_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61,7 +61,7 @@ func (x *DumpMetaRequest) String() string {
 func (*DumpMetaRequest) ProtoMessage() {}
 
 func (x *DumpMetaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_streaming_proto_msgTypes[0]
+	mi := &file_pb_meta_streaming_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -74,7 +74,7 @@ func (x *DumpMetaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DumpMetaRequest.ProtoReflect.Descriptor instead.
 func (*DumpMetaRequest) Descriptor() ([]byte, []int) {
-	return file_meta_streaming_proto_rawDescGZIP(), []int{0}
+	return file_pb_meta_streaming_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *DumpMetaRequest) GetRoot() uint64 {
@@ -121,7 +121,7 @@ type DumpMetaChunk struct {
 
 func (x *DumpMetaChunk) Reset() {
 	*x = DumpMetaChunk{}
-	mi := &file_meta_streaming_proto_msgTypes[1]
+	mi := &file_pb_meta_streaming_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -133,7 +133,7 @@ func (x *DumpMetaChunk) String() string {
 func (*DumpMetaChunk) ProtoMessage() {}
 
 func (x *DumpMetaChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_streaming_proto_msgTypes[1]
+	mi := &file_pb_meta_streaming_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -146,7 +146,7 @@ func (x *DumpMetaChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DumpMetaChunk.ProtoReflect.Descriptor instead.
 func (*DumpMetaChunk) Descriptor() ([]byte, []int) {
-	return file_meta_streaming_proto_rawDescGZIP(), []int{1}
+	return file_pb_meta_streaming_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *DumpMetaChunk) GetData() []byte {
@@ -165,7 +165,7 @@ type LoadMetaChunk struct {
 
 func (x *LoadMetaChunk) Reset() {
 	*x = LoadMetaChunk{}
-	mi := &file_meta_streaming_proto_msgTypes[2]
+	mi := &file_pb_meta_streaming_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -177,7 +177,7 @@ func (x *LoadMetaChunk) String() string {
 func (*LoadMetaChunk) ProtoMessage() {}
 
 func (x *LoadMetaChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_streaming_proto_msgTypes[2]
+	mi := &file_pb_meta_streaming_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -190,7 +190,7 @@ func (x *LoadMetaChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoadMetaChunk.ProtoReflect.Descriptor instead.
 func (*LoadMetaChunk) Descriptor() ([]byte, []int) {
-	return file_meta_streaming_proto_rawDescGZIP(), []int{2}
+	return file_pb_meta_streaming_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *LoadMetaChunk) GetData() []byte {
@@ -209,7 +209,7 @@ type LoadMetaResponse struct {
 
 func (x *LoadMetaResponse) Reset() {
 	*x = LoadMetaResponse{}
-	mi := &file_meta_streaming_proto_msgTypes[3]
+	mi := &file_pb_meta_streaming_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -221,7 +221,7 @@ func (x *LoadMetaResponse) String() string {
 func (*LoadMetaResponse) ProtoMessage() {}
 
 func (x *LoadMetaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_streaming_proto_msgTypes[3]
+	mi := &file_pb_meta_streaming_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -234,7 +234,7 @@ func (x *LoadMetaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoadMetaResponse.ProtoReflect.Descriptor instead.
 func (*LoadMetaResponse) Descriptor() ([]byte, []int) {
-	return file_meta_streaming_proto_rawDescGZIP(), []int{3}
+	return file_pb_meta_streaming_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *LoadMetaResponse) GetErrno() uint32 {
@@ -255,7 +255,7 @@ type DumpMetaV2Request struct {
 
 func (x *DumpMetaV2Request) Reset() {
 	*x = DumpMetaV2Request{}
-	mi := &file_meta_streaming_proto_msgTypes[4]
+	mi := &file_pb_meta_streaming_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -267,7 +267,7 @@ func (x *DumpMetaV2Request) String() string {
 func (*DumpMetaV2Request) ProtoMessage() {}
 
 func (x *DumpMetaV2Request) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_streaming_proto_msgTypes[4]
+	mi := &file_pb_meta_streaming_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -280,7 +280,7 @@ func (x *DumpMetaV2Request) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DumpMetaV2Request.ProtoReflect.Descriptor instead.
 func (*DumpMetaV2Request) Descriptor() ([]byte, []int) {
-	return file_meta_streaming_proto_rawDescGZIP(), []int{4}
+	return file_pb_meta_streaming_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *DumpMetaV2Request) GetCtx() *MetaContext {
@@ -313,7 +313,7 @@ type DumpMetaV2Chunk struct {
 
 func (x *DumpMetaV2Chunk) Reset() {
 	*x = DumpMetaV2Chunk{}
-	mi := &file_meta_streaming_proto_msgTypes[5]
+	mi := &file_pb_meta_streaming_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -325,7 +325,7 @@ func (x *DumpMetaV2Chunk) String() string {
 func (*DumpMetaV2Chunk) ProtoMessage() {}
 
 func (x *DumpMetaV2Chunk) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_streaming_proto_msgTypes[5]
+	mi := &file_pb_meta_streaming_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -338,7 +338,7 @@ func (x *DumpMetaV2Chunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DumpMetaV2Chunk.ProtoReflect.Descriptor instead.
 func (*DumpMetaV2Chunk) Descriptor() ([]byte, []int) {
-	return file_meta_streaming_proto_rawDescGZIP(), []int{5}
+	return file_pb_meta_streaming_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *DumpMetaV2Chunk) GetData() []byte {
@@ -357,7 +357,7 @@ type LoadMetaV2Chunk struct {
 
 func (x *LoadMetaV2Chunk) Reset() {
 	*x = LoadMetaV2Chunk{}
-	mi := &file_meta_streaming_proto_msgTypes[6]
+	mi := &file_pb_meta_streaming_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -369,7 +369,7 @@ func (x *LoadMetaV2Chunk) String() string {
 func (*LoadMetaV2Chunk) ProtoMessage() {}
 
 func (x *LoadMetaV2Chunk) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_streaming_proto_msgTypes[6]
+	mi := &file_pb_meta_streaming_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -382,7 +382,7 @@ func (x *LoadMetaV2Chunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoadMetaV2Chunk.ProtoReflect.Descriptor instead.
 func (*LoadMetaV2Chunk) Descriptor() ([]byte, []int) {
-	return file_meta_streaming_proto_rawDescGZIP(), []int{6}
+	return file_pb_meta_streaming_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *LoadMetaV2Chunk) GetData() []byte {
@@ -401,7 +401,7 @@ type LoadMetaV2Response struct {
 
 func (x *LoadMetaV2Response) Reset() {
 	*x = LoadMetaV2Response{}
-	mi := &file_meta_streaming_proto_msgTypes[7]
+	mi := &file_pb_meta_streaming_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -413,7 +413,7 @@ func (x *LoadMetaV2Response) String() string {
 func (*LoadMetaV2Response) ProtoMessage() {}
 
 func (x *LoadMetaV2Response) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_streaming_proto_msgTypes[7]
+	mi := &file_pb_meta_streaming_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -426,7 +426,7 @@ func (x *LoadMetaV2Response) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoadMetaV2Response.ProtoReflect.Descriptor instead.
 func (*LoadMetaV2Response) Descriptor() ([]byte, []int) {
-	return file_meta_streaming_proto_rawDescGZIP(), []int{7}
+	return file_pb_meta_streaming_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *LoadMetaV2Response) GetErrno() uint32 {
@@ -436,11 +436,11 @@ func (x *LoadMetaV2Response) GetErrno() uint32 {
 	return 0
 }
 
-var File_meta_streaming_proto protoreflect.FileDescriptor
+var File_pb_meta_streaming_proto protoreflect.FileDescriptor
 
-const file_meta_streaming_proto_rawDesc = "" +
+const file_pb_meta_streaming_proto_rawDesc = "" +
 	"\n" +
-	"\x14meta_streaming.proto\x12\x04meta\x1a\x11meta_common.proto\"\x93\x01\n" +
+	"\x17pb/meta_streaming.proto\x12\x02pb\x1a\x14pb/meta_common.proto\"\x93\x01\n" +
 	"\x0fDumpMetaRequest\x12\x12\n" +
 	"\x04root\x18\x01 \x01(\x04R\x04root\x12\x18\n" +
 	"\athreads\x18\x02 \x01(\x05R\athreads\x12\x1f\n" +
@@ -454,9 +454,9 @@ const file_meta_streaming_proto_rawDesc = "" +
 	"\rLoadMetaChunk\x12\x12\n" +
 	"\x04data\x18\x01 \x01(\fR\x04data\"(\n" +
 	"\x10LoadMetaResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"s\n" +
-	"\x11DumpMetaV2Request\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x1f\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\"q\n" +
+	"\x11DumpMetaV2Request\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x1f\n" +
 	"\vkeep_secret\x18\x02 \x01(\bR\n" +
 	"keepSecret\x12\x18\n" +
 	"\athreads\x18\x03 \x01(\x05R\athreads\"%\n" +
@@ -465,34 +465,34 @@ const file_meta_streaming_proto_rawDesc = "" +
 	"\x0fLoadMetaV2Chunk\x12\x12\n" +
 	"\x04data\x18\x01 \x01(\fR\x04data\"*\n" +
 	"\x12LoadMetaV2Response\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errnoB,Z*github.com/juicedata/juicefs/pkg/meta/grpcb\x06proto3"
+	"\x05errno\x18\x01 \x01(\rR\x05errnoB\x06Z\x04./pbb\x06proto3"
 
 var (
-	file_meta_streaming_proto_rawDescOnce sync.Once
-	file_meta_streaming_proto_rawDescData []byte
+	file_pb_meta_streaming_proto_rawDescOnce sync.Once
+	file_pb_meta_streaming_proto_rawDescData []byte
 )
 
-func file_meta_streaming_proto_rawDescGZIP() []byte {
-	file_meta_streaming_proto_rawDescOnce.Do(func() {
-		file_meta_streaming_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_meta_streaming_proto_rawDesc), len(file_meta_streaming_proto_rawDesc)))
+func file_pb_meta_streaming_proto_rawDescGZIP() []byte {
+	file_pb_meta_streaming_proto_rawDescOnce.Do(func() {
+		file_pb_meta_streaming_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pb_meta_streaming_proto_rawDesc), len(file_pb_meta_streaming_proto_rawDesc)))
 	})
-	return file_meta_streaming_proto_rawDescData
+	return file_pb_meta_streaming_proto_rawDescData
 }
 
-var file_meta_streaming_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
-var file_meta_streaming_proto_goTypes = []any{
-	(*DumpMetaRequest)(nil),    // 0: meta.DumpMetaRequest
-	(*DumpMetaChunk)(nil),      // 1: meta.DumpMetaChunk
-	(*LoadMetaChunk)(nil),      // 2: meta.LoadMetaChunk
-	(*LoadMetaResponse)(nil),   // 3: meta.LoadMetaResponse
-	(*DumpMetaV2Request)(nil),  // 4: meta.DumpMetaV2Request
-	(*DumpMetaV2Chunk)(nil),    // 5: meta.DumpMetaV2Chunk
-	(*LoadMetaV2Chunk)(nil),    // 6: meta.LoadMetaV2Chunk
-	(*LoadMetaV2Response)(nil), // 7: meta.LoadMetaV2Response
-	(*MetaContext)(nil),        // 8: meta.MetaContext
+var file_pb_meta_streaming_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_pb_meta_streaming_proto_goTypes = []any{
+	(*DumpMetaRequest)(nil),    // 0: pb.DumpMetaRequest
+	(*DumpMetaChunk)(nil),      // 1: pb.DumpMetaChunk
+	(*LoadMetaChunk)(nil),      // 2: pb.LoadMetaChunk
+	(*LoadMetaResponse)(nil),   // 3: pb.LoadMetaResponse
+	(*DumpMetaV2Request)(nil),  // 4: pb.DumpMetaV2Request
+	(*DumpMetaV2Chunk)(nil),    // 5: pb.DumpMetaV2Chunk
+	(*LoadMetaV2Chunk)(nil),    // 6: pb.LoadMetaV2Chunk
+	(*LoadMetaV2Response)(nil), // 7: pb.LoadMetaV2Response
+	(*MetaContext)(nil),        // 8: pb.MetaContext
 }
-var file_meta_streaming_proto_depIdxs = []int32{
-	8, // 0: meta.DumpMetaV2Request.ctx:type_name -> meta.MetaContext
+var file_pb_meta_streaming_proto_depIdxs = []int32{
+	8, // 0: pb.DumpMetaV2Request.ctx:type_name -> pb.MetaContext
 	1, // [1:1] is the sub-list for method output_type
 	1, // [1:1] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
@@ -500,27 +500,27 @@ var file_meta_streaming_proto_depIdxs = []int32{
 	0, // [0:1] is the sub-list for field type_name
 }
 
-func init() { file_meta_streaming_proto_init() }
-func file_meta_streaming_proto_init() {
-	if File_meta_streaming_proto != nil {
+func init() { file_pb_meta_streaming_proto_init() }
+func file_pb_meta_streaming_proto_init() {
+	if File_pb_meta_streaming_proto != nil {
 		return
 	}
-	file_meta_common_proto_init()
+	file_pb_meta_common_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meta_streaming_proto_rawDesc), len(file_meta_streaming_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_meta_streaming_proto_rawDesc), len(file_pb_meta_streaming_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_meta_streaming_proto_goTypes,
-		DependencyIndexes: file_meta_streaming_proto_depIdxs,
-		MessageInfos:      file_meta_streaming_proto_msgTypes,
+		GoTypes:           file_pb_meta_streaming_proto_goTypes,
+		DependencyIndexes: file_pb_meta_streaming_proto_depIdxs,
+		MessageInfos:      file_pb_meta_streaming_proto_msgTypes,
 	}.Build()
-	File_meta_streaming_proto = out.File
-	file_meta_streaming_proto_goTypes = nil
-	file_meta_streaming_proto_depIdxs = nil
+	File_pb_meta_streaming_proto = out.File
+	file_pb_meta_streaming_proto_goTypes = nil
+	file_pb_meta_streaming_proto_depIdxs = nil
 }

@@ -23,12 +23,13 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // dirHandler implements meta.DirHandler interface
 type dirHandler struct {
 	handleID uint64
-	client   MetaServiceClient
+	client   pb.MetaServiceClient
 	mu       sync.Mutex
 }
 
@@ -37,12 +38,12 @@ func (c *Client) NewDirHandler(ctx meta.Context, ino meta.Ino, plus bool, initEn
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	protoEntries := make([]*ProtoEntry, 0, len(initEntries))
+	protoEntries := make([]*pb.ProtoEntry, 0, len(initEntries))
 	for _, e := range initEntries {
 		protoEntries = append(protoEntries, toProtoEntry(e))
 	}
 
-	resp, err := c.client.NewDirHandler(grpcCtx, &NewDirHandlerRequest{
+	resp, err := c.client.NewDirHandler(grpcCtx, &pb.NewDirHandlerRequest{
 		Ctx:         toProtoContext(ctx),
 		Inode:       uint64(ino),
 		Plus:        plus,
@@ -69,8 +70,8 @@ func (h *dirHandler) List(ctx meta.Context, offset int) ([]*meta.Entry, syscall.
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	resp, err := h.client.DirHandlerList(grpcCtx, &DirHandlerListRequest{
-		Handle: &DirHandlerHandle{HandleId: h.handleID},
+	resp, err := h.client.DirHandlerList(grpcCtx, &pb.DirHandlerListRequest{
+		Handle: &pb.DirHandlerHandle{HandleId: h.handleID},
 		Offset: int32(offset),
 	})
 	if err != nil {
@@ -95,8 +96,8 @@ func (h *dirHandler) Insert(ino meta.Ino, name string, attr *meta.Attr) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	_, err := h.client.DirHandlerInsert(grpcCtx, &DirHandlerInsertRequest{
-		Handle: &DirHandlerHandle{HandleId: h.handleID},
+	_, err := h.client.DirHandlerInsert(grpcCtx, &pb.DirHandlerInsertRequest{
+		Handle: &pb.DirHandlerHandle{HandleId: h.handleID},
 		Inode:  uint64(ino),
 		Name:   name,
 		Attr:   toProtoAttr(attr),
@@ -112,8 +113,8 @@ func (h *dirHandler) Delete(name string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	_, err := h.client.DirHandlerDelete(grpcCtx, &DirHandlerDeleteRequest{
-		Handle: &DirHandlerHandle{HandleId: h.handleID},
+	_, err := h.client.DirHandlerDelete(grpcCtx, &pb.DirHandlerDeleteRequest{
+		Handle: &pb.DirHandlerHandle{HandleId: h.handleID},
 		Name:   name,
 	})
 	_ = err // Ignore errors for now
@@ -127,8 +128,8 @@ func (h *dirHandler) Close() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	_, err := h.client.DirHandlerClose(grpcCtx, &DirHandlerCloseRequest{
-		Handle: &DirHandlerHandle{HandleId: h.handleID},
+	_, err := h.client.DirHandlerClose(grpcCtx, &pb.DirHandlerCloseRequest{
+		Handle: &pb.DirHandlerHandle{HandleId: h.handleID},
 	})
 	_ = err // Ignore errors for now
 }

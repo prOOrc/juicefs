@@ -19,98 +19,100 @@ package grpc
 import (
 	"context"
 	"syscall"
+
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
-func (s *MetaProxyServer) Init(ctx context.Context, req *InitRequest) (*InitResponse, error) {
+func (s *MetaProxyServer) Init(ctx context.Context, req *pb.InitRequest) (*pb.InitResponse, error) {
 	format := ProtoToFormat(req.Format)
 	err := s.meta.Init(format, req.Force)
 	var errno uint32
 	if err != nil {
 		errno = uint32(syscall.EIO)
 	}
-	return &InitResponse{Errno: errno}, nil
+	return &pb.InitResponse{Errno: errno}, nil
 }
 
-func (s *MetaProxyServer) Load(ctx context.Context, req *LoadRequest) (*LoadResponse, error) {
+func (s *MetaProxyServer) Load(ctx context.Context, req *pb.LoadRequest) (*pb.LoadResponse, error) {
 	format, err := s.meta.Load(req.CheckVersion)
 	if err != nil {
-		return &LoadResponse{Errno: uint32(syscall.EIO)}, nil
+		return &pb.LoadResponse{Errno: uint32(syscall.EIO)}, nil
 	}
-	return &LoadResponse{
+	return &pb.LoadResponse{
 		Errno:  0,
 		Format: FormatToProto(*format),
 	}, nil
 }
 
-func (s *MetaProxyServer) NewSession(ctx context.Context, req *NewSessionRequest) (*NewSessionResponse, error) {
+func (s *MetaProxyServer) NewSession(ctx context.Context, req *pb.NewSessionRequest) (*pb.NewSessionResponse, error) {
 	err := s.meta.NewSession(req.Record)
 	var errno uint32
 	if err != nil {
 		errno = uint32(syscall.EIO)
 	}
-	return &NewSessionResponse{Errno: errno}, nil
+	return &pb.NewSessionResponse{Errno: errno}, nil
 }
 
-func (s *MetaProxyServer) CloseSession(ctx context.Context, req *CloseSessionRequest) (*CloseSessionResponse, error) {
+func (s *MetaProxyServer) CloseSession(ctx context.Context, req *pb.CloseSessionRequest) (*pb.CloseSessionResponse, error) {
 	err := s.meta.CloseSession()
 	var errno uint32
 	if err != nil {
 		errno = uint32(syscall.EIO)
 	}
-	return &CloseSessionResponse{Errno: errno}, nil
+	return &pb.CloseSessionResponse{Errno: errno}, nil
 }
 
-func (s *MetaProxyServer) FlushSession(ctx context.Context, req *FlushSessionRequest) (*FlushSessionResponse, error) {
+func (s *MetaProxyServer) FlushSession(ctx context.Context, req *pb.FlushSessionRequest) (*pb.FlushSessionResponse, error) {
 	s.meta.FlushSession()
-	return &FlushSessionResponse{Errno: 0}, nil
+	return &pb.FlushSessionResponse{Errno: 0}, nil
 }
 
-func (s *MetaProxyServer) Shutdown(ctx context.Context, req *ShutdownRequest) (*ShutdownResponse, error) {
+func (s *MetaProxyServer) Shutdown(ctx context.Context, req *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
 	err := s.meta.Shutdown()
 	var errno uint32
 	if err != nil {
 		errno = uint32(syscall.EIO)
 	}
-	return &ShutdownResponse{Errno: errno}, nil
+	return &pb.ShutdownResponse{Errno: errno}, nil
 }
 
-func (s *MetaProxyServer) Reset(ctx context.Context, req *ResetRequest) (*ResetResponse, error) {
+func (s *MetaProxyServer) Reset(ctx context.Context, req *pb.ResetRequest) (*pb.ResetResponse, error) {
 	err := s.meta.Reset()
 	var errno uint32
 	if err != nil {
 		errno = uint32(syscall.EIO)
 	}
-	return &ResetResponse{Errno: errno}, nil
+	return &pb.ResetResponse{Errno: errno}, nil
 }
 
-func (s *MetaProxyServer) GetSession(ctx context.Context, req *GetSessionRequest) (*GetSessionResponse, error) {
+func (s *MetaProxyServer) GetSession(ctx context.Context, req *pb.GetSessionRequest) (*pb.GetSessionResponse, error) {
 	session, err := s.meta.GetSession(req.Sid, req.Detail)
 	if err != nil {
-		return &GetSessionResponse{Errno: uint32(syscall.EIO)}, nil
+		return &pb.GetSessionResponse{Errno: uint32(syscall.EIO)}, nil
 	}
-	return &GetSessionResponse{
+	return &pb.GetSessionResponse{
 		Errno:   0,
 		Session: SessionToProto(session),
 	}, nil
 }
 
-func (s *MetaProxyServer) ListSessions(ctx context.Context, req *ListSessionsRequest) (*ListSessionsResponse, error) {
+func (s *MetaProxyServer) ListSessions(ctx context.Context, req *pb.ListSessionsRequest) (*pb.ListSessionsResponse, error) {
 	sessions, err := s.meta.ListSessions()
 	if err != nil {
-		return &ListSessionsResponse{Errno: uint32(syscall.EIO)}, nil
+		return &pb.ListSessionsResponse{Errno: uint32(syscall.EIO)}, nil
 	}
-	protoSessions := make([]*ProtoSession, len(sessions))
+	protoSessions := make([]*pb.ProtoSession, len(sessions))
 	for i, s := range sessions {
 		protoSessions[i] = SessionToProto(s)
 	}
-	return &ListSessionsResponse{
+	return &pb.ListSessionsResponse{
 		Errno:    0,
 		Sessions: protoSessions,
 	}, nil
 }
 
-func (s *MetaProxyServer) CleanStaleSessions(ctx context.Context, req *CleanStaleSessionsRequest) (*CleanStaleSessionsResponse, error) {
+func (s *MetaProxyServer) CleanStaleSessions(ctx context.Context, req *pb.CleanStaleSessionsRequest) (*pb.CleanStaleSessionsResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	s.meta.CleanStaleSessions(mctx)
-	return &CleanStaleSessionsResponse{Errno: 0}, nil
+	return &pb.CleanStaleSessionsResponse{Errno: 0}, nil
 }

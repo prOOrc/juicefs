@@ -15,58 +15,46 @@
  */
 
 syntax = "proto3";
-package meta;
-option go_package = "github.com/juicedata/juicefs/pkg/meta/grpc";
+package pb;
+option go_package = "./pb";
 
-import "meta_common.proto";
+import "pb/meta_common.proto";
 
 // =====================================================
-// Locks Request/Response Messages
+// Xattrs Request/Response Messages
 // =====================================================
 
-message FlockRequest {
+message GetXattrRequest {
   MetaContext ctx = 1;
   uint64 inode = 2;
-  uint64 owner = 3;
-  uint32 ltype = 4;
-  bool block = 5;
+  string name = 3;
 }
-message FlockResponse { uint32 errno = 1; }
-
-message GetlkRequest {
-  MetaContext ctx = 1;
-  uint64 inode = 2;
-  uint64 owner = 3;
-  uint32 ltype = 4;
-  uint64 start = 5;
-  uint64 end = 6;
-}
-message GetlkResponse {
+message GetXattrResponse {
   uint32 errno = 1;
-  uint32 ltype = 2;
-  uint64 start = 3;
-  uint64 end = 4;
-  uint32 pid = 5;
+  bytes value = 2;
 }
 
-message SetlkRequest {
+message SetXattrRequest {
   MetaContext ctx = 1;
   uint64 inode = 2;
-  uint64 owner = 3;
-  bool block = 4;
-  uint32 ltype = 5;
-  uint64 start = 6;
-  uint64 end = 7;
-  uint32 pid = 8;
+  string name = 3;
+  bytes value = 4;
+  uint32 flags = 5;
 }
-message SetlkResponse { uint32 errno = 1; }
+message SetXattrResponse { uint32 errno = 1; }
 
-message ListLocksRequest {
+message RemoveXattrRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  string name = 3;
+}
+message RemoveXattrResponse { uint32 errno = 1; }
+
+message ListXattrRequest {
   MetaContext ctx = 1;
   uint64 inode = 2;
 }
-message ListLocksResponse {
+message ListXattrResponse {
   uint32 errno = 1;
-  repeated ProtoPlock plocks = 2;
-  repeated ProtoFlock flocks = 3;
+  bytes names = 2;
 }

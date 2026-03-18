@@ -17,9 +17,9 @@
 // versions:
 // 	protoc-gen-go v1.36.9
 // 	protoc        v6.30.2
-// source: meta_acl.proto
+// source: pb/meta_acl.proto
 
-package grpc
+package pb
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -48,7 +48,7 @@ type SetFaclRequest struct {
 
 func (x *SetFaclRequest) Reset() {
 	*x = SetFaclRequest{}
-	mi := &file_meta_acl_proto_msgTypes[0]
+	mi := &file_pb_meta_acl_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60,7 +60,7 @@ func (x *SetFaclRequest) String() string {
 func (*SetFaclRequest) ProtoMessage() {}
 
 func (x *SetFaclRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_acl_proto_msgTypes[0]
+	mi := &file_pb_meta_acl_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73,7 +73,7 @@ func (x *SetFaclRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetFaclRequest.ProtoReflect.Descriptor instead.
 func (*SetFaclRequest) Descriptor() ([]byte, []int) {
-	return file_meta_acl_proto_rawDescGZIP(), []int{0}
+	return file_pb_meta_acl_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *SetFaclRequest) GetCtx() *MetaContext {
@@ -113,7 +113,7 @@ type SetFaclResponse struct {
 
 func (x *SetFaclResponse) Reset() {
 	*x = SetFaclResponse{}
-	mi := &file_meta_acl_proto_msgTypes[1]
+	mi := &file_pb_meta_acl_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -125,7 +125,7 @@ func (x *SetFaclResponse) String() string {
 func (*SetFaclResponse) ProtoMessage() {}
 
 func (x *SetFaclResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_acl_proto_msgTypes[1]
+	mi := &file_pb_meta_acl_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -138,7 +138,7 @@ func (x *SetFaclResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetFaclResponse.ProtoReflect.Descriptor instead.
 func (*SetFaclResponse) Descriptor() ([]byte, []int) {
-	return file_meta_acl_proto_rawDescGZIP(), []int{1}
+	return file_pb_meta_acl_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *SetFaclResponse) GetErrno() uint32 {
@@ -159,7 +159,7 @@ type GetFaclRequest struct {
 
 func (x *GetFaclRequest) Reset() {
 	*x = GetFaclRequest{}
-	mi := &file_meta_acl_proto_msgTypes[2]
+	mi := &file_pb_meta_acl_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -171,7 +171,7 @@ func (x *GetFaclRequest) String() string {
 func (*GetFaclRequest) ProtoMessage() {}
 
 func (x *GetFaclRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_acl_proto_msgTypes[2]
+	mi := &file_pb_meta_acl_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -184,7 +184,7 @@ func (x *GetFaclRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFaclRequest.ProtoReflect.Descriptor instead.
 func (*GetFaclRequest) Descriptor() ([]byte, []int) {
-	return file_meta_acl_proto_rawDescGZIP(), []int{2}
+	return file_pb_meta_acl_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *GetFaclRequest) GetCtx() *MetaContext {
@@ -218,7 +218,7 @@ type GetFaclResponse struct {
 
 func (x *GetFaclResponse) Reset() {
 	*x = GetFaclResponse{}
-	mi := &file_meta_acl_proto_msgTypes[3]
+	mi := &file_pb_meta_acl_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -230,7 +230,7 @@ func (x *GetFaclResponse) String() string {
 func (*GetFaclResponse) ProtoMessage() {}
 
 func (x *GetFaclResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_acl_proto_msgTypes[3]
+	mi := &file_pb_meta_acl_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -243,7 +243,7 @@ func (x *GetFaclResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFaclResponse.ProtoReflect.Descriptor instead.
 func (*GetFaclResponse) Descriptor() ([]byte, []int) {
-	return file_meta_acl_proto_rawDescGZIP(), []int{3}
+	return file_pb_meta_acl_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GetFaclResponse) GetErrno() uint32 {
@@ -260,52 +260,52 @@ func (x *GetFaclResponse) GetRule() *ProtoACLRule {
 	return nil
 }
 
-var File_meta_acl_proto protoreflect.FileDescriptor
+var File_pb_meta_acl_proto protoreflect.FileDescriptor
 
-const file_meta_acl_proto_rawDesc = "" +
+const file_pb_meta_acl_proto_rawDesc = "" +
 	"\n" +
-	"\x0emeta_acl.proto\x12\x04meta\x1a\x11meta_common.proto\"\x8a\x01\n" +
-	"\x0eSetFaclRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x10\n" +
+	"\x11pb/meta_acl.proto\x12\x02pb\x1a\x14pb/meta_common.proto\"\x86\x01\n" +
+	"\x0eSetFaclRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x10\n" +
 	"\x03ino\x18\x02 \x01(\x04R\x03ino\x12\x19\n" +
-	"\bacl_type\x18\x03 \x01(\rR\aaclType\x12&\n" +
-	"\x04rule\x18\x04 \x01(\v2\x12.meta.ProtoACLRuleR\x04rule\"'\n" +
+	"\bacl_type\x18\x03 \x01(\rR\aaclType\x12$\n" +
+	"\x04rule\x18\x04 \x01(\v2\x10.pb.ProtoACLRuleR\x04rule\"'\n" +
 	"\x0fSetFaclResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"b\n" +
-	"\x0eGetFaclRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x10\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\"`\n" +
+	"\x0eGetFaclRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x10\n" +
 	"\x03ino\x18\x02 \x01(\x04R\x03ino\x12\x19\n" +
-	"\bacl_type\x18\x03 \x01(\rR\aaclType\"O\n" +
+	"\bacl_type\x18\x03 \x01(\rR\aaclType\"M\n" +
 	"\x0fGetFaclResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12&\n" +
-	"\x04rule\x18\x02 \x01(\v2\x12.meta.ProtoACLRuleR\x04ruleB,Z*github.com/juicedata/juicefs/pkg/meta/grpcb\x06proto3"
+	"\x05errno\x18\x01 \x01(\rR\x05errno\x12$\n" +
+	"\x04rule\x18\x02 \x01(\v2\x10.pb.ProtoACLRuleR\x04ruleB\x06Z\x04./pbb\x06proto3"
 
 var (
-	file_meta_acl_proto_rawDescOnce sync.Once
-	file_meta_acl_proto_rawDescData []byte
+	file_pb_meta_acl_proto_rawDescOnce sync.Once
+	file_pb_meta_acl_proto_rawDescData []byte
 )
 
-func file_meta_acl_proto_rawDescGZIP() []byte {
-	file_meta_acl_proto_rawDescOnce.Do(func() {
-		file_meta_acl_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_meta_acl_proto_rawDesc), len(file_meta_acl_proto_rawDesc)))
+func file_pb_meta_acl_proto_rawDescGZIP() []byte {
+	file_pb_meta_acl_proto_rawDescOnce.Do(func() {
+		file_pb_meta_acl_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pb_meta_acl_proto_rawDesc), len(file_pb_meta_acl_proto_rawDesc)))
 	})
-	return file_meta_acl_proto_rawDescData
+	return file_pb_meta_acl_proto_rawDescData
 }
 
-var file_meta_acl_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
-var file_meta_acl_proto_goTypes = []any{
-	(*SetFaclRequest)(nil),  // 0: meta.SetFaclRequest
-	(*SetFaclResponse)(nil), // 1: meta.SetFaclResponse
-	(*GetFaclRequest)(nil),  // 2: meta.GetFaclRequest
-	(*GetFaclResponse)(nil), // 3: meta.GetFaclResponse
-	(*MetaContext)(nil),     // 4: meta.MetaContext
-	(*ProtoACLRule)(nil),    // 5: meta.ProtoACLRule
+var file_pb_meta_acl_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_pb_meta_acl_proto_goTypes = []any{
+	(*SetFaclRequest)(nil),  // 0: pb.SetFaclRequest
+	(*SetFaclResponse)(nil), // 1: pb.SetFaclResponse
+	(*GetFaclRequest)(nil),  // 2: pb.GetFaclRequest
+	(*GetFaclResponse)(nil), // 3: pb.GetFaclResponse
+	(*MetaContext)(nil),     // 4: pb.MetaContext
+	(*ProtoACLRule)(nil),    // 5: pb.ProtoACLRule
 }
-var file_meta_acl_proto_depIdxs = []int32{
-	4, // 0: meta.SetFaclRequest.ctx:type_name -> meta.MetaContext
-	5, // 1: meta.SetFaclRequest.rule:type_name -> meta.ProtoACLRule
-	4, // 2: meta.GetFaclRequest.ctx:type_name -> meta.MetaContext
-	5, // 3: meta.GetFaclResponse.rule:type_name -> meta.ProtoACLRule
+var file_pb_meta_acl_proto_depIdxs = []int32{
+	4, // 0: pb.SetFaclRequest.ctx:type_name -> pb.MetaContext
+	5, // 1: pb.SetFaclRequest.rule:type_name -> pb.ProtoACLRule
+	4, // 2: pb.GetFaclRequest.ctx:type_name -> pb.MetaContext
+	5, // 3: pb.GetFaclResponse.rule:type_name -> pb.ProtoACLRule
 	4, // [4:4] is the sub-list for method output_type
 	4, // [4:4] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name
@@ -313,27 +313,27 @@ var file_meta_acl_proto_depIdxs = []int32{
 	0, // [0:4] is the sub-list for field type_name
 }
 
-func init() { file_meta_acl_proto_init() }
-func file_meta_acl_proto_init() {
-	if File_meta_acl_proto != nil {
+func init() { file_pb_meta_acl_proto_init() }
+func file_pb_meta_acl_proto_init() {
+	if File_pb_meta_acl_proto != nil {
 		return
 	}
-	file_meta_common_proto_init()
+	file_pb_meta_common_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meta_acl_proto_rawDesc), len(file_meta_acl_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_meta_acl_proto_rawDesc), len(file_pb_meta_acl_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_meta_acl_proto_goTypes,
-		DependencyIndexes: file_meta_acl_proto_depIdxs,
-		MessageInfos:      file_meta_acl_proto_msgTypes,
+		GoTypes:           file_pb_meta_acl_proto_goTypes,
+		DependencyIndexes: file_pb_meta_acl_proto_depIdxs,
+		MessageInfos:      file_pb_meta_acl_proto_msgTypes,
 	}.Build()
-	File_meta_acl_proto = out.File
-	file_meta_acl_proto_goTypes = nil
-	file_meta_acl_proto_depIdxs = nil
+	File_pb_meta_acl_proto = out.File
+	file_pb_meta_acl_proto_goTypes = nil
+	file_pb_meta_acl_proto_depIdxs = nil
 }

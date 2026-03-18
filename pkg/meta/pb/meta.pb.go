@@ -17,9 +17,9 @@
 // versions:
 // 	protoc-gen-go v1.36.9
 // 	protoc        v6.30.2
-// source: meta.proto
+// source: pb/meta.proto
 
-package grpc
+package pb
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -46,7 +46,7 @@ type StatFSRequest struct {
 
 func (x *StatFSRequest) Reset() {
 	*x = StatFSRequest{}
-	mi := &file_meta_proto_msgTypes[0]
+	mi := &file_pb_meta_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58,7 +58,7 @@ func (x *StatFSRequest) String() string {
 func (*StatFSRequest) ProtoMessage() {}
 
 func (x *StatFSRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[0]
+	mi := &file_pb_meta_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71,7 +71,7 @@ func (x *StatFSRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatFSRequest.ProtoReflect.Descriptor instead.
 func (*StatFSRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{0}
+	return file_pb_meta_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *StatFSRequest) GetCtx() *MetaContext {
@@ -101,7 +101,7 @@ type StatFSResponse struct {
 
 func (x *StatFSResponse) Reset() {
 	*x = StatFSResponse{}
-	mi := &file_meta_proto_msgTypes[1]
+	mi := &file_pb_meta_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -113,7 +113,7 @@ func (x *StatFSResponse) String() string {
 func (*StatFSResponse) ProtoMessage() {}
 
 func (x *StatFSResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[1]
+	mi := &file_pb_meta_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -126,7 +126,7 @@ func (x *StatFSResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatFSResponse.ProtoReflect.Descriptor instead.
 func (*StatFSResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{1}
+	return file_pb_meta_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *StatFSResponse) GetErrno() uint32 {
@@ -176,7 +176,7 @@ type LookupRequest struct {
 
 func (x *LookupRequest) Reset() {
 	*x = LookupRequest{}
-	mi := &file_meta_proto_msgTypes[2]
+	mi := &file_pb_meta_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -188,7 +188,7 @@ func (x *LookupRequest) String() string {
 func (*LookupRequest) ProtoMessage() {}
 
 func (x *LookupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[2]
+	mi := &file_pb_meta_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -201,7 +201,7 @@ func (x *LookupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LookupRequest.ProtoReflect.Descriptor instead.
 func (*LookupRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{2}
+	return file_pb_meta_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *LookupRequest) GetCtx() *MetaContext {
@@ -243,7 +243,7 @@ type LookupResponse struct {
 
 func (x *LookupResponse) Reset() {
 	*x = LookupResponse{}
-	mi := &file_meta_proto_msgTypes[3]
+	mi := &file_pb_meta_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -255,7 +255,7 @@ func (x *LookupResponse) String() string {
 func (*LookupResponse) ProtoMessage() {}
 
 func (x *LookupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[3]
+	mi := &file_pb_meta_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -268,7 +268,7 @@ func (x *LookupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LookupResponse.ProtoReflect.Descriptor instead.
 func (*LookupResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{3}
+	return file_pb_meta_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *LookupResponse) GetErrno() uint32 {
@@ -303,7 +303,7 @@ type ResolveRequest struct {
 
 func (x *ResolveRequest) Reset() {
 	*x = ResolveRequest{}
-	mi := &file_meta_proto_msgTypes[4]
+	mi := &file_pb_meta_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -315,7 +315,7 @@ func (x *ResolveRequest) String() string {
 func (*ResolveRequest) ProtoMessage() {}
 
 func (x *ResolveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[4]
+	mi := &file_pb_meta_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -328,7 +328,7 @@ func (x *ResolveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveRequest.ProtoReflect.Descriptor instead.
 func (*ResolveRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{4}
+	return file_pb_meta_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ResolveRequest) GetCtx() *MetaContext {
@@ -363,7 +363,7 @@ type ResolveResponse struct {
 
 func (x *ResolveResponse) Reset() {
 	*x = ResolveResponse{}
-	mi := &file_meta_proto_msgTypes[5]
+	mi := &file_pb_meta_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -375,7 +375,7 @@ func (x *ResolveResponse) String() string {
 func (*ResolveResponse) ProtoMessage() {}
 
 func (x *ResolveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[5]
+	mi := &file_pb_meta_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -388,7 +388,7 @@ func (x *ResolveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveResponse.ProtoReflect.Descriptor instead.
 func (*ResolveResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{5}
+	return file_pb_meta_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ResolveResponse) GetErrno() uint32 {
@@ -423,7 +423,7 @@ type AccessRequest struct {
 
 func (x *AccessRequest) Reset() {
 	*x = AccessRequest{}
-	mi := &file_meta_proto_msgTypes[6]
+	mi := &file_pb_meta_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -435,7 +435,7 @@ func (x *AccessRequest) String() string {
 func (*AccessRequest) ProtoMessage() {}
 
 func (x *AccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[6]
+	mi := &file_pb_meta_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -448,7 +448,7 @@ func (x *AccessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccessRequest.ProtoReflect.Descriptor instead.
 func (*AccessRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{6}
+	return file_pb_meta_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *AccessRequest) GetCtx() *MetaContext {
@@ -482,7 +482,7 @@ type AccessResponse struct {
 
 func (x *AccessResponse) Reset() {
 	*x = AccessResponse{}
-	mi := &file_meta_proto_msgTypes[7]
+	mi := &file_pb_meta_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -494,7 +494,7 @@ func (x *AccessResponse) String() string {
 func (*AccessResponse) ProtoMessage() {}
 
 func (x *AccessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[7]
+	mi := &file_pb_meta_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -507,7 +507,7 @@ func (x *AccessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccessResponse.ProtoReflect.Descriptor instead.
 func (*AccessResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{7}
+	return file_pb_meta_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *AccessResponse) GetErrno() uint32 {
@@ -534,7 +534,7 @@ type GetAttrRequest struct {
 
 func (x *GetAttrRequest) Reset() {
 	*x = GetAttrRequest{}
-	mi := &file_meta_proto_msgTypes[8]
+	mi := &file_pb_meta_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -546,7 +546,7 @@ func (x *GetAttrRequest) String() string {
 func (*GetAttrRequest) ProtoMessage() {}
 
 func (x *GetAttrRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[8]
+	mi := &file_pb_meta_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -559,7 +559,7 @@ func (x *GetAttrRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAttrRequest.ProtoReflect.Descriptor instead.
 func (*GetAttrRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{8}
+	return file_pb_meta_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetAttrRequest) GetCtx() *MetaContext {
@@ -586,7 +586,7 @@ type GetAttrResponse struct {
 
 func (x *GetAttrResponse) Reset() {
 	*x = GetAttrResponse{}
-	mi := &file_meta_proto_msgTypes[9]
+	mi := &file_pb_meta_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -598,7 +598,7 @@ func (x *GetAttrResponse) String() string {
 func (*GetAttrResponse) ProtoMessage() {}
 
 func (x *GetAttrResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[9]
+	mi := &file_pb_meta_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -611,7 +611,7 @@ func (x *GetAttrResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAttrResponse.ProtoReflect.Descriptor instead.
 func (*GetAttrResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{9}
+	return file_pb_meta_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *GetAttrResponse) GetErrno() uint32 {
@@ -641,7 +641,7 @@ type SetAttrRequest struct {
 
 func (x *SetAttrRequest) Reset() {
 	*x = SetAttrRequest{}
-	mi := &file_meta_proto_msgTypes[10]
+	mi := &file_pb_meta_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -653,7 +653,7 @@ func (x *SetAttrRequest) String() string {
 func (*SetAttrRequest) ProtoMessage() {}
 
 func (x *SetAttrRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[10]
+	mi := &file_pb_meta_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -666,7 +666,7 @@ func (x *SetAttrRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetAttrRequest.ProtoReflect.Descriptor instead.
 func (*SetAttrRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{10}
+	return file_pb_meta_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *SetAttrRequest) GetCtx() *MetaContext {
@@ -713,7 +713,7 @@ type SetAttrResponse struct {
 
 func (x *SetAttrResponse) Reset() {
 	*x = SetAttrResponse{}
-	mi := &file_meta_proto_msgTypes[11]
+	mi := &file_pb_meta_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -725,7 +725,7 @@ func (x *SetAttrResponse) String() string {
 func (*SetAttrResponse) ProtoMessage() {}
 
 func (x *SetAttrResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[11]
+	mi := &file_pb_meta_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -738,7 +738,7 @@ func (x *SetAttrResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetAttrResponse.ProtoReflect.Descriptor instead.
 func (*SetAttrResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{11}
+	return file_pb_meta_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *SetAttrResponse) GetErrno() uint32 {
@@ -760,7 +760,7 @@ type CheckSetAttrRequest struct {
 
 func (x *CheckSetAttrRequest) Reset() {
 	*x = CheckSetAttrRequest{}
-	mi := &file_meta_proto_msgTypes[12]
+	mi := &file_pb_meta_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -772,7 +772,7 @@ func (x *CheckSetAttrRequest) String() string {
 func (*CheckSetAttrRequest) ProtoMessage() {}
 
 func (x *CheckSetAttrRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[12]
+	mi := &file_pb_meta_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -785,7 +785,7 @@ func (x *CheckSetAttrRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckSetAttrRequest.ProtoReflect.Descriptor instead.
 func (*CheckSetAttrRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{12}
+	return file_pb_meta_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *CheckSetAttrRequest) GetCtx() *MetaContext {
@@ -825,7 +825,7 @@ type CheckSetAttrResponse struct {
 
 func (x *CheckSetAttrResponse) Reset() {
 	*x = CheckSetAttrResponse{}
-	mi := &file_meta_proto_msgTypes[13]
+	mi := &file_pb_meta_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -837,7 +837,7 @@ func (x *CheckSetAttrResponse) String() string {
 func (*CheckSetAttrResponse) ProtoMessage() {}
 
 func (x *CheckSetAttrResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[13]
+	mi := &file_pb_meta_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -850,7 +850,7 @@ func (x *CheckSetAttrResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckSetAttrResponse.ProtoReflect.Descriptor instead.
 func (*CheckSetAttrResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{13}
+	return file_pb_meta_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *CheckSetAttrResponse) GetErrno() uint32 {
@@ -876,7 +876,7 @@ type MknodRequest struct {
 
 func (x *MknodRequest) Reset() {
 	*x = MknodRequest{}
-	mi := &file_meta_proto_msgTypes[14]
+	mi := &file_pb_meta_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -888,7 +888,7 @@ func (x *MknodRequest) String() string {
 func (*MknodRequest) ProtoMessage() {}
 
 func (x *MknodRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[14]
+	mi := &file_pb_meta_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -901,7 +901,7 @@ func (x *MknodRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MknodRequest.ProtoReflect.Descriptor instead.
 func (*MknodRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{14}
+	return file_pb_meta_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *MknodRequest) GetCtx() *MetaContext {
@@ -971,7 +971,7 @@ type MknodResponse struct {
 
 func (x *MknodResponse) Reset() {
 	*x = MknodResponse{}
-	mi := &file_meta_proto_msgTypes[15]
+	mi := &file_pb_meta_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -983,7 +983,7 @@ func (x *MknodResponse) String() string {
 func (*MknodResponse) ProtoMessage() {}
 
 func (x *MknodResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[15]
+	mi := &file_pb_meta_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -996,7 +996,7 @@ func (x *MknodResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MknodResponse.ProtoReflect.Descriptor instead.
 func (*MknodResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{15}
+	return file_pb_meta_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *MknodResponse) GetErrno() uint32 {
@@ -1034,7 +1034,7 @@ type MkdirRequest struct {
 
 func (x *MkdirRequest) Reset() {
 	*x = MkdirRequest{}
-	mi := &file_meta_proto_msgTypes[16]
+	mi := &file_pb_meta_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1046,7 +1046,7 @@ func (x *MkdirRequest) String() string {
 func (*MkdirRequest) ProtoMessage() {}
 
 func (x *MkdirRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[16]
+	mi := &file_pb_meta_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1059,7 +1059,7 @@ func (x *MkdirRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MkdirRequest.ProtoReflect.Descriptor instead.
 func (*MkdirRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{16}
+	return file_pb_meta_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *MkdirRequest) GetCtx() *MetaContext {
@@ -1115,7 +1115,7 @@ type MkdirResponse struct {
 
 func (x *MkdirResponse) Reset() {
 	*x = MkdirResponse{}
-	mi := &file_meta_proto_msgTypes[17]
+	mi := &file_pb_meta_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1127,7 +1127,7 @@ func (x *MkdirResponse) String() string {
 func (*MkdirResponse) ProtoMessage() {}
 
 func (x *MkdirResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[17]
+	mi := &file_pb_meta_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1140,7 +1140,7 @@ func (x *MkdirResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MkdirResponse.ProtoReflect.Descriptor instead.
 func (*MkdirResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{17}
+	return file_pb_meta_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *MkdirResponse) GetErrno() uint32 {
@@ -1178,7 +1178,7 @@ type CreateRequest struct {
 
 func (x *CreateRequest) Reset() {
 	*x = CreateRequest{}
-	mi := &file_meta_proto_msgTypes[18]
+	mi := &file_pb_meta_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1190,7 +1190,7 @@ func (x *CreateRequest) String() string {
 func (*CreateRequest) ProtoMessage() {}
 
 func (x *CreateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[18]
+	mi := &file_pb_meta_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1203,7 +1203,7 @@ func (x *CreateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRequest.ProtoReflect.Descriptor instead.
 func (*CreateRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{18}
+	return file_pb_meta_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *CreateRequest) GetCtx() *MetaContext {
@@ -1259,7 +1259,7 @@ type CreateResponse struct {
 
 func (x *CreateResponse) Reset() {
 	*x = CreateResponse{}
-	mi := &file_meta_proto_msgTypes[19]
+	mi := &file_pb_meta_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1271,7 +1271,7 @@ func (x *CreateResponse) String() string {
 func (*CreateResponse) ProtoMessage() {}
 
 func (x *CreateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[19]
+	mi := &file_pb_meta_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1284,7 +1284,7 @@ func (x *CreateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateResponse.ProtoReflect.Descriptor instead.
 func (*CreateResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{19}
+	return file_pb_meta_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *CreateResponse) GetErrno() uint32 {
@@ -1319,7 +1319,7 @@ type OpenRequest struct {
 
 func (x *OpenRequest) Reset() {
 	*x = OpenRequest{}
-	mi := &file_meta_proto_msgTypes[20]
+	mi := &file_pb_meta_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1331,7 +1331,7 @@ func (x *OpenRequest) String() string {
 func (*OpenRequest) ProtoMessage() {}
 
 func (x *OpenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[20]
+	mi := &file_pb_meta_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1344,7 +1344,7 @@ func (x *OpenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenRequest.ProtoReflect.Descriptor instead.
 func (*OpenRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{20}
+	return file_pb_meta_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *OpenRequest) GetCtx() *MetaContext {
@@ -1378,7 +1378,7 @@ type OpenResponse struct {
 
 func (x *OpenResponse) Reset() {
 	*x = OpenResponse{}
-	mi := &file_meta_proto_msgTypes[21]
+	mi := &file_pb_meta_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1390,7 +1390,7 @@ func (x *OpenResponse) String() string {
 func (*OpenResponse) ProtoMessage() {}
 
 func (x *OpenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[21]
+	mi := &file_pb_meta_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1403,7 +1403,7 @@ func (x *OpenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenResponse.ProtoReflect.Descriptor instead.
 func (*OpenResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{21}
+	return file_pb_meta_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *OpenResponse) GetErrno() uint32 {
@@ -1430,7 +1430,7 @@ type CloseRequest struct {
 
 func (x *CloseRequest) Reset() {
 	*x = CloseRequest{}
-	mi := &file_meta_proto_msgTypes[22]
+	mi := &file_pb_meta_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1442,7 +1442,7 @@ func (x *CloseRequest) String() string {
 func (*CloseRequest) ProtoMessage() {}
 
 func (x *CloseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[22]
+	mi := &file_pb_meta_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1455,7 +1455,7 @@ func (x *CloseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CloseRequest.ProtoReflect.Descriptor instead.
 func (*CloseRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{22}
+	return file_pb_meta_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *CloseRequest) GetCtx() *MetaContext {
@@ -1481,7 +1481,7 @@ type CloseResponse struct {
 
 func (x *CloseResponse) Reset() {
 	*x = CloseResponse{}
-	mi := &file_meta_proto_msgTypes[23]
+	mi := &file_pb_meta_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1493,7 +1493,7 @@ func (x *CloseResponse) String() string {
 func (*CloseResponse) ProtoMessage() {}
 
 func (x *CloseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[23]
+	mi := &file_pb_meta_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1506,7 +1506,7 @@ func (x *CloseResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CloseResponse.ProtoReflect.Descriptor instead.
 func (*CloseResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{23}
+	return file_pb_meta_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *CloseResponse) GetErrno() uint32 {
@@ -1528,7 +1528,7 @@ type UnlinkRequest struct {
 
 func (x *UnlinkRequest) Reset() {
 	*x = UnlinkRequest{}
-	mi := &file_meta_proto_msgTypes[24]
+	mi := &file_pb_meta_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1540,7 +1540,7 @@ func (x *UnlinkRequest) String() string {
 func (*UnlinkRequest) ProtoMessage() {}
 
 func (x *UnlinkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[24]
+	mi := &file_pb_meta_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1553,7 +1553,7 @@ func (x *UnlinkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlinkRequest.ProtoReflect.Descriptor instead.
 func (*UnlinkRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{24}
+	return file_pb_meta_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *UnlinkRequest) GetCtx() *MetaContext {
@@ -1593,7 +1593,7 @@ type UnlinkResponse struct {
 
 func (x *UnlinkResponse) Reset() {
 	*x = UnlinkResponse{}
-	mi := &file_meta_proto_msgTypes[25]
+	mi := &file_pb_meta_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1605,7 +1605,7 @@ func (x *UnlinkResponse) String() string {
 func (*UnlinkResponse) ProtoMessage() {}
 
 func (x *UnlinkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[25]
+	mi := &file_pb_meta_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1618,7 +1618,7 @@ func (x *UnlinkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlinkResponse.ProtoReflect.Descriptor instead.
 func (*UnlinkResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{25}
+	return file_pb_meta_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *UnlinkResponse) GetErrno() uint32 {
@@ -1640,7 +1640,7 @@ type RmdirRequest struct {
 
 func (x *RmdirRequest) Reset() {
 	*x = RmdirRequest{}
-	mi := &file_meta_proto_msgTypes[26]
+	mi := &file_pb_meta_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1652,7 +1652,7 @@ func (x *RmdirRequest) String() string {
 func (*RmdirRequest) ProtoMessage() {}
 
 func (x *RmdirRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[26]
+	mi := &file_pb_meta_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1665,7 +1665,7 @@ func (x *RmdirRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RmdirRequest.ProtoReflect.Descriptor instead.
 func (*RmdirRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{26}
+	return file_pb_meta_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *RmdirRequest) GetCtx() *MetaContext {
@@ -1705,7 +1705,7 @@ type RmdirResponse struct {
 
 func (x *RmdirResponse) Reset() {
 	*x = RmdirResponse{}
-	mi := &file_meta_proto_msgTypes[27]
+	mi := &file_pb_meta_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1717,7 +1717,7 @@ func (x *RmdirResponse) String() string {
 func (*RmdirResponse) ProtoMessage() {}
 
 func (x *RmdirResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[27]
+	mi := &file_pb_meta_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1730,7 +1730,7 @@ func (x *RmdirResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RmdirResponse.ProtoReflect.Descriptor instead.
 func (*RmdirResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{27}
+	return file_pb_meta_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *RmdirResponse) GetErrno() uint32 {
@@ -1754,7 +1754,7 @@ type RenameRequest struct {
 
 func (x *RenameRequest) Reset() {
 	*x = RenameRequest{}
-	mi := &file_meta_proto_msgTypes[28]
+	mi := &file_pb_meta_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1766,7 +1766,7 @@ func (x *RenameRequest) String() string {
 func (*RenameRequest) ProtoMessage() {}
 
 func (x *RenameRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[28]
+	mi := &file_pb_meta_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1779,7 +1779,7 @@ func (x *RenameRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameRequest.ProtoReflect.Descriptor instead.
 func (*RenameRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{28}
+	return file_pb_meta_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *RenameRequest) GetCtx() *MetaContext {
@@ -1835,7 +1835,7 @@ type RenameResponse struct {
 
 func (x *RenameResponse) Reset() {
 	*x = RenameResponse{}
-	mi := &file_meta_proto_msgTypes[29]
+	mi := &file_pb_meta_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1847,7 +1847,7 @@ func (x *RenameResponse) String() string {
 func (*RenameResponse) ProtoMessage() {}
 
 func (x *RenameResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[29]
+	mi := &file_pb_meta_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1860,7 +1860,7 @@ func (x *RenameResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameResponse.ProtoReflect.Descriptor instead.
 func (*RenameResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{29}
+	return file_pb_meta_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *RenameResponse) GetErrno() uint32 {
@@ -1896,7 +1896,7 @@ type LinkRequest struct {
 
 func (x *LinkRequest) Reset() {
 	*x = LinkRequest{}
-	mi := &file_meta_proto_msgTypes[30]
+	mi := &file_pb_meta_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1908,7 +1908,7 @@ func (x *LinkRequest) String() string {
 func (*LinkRequest) ProtoMessage() {}
 
 func (x *LinkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[30]
+	mi := &file_pb_meta_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1921,7 +1921,7 @@ func (x *LinkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkRequest.ProtoReflect.Descriptor instead.
 func (*LinkRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{30}
+	return file_pb_meta_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *LinkRequest) GetCtx() *MetaContext {
@@ -1962,7 +1962,7 @@ type LinkResponse struct {
 
 func (x *LinkResponse) Reset() {
 	*x = LinkResponse{}
-	mi := &file_meta_proto_msgTypes[31]
+	mi := &file_pb_meta_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1974,7 +1974,7 @@ func (x *LinkResponse) String() string {
 func (*LinkResponse) ProtoMessage() {}
 
 func (x *LinkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[31]
+	mi := &file_pb_meta_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1987,7 +1987,7 @@ func (x *LinkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkResponse.ProtoReflect.Descriptor instead.
 func (*LinkResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{31}
+	return file_pb_meta_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *LinkResponse) GetErrno() uint32 {
@@ -2016,7 +2016,7 @@ type SymlinkRequest struct {
 
 func (x *SymlinkRequest) Reset() {
 	*x = SymlinkRequest{}
-	mi := &file_meta_proto_msgTypes[32]
+	mi := &file_pb_meta_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2028,7 +2028,7 @@ func (x *SymlinkRequest) String() string {
 func (*SymlinkRequest) ProtoMessage() {}
 
 func (x *SymlinkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[32]
+	mi := &file_pb_meta_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2041,7 +2041,7 @@ func (x *SymlinkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SymlinkRequest.ProtoReflect.Descriptor instead.
 func (*SymlinkRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{32}
+	return file_pb_meta_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *SymlinkRequest) GetCtx() *MetaContext {
@@ -2083,7 +2083,7 @@ type SymlinkResponse struct {
 
 func (x *SymlinkResponse) Reset() {
 	*x = SymlinkResponse{}
-	mi := &file_meta_proto_msgTypes[33]
+	mi := &file_pb_meta_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2095,7 +2095,7 @@ func (x *SymlinkResponse) String() string {
 func (*SymlinkResponse) ProtoMessage() {}
 
 func (x *SymlinkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[33]
+	mi := &file_pb_meta_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2108,7 +2108,7 @@ func (x *SymlinkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SymlinkResponse.ProtoReflect.Descriptor instead.
 func (*SymlinkResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{33}
+	return file_pb_meta_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *SymlinkResponse) GetErrno() uint32 {
@@ -2142,7 +2142,7 @@ type ReadLinkRequest struct {
 
 func (x *ReadLinkRequest) Reset() {
 	*x = ReadLinkRequest{}
-	mi := &file_meta_proto_msgTypes[34]
+	mi := &file_pb_meta_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2154,7 +2154,7 @@ func (x *ReadLinkRequest) String() string {
 func (*ReadLinkRequest) ProtoMessage() {}
 
 func (x *ReadLinkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[34]
+	mi := &file_pb_meta_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2167,7 +2167,7 @@ func (x *ReadLinkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadLinkRequest.ProtoReflect.Descriptor instead.
 func (*ReadLinkRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{34}
+	return file_pb_meta_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ReadLinkRequest) GetCtx() *MetaContext {
@@ -2194,7 +2194,7 @@ type ReadLinkResponse struct {
 
 func (x *ReadLinkResponse) Reset() {
 	*x = ReadLinkResponse{}
-	mi := &file_meta_proto_msgTypes[35]
+	mi := &file_pb_meta_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2206,7 +2206,7 @@ func (x *ReadLinkResponse) String() string {
 func (*ReadLinkResponse) ProtoMessage() {}
 
 func (x *ReadLinkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[35]
+	mi := &file_pb_meta_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2219,7 +2219,7 @@ func (x *ReadLinkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadLinkResponse.ProtoReflect.Descriptor instead.
 func (*ReadLinkResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{35}
+	return file_pb_meta_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ReadLinkResponse) GetErrno() uint32 {
@@ -2249,7 +2249,7 @@ type TruncateRequest struct {
 
 func (x *TruncateRequest) Reset() {
 	*x = TruncateRequest{}
-	mi := &file_meta_proto_msgTypes[36]
+	mi := &file_pb_meta_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2261,7 +2261,7 @@ func (x *TruncateRequest) String() string {
 func (*TruncateRequest) ProtoMessage() {}
 
 func (x *TruncateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[36]
+	mi := &file_pb_meta_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2274,7 +2274,7 @@ func (x *TruncateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TruncateRequest.ProtoReflect.Descriptor instead.
 func (*TruncateRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{36}
+	return file_pb_meta_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *TruncateRequest) GetCtx() *MetaContext {
@@ -2322,7 +2322,7 @@ type TruncateResponse struct {
 
 func (x *TruncateResponse) Reset() {
 	*x = TruncateResponse{}
-	mi := &file_meta_proto_msgTypes[37]
+	mi := &file_pb_meta_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2334,7 +2334,7 @@ func (x *TruncateResponse) String() string {
 func (*TruncateResponse) ProtoMessage() {}
 
 func (x *TruncateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[37]
+	mi := &file_pb_meta_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2347,7 +2347,7 @@ func (x *TruncateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TruncateResponse.ProtoReflect.Descriptor instead.
 func (*TruncateResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{37}
+	return file_pb_meta_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *TruncateResponse) GetErrno() uint32 {
@@ -2377,7 +2377,7 @@ type FallocateRequest struct {
 
 func (x *FallocateRequest) Reset() {
 	*x = FallocateRequest{}
-	mi := &file_meta_proto_msgTypes[38]
+	mi := &file_pb_meta_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2389,7 +2389,7 @@ func (x *FallocateRequest) String() string {
 func (*FallocateRequest) ProtoMessage() {}
 
 func (x *FallocateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[38]
+	mi := &file_pb_meta_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2402,7 +2402,7 @@ func (x *FallocateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FallocateRequest.ProtoReflect.Descriptor instead.
 func (*FallocateRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{38}
+	return file_pb_meta_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *FallocateRequest) GetCtx() *MetaContext {
@@ -2450,7 +2450,7 @@ type FallocateResponse struct {
 
 func (x *FallocateResponse) Reset() {
 	*x = FallocateResponse{}
-	mi := &file_meta_proto_msgTypes[39]
+	mi := &file_pb_meta_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2462,7 +2462,7 @@ func (x *FallocateResponse) String() string {
 func (*FallocateResponse) ProtoMessage() {}
 
 func (x *FallocateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[39]
+	mi := &file_pb_meta_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2475,7 +2475,7 @@ func (x *FallocateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FallocateResponse.ProtoReflect.Descriptor instead.
 func (*FallocateResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{39}
+	return file_pb_meta_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *FallocateResponse) GetErrno() uint32 {
@@ -2503,7 +2503,7 @@ type ReaddirRequest struct {
 
 func (x *ReaddirRequest) Reset() {
 	*x = ReaddirRequest{}
-	mi := &file_meta_proto_msgTypes[40]
+	mi := &file_pb_meta_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2515,7 +2515,7 @@ func (x *ReaddirRequest) String() string {
 func (*ReaddirRequest) ProtoMessage() {}
 
 func (x *ReaddirRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[40]
+	mi := &file_pb_meta_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2528,7 +2528,7 @@ func (x *ReaddirRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReaddirRequest.ProtoReflect.Descriptor instead.
 func (*ReaddirRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{40}
+	return file_pb_meta_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *ReaddirRequest) GetCtx() *MetaContext {
@@ -2562,7 +2562,7 @@ type ReaddirResponse struct {
 
 func (x *ReaddirResponse) Reset() {
 	*x = ReaddirResponse{}
-	mi := &file_meta_proto_msgTypes[41]
+	mi := &file_pb_meta_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2574,7 +2574,7 @@ func (x *ReaddirResponse) String() string {
 func (*ReaddirResponse) ProtoMessage() {}
 
 func (x *ReaddirResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[41]
+	mi := &file_pb_meta_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2587,7 +2587,7 @@ func (x *ReaddirResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReaddirResponse.ProtoReflect.Descriptor instead.
 func (*ReaddirResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{41}
+	return file_pb_meta_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *ReaddirResponse) GetErrno() uint32 {
@@ -2615,7 +2615,7 @@ type ReadRequest struct {
 
 func (x *ReadRequest) Reset() {
 	*x = ReadRequest{}
-	mi := &file_meta_proto_msgTypes[42]
+	mi := &file_pb_meta_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2627,7 +2627,7 @@ func (x *ReadRequest) String() string {
 func (*ReadRequest) ProtoMessage() {}
 
 func (x *ReadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[42]
+	mi := &file_pb_meta_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2640,7 +2640,7 @@ func (x *ReadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadRequest.ProtoReflect.Descriptor instead.
 func (*ReadRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{42}
+	return file_pb_meta_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ReadRequest) GetCtx() *MetaContext {
@@ -2674,7 +2674,7 @@ type ReadResponse struct {
 
 func (x *ReadResponse) Reset() {
 	*x = ReadResponse{}
-	mi := &file_meta_proto_msgTypes[43]
+	mi := &file_pb_meta_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2686,7 +2686,7 @@ func (x *ReadResponse) String() string {
 func (*ReadResponse) ProtoMessage() {}
 
 func (x *ReadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[43]
+	mi := &file_pb_meta_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2699,7 +2699,7 @@ func (x *ReadResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadResponse.ProtoReflect.Descriptor instead.
 func (*ReadResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{43}
+	return file_pb_meta_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ReadResponse) GetErrno() uint32 {
@@ -2730,7 +2730,7 @@ type WriteRequest struct {
 
 func (x *WriteRequest) Reset() {
 	*x = WriteRequest{}
-	mi := &file_meta_proto_msgTypes[44]
+	mi := &file_pb_meta_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2742,7 +2742,7 @@ func (x *WriteRequest) String() string {
 func (*WriteRequest) ProtoMessage() {}
 
 func (x *WriteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[44]
+	mi := &file_pb_meta_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2755,7 +2755,7 @@ func (x *WriteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WriteRequest.ProtoReflect.Descriptor instead.
 func (*WriteRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{44}
+	return file_pb_meta_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *WriteRequest) GetCtx() *MetaContext {
@@ -2809,7 +2809,7 @@ type WriteResponse struct {
 
 func (x *WriteResponse) Reset() {
 	*x = WriteResponse{}
-	mi := &file_meta_proto_msgTypes[45]
+	mi := &file_pb_meta_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2821,7 +2821,7 @@ func (x *WriteResponse) String() string {
 func (*WriteResponse) ProtoMessage() {}
 
 func (x *WriteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[45]
+	mi := &file_pb_meta_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2834,7 +2834,7 @@ func (x *WriteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WriteResponse.ProtoReflect.Descriptor instead.
 func (*WriteResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{45}
+	return file_pb_meta_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *WriteResponse) GetErrno() uint32 {
@@ -2853,7 +2853,7 @@ type NewSliceRequest struct {
 
 func (x *NewSliceRequest) Reset() {
 	*x = NewSliceRequest{}
-	mi := &file_meta_proto_msgTypes[46]
+	mi := &file_pb_meta_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2865,7 +2865,7 @@ func (x *NewSliceRequest) String() string {
 func (*NewSliceRequest) ProtoMessage() {}
 
 func (x *NewSliceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[46]
+	mi := &file_pb_meta_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2878,7 +2878,7 @@ func (x *NewSliceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NewSliceRequest.ProtoReflect.Descriptor instead.
 func (*NewSliceRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{46}
+	return file_pb_meta_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *NewSliceRequest) GetCtx() *MetaContext {
@@ -2898,7 +2898,7 @@ type NewSliceResponse struct {
 
 func (x *NewSliceResponse) Reset() {
 	*x = NewSliceResponse{}
-	mi := &file_meta_proto_msgTypes[47]
+	mi := &file_pb_meta_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2910,7 +2910,7 @@ func (x *NewSliceResponse) String() string {
 func (*NewSliceResponse) ProtoMessage() {}
 
 func (x *NewSliceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[47]
+	mi := &file_pb_meta_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2923,7 +2923,7 @@ func (x *NewSliceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NewSliceResponse.ProtoReflect.Descriptor instead.
 func (*NewSliceResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{47}
+	return file_pb_meta_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *NewSliceResponse) GetErrno() uint32 {
@@ -2951,7 +2951,7 @@ type InvalidateChunkCacheRequest struct {
 
 func (x *InvalidateChunkCacheRequest) Reset() {
 	*x = InvalidateChunkCacheRequest{}
-	mi := &file_meta_proto_msgTypes[48]
+	mi := &file_pb_meta_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2963,7 +2963,7 @@ func (x *InvalidateChunkCacheRequest) String() string {
 func (*InvalidateChunkCacheRequest) ProtoMessage() {}
 
 func (x *InvalidateChunkCacheRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[48]
+	mi := &file_pb_meta_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2976,7 +2976,7 @@ func (x *InvalidateChunkCacheRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvalidateChunkCacheRequest.ProtoReflect.Descriptor instead.
 func (*InvalidateChunkCacheRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{48}
+	return file_pb_meta_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *InvalidateChunkCacheRequest) GetCtx() *MetaContext {
@@ -3009,7 +3009,7 @@ type InvalidateChunkCacheResponse struct {
 
 func (x *InvalidateChunkCacheResponse) Reset() {
 	*x = InvalidateChunkCacheResponse{}
-	mi := &file_meta_proto_msgTypes[49]
+	mi := &file_pb_meta_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3021,7 +3021,7 @@ func (x *InvalidateChunkCacheResponse) String() string {
 func (*InvalidateChunkCacheResponse) ProtoMessage() {}
 
 func (x *InvalidateChunkCacheResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[49]
+	mi := &file_pb_meta_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3034,7 +3034,7 @@ func (x *InvalidateChunkCacheResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvalidateChunkCacheResponse.ProtoReflect.Descriptor instead.
 func (*InvalidateChunkCacheResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{49}
+	return file_pb_meta_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *InvalidateChunkCacheResponse) GetErrno() uint32 {
@@ -3059,7 +3059,7 @@ type CopyFileRangeRequest struct {
 
 func (x *CopyFileRangeRequest) Reset() {
 	*x = CopyFileRangeRequest{}
-	mi := &file_meta_proto_msgTypes[50]
+	mi := &file_pb_meta_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3071,7 +3071,7 @@ func (x *CopyFileRangeRequest) String() string {
 func (*CopyFileRangeRequest) ProtoMessage() {}
 
 func (x *CopyFileRangeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[50]
+	mi := &file_pb_meta_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3084,7 +3084,7 @@ func (x *CopyFileRangeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CopyFileRangeRequest.ProtoReflect.Descriptor instead.
 func (*CopyFileRangeRequest) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{50}
+	return file_pb_meta_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *CopyFileRangeRequest) GetCtx() *MetaContext {
@@ -3147,7 +3147,7 @@ type CopyFileRangeResponse struct {
 
 func (x *CopyFileRangeResponse) Reset() {
 	*x = CopyFileRangeResponse{}
-	mi := &file_meta_proto_msgTypes[51]
+	mi := &file_pb_meta_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3159,7 +3159,7 @@ func (x *CopyFileRangeResponse) String() string {
 func (*CopyFileRangeResponse) ProtoMessage() {}
 
 func (x *CopyFileRangeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_proto_msgTypes[51]
+	mi := &file_pb_meta_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3172,7 +3172,7 @@ func (x *CopyFileRangeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CopyFileRangeResponse.ProtoReflect.Descriptor instead.
 func (*CopyFileRangeResponse) Descriptor() ([]byte, []int) {
-	return file_meta_proto_rawDescGZIP(), []int{51}
+	return file_pb_meta_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *CopyFileRangeResponse) GetErrno() uint32 {
@@ -3196,14 +3196,13 @@ func (x *CopyFileRangeResponse) GetOutLength() uint64 {
 	return 0
 }
 
-var File_meta_proto protoreflect.FileDescriptor
+var File_pb_meta_proto protoreflect.FileDescriptor
 
-const file_meta_proto_rawDesc = "" +
+const file_pb_meta_proto_rawDesc = "" +
 	"\n" +
-	"\n" +
-	"meta.proto\x12\x04meta\x1a\x11meta_common.proto\x1a\x14meta_lifecycle.proto\x1a\x10meta_locks.proto\x1a\x11meta_xattrs.proto\x1a\x14meta_directory.proto\x1a\x0emeta_acl.proto\x1a\x10meta_token.proto\x1a\x10meta_admin.proto\x1a\x14meta_streaming.proto\x1a\x16meta_dir_handler.proto\"F\n" +
-	"\rStatFSRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x10\n" +
+	"\rpb/meta.proto\x12\x02pb\x1a\x14pb/meta_common.proto\x1a\x17pb/meta_lifecycle.proto\x1a\x13pb/meta_locks.proto\x1a\x14pb/meta_xattrs.proto\x1a\x17pb/meta_directory.proto\x1a\x11pb/meta_acl.proto\x1a\x13pb/meta_token.proto\x1a\x13pb/meta_admin.proto\x1a\x17pb/meta_streaming.proto\x1a\x19pb/meta_dir_handler.proto\"D\n" +
+	"\rStatFSRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x10\n" +
 	"\x03ino\x18\x02 \x01(\x04R\x03ino\"\x96\x01\n" +
 	"\x0eStatFSResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x1f\n" +
@@ -3212,203 +3211,203 @@ const file_meta_proto_rawDesc = "" +
 	"\vavail_space\x18\x03 \x01(\x04R\n" +
 	"availSpace\x12\x14\n" +
 	"\x05iused\x18\x04 \x01(\x04R\x05iused\x12\x16\n" +
-	"\x06iavail\x18\x05 \x01(\x04R\x06iavail\"\x8b\x01\n" +
-	"\rLookupRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x16\n" +
+	"\x06iavail\x18\x05 \x01(\x04R\x06iavail\"\x89\x01\n" +
+	"\rLookupRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x16\n" +
 	"\x06parent\x18\x02 \x01(\x04R\x06parent\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12)\n" +
-	"\x10check_permission\x18\x04 \x01(\bR\x0fcheckPermission\"a\n" +
+	"\x10check_permission\x18\x04 \x01(\bR\x0fcheckPermission\"_\n" +
 	"\x0eLookupResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12#\n" +
-	"\x04attr\x18\x03 \x01(\v2\x0f.meta.ProtoAttrR\x04attr\"a\n" +
-	"\x0eResolveRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x16\n" +
+	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12!\n" +
+	"\x04attr\x18\x03 \x01(\v2\r.pb.ProtoAttrR\x04attr\"_\n" +
+	"\x0eResolveRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x16\n" +
 	"\x06parent\x18\x02 \x01(\x04R\x06parent\x12\x12\n" +
-	"\x04path\x18\x03 \x01(\tR\x04path\"b\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\"`\n" +
 	"\x0fResolveResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12#\n" +
-	"\x04attr\x18\x03 \x01(\v2\x0f.meta.ProtoAttrR\x04attr\"f\n" +
-	"\rAccessRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12!\n" +
+	"\x04attr\x18\x03 \x01(\v2\r.pb.ProtoAttrR\x04attr\"d\n" +
+	"\rAccessRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x1a\n" +
-	"\bmodemask\x18\x03 \x01(\rR\bmodemask\"K\n" +
+	"\bmodemask\x18\x03 \x01(\rR\bmodemask\"I\n" +
 	"\x0eAccessResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12#\n" +
-	"\x04attr\x18\x02 \x01(\v2\x0f.meta.ProtoAttrR\x04attr\"K\n" +
-	"\x0eGetAttrRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\"L\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\x12!\n" +
+	"\x04attr\x18\x02 \x01(\v2\r.pb.ProtoAttrR\x04attr\"I\n" +
+	"\x0eGetAttrRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
+	"\x05inode\x18\x02 \x01(\x04R\x05inode\"J\n" +
 	"\x0fGetAttrResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12#\n" +
-	"\x04attr\x18\x02 \x01(\v2\x0f.meta.ProtoAttrR\x04attr\"\xaa\x01\n" +
-	"\x0eSetAttrRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\x12!\n" +
+	"\x04attr\x18\x02 \x01(\v2\r.pb.ProtoAttrR\x04attr\"\xa6\x01\n" +
+	"\x0eSetAttrRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x10\n" +
 	"\x03set\x18\x03 \x01(\rR\x03set\x12&\n" +
-	"\x0esggidclearmode\x18\x04 \x01(\rR\x0esggidclearmode\x12#\n" +
-	"\x04attr\x18\x05 \x01(\v2\x0f.meta.ProtoAttrR\x04attr\"'\n" +
+	"\x0esggidclearmode\x18\x04 \x01(\rR\x0esggidclearmode\x12!\n" +
+	"\x04attr\x18\x05 \x01(\v2\r.pb.ProtoAttrR\x04attr\"'\n" +
 	"\x0fSetAttrResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x87\x01\n" +
-	"\x13CheckSetAttrRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x83\x01\n" +
+	"\x13CheckSetAttrRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x10\n" +
-	"\x03set\x18\x03 \x01(\rR\x03set\x12#\n" +
-	"\x04attr\x18\x04 \x01(\v2\x0f.meta.ProtoAttrR\x04attr\",\n" +
+	"\x03set\x18\x03 \x01(\rR\x03set\x12!\n" +
+	"\x04attr\x18\x04 \x01(\v2\r.pb.ProtoAttrR\x04attr\",\n" +
 	"\x14CheckSetAttrResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"\xc7\x01\n" +
-	"\fMknodRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x16\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\"\xc5\x01\n" +
+	"\fMknodRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x16\n" +
 	"\x06parent\x18\x02 \x01(\x04R\x06parent\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x12\n" +
 	"\x04type\x18\x04 \x01(\rR\x04type\x12\x12\n" +
 	"\x04mode\x18\x05 \x01(\rR\x04mode\x12\x16\n" +
 	"\x06cumask\x18\x06 \x01(\rR\x06cumask\x12\x12\n" +
 	"\x04rdev\x18\a \x01(\rR\x04rdev\x12\x12\n" +
-	"\x04path\x18\b \x01(\tR\x04path\"`\n" +
+	"\x04path\x18\b \x01(\tR\x04path\"^\n" +
 	"\rMknodResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12#\n" +
-	"\x04attr\x18\x03 \x01(\v2\x0f.meta.ProtoAttrR\x04attr\"\xa7\x01\n" +
-	"\fMkdirRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x16\n" +
+	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12!\n" +
+	"\x04attr\x18\x03 \x01(\v2\r.pb.ProtoAttrR\x04attr\"\xa5\x01\n" +
+	"\fMkdirRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x16\n" +
 	"\x06parent\x18\x02 \x01(\x04R\x06parent\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x12\n" +
 	"\x04mode\x18\x04 \x01(\rR\x04mode\x12\x16\n" +
 	"\x06cumask\x18\x05 \x01(\rR\x06cumask\x12\x1a\n" +
-	"\bcopysgid\x18\x06 \x01(\rR\bcopysgid\"`\n" +
+	"\bcopysgid\x18\x06 \x01(\rR\bcopysgid\"^\n" +
 	"\rMkdirResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12#\n" +
-	"\x04attr\x18\x03 \x01(\v2\x0f.meta.ProtoAttrR\x04attr\"\xa2\x01\n" +
-	"\rCreateRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x16\n" +
+	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12!\n" +
+	"\x04attr\x18\x03 \x01(\v2\r.pb.ProtoAttrR\x04attr\"\xa0\x01\n" +
+	"\rCreateRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x16\n" +
 	"\x06parent\x18\x02 \x01(\x04R\x06parent\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x12\n" +
 	"\x04mode\x18\x04 \x01(\rR\x04mode\x12\x16\n" +
 	"\x06cumask\x18\x05 \x01(\rR\x06cumask\x12\x14\n" +
-	"\x05flags\x18\x06 \x01(\rR\x05flags\"a\n" +
+	"\x05flags\x18\x06 \x01(\rR\x05flags\"_\n" +
 	"\x0eCreateResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12#\n" +
-	"\x04attr\x18\x03 \x01(\v2\x0f.meta.ProtoAttrR\x04attr\"^\n" +
-	"\vOpenRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12!\n" +
+	"\x04attr\x18\x03 \x01(\v2\r.pb.ProtoAttrR\x04attr\"\\\n" +
+	"\vOpenRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x14\n" +
-	"\x05flags\x18\x03 \x01(\rR\x05flags\"I\n" +
+	"\x05flags\x18\x03 \x01(\rR\x05flags\"G\n" +
 	"\fOpenResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12#\n" +
-	"\x04attr\x18\x02 \x01(\v2\x0f.meta.ProtoAttrR\x04attr\"I\n" +
-	"\fCloseRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\x12!\n" +
+	"\x04attr\x18\x02 \x01(\v2\r.pb.ProtoAttrR\x04attr\"G\n" +
+	"\fCloseRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\"%\n" +
 	"\rCloseResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x8a\x01\n" +
-	"\rUnlinkRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x16\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x88\x01\n" +
+	"\rUnlinkRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x16\n" +
 	"\x06parent\x18\x02 \x01(\x04R\x06parent\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12(\n" +
 	"\x10skip_check_trash\x18\x04 \x01(\bR\x0eskipCheckTrash\"&\n" +
 	"\x0eUnlinkResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x89\x01\n" +
-	"\fRmdirRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x16\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x87\x01\n" +
+	"\fRmdirRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x16\n" +
 	"\x06parent\x18\x02 \x01(\x04R\x06parent\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12(\n" +
 	"\x10skip_check_trash\x18\x04 \x01(\bR\x0eskipCheckTrash\"%\n" +
 	"\rRmdirResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"\xbe\x01\n" +
-	"\rRenameRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x1d\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\"\xbc\x01\n" +
+	"\rRenameRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x1d\n" +
 	"\n" +
 	"parent_src\x18\x02 \x01(\x04R\tparentSrc\x12\x19\n" +
 	"\bname_src\x18\x03 \x01(\tR\anameSrc\x12\x1d\n" +
 	"\n" +
 	"parent_dst\x18\x04 \x01(\x04R\tparentDst\x12\x19\n" +
 	"\bname_dst\x18\x05 \x01(\tR\anameDst\x12\x14\n" +
-	"\x05flags\x18\x06 \x01(\rR\x05flags\"a\n" +
+	"\x05flags\x18\x06 \x01(\rR\x05flags\"_\n" +
 	"\x0eRenameResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12#\n" +
-	"\x04attr\x18\x03 \x01(\v2\x0f.meta.ProtoAttrR\x04attr\"{\n" +
-	"\vLinkRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x1b\n" +
+	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12!\n" +
+	"\x04attr\x18\x03 \x01(\v2\r.pb.ProtoAttrR\x04attr\"y\n" +
+	"\vLinkRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x1b\n" +
 	"\tinode_src\x18\x02 \x01(\x04R\binodeSrc\x12\x16\n" +
 	"\x06parent\x18\x03 \x01(\x04R\x06parent\x12\x12\n" +
-	"\x04name\x18\x04 \x01(\tR\x04name\"I\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\"G\n" +
 	"\fLinkResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12#\n" +
-	"\x04attr\x18\x02 \x01(\v2\x0f.meta.ProtoAttrR\x04attr\"u\n" +
-	"\x0eSymlinkRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x16\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\x12!\n" +
+	"\x04attr\x18\x02 \x01(\v2\r.pb.ProtoAttrR\x04attr\"s\n" +
+	"\x0eSymlinkRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x16\n" +
 	"\x06parent\x18\x02 \x01(\x04R\x06parent\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x12\n" +
-	"\x04path\x18\x04 \x01(\tR\x04path\"b\n" +
+	"\x04path\x18\x04 \x01(\tR\x04path\"`\n" +
 	"\x0fSymlinkResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12#\n" +
-	"\x04attr\x18\x03 \x01(\v2\x0f.meta.ProtoAttrR\x04attr\"L\n" +
-	"\x0fReadLinkRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12!\n" +
+	"\x04attr\x18\x03 \x01(\v2\r.pb.ProtoAttrR\x04attr\"J\n" +
+	"\x0fReadLinkRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\"<\n" +
 	"\x10ReadLinkResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x12\n" +
-	"\x04path\x18\x02 \x01(\fR\x04path\"\xa2\x01\n" +
-	"\x0fTruncateRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\x04path\x18\x02 \x01(\fR\x04path\"\xa0\x01\n" +
+	"\x0fTruncateRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x14\n" +
 	"\x05flags\x18\x03 \x01(\rR\x05flags\x12\x16\n" +
 	"\x06length\x18\x04 \x01(\x04R\x06length\x12&\n" +
-	"\x0fskip_perm_check\x18\x05 \x01(\bR\rskipPermCheck\"M\n" +
+	"\x0fskip_perm_check\x18\x05 \x01(\bR\rskipPermCheck\"K\n" +
 	"\x10TruncateResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12#\n" +
-	"\x04attr\x18\x02 \x01(\v2\x0f.meta.ProtoAttrR\x04attr\"\x87\x01\n" +
-	"\x10FallocateRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\x12!\n" +
+	"\x04attr\x18\x02 \x01(\v2\r.pb.ProtoAttrR\x04attr\"\x85\x01\n" +
+	"\x10FallocateRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x12\n" +
 	"\x04mode\x18\x03 \x01(\rR\x04mode\x12\x10\n" +
 	"\x03off\x18\x04 \x01(\x04R\x03off\x12\x12\n" +
 	"\x04size\x18\x05 \x01(\x04R\x04size\"A\n" +
 	"\x11FallocateResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x16\n" +
-	"\x06length\x18\x02 \x01(\x04R\x06length\"g\n" +
-	"\x0eReaddirRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\x06length\x18\x02 \x01(\x04R\x06length\"e\n" +
+	"\x0eReaddirRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x1a\n" +
-	"\bwantattr\x18\x03 \x01(\rR\bwantattr\"S\n" +
+	"\bwantattr\x18\x03 \x01(\rR\bwantattr\"Q\n" +
 	"\x0fReaddirResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12*\n" +
-	"\aentries\x18\x02 \x03(\v2\x10.meta.ProtoEntryR\aentries\"\\\n" +
-	"\vReadRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x12\n" +
-	"\x04indx\x18\x03 \x01(\rR\x04indx\"N\n" +
-	"\fReadResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12(\n" +
-	"\x06slices\x18\x02 \x03(\v2\x10.meta.ProtoSliceR\x06slices\"\xad\x01\n" +
-	"\fWriteRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\aentries\x18\x02 \x03(\v2\x0e.pb.ProtoEntryR\aentries\"Z\n" +
+	"\vReadRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
+	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x12\n" +
+	"\x04indx\x18\x03 \x01(\rR\x04indx\"L\n" +
+	"\fReadResponse\x12\x14\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\x12&\n" +
+	"\x06slices\x18\x02 \x03(\v2\x0e.pb.ProtoSliceR\x06slices\"\xa9\x01\n" +
+	"\fWriteRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x12\n" +
 	"\x04indx\x18\x03 \x01(\rR\x04indx\x12\x10\n" +
-	"\x03off\x18\x04 \x01(\rR\x03off\x12&\n" +
-	"\x05slice\x18\x05 \x01(\v2\x10.meta.ProtoSliceR\x05slice\x12\x14\n" +
+	"\x03off\x18\x04 \x01(\rR\x03off\x12$\n" +
+	"\x05slice\x18\x05 \x01(\v2\x0e.pb.ProtoSliceR\x05slice\x12\x14\n" +
 	"\x05mtime\x18\x06 \x01(\x03R\x05mtime\"%\n" +
 	"\rWriteResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"6\n" +
-	"\x0fNewSliceRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\"8\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\"4\n" +
+	"\x0fNewSliceRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\"8\n" +
 	"\x10NewSliceResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x0e\n" +
-	"\x02id\x18\x02 \x01(\x04R\x02id\"l\n" +
-	"\x1bInvalidateChunkCacheRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\x02id\x18\x02 \x01(\x04R\x02id\"j\n" +
+	"\x1bInvalidateChunkCacheRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x12\n" +
 	"\x04indx\x18\x03 \x01(\rR\x04indx\"4\n" +
 	"\x1cInvalidateChunkCacheResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"\xbb\x01\n" +
-	"\x14CopyFileRangeRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x10\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\"\xb9\x01\n" +
+	"\x14CopyFileRangeRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x10\n" +
 	"\x03fin\x18\x02 \x01(\x04R\x03fin\x12\x15\n" +
 	"\x06off_in\x18\x03 \x01(\x04R\x05offIn\x12\x12\n" +
 	"\x04fout\x18\x04 \x01(\x04R\x04fout\x12\x17\n" +
@@ -3419,473 +3418,473 @@ const file_meta_proto_rawDesc = "" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x16\n" +
 	"\x06copied\x18\x02 \x01(\x04R\x06copied\x12\x1d\n" +
 	"\n" +
-	"out_length\x18\x03 \x01(\x04R\toutLength2\x8a&\n" +
-	"\vMetaService\x12-\n" +
-	"\x04Init\x12\x11.meta.InitRequest\x1a\x12.meta.InitResponse\x12-\n" +
-	"\x04Load\x12\x11.meta.LoadRequest\x1a\x12.meta.LoadResponse\x12?\n" +
+	"out_length\x18\x03 \x01(\x04R\toutLength2\xd2#\n" +
+	"\vMetaService\x12)\n" +
+	"\x04Init\x12\x0f.pb.InitRequest\x1a\x10.pb.InitResponse\x12)\n" +
+	"\x04Load\x12\x0f.pb.LoadRequest\x1a\x10.pb.LoadResponse\x12;\n" +
 	"\n" +
-	"NewSession\x12\x17.meta.NewSessionRequest\x1a\x18.meta.NewSessionResponse\x12E\n" +
-	"\fCloseSession\x12\x19.meta.CloseSessionRequest\x1a\x1a.meta.CloseSessionResponse\x12E\n" +
-	"\fFlushSession\x12\x19.meta.FlushSessionRequest\x1a\x1a.meta.FlushSessionResponse\x129\n" +
-	"\bShutdown\x12\x15.meta.ShutdownRequest\x1a\x16.meta.ShutdownResponse\x120\n" +
-	"\x05Reset\x12\x12.meta.ResetRequest\x1a\x13.meta.ResetResponse\x12?\n" +
+	"NewSession\x12\x15.pb.NewSessionRequest\x1a\x16.pb.NewSessionResponse\x12A\n" +
+	"\fCloseSession\x12\x17.pb.CloseSessionRequest\x1a\x18.pb.CloseSessionResponse\x12A\n" +
+	"\fFlushSession\x12\x17.pb.FlushSessionRequest\x1a\x18.pb.FlushSessionResponse\x125\n" +
+	"\bShutdown\x12\x13.pb.ShutdownRequest\x1a\x14.pb.ShutdownResponse\x12,\n" +
+	"\x05Reset\x12\x10.pb.ResetRequest\x1a\x11.pb.ResetResponse\x12;\n" +
 	"\n" +
-	"GetSession\x12\x17.meta.GetSessionRequest\x1a\x18.meta.GetSessionResponse\x12E\n" +
-	"\fListSessions\x12\x19.meta.ListSessionsRequest\x1a\x1a.meta.ListSessionsResponse\x12W\n" +
-	"\x12CleanStaleSessions\x12\x1f.meta.CleanStaleSessionsRequest\x1a .meta.CleanStaleSessionsResponse\x123\n" +
-	"\x06StatFS\x12\x13.meta.StatFSRequest\x1a\x14.meta.StatFSResponse\x123\n" +
-	"\x06Lookup\x12\x13.meta.LookupRequest\x1a\x14.meta.LookupResponse\x126\n" +
-	"\aResolve\x12\x14.meta.ResolveRequest\x1a\x15.meta.ResolveResponse\x123\n" +
-	"\x06Access\x12\x13.meta.AccessRequest\x1a\x14.meta.AccessResponse\x126\n" +
-	"\aGetAttr\x12\x14.meta.GetAttrRequest\x1a\x15.meta.GetAttrResponse\x126\n" +
-	"\aSetAttr\x12\x14.meta.SetAttrRequest\x1a\x15.meta.SetAttrResponse\x12E\n" +
-	"\fCheckSetAttr\x12\x19.meta.CheckSetAttrRequest\x1a\x1a.meta.CheckSetAttrResponse\x120\n" +
-	"\x05Mknod\x12\x12.meta.MknodRequest\x1a\x13.meta.MknodResponse\x120\n" +
-	"\x05Mkdir\x12\x12.meta.MkdirRequest\x1a\x13.meta.MkdirResponse\x123\n" +
-	"\x06Create\x12\x13.meta.CreateRequest\x1a\x14.meta.CreateResponse\x12-\n" +
-	"\x04Open\x12\x11.meta.OpenRequest\x1a\x12.meta.OpenResponse\x120\n" +
-	"\x05Close\x12\x12.meta.CloseRequest\x1a\x13.meta.CloseResponse\x123\n" +
-	"\x06Unlink\x12\x13.meta.UnlinkRequest\x1a\x14.meta.UnlinkResponse\x120\n" +
-	"\x05Rmdir\x12\x12.meta.RmdirRequest\x1a\x13.meta.RmdirResponse\x123\n" +
-	"\x06Rename\x12\x13.meta.RenameRequest\x1a\x14.meta.RenameResponse\x12-\n" +
-	"\x04Link\x12\x11.meta.LinkRequest\x1a\x12.meta.LinkResponse\x126\n" +
-	"\aSymlink\x12\x14.meta.SymlinkRequest\x1a\x15.meta.SymlinkResponse\x129\n" +
-	"\bReadLink\x12\x15.meta.ReadLinkRequest\x1a\x16.meta.ReadLinkResponse\x129\n" +
-	"\bTruncate\x12\x15.meta.TruncateRequest\x1a\x16.meta.TruncateResponse\x12<\n" +
-	"\tFallocate\x12\x16.meta.FallocateRequest\x1a\x17.meta.FallocateResponse\x126\n" +
-	"\aReaddir\x12\x14.meta.ReaddirRequest\x1a\x15.meta.ReaddirResponse\x12-\n" +
-	"\x04Read\x12\x11.meta.ReadRequest\x1a\x12.meta.ReadResponse\x120\n" +
-	"\x05Write\x12\x12.meta.WriteRequest\x1a\x13.meta.WriteResponse\x129\n" +
-	"\bNewSlice\x12\x15.meta.NewSliceRequest\x1a\x16.meta.NewSliceResponse\x12]\n" +
-	"\x14InvalidateChunkCache\x12!.meta.InvalidateChunkCacheRequest\x1a\".meta.InvalidateChunkCacheResponse\x12H\n" +
-	"\rCopyFileRange\x12\x1a.meta.CopyFileRangeRequest\x1a\x1b.meta.CopyFileRangeResponse\x120\n" +
-	"\x05Flock\x12\x12.meta.FlockRequest\x1a\x13.meta.FlockResponse\x120\n" +
-	"\x05Getlk\x12\x12.meta.GetlkRequest\x1a\x13.meta.GetlkResponse\x120\n" +
-	"\x05Setlk\x12\x12.meta.SetlkRequest\x1a\x13.meta.SetlkResponse\x12<\n" +
-	"\tListLocks\x12\x16.meta.ListLocksRequest\x1a\x17.meta.ListLocksResponse\x129\n" +
-	"\bGetXattr\x12\x15.meta.GetXattrRequest\x1a\x16.meta.GetXattrResponse\x129\n" +
-	"\bSetXattr\x12\x15.meta.SetXattrRequest\x1a\x16.meta.SetXattrResponse\x12B\n" +
-	"\vRemoveXattr\x12\x18.meta.RemoveXattrRequest\x1a\x19.meta.RemoveXattrResponse\x12<\n" +
-	"\tListXattr\x12\x16.meta.ListXattrRequest\x1a\x17.meta.ListXattrResponse\x12?\n" +
+	"GetSession\x12\x15.pb.GetSessionRequest\x1a\x16.pb.GetSessionResponse\x12A\n" +
+	"\fListSessions\x12\x17.pb.ListSessionsRequest\x1a\x18.pb.ListSessionsResponse\x12S\n" +
+	"\x12CleanStaleSessions\x12\x1d.pb.CleanStaleSessionsRequest\x1a\x1e.pb.CleanStaleSessionsResponse\x12/\n" +
+	"\x06StatFS\x12\x11.pb.StatFSRequest\x1a\x12.pb.StatFSResponse\x12/\n" +
+	"\x06Lookup\x12\x11.pb.LookupRequest\x1a\x12.pb.LookupResponse\x122\n" +
+	"\aResolve\x12\x12.pb.ResolveRequest\x1a\x13.pb.ResolveResponse\x12/\n" +
+	"\x06Access\x12\x11.pb.AccessRequest\x1a\x12.pb.AccessResponse\x122\n" +
+	"\aGetAttr\x12\x12.pb.GetAttrRequest\x1a\x13.pb.GetAttrResponse\x122\n" +
+	"\aSetAttr\x12\x12.pb.SetAttrRequest\x1a\x13.pb.SetAttrResponse\x12A\n" +
+	"\fCheckSetAttr\x12\x17.pb.CheckSetAttrRequest\x1a\x18.pb.CheckSetAttrResponse\x12,\n" +
+	"\x05Mknod\x12\x10.pb.MknodRequest\x1a\x11.pb.MknodResponse\x12,\n" +
+	"\x05Mkdir\x12\x10.pb.MkdirRequest\x1a\x11.pb.MkdirResponse\x12/\n" +
+	"\x06Create\x12\x11.pb.CreateRequest\x1a\x12.pb.CreateResponse\x12)\n" +
+	"\x04Open\x12\x0f.pb.OpenRequest\x1a\x10.pb.OpenResponse\x12,\n" +
+	"\x05Close\x12\x10.pb.CloseRequest\x1a\x11.pb.CloseResponse\x12/\n" +
+	"\x06Unlink\x12\x11.pb.UnlinkRequest\x1a\x12.pb.UnlinkResponse\x12,\n" +
+	"\x05Rmdir\x12\x10.pb.RmdirRequest\x1a\x11.pb.RmdirResponse\x12/\n" +
+	"\x06Rename\x12\x11.pb.RenameRequest\x1a\x12.pb.RenameResponse\x12)\n" +
+	"\x04Link\x12\x0f.pb.LinkRequest\x1a\x10.pb.LinkResponse\x122\n" +
+	"\aSymlink\x12\x12.pb.SymlinkRequest\x1a\x13.pb.SymlinkResponse\x125\n" +
+	"\bReadLink\x12\x13.pb.ReadLinkRequest\x1a\x14.pb.ReadLinkResponse\x125\n" +
+	"\bTruncate\x12\x13.pb.TruncateRequest\x1a\x14.pb.TruncateResponse\x128\n" +
+	"\tFallocate\x12\x14.pb.FallocateRequest\x1a\x15.pb.FallocateResponse\x122\n" +
+	"\aReaddir\x12\x12.pb.ReaddirRequest\x1a\x13.pb.ReaddirResponse\x12)\n" +
+	"\x04Read\x12\x0f.pb.ReadRequest\x1a\x10.pb.ReadResponse\x12,\n" +
+	"\x05Write\x12\x10.pb.WriteRequest\x1a\x11.pb.WriteResponse\x125\n" +
+	"\bNewSlice\x12\x13.pb.NewSliceRequest\x1a\x14.pb.NewSliceResponse\x12Y\n" +
+	"\x14InvalidateChunkCache\x12\x1f.pb.InvalidateChunkCacheRequest\x1a .pb.InvalidateChunkCacheResponse\x12D\n" +
+	"\rCopyFileRange\x12\x18.pb.CopyFileRangeRequest\x1a\x19.pb.CopyFileRangeResponse\x12,\n" +
+	"\x05Flock\x12\x10.pb.FlockRequest\x1a\x11.pb.FlockResponse\x12,\n" +
+	"\x05Getlk\x12\x10.pb.GetlkRequest\x1a\x11.pb.GetlkResponse\x12,\n" +
+	"\x05Setlk\x12\x10.pb.SetlkRequest\x1a\x11.pb.SetlkResponse\x128\n" +
+	"\tListLocks\x12\x14.pb.ListLocksRequest\x1a\x15.pb.ListLocksResponse\x125\n" +
+	"\bGetXattr\x12\x13.pb.GetXattrRequest\x1a\x14.pb.GetXattrResponse\x125\n" +
+	"\bSetXattr\x12\x13.pb.SetXattrRequest\x1a\x14.pb.SetXattrResponse\x12>\n" +
+	"\vRemoveXattr\x12\x16.pb.RemoveXattrRequest\x1a\x17.pb.RemoveXattrResponse\x128\n" +
+	"\tListXattr\x12\x14.pb.ListXattrRequest\x1a\x15.pb.ListXattrResponse\x12;\n" +
 	"\n" +
-	"GetParents\x12\x17.meta.GetParentsRequest\x1a\x18.meta.GetParentsResponse\x12?\n" +
+	"GetParents\x12\x15.pb.GetParentsRequest\x1a\x16.pb.GetParentsResponse\x12;\n" +
 	"\n" +
-	"GetDirStat\x12\x17.meta.GetDirStatRequest\x1a\x18.meta.GetDirStatResponse\x126\n" +
-	"\aSetFacl\x12\x14.meta.SetFaclRequest\x1a\x15.meta.SetFaclResponse\x126\n" +
-	"\aGetFacl\x12\x14.meta.GetFaclRequest\x1a\x15.meta.GetFaclResponse\x12?\n" +
+	"GetDirStat\x12\x15.pb.GetDirStatRequest\x1a\x16.pb.GetDirStatResponse\x122\n" +
+	"\aSetFacl\x12\x12.pb.SetFaclRequest\x1a\x13.pb.SetFaclResponse\x122\n" +
+	"\aGetFacl\x12\x12.pb.GetFaclRequest\x1a\x13.pb.GetFaclResponse\x12;\n" +
 	"\n" +
-	"StoreToken\x12\x17.meta.StoreTokenRequest\x1a\x18.meta.StoreTokenResponse\x12B\n" +
-	"\vUpdateToken\x12\x18.meta.UpdateTokenRequest\x1a\x19.meta.UpdateTokenResponse\x12<\n" +
-	"\tLoadToken\x12\x16.meta.LoadTokenRequest\x1a\x17.meta.LoadTokenResponse\x12E\n" +
-	"\fDeleteTokens\x12\x19.meta.DeleteTokensRequest\x1a\x1a.meta.DeleteTokensResponse\x12?\n" +
+	"StoreToken\x12\x15.pb.StoreTokenRequest\x1a\x16.pb.StoreTokenResponse\x12>\n" +
+	"\vUpdateToken\x12\x16.pb.UpdateTokenRequest\x1a\x17.pb.UpdateTokenResponse\x128\n" +
+	"\tLoadToken\x12\x14.pb.LoadTokenRequest\x1a\x15.pb.LoadTokenResponse\x12A\n" +
+	"\fDeleteTokens\x12\x17.pb.DeleteTokensRequest\x1a\x18.pb.DeleteTokensResponse\x12;\n" +
 	"\n" +
-	"ListTokens\x12\x17.meta.ListTokensRequest\x1a\x18.meta.ListTokensResponse\x12<\n" +
-	"\tGetFormat\x12\x16.meta.GetFormatRequest\x1a\x17.meta.GetFormatResponse\x123\n" +
-	"\x06Remove\x12\x13.meta.RemoveRequest\x1a\x14.meta.RemoveResponse\x12B\n" +
-	"\vBatchUnlink\x12\x18.meta.BatchUnlinkRequest\x1a\x19.meta.BatchUnlinkResponse\x12?\n" +
+	"ListTokens\x12\x15.pb.ListTokensRequest\x1a\x16.pb.ListTokensResponse\x128\n" +
+	"\tGetFormat\x12\x14.pb.GetFormatRequest\x1a\x15.pb.GetFormatResponse\x12/\n" +
+	"\x06Remove\x12\x11.pb.RemoveRequest\x1a\x12.pb.RemoveResponse\x12>\n" +
+	"\vBatchUnlink\x12\x16.pb.BatchUnlinkRequest\x1a\x17.pb.BatchUnlinkResponse\x12;\n" +
 	"\n" +
-	"GetSummary\x12\x17.meta.GetSummaryRequest\x1a\x18.meta.GetSummaryResponse\x12K\n" +
-	"\x0eGetTreeSummary\x12\x1b.meta.GetTreeSummaryRequest\x1a\x1c.meta.GetTreeSummaryResponse\x120\n" +
-	"\x05Clone\x12\x12.meta.CloneRequest\x1a\x13.meta.CloneResponse\x129\n" +
-	"\bGetPaths\x12\x15.meta.GetPathsRequest\x1a\x16.meta.GetPathsResponse\x120\n" +
-	"\x05Check\x12\x12.meta.CheckRequest\x1a\x13.meta.CheckResponse\x12?\n" +
+	"GetSummary\x12\x15.pb.GetSummaryRequest\x1a\x16.pb.GetSummaryResponse\x12G\n" +
+	"\x0eGetTreeSummary\x12\x19.pb.GetTreeSummaryRequest\x1a\x1a.pb.GetTreeSummaryResponse\x12,\n" +
+	"\x05Clone\x12\x10.pb.CloneRequest\x1a\x11.pb.CloneResponse\x125\n" +
+	"\bGetPaths\x12\x13.pb.GetPathsRequest\x1a\x14.pb.GetPathsResponse\x12,\n" +
+	"\x05Check\x12\x10.pb.CheckRequest\x1a\x11.pb.CheckResponse\x12;\n" +
 	"\n" +
-	"CompactAll\x12\x17.meta.CompactAllRequest\x1a\x18.meta.CompactAllResponse\x126\n" +
-	"\aCompact\x12\x14.meta.CompactRequest\x1a\x15.meta.CompactResponse\x12?\n" +
+	"CompactAll\x12\x15.pb.CompactAllRequest\x1a\x16.pb.CompactAllResponse\x122\n" +
+	"\aCompact\x12\x12.pb.CompactRequest\x1a\x13.pb.CompactResponse\x12;\n" +
 	"\n" +
-	"ListSlices\x12\x17.meta.ListSlicesRequest\x1a\x18.meta.ListSlicesResponse\x12B\n" +
-	"\vHandleQuota\x12\x18.meta.HandleQuotaRequest\x1a\x19.meta.HandleQuotaResponse\x12W\n" +
-	"\x12ScanUserGroupUsage\x12\x1f.meta.ScanUserGroupUsageRequest\x1a .meta.ScanUserGroupUsageResponse\x123\n" +
-	"\x06Chroot\x12\x13.meta.ChrootRequest\x1a\x14.meta.ChrootResponse\x12W\n" +
-	"\x12CleanupTrashBefore\x12\x1f.meta.CleanupTrashBeforeRequest\x1a .meta.CleanupTrashBeforeResponse\x12o\n" +
-	"\x1aCleanupDetachedNodesBefore\x12'.meta.CleanupDetachedNodesBeforeRequest\x1a(.meta.CleanupDetachedNodesBeforeResponse\x12H\n" +
-	"\rNewDirHandler\x12\x1a.meta.NewDirHandlerRequest\x1a\x1b.meta.NewDirHandlerResponse\x12K\n" +
-	"\x0eDirHandlerList\x12\x1b.meta.DirHandlerListRequest\x1a\x1c.meta.DirHandlerListResponse\x12Q\n" +
-	"\x10DirHandlerInsert\x12\x1d.meta.DirHandlerInsertRequest\x1a\x1e.meta.DirHandlerInsertResponse\x12Q\n" +
-	"\x10DirHandlerDelete\x12\x1d.meta.DirHandlerDeleteRequest\x1a\x1e.meta.DirHandlerDeleteResponse\x12N\n" +
-	"\x0fDirHandlerClose\x12\x1c.meta.DirHandlerCloseRequest\x1a\x1d.meta.DirHandlerCloseResponse\x128\n" +
-	"\bDumpMeta\x12\x15.meta.DumpMetaRequest\x1a\x13.meta.DumpMetaChunk0\x01\x129\n" +
-	"\bLoadMeta\x12\x13.meta.LoadMetaChunk\x1a\x16.meta.LoadMetaResponse(\x01\x12>\n" +
+	"ListSlices\x12\x15.pb.ListSlicesRequest\x1a\x16.pb.ListSlicesResponse\x12>\n" +
+	"\vHandleQuota\x12\x16.pb.HandleQuotaRequest\x1a\x17.pb.HandleQuotaResponse\x12S\n" +
+	"\x12ScanUserGroupUsage\x12\x1d.pb.ScanUserGroupUsageRequest\x1a\x1e.pb.ScanUserGroupUsageResponse\x12/\n" +
+	"\x06Chroot\x12\x11.pb.ChrootRequest\x1a\x12.pb.ChrootResponse\x12S\n" +
+	"\x12CleanupTrashBefore\x12\x1d.pb.CleanupTrashBeforeRequest\x1a\x1e.pb.CleanupTrashBeforeResponse\x12k\n" +
+	"\x1aCleanupDetachedNodesBefore\x12%.pb.CleanupDetachedNodesBeforeRequest\x1a&.pb.CleanupDetachedNodesBeforeResponse\x12D\n" +
+	"\rNewDirHandler\x12\x18.pb.NewDirHandlerRequest\x1a\x19.pb.NewDirHandlerResponse\x12G\n" +
+	"\x0eDirHandlerList\x12\x19.pb.DirHandlerListRequest\x1a\x1a.pb.DirHandlerListResponse\x12M\n" +
+	"\x10DirHandlerInsert\x12\x1b.pb.DirHandlerInsertRequest\x1a\x1c.pb.DirHandlerInsertResponse\x12M\n" +
+	"\x10DirHandlerDelete\x12\x1b.pb.DirHandlerDeleteRequest\x1a\x1c.pb.DirHandlerDeleteResponse\x12J\n" +
+	"\x0fDirHandlerClose\x12\x1a.pb.DirHandlerCloseRequest\x1a\x1b.pb.DirHandlerCloseResponse\x124\n" +
+	"\bDumpMeta\x12\x13.pb.DumpMetaRequest\x1a\x11.pb.DumpMetaChunk0\x01\x125\n" +
+	"\bLoadMeta\x12\x11.pb.LoadMetaChunk\x1a\x14.pb.LoadMetaResponse(\x01\x12:\n" +
 	"\n" +
-	"DumpMetaV2\x12\x17.meta.DumpMetaV2Request\x1a\x15.meta.DumpMetaV2Chunk0\x01\x12?\n" +
+	"DumpMetaV2\x12\x15.pb.DumpMetaV2Request\x1a\x13.pb.DumpMetaV2Chunk0\x01\x12;\n" +
 	"\n" +
-	"LoadMetaV2\x12\x15.meta.LoadMetaV2Chunk\x1a\x18.meta.LoadMetaV2Response(\x01B,Z*github.com/juicedata/juicefs/pkg/meta/grpcb\x06proto3"
+	"LoadMetaV2\x12\x13.pb.LoadMetaV2Chunk\x1a\x16.pb.LoadMetaV2Response(\x01B\x06Z\x04./pbb\x06proto3"
 
 var (
-	file_meta_proto_rawDescOnce sync.Once
-	file_meta_proto_rawDescData []byte
+	file_pb_meta_proto_rawDescOnce sync.Once
+	file_pb_meta_proto_rawDescData []byte
 )
 
-func file_meta_proto_rawDescGZIP() []byte {
-	file_meta_proto_rawDescOnce.Do(func() {
-		file_meta_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_meta_proto_rawDesc), len(file_meta_proto_rawDesc)))
+func file_pb_meta_proto_rawDescGZIP() []byte {
+	file_pb_meta_proto_rawDescOnce.Do(func() {
+		file_pb_meta_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pb_meta_proto_rawDesc), len(file_pb_meta_proto_rawDesc)))
 	})
-	return file_meta_proto_rawDescData
+	return file_pb_meta_proto_rawDescData
 }
 
-var file_meta_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
-var file_meta_proto_goTypes = []any{
-	(*StatFSRequest)(nil),                      // 0: meta.StatFSRequest
-	(*StatFSResponse)(nil),                     // 1: meta.StatFSResponse
-	(*LookupRequest)(nil),                      // 2: meta.LookupRequest
-	(*LookupResponse)(nil),                     // 3: meta.LookupResponse
-	(*ResolveRequest)(nil),                     // 4: meta.ResolveRequest
-	(*ResolveResponse)(nil),                    // 5: meta.ResolveResponse
-	(*AccessRequest)(nil),                      // 6: meta.AccessRequest
-	(*AccessResponse)(nil),                     // 7: meta.AccessResponse
-	(*GetAttrRequest)(nil),                     // 8: meta.GetAttrRequest
-	(*GetAttrResponse)(nil),                    // 9: meta.GetAttrResponse
-	(*SetAttrRequest)(nil),                     // 10: meta.SetAttrRequest
-	(*SetAttrResponse)(nil),                    // 11: meta.SetAttrResponse
-	(*CheckSetAttrRequest)(nil),                // 12: meta.CheckSetAttrRequest
-	(*CheckSetAttrResponse)(nil),               // 13: meta.CheckSetAttrResponse
-	(*MknodRequest)(nil),                       // 14: meta.MknodRequest
-	(*MknodResponse)(nil),                      // 15: meta.MknodResponse
-	(*MkdirRequest)(nil),                       // 16: meta.MkdirRequest
-	(*MkdirResponse)(nil),                      // 17: meta.MkdirResponse
-	(*CreateRequest)(nil),                      // 18: meta.CreateRequest
-	(*CreateResponse)(nil),                     // 19: meta.CreateResponse
-	(*OpenRequest)(nil),                        // 20: meta.OpenRequest
-	(*OpenResponse)(nil),                       // 21: meta.OpenResponse
-	(*CloseRequest)(nil),                       // 22: meta.CloseRequest
-	(*CloseResponse)(nil),                      // 23: meta.CloseResponse
-	(*UnlinkRequest)(nil),                      // 24: meta.UnlinkRequest
-	(*UnlinkResponse)(nil),                     // 25: meta.UnlinkResponse
-	(*RmdirRequest)(nil),                       // 26: meta.RmdirRequest
-	(*RmdirResponse)(nil),                      // 27: meta.RmdirResponse
-	(*RenameRequest)(nil),                      // 28: meta.RenameRequest
-	(*RenameResponse)(nil),                     // 29: meta.RenameResponse
-	(*LinkRequest)(nil),                        // 30: meta.LinkRequest
-	(*LinkResponse)(nil),                       // 31: meta.LinkResponse
-	(*SymlinkRequest)(nil),                     // 32: meta.SymlinkRequest
-	(*SymlinkResponse)(nil),                    // 33: meta.SymlinkResponse
-	(*ReadLinkRequest)(nil),                    // 34: meta.ReadLinkRequest
-	(*ReadLinkResponse)(nil),                   // 35: meta.ReadLinkResponse
-	(*TruncateRequest)(nil),                    // 36: meta.TruncateRequest
-	(*TruncateResponse)(nil),                   // 37: meta.TruncateResponse
-	(*FallocateRequest)(nil),                   // 38: meta.FallocateRequest
-	(*FallocateResponse)(nil),                  // 39: meta.FallocateResponse
-	(*ReaddirRequest)(nil),                     // 40: meta.ReaddirRequest
-	(*ReaddirResponse)(nil),                    // 41: meta.ReaddirResponse
-	(*ReadRequest)(nil),                        // 42: meta.ReadRequest
-	(*ReadResponse)(nil),                       // 43: meta.ReadResponse
-	(*WriteRequest)(nil),                       // 44: meta.WriteRequest
-	(*WriteResponse)(nil),                      // 45: meta.WriteResponse
-	(*NewSliceRequest)(nil),                    // 46: meta.NewSliceRequest
-	(*NewSliceResponse)(nil),                   // 47: meta.NewSliceResponse
-	(*InvalidateChunkCacheRequest)(nil),        // 48: meta.InvalidateChunkCacheRequest
-	(*InvalidateChunkCacheResponse)(nil),       // 49: meta.InvalidateChunkCacheResponse
-	(*CopyFileRangeRequest)(nil),               // 50: meta.CopyFileRangeRequest
-	(*CopyFileRangeResponse)(nil),              // 51: meta.CopyFileRangeResponse
-	(*MetaContext)(nil),                        // 52: meta.MetaContext
-	(*ProtoAttr)(nil),                          // 53: meta.ProtoAttr
-	(*ProtoEntry)(nil),                         // 54: meta.ProtoEntry
-	(*ProtoSlice)(nil),                         // 55: meta.ProtoSlice
-	(*InitRequest)(nil),                        // 56: meta.InitRequest
-	(*LoadRequest)(nil),                        // 57: meta.LoadRequest
-	(*NewSessionRequest)(nil),                  // 58: meta.NewSessionRequest
-	(*CloseSessionRequest)(nil),                // 59: meta.CloseSessionRequest
-	(*FlushSessionRequest)(nil),                // 60: meta.FlushSessionRequest
-	(*ShutdownRequest)(nil),                    // 61: meta.ShutdownRequest
-	(*ResetRequest)(nil),                       // 62: meta.ResetRequest
-	(*GetSessionRequest)(nil),                  // 63: meta.GetSessionRequest
-	(*ListSessionsRequest)(nil),                // 64: meta.ListSessionsRequest
-	(*CleanStaleSessionsRequest)(nil),          // 65: meta.CleanStaleSessionsRequest
-	(*FlockRequest)(nil),                       // 66: meta.FlockRequest
-	(*GetlkRequest)(nil),                       // 67: meta.GetlkRequest
-	(*SetlkRequest)(nil),                       // 68: meta.SetlkRequest
-	(*ListLocksRequest)(nil),                   // 69: meta.ListLocksRequest
-	(*GetXattrRequest)(nil),                    // 70: meta.GetXattrRequest
-	(*SetXattrRequest)(nil),                    // 71: meta.SetXattrRequest
-	(*RemoveXattrRequest)(nil),                 // 72: meta.RemoveXattrRequest
-	(*ListXattrRequest)(nil),                   // 73: meta.ListXattrRequest
-	(*GetParentsRequest)(nil),                  // 74: meta.GetParentsRequest
-	(*GetDirStatRequest)(nil),                  // 75: meta.GetDirStatRequest
-	(*SetFaclRequest)(nil),                     // 76: meta.SetFaclRequest
-	(*GetFaclRequest)(nil),                     // 77: meta.GetFaclRequest
-	(*StoreTokenRequest)(nil),                  // 78: meta.StoreTokenRequest
-	(*UpdateTokenRequest)(nil),                 // 79: meta.UpdateTokenRequest
-	(*LoadTokenRequest)(nil),                   // 80: meta.LoadTokenRequest
-	(*DeleteTokensRequest)(nil),                // 81: meta.DeleteTokensRequest
-	(*ListTokensRequest)(nil),                  // 82: meta.ListTokensRequest
-	(*GetFormatRequest)(nil),                   // 83: meta.GetFormatRequest
-	(*RemoveRequest)(nil),                      // 84: meta.RemoveRequest
-	(*BatchUnlinkRequest)(nil),                 // 85: meta.BatchUnlinkRequest
-	(*GetSummaryRequest)(nil),                  // 86: meta.GetSummaryRequest
-	(*GetTreeSummaryRequest)(nil),              // 87: meta.GetTreeSummaryRequest
-	(*CloneRequest)(nil),                       // 88: meta.CloneRequest
-	(*GetPathsRequest)(nil),                    // 89: meta.GetPathsRequest
-	(*CheckRequest)(nil),                       // 90: meta.CheckRequest
-	(*CompactAllRequest)(nil),                  // 91: meta.CompactAllRequest
-	(*CompactRequest)(nil),                     // 92: meta.CompactRequest
-	(*ListSlicesRequest)(nil),                  // 93: meta.ListSlicesRequest
-	(*HandleQuotaRequest)(nil),                 // 94: meta.HandleQuotaRequest
-	(*ScanUserGroupUsageRequest)(nil),          // 95: meta.ScanUserGroupUsageRequest
-	(*ChrootRequest)(nil),                      // 96: meta.ChrootRequest
-	(*CleanupTrashBeforeRequest)(nil),          // 97: meta.CleanupTrashBeforeRequest
-	(*CleanupDetachedNodesBeforeRequest)(nil),  // 98: meta.CleanupDetachedNodesBeforeRequest
-	(*NewDirHandlerRequest)(nil),               // 99: meta.NewDirHandlerRequest
-	(*DirHandlerListRequest)(nil),              // 100: meta.DirHandlerListRequest
-	(*DirHandlerInsertRequest)(nil),            // 101: meta.DirHandlerInsertRequest
-	(*DirHandlerDeleteRequest)(nil),            // 102: meta.DirHandlerDeleteRequest
-	(*DirHandlerCloseRequest)(nil),             // 103: meta.DirHandlerCloseRequest
-	(*DumpMetaRequest)(nil),                    // 104: meta.DumpMetaRequest
-	(*LoadMetaChunk)(nil),                      // 105: meta.LoadMetaChunk
-	(*DumpMetaV2Request)(nil),                  // 106: meta.DumpMetaV2Request
-	(*LoadMetaV2Chunk)(nil),                    // 107: meta.LoadMetaV2Chunk
-	(*InitResponse)(nil),                       // 108: meta.InitResponse
-	(*LoadResponse)(nil),                       // 109: meta.LoadResponse
-	(*NewSessionResponse)(nil),                 // 110: meta.NewSessionResponse
-	(*CloseSessionResponse)(nil),               // 111: meta.CloseSessionResponse
-	(*FlushSessionResponse)(nil),               // 112: meta.FlushSessionResponse
-	(*ShutdownResponse)(nil),                   // 113: meta.ShutdownResponse
-	(*ResetResponse)(nil),                      // 114: meta.ResetResponse
-	(*GetSessionResponse)(nil),                 // 115: meta.GetSessionResponse
-	(*ListSessionsResponse)(nil),               // 116: meta.ListSessionsResponse
-	(*CleanStaleSessionsResponse)(nil),         // 117: meta.CleanStaleSessionsResponse
-	(*FlockResponse)(nil),                      // 118: meta.FlockResponse
-	(*GetlkResponse)(nil),                      // 119: meta.GetlkResponse
-	(*SetlkResponse)(nil),                      // 120: meta.SetlkResponse
-	(*ListLocksResponse)(nil),                  // 121: meta.ListLocksResponse
-	(*GetXattrResponse)(nil),                   // 122: meta.GetXattrResponse
-	(*SetXattrResponse)(nil),                   // 123: meta.SetXattrResponse
-	(*RemoveXattrResponse)(nil),                // 124: meta.RemoveXattrResponse
-	(*ListXattrResponse)(nil),                  // 125: meta.ListXattrResponse
-	(*GetParentsResponse)(nil),                 // 126: meta.GetParentsResponse
-	(*GetDirStatResponse)(nil),                 // 127: meta.GetDirStatResponse
-	(*SetFaclResponse)(nil),                    // 128: meta.SetFaclResponse
-	(*GetFaclResponse)(nil),                    // 129: meta.GetFaclResponse
-	(*StoreTokenResponse)(nil),                 // 130: meta.StoreTokenResponse
-	(*UpdateTokenResponse)(nil),                // 131: meta.UpdateTokenResponse
-	(*LoadTokenResponse)(nil),                  // 132: meta.LoadTokenResponse
-	(*DeleteTokensResponse)(nil),               // 133: meta.DeleteTokensResponse
-	(*ListTokensResponse)(nil),                 // 134: meta.ListTokensResponse
-	(*GetFormatResponse)(nil),                  // 135: meta.GetFormatResponse
-	(*RemoveResponse)(nil),                     // 136: meta.RemoveResponse
-	(*BatchUnlinkResponse)(nil),                // 137: meta.BatchUnlinkResponse
-	(*GetSummaryResponse)(nil),                 // 138: meta.GetSummaryResponse
-	(*GetTreeSummaryResponse)(nil),             // 139: meta.GetTreeSummaryResponse
-	(*CloneResponse)(nil),                      // 140: meta.CloneResponse
-	(*GetPathsResponse)(nil),                   // 141: meta.GetPathsResponse
-	(*CheckResponse)(nil),                      // 142: meta.CheckResponse
-	(*CompactAllResponse)(nil),                 // 143: meta.CompactAllResponse
-	(*CompactResponse)(nil),                    // 144: meta.CompactResponse
-	(*ListSlicesResponse)(nil),                 // 145: meta.ListSlicesResponse
-	(*HandleQuotaResponse)(nil),                // 146: meta.HandleQuotaResponse
-	(*ScanUserGroupUsageResponse)(nil),         // 147: meta.ScanUserGroupUsageResponse
-	(*ChrootResponse)(nil),                     // 148: meta.ChrootResponse
-	(*CleanupTrashBeforeResponse)(nil),         // 149: meta.CleanupTrashBeforeResponse
-	(*CleanupDetachedNodesBeforeResponse)(nil), // 150: meta.CleanupDetachedNodesBeforeResponse
-	(*NewDirHandlerResponse)(nil),              // 151: meta.NewDirHandlerResponse
-	(*DirHandlerListResponse)(nil),             // 152: meta.DirHandlerListResponse
-	(*DirHandlerInsertResponse)(nil),           // 153: meta.DirHandlerInsertResponse
-	(*DirHandlerDeleteResponse)(nil),           // 154: meta.DirHandlerDeleteResponse
-	(*DirHandlerCloseResponse)(nil),            // 155: meta.DirHandlerCloseResponse
-	(*DumpMetaChunk)(nil),                      // 156: meta.DumpMetaChunk
-	(*LoadMetaResponse)(nil),                   // 157: meta.LoadMetaResponse
-	(*DumpMetaV2Chunk)(nil),                    // 158: meta.DumpMetaV2Chunk
-	(*LoadMetaV2Response)(nil),                 // 159: meta.LoadMetaV2Response
+var file_pb_meta_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
+var file_pb_meta_proto_goTypes = []any{
+	(*StatFSRequest)(nil),                      // 0: pb.StatFSRequest
+	(*StatFSResponse)(nil),                     // 1: pb.StatFSResponse
+	(*LookupRequest)(nil),                      // 2: pb.LookupRequest
+	(*LookupResponse)(nil),                     // 3: pb.LookupResponse
+	(*ResolveRequest)(nil),                     // 4: pb.ResolveRequest
+	(*ResolveResponse)(nil),                    // 5: pb.ResolveResponse
+	(*AccessRequest)(nil),                      // 6: pb.AccessRequest
+	(*AccessResponse)(nil),                     // 7: pb.AccessResponse
+	(*GetAttrRequest)(nil),                     // 8: pb.GetAttrRequest
+	(*GetAttrResponse)(nil),                    // 9: pb.GetAttrResponse
+	(*SetAttrRequest)(nil),                     // 10: pb.SetAttrRequest
+	(*SetAttrResponse)(nil),                    // 11: pb.SetAttrResponse
+	(*CheckSetAttrRequest)(nil),                // 12: pb.CheckSetAttrRequest
+	(*CheckSetAttrResponse)(nil),               // 13: pb.CheckSetAttrResponse
+	(*MknodRequest)(nil),                       // 14: pb.MknodRequest
+	(*MknodResponse)(nil),                      // 15: pb.MknodResponse
+	(*MkdirRequest)(nil),                       // 16: pb.MkdirRequest
+	(*MkdirResponse)(nil),                      // 17: pb.MkdirResponse
+	(*CreateRequest)(nil),                      // 18: pb.CreateRequest
+	(*CreateResponse)(nil),                     // 19: pb.CreateResponse
+	(*OpenRequest)(nil),                        // 20: pb.OpenRequest
+	(*OpenResponse)(nil),                       // 21: pb.OpenResponse
+	(*CloseRequest)(nil),                       // 22: pb.CloseRequest
+	(*CloseResponse)(nil),                      // 23: pb.CloseResponse
+	(*UnlinkRequest)(nil),                      // 24: pb.UnlinkRequest
+	(*UnlinkResponse)(nil),                     // 25: pb.UnlinkResponse
+	(*RmdirRequest)(nil),                       // 26: pb.RmdirRequest
+	(*RmdirResponse)(nil),                      // 27: pb.RmdirResponse
+	(*RenameRequest)(nil),                      // 28: pb.RenameRequest
+	(*RenameResponse)(nil),                     // 29: pb.RenameResponse
+	(*LinkRequest)(nil),                        // 30: pb.LinkRequest
+	(*LinkResponse)(nil),                       // 31: pb.LinkResponse
+	(*SymlinkRequest)(nil),                     // 32: pb.SymlinkRequest
+	(*SymlinkResponse)(nil),                    // 33: pb.SymlinkResponse
+	(*ReadLinkRequest)(nil),                    // 34: pb.ReadLinkRequest
+	(*ReadLinkResponse)(nil),                   // 35: pb.ReadLinkResponse
+	(*TruncateRequest)(nil),                    // 36: pb.TruncateRequest
+	(*TruncateResponse)(nil),                   // 37: pb.TruncateResponse
+	(*FallocateRequest)(nil),                   // 38: pb.FallocateRequest
+	(*FallocateResponse)(nil),                  // 39: pb.FallocateResponse
+	(*ReaddirRequest)(nil),                     // 40: pb.ReaddirRequest
+	(*ReaddirResponse)(nil),                    // 41: pb.ReaddirResponse
+	(*ReadRequest)(nil),                        // 42: pb.ReadRequest
+	(*ReadResponse)(nil),                       // 43: pb.ReadResponse
+	(*WriteRequest)(nil),                       // 44: pb.WriteRequest
+	(*WriteResponse)(nil),                      // 45: pb.WriteResponse
+	(*NewSliceRequest)(nil),                    // 46: pb.NewSliceRequest
+	(*NewSliceResponse)(nil),                   // 47: pb.NewSliceResponse
+	(*InvalidateChunkCacheRequest)(nil),        // 48: pb.InvalidateChunkCacheRequest
+	(*InvalidateChunkCacheResponse)(nil),       // 49: pb.InvalidateChunkCacheResponse
+	(*CopyFileRangeRequest)(nil),               // 50: pb.CopyFileRangeRequest
+	(*CopyFileRangeResponse)(nil),              // 51: pb.CopyFileRangeResponse
+	(*MetaContext)(nil),                        // 52: pb.MetaContext
+	(*ProtoAttr)(nil),                          // 53: pb.ProtoAttr
+	(*ProtoEntry)(nil),                         // 54: pb.ProtoEntry
+	(*ProtoSlice)(nil),                         // 55: pb.ProtoSlice
+	(*InitRequest)(nil),                        // 56: pb.InitRequest
+	(*LoadRequest)(nil),                        // 57: pb.LoadRequest
+	(*NewSessionRequest)(nil),                  // 58: pb.NewSessionRequest
+	(*CloseSessionRequest)(nil),                // 59: pb.CloseSessionRequest
+	(*FlushSessionRequest)(nil),                // 60: pb.FlushSessionRequest
+	(*ShutdownRequest)(nil),                    // 61: pb.ShutdownRequest
+	(*ResetRequest)(nil),                       // 62: pb.ResetRequest
+	(*GetSessionRequest)(nil),                  // 63: pb.GetSessionRequest
+	(*ListSessionsRequest)(nil),                // 64: pb.ListSessionsRequest
+	(*CleanStaleSessionsRequest)(nil),          // 65: pb.CleanStaleSessionsRequest
+	(*FlockRequest)(nil),                       // 66: pb.FlockRequest
+	(*GetlkRequest)(nil),                       // 67: pb.GetlkRequest
+	(*SetlkRequest)(nil),                       // 68: pb.SetlkRequest
+	(*ListLocksRequest)(nil),                   // 69: pb.ListLocksRequest
+	(*GetXattrRequest)(nil),                    // 70: pb.GetXattrRequest
+	(*SetXattrRequest)(nil),                    // 71: pb.SetXattrRequest
+	(*RemoveXattrRequest)(nil),                 // 72: pb.RemoveXattrRequest
+	(*ListXattrRequest)(nil),                   // 73: pb.ListXattrRequest
+	(*GetParentsRequest)(nil),                  // 74: pb.GetParentsRequest
+	(*GetDirStatRequest)(nil),                  // 75: pb.GetDirStatRequest
+	(*SetFaclRequest)(nil),                     // 76: pb.SetFaclRequest
+	(*GetFaclRequest)(nil),                     // 77: pb.GetFaclRequest
+	(*StoreTokenRequest)(nil),                  // 78: pb.StoreTokenRequest
+	(*UpdateTokenRequest)(nil),                 // 79: pb.UpdateTokenRequest
+	(*LoadTokenRequest)(nil),                   // 80: pb.LoadTokenRequest
+	(*DeleteTokensRequest)(nil),                // 81: pb.DeleteTokensRequest
+	(*ListTokensRequest)(nil),                  // 82: pb.ListTokensRequest
+	(*GetFormatRequest)(nil),                   // 83: pb.GetFormatRequest
+	(*RemoveRequest)(nil),                      // 84: pb.RemoveRequest
+	(*BatchUnlinkRequest)(nil),                 // 85: pb.BatchUnlinkRequest
+	(*GetSummaryRequest)(nil),                  // 86: pb.GetSummaryRequest
+	(*GetTreeSummaryRequest)(nil),              // 87: pb.GetTreeSummaryRequest
+	(*CloneRequest)(nil),                       // 88: pb.CloneRequest
+	(*GetPathsRequest)(nil),                    // 89: pb.GetPathsRequest
+	(*CheckRequest)(nil),                       // 90: pb.CheckRequest
+	(*CompactAllRequest)(nil),                  // 91: pb.CompactAllRequest
+	(*CompactRequest)(nil),                     // 92: pb.CompactRequest
+	(*ListSlicesRequest)(nil),                  // 93: pb.ListSlicesRequest
+	(*HandleQuotaRequest)(nil),                 // 94: pb.HandleQuotaRequest
+	(*ScanUserGroupUsageRequest)(nil),          // 95: pb.ScanUserGroupUsageRequest
+	(*ChrootRequest)(nil),                      // 96: pb.ChrootRequest
+	(*CleanupTrashBeforeRequest)(nil),          // 97: pb.CleanupTrashBeforeRequest
+	(*CleanupDetachedNodesBeforeRequest)(nil),  // 98: pb.CleanupDetachedNodesBeforeRequest
+	(*NewDirHandlerRequest)(nil),               // 99: pb.NewDirHandlerRequest
+	(*DirHandlerListRequest)(nil),              // 100: pb.DirHandlerListRequest
+	(*DirHandlerInsertRequest)(nil),            // 101: pb.DirHandlerInsertRequest
+	(*DirHandlerDeleteRequest)(nil),            // 102: pb.DirHandlerDeleteRequest
+	(*DirHandlerCloseRequest)(nil),             // 103: pb.DirHandlerCloseRequest
+	(*DumpMetaRequest)(nil),                    // 104: pb.DumpMetaRequest
+	(*LoadMetaChunk)(nil),                      // 105: pb.LoadMetaChunk
+	(*DumpMetaV2Request)(nil),                  // 106: pb.DumpMetaV2Request
+	(*LoadMetaV2Chunk)(nil),                    // 107: pb.LoadMetaV2Chunk
+	(*InitResponse)(nil),                       // 108: pb.InitResponse
+	(*LoadResponse)(nil),                       // 109: pb.LoadResponse
+	(*NewSessionResponse)(nil),                 // 110: pb.NewSessionResponse
+	(*CloseSessionResponse)(nil),               // 111: pb.CloseSessionResponse
+	(*FlushSessionResponse)(nil),               // 112: pb.FlushSessionResponse
+	(*ShutdownResponse)(nil),                   // 113: pb.ShutdownResponse
+	(*ResetResponse)(nil),                      // 114: pb.ResetResponse
+	(*GetSessionResponse)(nil),                 // 115: pb.GetSessionResponse
+	(*ListSessionsResponse)(nil),               // 116: pb.ListSessionsResponse
+	(*CleanStaleSessionsResponse)(nil),         // 117: pb.CleanStaleSessionsResponse
+	(*FlockResponse)(nil),                      // 118: pb.FlockResponse
+	(*GetlkResponse)(nil),                      // 119: pb.GetlkResponse
+	(*SetlkResponse)(nil),                      // 120: pb.SetlkResponse
+	(*ListLocksResponse)(nil),                  // 121: pb.ListLocksResponse
+	(*GetXattrResponse)(nil),                   // 122: pb.GetXattrResponse
+	(*SetXattrResponse)(nil),                   // 123: pb.SetXattrResponse
+	(*RemoveXattrResponse)(nil),                // 124: pb.RemoveXattrResponse
+	(*ListXattrResponse)(nil),                  // 125: pb.ListXattrResponse
+	(*GetParentsResponse)(nil),                 // 126: pb.GetParentsResponse
+	(*GetDirStatResponse)(nil),                 // 127: pb.GetDirStatResponse
+	(*SetFaclResponse)(nil),                    // 128: pb.SetFaclResponse
+	(*GetFaclResponse)(nil),                    // 129: pb.GetFaclResponse
+	(*StoreTokenResponse)(nil),                 // 130: pb.StoreTokenResponse
+	(*UpdateTokenResponse)(nil),                // 131: pb.UpdateTokenResponse
+	(*LoadTokenResponse)(nil),                  // 132: pb.LoadTokenResponse
+	(*DeleteTokensResponse)(nil),               // 133: pb.DeleteTokensResponse
+	(*ListTokensResponse)(nil),                 // 134: pb.ListTokensResponse
+	(*GetFormatResponse)(nil),                  // 135: pb.GetFormatResponse
+	(*RemoveResponse)(nil),                     // 136: pb.RemoveResponse
+	(*BatchUnlinkResponse)(nil),                // 137: pb.BatchUnlinkResponse
+	(*GetSummaryResponse)(nil),                 // 138: pb.GetSummaryResponse
+	(*GetTreeSummaryResponse)(nil),             // 139: pb.GetTreeSummaryResponse
+	(*CloneResponse)(nil),                      // 140: pb.CloneResponse
+	(*GetPathsResponse)(nil),                   // 141: pb.GetPathsResponse
+	(*CheckResponse)(nil),                      // 142: pb.CheckResponse
+	(*CompactAllResponse)(nil),                 // 143: pb.CompactAllResponse
+	(*CompactResponse)(nil),                    // 144: pb.CompactResponse
+	(*ListSlicesResponse)(nil),                 // 145: pb.ListSlicesResponse
+	(*HandleQuotaResponse)(nil),                // 146: pb.HandleQuotaResponse
+	(*ScanUserGroupUsageResponse)(nil),         // 147: pb.ScanUserGroupUsageResponse
+	(*ChrootResponse)(nil),                     // 148: pb.ChrootResponse
+	(*CleanupTrashBeforeResponse)(nil),         // 149: pb.CleanupTrashBeforeResponse
+	(*CleanupDetachedNodesBeforeResponse)(nil), // 150: pb.CleanupDetachedNodesBeforeResponse
+	(*NewDirHandlerResponse)(nil),              // 151: pb.NewDirHandlerResponse
+	(*DirHandlerListResponse)(nil),             // 152: pb.DirHandlerListResponse
+	(*DirHandlerInsertResponse)(nil),           // 153: pb.DirHandlerInsertResponse
+	(*DirHandlerDeleteResponse)(nil),           // 154: pb.DirHandlerDeleteResponse
+	(*DirHandlerCloseResponse)(nil),            // 155: pb.DirHandlerCloseResponse
+	(*DumpMetaChunk)(nil),                      // 156: pb.DumpMetaChunk
+	(*LoadMetaResponse)(nil),                   // 157: pb.LoadMetaResponse
+	(*DumpMetaV2Chunk)(nil),                    // 158: pb.DumpMetaV2Chunk
+	(*LoadMetaV2Response)(nil),                 // 159: pb.LoadMetaV2Response
 }
-var file_meta_proto_depIdxs = []int32{
-	52,  // 0: meta.StatFSRequest.ctx:type_name -> meta.MetaContext
-	52,  // 1: meta.LookupRequest.ctx:type_name -> meta.MetaContext
-	53,  // 2: meta.LookupResponse.attr:type_name -> meta.ProtoAttr
-	52,  // 3: meta.ResolveRequest.ctx:type_name -> meta.MetaContext
-	53,  // 4: meta.ResolveResponse.attr:type_name -> meta.ProtoAttr
-	52,  // 5: meta.AccessRequest.ctx:type_name -> meta.MetaContext
-	53,  // 6: meta.AccessResponse.attr:type_name -> meta.ProtoAttr
-	52,  // 7: meta.GetAttrRequest.ctx:type_name -> meta.MetaContext
-	53,  // 8: meta.GetAttrResponse.attr:type_name -> meta.ProtoAttr
-	52,  // 9: meta.SetAttrRequest.ctx:type_name -> meta.MetaContext
-	53,  // 10: meta.SetAttrRequest.attr:type_name -> meta.ProtoAttr
-	52,  // 11: meta.CheckSetAttrRequest.ctx:type_name -> meta.MetaContext
-	53,  // 12: meta.CheckSetAttrRequest.attr:type_name -> meta.ProtoAttr
-	52,  // 13: meta.MknodRequest.ctx:type_name -> meta.MetaContext
-	53,  // 14: meta.MknodResponse.attr:type_name -> meta.ProtoAttr
-	52,  // 15: meta.MkdirRequest.ctx:type_name -> meta.MetaContext
-	53,  // 16: meta.MkdirResponse.attr:type_name -> meta.ProtoAttr
-	52,  // 17: meta.CreateRequest.ctx:type_name -> meta.MetaContext
-	53,  // 18: meta.CreateResponse.attr:type_name -> meta.ProtoAttr
-	52,  // 19: meta.OpenRequest.ctx:type_name -> meta.MetaContext
-	53,  // 20: meta.OpenResponse.attr:type_name -> meta.ProtoAttr
-	52,  // 21: meta.CloseRequest.ctx:type_name -> meta.MetaContext
-	52,  // 22: meta.UnlinkRequest.ctx:type_name -> meta.MetaContext
-	52,  // 23: meta.RmdirRequest.ctx:type_name -> meta.MetaContext
-	52,  // 24: meta.RenameRequest.ctx:type_name -> meta.MetaContext
-	53,  // 25: meta.RenameResponse.attr:type_name -> meta.ProtoAttr
-	52,  // 26: meta.LinkRequest.ctx:type_name -> meta.MetaContext
-	53,  // 27: meta.LinkResponse.attr:type_name -> meta.ProtoAttr
-	52,  // 28: meta.SymlinkRequest.ctx:type_name -> meta.MetaContext
-	53,  // 29: meta.SymlinkResponse.attr:type_name -> meta.ProtoAttr
-	52,  // 30: meta.ReadLinkRequest.ctx:type_name -> meta.MetaContext
-	52,  // 31: meta.TruncateRequest.ctx:type_name -> meta.MetaContext
-	53,  // 32: meta.TruncateResponse.attr:type_name -> meta.ProtoAttr
-	52,  // 33: meta.FallocateRequest.ctx:type_name -> meta.MetaContext
-	52,  // 34: meta.ReaddirRequest.ctx:type_name -> meta.MetaContext
-	54,  // 35: meta.ReaddirResponse.entries:type_name -> meta.ProtoEntry
-	52,  // 36: meta.ReadRequest.ctx:type_name -> meta.MetaContext
-	55,  // 37: meta.ReadResponse.slices:type_name -> meta.ProtoSlice
-	52,  // 38: meta.WriteRequest.ctx:type_name -> meta.MetaContext
-	55,  // 39: meta.WriteRequest.slice:type_name -> meta.ProtoSlice
-	52,  // 40: meta.NewSliceRequest.ctx:type_name -> meta.MetaContext
-	52,  // 41: meta.InvalidateChunkCacheRequest.ctx:type_name -> meta.MetaContext
-	52,  // 42: meta.CopyFileRangeRequest.ctx:type_name -> meta.MetaContext
-	56,  // 43: meta.MetaService.Init:input_type -> meta.InitRequest
-	57,  // 44: meta.MetaService.Load:input_type -> meta.LoadRequest
-	58,  // 45: meta.MetaService.NewSession:input_type -> meta.NewSessionRequest
-	59,  // 46: meta.MetaService.CloseSession:input_type -> meta.CloseSessionRequest
-	60,  // 47: meta.MetaService.FlushSession:input_type -> meta.FlushSessionRequest
-	61,  // 48: meta.MetaService.Shutdown:input_type -> meta.ShutdownRequest
-	62,  // 49: meta.MetaService.Reset:input_type -> meta.ResetRequest
-	63,  // 50: meta.MetaService.GetSession:input_type -> meta.GetSessionRequest
-	64,  // 51: meta.MetaService.ListSessions:input_type -> meta.ListSessionsRequest
-	65,  // 52: meta.MetaService.CleanStaleSessions:input_type -> meta.CleanStaleSessionsRequest
-	0,   // 53: meta.MetaService.StatFS:input_type -> meta.StatFSRequest
-	2,   // 54: meta.MetaService.Lookup:input_type -> meta.LookupRequest
-	4,   // 55: meta.MetaService.Resolve:input_type -> meta.ResolveRequest
-	6,   // 56: meta.MetaService.Access:input_type -> meta.AccessRequest
-	8,   // 57: meta.MetaService.GetAttr:input_type -> meta.GetAttrRequest
-	10,  // 58: meta.MetaService.SetAttr:input_type -> meta.SetAttrRequest
-	12,  // 59: meta.MetaService.CheckSetAttr:input_type -> meta.CheckSetAttrRequest
-	14,  // 60: meta.MetaService.Mknod:input_type -> meta.MknodRequest
-	16,  // 61: meta.MetaService.Mkdir:input_type -> meta.MkdirRequest
-	18,  // 62: meta.MetaService.Create:input_type -> meta.CreateRequest
-	20,  // 63: meta.MetaService.Open:input_type -> meta.OpenRequest
-	22,  // 64: meta.MetaService.Close:input_type -> meta.CloseRequest
-	24,  // 65: meta.MetaService.Unlink:input_type -> meta.UnlinkRequest
-	26,  // 66: meta.MetaService.Rmdir:input_type -> meta.RmdirRequest
-	28,  // 67: meta.MetaService.Rename:input_type -> meta.RenameRequest
-	30,  // 68: meta.MetaService.Link:input_type -> meta.LinkRequest
-	32,  // 69: meta.MetaService.Symlink:input_type -> meta.SymlinkRequest
-	34,  // 70: meta.MetaService.ReadLink:input_type -> meta.ReadLinkRequest
-	36,  // 71: meta.MetaService.Truncate:input_type -> meta.TruncateRequest
-	38,  // 72: meta.MetaService.Fallocate:input_type -> meta.FallocateRequest
-	40,  // 73: meta.MetaService.Readdir:input_type -> meta.ReaddirRequest
-	42,  // 74: meta.MetaService.Read:input_type -> meta.ReadRequest
-	44,  // 75: meta.MetaService.Write:input_type -> meta.WriteRequest
-	46,  // 76: meta.MetaService.NewSlice:input_type -> meta.NewSliceRequest
-	48,  // 77: meta.MetaService.InvalidateChunkCache:input_type -> meta.InvalidateChunkCacheRequest
-	50,  // 78: meta.MetaService.CopyFileRange:input_type -> meta.CopyFileRangeRequest
-	66,  // 79: meta.MetaService.Flock:input_type -> meta.FlockRequest
-	67,  // 80: meta.MetaService.Getlk:input_type -> meta.GetlkRequest
-	68,  // 81: meta.MetaService.Setlk:input_type -> meta.SetlkRequest
-	69,  // 82: meta.MetaService.ListLocks:input_type -> meta.ListLocksRequest
-	70,  // 83: meta.MetaService.GetXattr:input_type -> meta.GetXattrRequest
-	71,  // 84: meta.MetaService.SetXattr:input_type -> meta.SetXattrRequest
-	72,  // 85: meta.MetaService.RemoveXattr:input_type -> meta.RemoveXattrRequest
-	73,  // 86: meta.MetaService.ListXattr:input_type -> meta.ListXattrRequest
-	74,  // 87: meta.MetaService.GetParents:input_type -> meta.GetParentsRequest
-	75,  // 88: meta.MetaService.GetDirStat:input_type -> meta.GetDirStatRequest
-	76,  // 89: meta.MetaService.SetFacl:input_type -> meta.SetFaclRequest
-	77,  // 90: meta.MetaService.GetFacl:input_type -> meta.GetFaclRequest
-	78,  // 91: meta.MetaService.StoreToken:input_type -> meta.StoreTokenRequest
-	79,  // 92: meta.MetaService.UpdateToken:input_type -> meta.UpdateTokenRequest
-	80,  // 93: meta.MetaService.LoadToken:input_type -> meta.LoadTokenRequest
-	81,  // 94: meta.MetaService.DeleteTokens:input_type -> meta.DeleteTokensRequest
-	82,  // 95: meta.MetaService.ListTokens:input_type -> meta.ListTokensRequest
-	83,  // 96: meta.MetaService.GetFormat:input_type -> meta.GetFormatRequest
-	84,  // 97: meta.MetaService.Remove:input_type -> meta.RemoveRequest
-	85,  // 98: meta.MetaService.BatchUnlink:input_type -> meta.BatchUnlinkRequest
-	86,  // 99: meta.MetaService.GetSummary:input_type -> meta.GetSummaryRequest
-	87,  // 100: meta.MetaService.GetTreeSummary:input_type -> meta.GetTreeSummaryRequest
-	88,  // 101: meta.MetaService.Clone:input_type -> meta.CloneRequest
-	89,  // 102: meta.MetaService.GetPaths:input_type -> meta.GetPathsRequest
-	90,  // 103: meta.MetaService.Check:input_type -> meta.CheckRequest
-	91,  // 104: meta.MetaService.CompactAll:input_type -> meta.CompactAllRequest
-	92,  // 105: meta.MetaService.Compact:input_type -> meta.CompactRequest
-	93,  // 106: meta.MetaService.ListSlices:input_type -> meta.ListSlicesRequest
-	94,  // 107: meta.MetaService.HandleQuota:input_type -> meta.HandleQuotaRequest
-	95,  // 108: meta.MetaService.ScanUserGroupUsage:input_type -> meta.ScanUserGroupUsageRequest
-	96,  // 109: meta.MetaService.Chroot:input_type -> meta.ChrootRequest
-	97,  // 110: meta.MetaService.CleanupTrashBefore:input_type -> meta.CleanupTrashBeforeRequest
-	98,  // 111: meta.MetaService.CleanupDetachedNodesBefore:input_type -> meta.CleanupDetachedNodesBeforeRequest
-	99,  // 112: meta.MetaService.NewDirHandler:input_type -> meta.NewDirHandlerRequest
-	100, // 113: meta.MetaService.DirHandlerList:input_type -> meta.DirHandlerListRequest
-	101, // 114: meta.MetaService.DirHandlerInsert:input_type -> meta.DirHandlerInsertRequest
-	102, // 115: meta.MetaService.DirHandlerDelete:input_type -> meta.DirHandlerDeleteRequest
-	103, // 116: meta.MetaService.DirHandlerClose:input_type -> meta.DirHandlerCloseRequest
-	104, // 117: meta.MetaService.DumpMeta:input_type -> meta.DumpMetaRequest
-	105, // 118: meta.MetaService.LoadMeta:input_type -> meta.LoadMetaChunk
-	106, // 119: meta.MetaService.DumpMetaV2:input_type -> meta.DumpMetaV2Request
-	107, // 120: meta.MetaService.LoadMetaV2:input_type -> meta.LoadMetaV2Chunk
-	108, // 121: meta.MetaService.Init:output_type -> meta.InitResponse
-	109, // 122: meta.MetaService.Load:output_type -> meta.LoadResponse
-	110, // 123: meta.MetaService.NewSession:output_type -> meta.NewSessionResponse
-	111, // 124: meta.MetaService.CloseSession:output_type -> meta.CloseSessionResponse
-	112, // 125: meta.MetaService.FlushSession:output_type -> meta.FlushSessionResponse
-	113, // 126: meta.MetaService.Shutdown:output_type -> meta.ShutdownResponse
-	114, // 127: meta.MetaService.Reset:output_type -> meta.ResetResponse
-	115, // 128: meta.MetaService.GetSession:output_type -> meta.GetSessionResponse
-	116, // 129: meta.MetaService.ListSessions:output_type -> meta.ListSessionsResponse
-	117, // 130: meta.MetaService.CleanStaleSessions:output_type -> meta.CleanStaleSessionsResponse
-	1,   // 131: meta.MetaService.StatFS:output_type -> meta.StatFSResponse
-	3,   // 132: meta.MetaService.Lookup:output_type -> meta.LookupResponse
-	5,   // 133: meta.MetaService.Resolve:output_type -> meta.ResolveResponse
-	7,   // 134: meta.MetaService.Access:output_type -> meta.AccessResponse
-	9,   // 135: meta.MetaService.GetAttr:output_type -> meta.GetAttrResponse
-	11,  // 136: meta.MetaService.SetAttr:output_type -> meta.SetAttrResponse
-	13,  // 137: meta.MetaService.CheckSetAttr:output_type -> meta.CheckSetAttrResponse
-	15,  // 138: meta.MetaService.Mknod:output_type -> meta.MknodResponse
-	17,  // 139: meta.MetaService.Mkdir:output_type -> meta.MkdirResponse
-	19,  // 140: meta.MetaService.Create:output_type -> meta.CreateResponse
-	21,  // 141: meta.MetaService.Open:output_type -> meta.OpenResponse
-	23,  // 142: meta.MetaService.Close:output_type -> meta.CloseResponse
-	25,  // 143: meta.MetaService.Unlink:output_type -> meta.UnlinkResponse
-	27,  // 144: meta.MetaService.Rmdir:output_type -> meta.RmdirResponse
-	29,  // 145: meta.MetaService.Rename:output_type -> meta.RenameResponse
-	31,  // 146: meta.MetaService.Link:output_type -> meta.LinkResponse
-	33,  // 147: meta.MetaService.Symlink:output_type -> meta.SymlinkResponse
-	35,  // 148: meta.MetaService.ReadLink:output_type -> meta.ReadLinkResponse
-	37,  // 149: meta.MetaService.Truncate:output_type -> meta.TruncateResponse
-	39,  // 150: meta.MetaService.Fallocate:output_type -> meta.FallocateResponse
-	41,  // 151: meta.MetaService.Readdir:output_type -> meta.ReaddirResponse
-	43,  // 152: meta.MetaService.Read:output_type -> meta.ReadResponse
-	45,  // 153: meta.MetaService.Write:output_type -> meta.WriteResponse
-	47,  // 154: meta.MetaService.NewSlice:output_type -> meta.NewSliceResponse
-	49,  // 155: meta.MetaService.InvalidateChunkCache:output_type -> meta.InvalidateChunkCacheResponse
-	51,  // 156: meta.MetaService.CopyFileRange:output_type -> meta.CopyFileRangeResponse
-	118, // 157: meta.MetaService.Flock:output_type -> meta.FlockResponse
-	119, // 158: meta.MetaService.Getlk:output_type -> meta.GetlkResponse
-	120, // 159: meta.MetaService.Setlk:output_type -> meta.SetlkResponse
-	121, // 160: meta.MetaService.ListLocks:output_type -> meta.ListLocksResponse
-	122, // 161: meta.MetaService.GetXattr:output_type -> meta.GetXattrResponse
-	123, // 162: meta.MetaService.SetXattr:output_type -> meta.SetXattrResponse
-	124, // 163: meta.MetaService.RemoveXattr:output_type -> meta.RemoveXattrResponse
-	125, // 164: meta.MetaService.ListXattr:output_type -> meta.ListXattrResponse
-	126, // 165: meta.MetaService.GetParents:output_type -> meta.GetParentsResponse
-	127, // 166: meta.MetaService.GetDirStat:output_type -> meta.GetDirStatResponse
-	128, // 167: meta.MetaService.SetFacl:output_type -> meta.SetFaclResponse
-	129, // 168: meta.MetaService.GetFacl:output_type -> meta.GetFaclResponse
-	130, // 169: meta.MetaService.StoreToken:output_type -> meta.StoreTokenResponse
-	131, // 170: meta.MetaService.UpdateToken:output_type -> meta.UpdateTokenResponse
-	132, // 171: meta.MetaService.LoadToken:output_type -> meta.LoadTokenResponse
-	133, // 172: meta.MetaService.DeleteTokens:output_type -> meta.DeleteTokensResponse
-	134, // 173: meta.MetaService.ListTokens:output_type -> meta.ListTokensResponse
-	135, // 174: meta.MetaService.GetFormat:output_type -> meta.GetFormatResponse
-	136, // 175: meta.MetaService.Remove:output_type -> meta.RemoveResponse
-	137, // 176: meta.MetaService.BatchUnlink:output_type -> meta.BatchUnlinkResponse
-	138, // 177: meta.MetaService.GetSummary:output_type -> meta.GetSummaryResponse
-	139, // 178: meta.MetaService.GetTreeSummary:output_type -> meta.GetTreeSummaryResponse
-	140, // 179: meta.MetaService.Clone:output_type -> meta.CloneResponse
-	141, // 180: meta.MetaService.GetPaths:output_type -> meta.GetPathsResponse
-	142, // 181: meta.MetaService.Check:output_type -> meta.CheckResponse
-	143, // 182: meta.MetaService.CompactAll:output_type -> meta.CompactAllResponse
-	144, // 183: meta.MetaService.Compact:output_type -> meta.CompactResponse
-	145, // 184: meta.MetaService.ListSlices:output_type -> meta.ListSlicesResponse
-	146, // 185: meta.MetaService.HandleQuota:output_type -> meta.HandleQuotaResponse
-	147, // 186: meta.MetaService.ScanUserGroupUsage:output_type -> meta.ScanUserGroupUsageResponse
-	148, // 187: meta.MetaService.Chroot:output_type -> meta.ChrootResponse
-	149, // 188: meta.MetaService.CleanupTrashBefore:output_type -> meta.CleanupTrashBeforeResponse
-	150, // 189: meta.MetaService.CleanupDetachedNodesBefore:output_type -> meta.CleanupDetachedNodesBeforeResponse
-	151, // 190: meta.MetaService.NewDirHandler:output_type -> meta.NewDirHandlerResponse
-	152, // 191: meta.MetaService.DirHandlerList:output_type -> meta.DirHandlerListResponse
-	153, // 192: meta.MetaService.DirHandlerInsert:output_type -> meta.DirHandlerInsertResponse
-	154, // 193: meta.MetaService.DirHandlerDelete:output_type -> meta.DirHandlerDeleteResponse
-	155, // 194: meta.MetaService.DirHandlerClose:output_type -> meta.DirHandlerCloseResponse
-	156, // 195: meta.MetaService.DumpMeta:output_type -> meta.DumpMetaChunk
-	157, // 196: meta.MetaService.LoadMeta:output_type -> meta.LoadMetaResponse
-	158, // 197: meta.MetaService.DumpMetaV2:output_type -> meta.DumpMetaV2Chunk
-	159, // 198: meta.MetaService.LoadMetaV2:output_type -> meta.LoadMetaV2Response
+var file_pb_meta_proto_depIdxs = []int32{
+	52,  // 0: pb.StatFSRequest.ctx:type_name -> pb.MetaContext
+	52,  // 1: pb.LookupRequest.ctx:type_name -> pb.MetaContext
+	53,  // 2: pb.LookupResponse.attr:type_name -> pb.ProtoAttr
+	52,  // 3: pb.ResolveRequest.ctx:type_name -> pb.MetaContext
+	53,  // 4: pb.ResolveResponse.attr:type_name -> pb.ProtoAttr
+	52,  // 5: pb.AccessRequest.ctx:type_name -> pb.MetaContext
+	53,  // 6: pb.AccessResponse.attr:type_name -> pb.ProtoAttr
+	52,  // 7: pb.GetAttrRequest.ctx:type_name -> pb.MetaContext
+	53,  // 8: pb.GetAttrResponse.attr:type_name -> pb.ProtoAttr
+	52,  // 9: pb.SetAttrRequest.ctx:type_name -> pb.MetaContext
+	53,  // 10: pb.SetAttrRequest.attr:type_name -> pb.ProtoAttr
+	52,  // 11: pb.CheckSetAttrRequest.ctx:type_name -> pb.MetaContext
+	53,  // 12: pb.CheckSetAttrRequest.attr:type_name -> pb.ProtoAttr
+	52,  // 13: pb.MknodRequest.ctx:type_name -> pb.MetaContext
+	53,  // 14: pb.MknodResponse.attr:type_name -> pb.ProtoAttr
+	52,  // 15: pb.MkdirRequest.ctx:type_name -> pb.MetaContext
+	53,  // 16: pb.MkdirResponse.attr:type_name -> pb.ProtoAttr
+	52,  // 17: pb.CreateRequest.ctx:type_name -> pb.MetaContext
+	53,  // 18: pb.CreateResponse.attr:type_name -> pb.ProtoAttr
+	52,  // 19: pb.OpenRequest.ctx:type_name -> pb.MetaContext
+	53,  // 20: pb.OpenResponse.attr:type_name -> pb.ProtoAttr
+	52,  // 21: pb.CloseRequest.ctx:type_name -> pb.MetaContext
+	52,  // 22: pb.UnlinkRequest.ctx:type_name -> pb.MetaContext
+	52,  // 23: pb.RmdirRequest.ctx:type_name -> pb.MetaContext
+	52,  // 24: pb.RenameRequest.ctx:type_name -> pb.MetaContext
+	53,  // 25: pb.RenameResponse.attr:type_name -> pb.ProtoAttr
+	52,  // 26: pb.LinkRequest.ctx:type_name -> pb.MetaContext
+	53,  // 27: pb.LinkResponse.attr:type_name -> pb.ProtoAttr
+	52,  // 28: pb.SymlinkRequest.ctx:type_name -> pb.MetaContext
+	53,  // 29: pb.SymlinkResponse.attr:type_name -> pb.ProtoAttr
+	52,  // 30: pb.ReadLinkRequest.ctx:type_name -> pb.MetaContext
+	52,  // 31: pb.TruncateRequest.ctx:type_name -> pb.MetaContext
+	53,  // 32: pb.TruncateResponse.attr:type_name -> pb.ProtoAttr
+	52,  // 33: pb.FallocateRequest.ctx:type_name -> pb.MetaContext
+	52,  // 34: pb.ReaddirRequest.ctx:type_name -> pb.MetaContext
+	54,  // 35: pb.ReaddirResponse.entries:type_name -> pb.ProtoEntry
+	52,  // 36: pb.ReadRequest.ctx:type_name -> pb.MetaContext
+	55,  // 37: pb.ReadResponse.slices:type_name -> pb.ProtoSlice
+	52,  // 38: pb.WriteRequest.ctx:type_name -> pb.MetaContext
+	55,  // 39: pb.WriteRequest.slice:type_name -> pb.ProtoSlice
+	52,  // 40: pb.NewSliceRequest.ctx:type_name -> pb.MetaContext
+	52,  // 41: pb.InvalidateChunkCacheRequest.ctx:type_name -> pb.MetaContext
+	52,  // 42: pb.CopyFileRangeRequest.ctx:type_name -> pb.MetaContext
+	56,  // 43: pb.MetaService.Init:input_type -> pb.InitRequest
+	57,  // 44: pb.MetaService.Load:input_type -> pb.LoadRequest
+	58,  // 45: pb.MetaService.NewSession:input_type -> pb.NewSessionRequest
+	59,  // 46: pb.MetaService.CloseSession:input_type -> pb.CloseSessionRequest
+	60,  // 47: pb.MetaService.FlushSession:input_type -> pb.FlushSessionRequest
+	61,  // 48: pb.MetaService.Shutdown:input_type -> pb.ShutdownRequest
+	62,  // 49: pb.MetaService.Reset:input_type -> pb.ResetRequest
+	63,  // 50: pb.MetaService.GetSession:input_type -> pb.GetSessionRequest
+	64,  // 51: pb.MetaService.ListSessions:input_type -> pb.ListSessionsRequest
+	65,  // 52: pb.MetaService.CleanStaleSessions:input_type -> pb.CleanStaleSessionsRequest
+	0,   // 53: pb.MetaService.StatFS:input_type -> pb.StatFSRequest
+	2,   // 54: pb.MetaService.Lookup:input_type -> pb.LookupRequest
+	4,   // 55: pb.MetaService.Resolve:input_type -> pb.ResolveRequest
+	6,   // 56: pb.MetaService.Access:input_type -> pb.AccessRequest
+	8,   // 57: pb.MetaService.GetAttr:input_type -> pb.GetAttrRequest
+	10,  // 58: pb.MetaService.SetAttr:input_type -> pb.SetAttrRequest
+	12,  // 59: pb.MetaService.CheckSetAttr:input_type -> pb.CheckSetAttrRequest
+	14,  // 60: pb.MetaService.Mknod:input_type -> pb.MknodRequest
+	16,  // 61: pb.MetaService.Mkdir:input_type -> pb.MkdirRequest
+	18,  // 62: pb.MetaService.Create:input_type -> pb.CreateRequest
+	20,  // 63: pb.MetaService.Open:input_type -> pb.OpenRequest
+	22,  // 64: pb.MetaService.Close:input_type -> pb.CloseRequest
+	24,  // 65: pb.MetaService.Unlink:input_type -> pb.UnlinkRequest
+	26,  // 66: pb.MetaService.Rmdir:input_type -> pb.RmdirRequest
+	28,  // 67: pb.MetaService.Rename:input_type -> pb.RenameRequest
+	30,  // 68: pb.MetaService.Link:input_type -> pb.LinkRequest
+	32,  // 69: pb.MetaService.Symlink:input_type -> pb.SymlinkRequest
+	34,  // 70: pb.MetaService.ReadLink:input_type -> pb.ReadLinkRequest
+	36,  // 71: pb.MetaService.Truncate:input_type -> pb.TruncateRequest
+	38,  // 72: pb.MetaService.Fallocate:input_type -> pb.FallocateRequest
+	40,  // 73: pb.MetaService.Readdir:input_type -> pb.ReaddirRequest
+	42,  // 74: pb.MetaService.Read:input_type -> pb.ReadRequest
+	44,  // 75: pb.MetaService.Write:input_type -> pb.WriteRequest
+	46,  // 76: pb.MetaService.NewSlice:input_type -> pb.NewSliceRequest
+	48,  // 77: pb.MetaService.InvalidateChunkCache:input_type -> pb.InvalidateChunkCacheRequest
+	50,  // 78: pb.MetaService.CopyFileRange:input_type -> pb.CopyFileRangeRequest
+	66,  // 79: pb.MetaService.Flock:input_type -> pb.FlockRequest
+	67,  // 80: pb.MetaService.Getlk:input_type -> pb.GetlkRequest
+	68,  // 81: pb.MetaService.Setlk:input_type -> pb.SetlkRequest
+	69,  // 82: pb.MetaService.ListLocks:input_type -> pb.ListLocksRequest
+	70,  // 83: pb.MetaService.GetXattr:input_type -> pb.GetXattrRequest
+	71,  // 84: pb.MetaService.SetXattr:input_type -> pb.SetXattrRequest
+	72,  // 85: pb.MetaService.RemoveXattr:input_type -> pb.RemoveXattrRequest
+	73,  // 86: pb.MetaService.ListXattr:input_type -> pb.ListXattrRequest
+	74,  // 87: pb.MetaService.GetParents:input_type -> pb.GetParentsRequest
+	75,  // 88: pb.MetaService.GetDirStat:input_type -> pb.GetDirStatRequest
+	76,  // 89: pb.MetaService.SetFacl:input_type -> pb.SetFaclRequest
+	77,  // 90: pb.MetaService.GetFacl:input_type -> pb.GetFaclRequest
+	78,  // 91: pb.MetaService.StoreToken:input_type -> pb.StoreTokenRequest
+	79,  // 92: pb.MetaService.UpdateToken:input_type -> pb.UpdateTokenRequest
+	80,  // 93: pb.MetaService.LoadToken:input_type -> pb.LoadTokenRequest
+	81,  // 94: pb.MetaService.DeleteTokens:input_type -> pb.DeleteTokensRequest
+	82,  // 95: pb.MetaService.ListTokens:input_type -> pb.ListTokensRequest
+	83,  // 96: pb.MetaService.GetFormat:input_type -> pb.GetFormatRequest
+	84,  // 97: pb.MetaService.Remove:input_type -> pb.RemoveRequest
+	85,  // 98: pb.MetaService.BatchUnlink:input_type -> pb.BatchUnlinkRequest
+	86,  // 99: pb.MetaService.GetSummary:input_type -> pb.GetSummaryRequest
+	87,  // 100: pb.MetaService.GetTreeSummary:input_type -> pb.GetTreeSummaryRequest
+	88,  // 101: pb.MetaService.Clone:input_type -> pb.CloneRequest
+	89,  // 102: pb.MetaService.GetPaths:input_type -> pb.GetPathsRequest
+	90,  // 103: pb.MetaService.Check:input_type -> pb.CheckRequest
+	91,  // 104: pb.MetaService.CompactAll:input_type -> pb.CompactAllRequest
+	92,  // 105: pb.MetaService.Compact:input_type -> pb.CompactRequest
+	93,  // 106: pb.MetaService.ListSlices:input_type -> pb.ListSlicesRequest
+	94,  // 107: pb.MetaService.HandleQuota:input_type -> pb.HandleQuotaRequest
+	95,  // 108: pb.MetaService.ScanUserGroupUsage:input_type -> pb.ScanUserGroupUsageRequest
+	96,  // 109: pb.MetaService.Chroot:input_type -> pb.ChrootRequest
+	97,  // 110: pb.MetaService.CleanupTrashBefore:input_type -> pb.CleanupTrashBeforeRequest
+	98,  // 111: pb.MetaService.CleanupDetachedNodesBefore:input_type -> pb.CleanupDetachedNodesBeforeRequest
+	99,  // 112: pb.MetaService.NewDirHandler:input_type -> pb.NewDirHandlerRequest
+	100, // 113: pb.MetaService.DirHandlerList:input_type -> pb.DirHandlerListRequest
+	101, // 114: pb.MetaService.DirHandlerInsert:input_type -> pb.DirHandlerInsertRequest
+	102, // 115: pb.MetaService.DirHandlerDelete:input_type -> pb.DirHandlerDeleteRequest
+	103, // 116: pb.MetaService.DirHandlerClose:input_type -> pb.DirHandlerCloseRequest
+	104, // 117: pb.MetaService.DumpMeta:input_type -> pb.DumpMetaRequest
+	105, // 118: pb.MetaService.LoadMeta:input_type -> pb.LoadMetaChunk
+	106, // 119: pb.MetaService.DumpMetaV2:input_type -> pb.DumpMetaV2Request
+	107, // 120: pb.MetaService.LoadMetaV2:input_type -> pb.LoadMetaV2Chunk
+	108, // 121: pb.MetaService.Init:output_type -> pb.InitResponse
+	109, // 122: pb.MetaService.Load:output_type -> pb.LoadResponse
+	110, // 123: pb.MetaService.NewSession:output_type -> pb.NewSessionResponse
+	111, // 124: pb.MetaService.CloseSession:output_type -> pb.CloseSessionResponse
+	112, // 125: pb.MetaService.FlushSession:output_type -> pb.FlushSessionResponse
+	113, // 126: pb.MetaService.Shutdown:output_type -> pb.ShutdownResponse
+	114, // 127: pb.MetaService.Reset:output_type -> pb.ResetResponse
+	115, // 128: pb.MetaService.GetSession:output_type -> pb.GetSessionResponse
+	116, // 129: pb.MetaService.ListSessions:output_type -> pb.ListSessionsResponse
+	117, // 130: pb.MetaService.CleanStaleSessions:output_type -> pb.CleanStaleSessionsResponse
+	1,   // 131: pb.MetaService.StatFS:output_type -> pb.StatFSResponse
+	3,   // 132: pb.MetaService.Lookup:output_type -> pb.LookupResponse
+	5,   // 133: pb.MetaService.Resolve:output_type -> pb.ResolveResponse
+	7,   // 134: pb.MetaService.Access:output_type -> pb.AccessResponse
+	9,   // 135: pb.MetaService.GetAttr:output_type -> pb.GetAttrResponse
+	11,  // 136: pb.MetaService.SetAttr:output_type -> pb.SetAttrResponse
+	13,  // 137: pb.MetaService.CheckSetAttr:output_type -> pb.CheckSetAttrResponse
+	15,  // 138: pb.MetaService.Mknod:output_type -> pb.MknodResponse
+	17,  // 139: pb.MetaService.Mkdir:output_type -> pb.MkdirResponse
+	19,  // 140: pb.MetaService.Create:output_type -> pb.CreateResponse
+	21,  // 141: pb.MetaService.Open:output_type -> pb.OpenResponse
+	23,  // 142: pb.MetaService.Close:output_type -> pb.CloseResponse
+	25,  // 143: pb.MetaService.Unlink:output_type -> pb.UnlinkResponse
+	27,  // 144: pb.MetaService.Rmdir:output_type -> pb.RmdirResponse
+	29,  // 145: pb.MetaService.Rename:output_type -> pb.RenameResponse
+	31,  // 146: pb.MetaService.Link:output_type -> pb.LinkResponse
+	33,  // 147: pb.MetaService.Symlink:output_type -> pb.SymlinkResponse
+	35,  // 148: pb.MetaService.ReadLink:output_type -> pb.ReadLinkResponse
+	37,  // 149: pb.MetaService.Truncate:output_type -> pb.TruncateResponse
+	39,  // 150: pb.MetaService.Fallocate:output_type -> pb.FallocateResponse
+	41,  // 151: pb.MetaService.Readdir:output_type -> pb.ReaddirResponse
+	43,  // 152: pb.MetaService.Read:output_type -> pb.ReadResponse
+	45,  // 153: pb.MetaService.Write:output_type -> pb.WriteResponse
+	47,  // 154: pb.MetaService.NewSlice:output_type -> pb.NewSliceResponse
+	49,  // 155: pb.MetaService.InvalidateChunkCache:output_type -> pb.InvalidateChunkCacheResponse
+	51,  // 156: pb.MetaService.CopyFileRange:output_type -> pb.CopyFileRangeResponse
+	118, // 157: pb.MetaService.Flock:output_type -> pb.FlockResponse
+	119, // 158: pb.MetaService.Getlk:output_type -> pb.GetlkResponse
+	120, // 159: pb.MetaService.Setlk:output_type -> pb.SetlkResponse
+	121, // 160: pb.MetaService.ListLocks:output_type -> pb.ListLocksResponse
+	122, // 161: pb.MetaService.GetXattr:output_type -> pb.GetXattrResponse
+	123, // 162: pb.MetaService.SetXattr:output_type -> pb.SetXattrResponse
+	124, // 163: pb.MetaService.RemoveXattr:output_type -> pb.RemoveXattrResponse
+	125, // 164: pb.MetaService.ListXattr:output_type -> pb.ListXattrResponse
+	126, // 165: pb.MetaService.GetParents:output_type -> pb.GetParentsResponse
+	127, // 166: pb.MetaService.GetDirStat:output_type -> pb.GetDirStatResponse
+	128, // 167: pb.MetaService.SetFacl:output_type -> pb.SetFaclResponse
+	129, // 168: pb.MetaService.GetFacl:output_type -> pb.GetFaclResponse
+	130, // 169: pb.MetaService.StoreToken:output_type -> pb.StoreTokenResponse
+	131, // 170: pb.MetaService.UpdateToken:output_type -> pb.UpdateTokenResponse
+	132, // 171: pb.MetaService.LoadToken:output_type -> pb.LoadTokenResponse
+	133, // 172: pb.MetaService.DeleteTokens:output_type -> pb.DeleteTokensResponse
+	134, // 173: pb.MetaService.ListTokens:output_type -> pb.ListTokensResponse
+	135, // 174: pb.MetaService.GetFormat:output_type -> pb.GetFormatResponse
+	136, // 175: pb.MetaService.Remove:output_type -> pb.RemoveResponse
+	137, // 176: pb.MetaService.BatchUnlink:output_type -> pb.BatchUnlinkResponse
+	138, // 177: pb.MetaService.GetSummary:output_type -> pb.GetSummaryResponse
+	139, // 178: pb.MetaService.GetTreeSummary:output_type -> pb.GetTreeSummaryResponse
+	140, // 179: pb.MetaService.Clone:output_type -> pb.CloneResponse
+	141, // 180: pb.MetaService.GetPaths:output_type -> pb.GetPathsResponse
+	142, // 181: pb.MetaService.Check:output_type -> pb.CheckResponse
+	143, // 182: pb.MetaService.CompactAll:output_type -> pb.CompactAllResponse
+	144, // 183: pb.MetaService.Compact:output_type -> pb.CompactResponse
+	145, // 184: pb.MetaService.ListSlices:output_type -> pb.ListSlicesResponse
+	146, // 185: pb.MetaService.HandleQuota:output_type -> pb.HandleQuotaResponse
+	147, // 186: pb.MetaService.ScanUserGroupUsage:output_type -> pb.ScanUserGroupUsageResponse
+	148, // 187: pb.MetaService.Chroot:output_type -> pb.ChrootResponse
+	149, // 188: pb.MetaService.CleanupTrashBefore:output_type -> pb.CleanupTrashBeforeResponse
+	150, // 189: pb.MetaService.CleanupDetachedNodesBefore:output_type -> pb.CleanupDetachedNodesBeforeResponse
+	151, // 190: pb.MetaService.NewDirHandler:output_type -> pb.NewDirHandlerResponse
+	152, // 191: pb.MetaService.DirHandlerList:output_type -> pb.DirHandlerListResponse
+	153, // 192: pb.MetaService.DirHandlerInsert:output_type -> pb.DirHandlerInsertResponse
+	154, // 193: pb.MetaService.DirHandlerDelete:output_type -> pb.DirHandlerDeleteResponse
+	155, // 194: pb.MetaService.DirHandlerClose:output_type -> pb.DirHandlerCloseResponse
+	156, // 195: pb.MetaService.DumpMeta:output_type -> pb.DumpMetaChunk
+	157, // 196: pb.MetaService.LoadMeta:output_type -> pb.LoadMetaResponse
+	158, // 197: pb.MetaService.DumpMetaV2:output_type -> pb.DumpMetaV2Chunk
+	159, // 198: pb.MetaService.LoadMetaV2:output_type -> pb.LoadMetaV2Response
 	121, // [121:199] is the sub-list for method output_type
 	43,  // [43:121] is the sub-list for method input_type
 	43,  // [43:43] is the sub-list for extension type_name
@@ -3893,36 +3892,36 @@ var file_meta_proto_depIdxs = []int32{
 	0,   // [0:43] is the sub-list for field type_name
 }
 
-func init() { file_meta_proto_init() }
-func file_meta_proto_init() {
-	if File_meta_proto != nil {
+func init() { file_pb_meta_proto_init() }
+func file_pb_meta_proto_init() {
+	if File_pb_meta_proto != nil {
 		return
 	}
-	file_meta_common_proto_init()
-	file_meta_lifecycle_proto_init()
-	file_meta_locks_proto_init()
-	file_meta_xattrs_proto_init()
-	file_meta_directory_proto_init()
-	file_meta_acl_proto_init()
-	file_meta_token_proto_init()
-	file_meta_admin_proto_init()
-	file_meta_streaming_proto_init()
-	file_meta_dir_handler_proto_init()
+	file_pb_meta_common_proto_init()
+	file_pb_meta_lifecycle_proto_init()
+	file_pb_meta_locks_proto_init()
+	file_pb_meta_xattrs_proto_init()
+	file_pb_meta_directory_proto_init()
+	file_pb_meta_acl_proto_init()
+	file_pb_meta_token_proto_init()
+	file_pb_meta_admin_proto_init()
+	file_pb_meta_streaming_proto_init()
+	file_pb_meta_dir_handler_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meta_proto_rawDesc), len(file_meta_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_meta_proto_rawDesc), len(file_pb_meta_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   52,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_meta_proto_goTypes,
-		DependencyIndexes: file_meta_proto_depIdxs,
-		MessageInfos:      file_meta_proto_msgTypes,
+		GoTypes:           file_pb_meta_proto_goTypes,
+		DependencyIndexes: file_pb_meta_proto_depIdxs,
+		MessageInfos:      file_pb_meta_proto_msgTypes,
 	}.Build()
-	File_meta_proto = out.File
-	file_meta_proto_goTypes = nil
-	file_meta_proto_depIdxs = nil
+	File_pb_meta_proto = out.File
+	file_pb_meta_proto_goTypes = nil
+	file_pb_meta_proto_depIdxs = nil
 }

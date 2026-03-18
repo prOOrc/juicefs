@@ -15,46 +15,48 @@
  */
 
 syntax = "proto3";
-package meta;
-option go_package = "github.com/juicedata/juicefs/pkg/meta/grpc";
+package pb;
+option go_package = "./pb";
 
-import "meta_common.proto";
+import "pb/meta_common.proto";
 
 // =====================================================
-// Xattrs Request/Response Messages
+// DirHandler Request/Response Messages
 // =====================================================
 
-message GetXattrRequest {
+message NewDirHandlerRequest {
   MetaContext ctx = 1;
   uint64 inode = 2;
-  string name = 3;
+  bool plus = 3;
+  repeated ProtoEntry init_entries = 4;
 }
-message GetXattrResponse {
+message NewDirHandlerResponse {
   uint32 errno = 1;
-  bytes value = 2;
+  DirHandlerHandle handle = 2;
 }
 
-message SetXattrRequest {
-  MetaContext ctx = 1;
-  uint64 inode = 2;
-  string name = 3;
-  bytes value = 4;
-  uint32 flags = 5;
+message DirHandlerListRequest {
+  DirHandlerHandle handle = 1;
+  int32 offset = 2;
 }
-message SetXattrResponse { uint32 errno = 1; }
-
-message RemoveXattrRequest {
-  MetaContext ctx = 1;
-  uint64 inode = 2;
-  string name = 3;
-}
-message RemoveXattrResponse { uint32 errno = 1; }
-
-message ListXattrRequest {
-  MetaContext ctx = 1;
-  uint64 inode = 2;
-}
-message ListXattrResponse {
+message DirHandlerListResponse {
   uint32 errno = 1;
-  bytes names = 2;
+  repeated ProtoEntry entries = 2;
 }
+
+message DirHandlerInsertRequest {
+  DirHandlerHandle handle = 1;
+  uint64 inode = 2;
+  string name = 3;
+  ProtoAttr attr = 4;
+}
+message DirHandlerInsertResponse { uint32 errno = 1; }
+
+message DirHandlerDeleteRequest {
+  DirHandlerHandle handle = 1;
+  string name = 2;
+}
+message DirHandlerDeleteResponse { uint32 errno = 1; }
+
+message DirHandlerCloseRequest { DirHandlerHandle handle = 1; }
+message DirHandlerCloseResponse { uint32 errno = 1; }

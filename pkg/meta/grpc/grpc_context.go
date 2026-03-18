@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // ContextKey is the key for storing meta.Context in gRPC context
@@ -102,21 +103,21 @@ func (c *grpcContext) Canceled() bool {
 }
 
 // protoToMetaContext converts a ProtoMetaContext to meta.Context
-func ProtoToMetaContext(ctx context.Context, pb *MetaContext) meta.Context {
-	gids := pb.Gids
+func ProtoToMetaContext(ctx context.Context, ctx2 *pb.MetaContext) meta.Context {
+	gids := ctx2.Gids
 	if len(gids) == 0 {
-		gids = []uint32{pb.Gid}
+		gids = []uint32{ctx2.Gid}
 	}
-	return meta.WrapWithCancel(ctx, pb.Pid, pb.Uid, gids)
+	return meta.WrapWithCancel(ctx, ctx2.Pid, ctx2.Uid, gids)
 }
 
 // metaContextToProto converts a meta.Context to ProtoMetaContext
-func MetaContextToProto(ctx meta.Context) *MetaContext {
+func MetaContextToProto(ctx meta.Context) *pb.MetaContext {
 	gids := ctx.Gids()
 	if len(gids) == 0 {
 		gids = []uint32{ctx.Gid()}
 	}
-	return &MetaContext{
+	return &pb.MetaContext{
 		Uid:             ctx.Uid(),
 		Gid:             ctx.Gid(),
 		Gids:            gids,
@@ -140,16 +141,16 @@ func WithMetaContextInGRPCContext(ctx context.Context, mc meta.Context) context.
 
 // Alias functions for simpler names used in grpc_client.go and server.go
 
-func toProtoContext(ctx meta.Context) *MetaContext {
+func toProtoContext(ctx meta.Context) *pb.MetaContext {
 	if ctx == nil {
-		return &MetaContext{}
+		return &pb.MetaContext{}
 	}
 	return MetaContextToProto(ctx)
 }
 
-func fromProtoContext(pbCtx *MetaContext) meta.Context {
-	if pbCtx == nil {
+func fromProtoContext(ctx2 *pb.MetaContext) meta.Context {
+	if ctx2 == nil {
 		return meta.Background()
 	}
-	return ProtoToMetaContext(context.Background(), pbCtx)
+	return ProtoToMetaContext(context.Background(), ctx2)
 }

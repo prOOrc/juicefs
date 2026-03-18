@@ -17,9 +17,9 @@
 // versions:
 // 	protoc-gen-go v1.36.9
 // 	protoc        v6.30.2
-// source: meta_directory.proto
+// source: pb/meta_directory.proto
 
-package grpc
+package pb
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -46,7 +46,7 @@ type GetParentsRequest struct {
 
 func (x *GetParentsRequest) Reset() {
 	*x = GetParentsRequest{}
-	mi := &file_meta_directory_proto_msgTypes[0]
+	mi := &file_pb_meta_directory_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58,7 +58,7 @@ func (x *GetParentsRequest) String() string {
 func (*GetParentsRequest) ProtoMessage() {}
 
 func (x *GetParentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_directory_proto_msgTypes[0]
+	mi := &file_pb_meta_directory_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71,7 +71,7 @@ func (x *GetParentsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetParentsRequest.ProtoReflect.Descriptor instead.
 func (*GetParentsRequest) Descriptor() ([]byte, []int) {
-	return file_meta_directory_proto_rawDescGZIP(), []int{0}
+	return file_pb_meta_directory_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *GetParentsRequest) GetCtx() *MetaContext {
@@ -98,7 +98,7 @@ type GetParentsResponse struct {
 
 func (x *GetParentsResponse) Reset() {
 	*x = GetParentsResponse{}
-	mi := &file_meta_directory_proto_msgTypes[1]
+	mi := &file_pb_meta_directory_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -110,7 +110,7 @@ func (x *GetParentsResponse) String() string {
 func (*GetParentsResponse) ProtoMessage() {}
 
 func (x *GetParentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_directory_proto_msgTypes[1]
+	mi := &file_pb_meta_directory_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -123,7 +123,7 @@ func (x *GetParentsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetParentsResponse.ProtoReflect.Descriptor instead.
 func (*GetParentsResponse) Descriptor() ([]byte, []int) {
-	return file_meta_directory_proto_rawDescGZIP(), []int{1}
+	return file_pb_meta_directory_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *GetParentsResponse) GetErrno() uint32 {
@@ -150,7 +150,7 @@ type GetDirStatRequest struct {
 
 func (x *GetDirStatRequest) Reset() {
 	*x = GetDirStatRequest{}
-	mi := &file_meta_directory_proto_msgTypes[2]
+	mi := &file_pb_meta_directory_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -162,7 +162,7 @@ func (x *GetDirStatRequest) String() string {
 func (*GetDirStatRequest) ProtoMessage() {}
 
 func (x *GetDirStatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_directory_proto_msgTypes[2]
+	mi := &file_pb_meta_directory_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -175,7 +175,7 @@ func (x *GetDirStatRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDirStatRequest.ProtoReflect.Descriptor instead.
 func (*GetDirStatRequest) Descriptor() ([]byte, []int) {
-	return file_meta_directory_proto_rawDescGZIP(), []int{2}
+	return file_pb_meta_directory_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *GetDirStatRequest) GetCtx() *MetaContext {
@@ -204,7 +204,7 @@ type GetDirStatResponse struct {
 
 func (x *GetDirStatResponse) Reset() {
 	*x = GetDirStatResponse{}
-	mi := &file_meta_directory_proto_msgTypes[3]
+	mi := &file_pb_meta_directory_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -216,7 +216,7 @@ func (x *GetDirStatResponse) String() string {
 func (*GetDirStatResponse) ProtoMessage() {}
 
 func (x *GetDirStatResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_directory_proto_msgTypes[3]
+	mi := &file_pb_meta_directory_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -229,7 +229,7 @@ func (x *GetDirStatResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDirStatResponse.ProtoReflect.Descriptor instead.
 func (*GetDirStatResponse) Descriptor() ([]byte, []int) {
-	return file_meta_directory_proto_rawDescGZIP(), []int{3}
+	return file_pb_meta_directory_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GetDirStatResponse) GetErrno() uint32 {
@@ -260,54 +260,54 @@ func (x *GetDirStatResponse) GetInodes() int64 {
 	return 0
 }
 
-var File_meta_directory_proto protoreflect.FileDescriptor
+var File_pb_meta_directory_proto protoreflect.FileDescriptor
 
-const file_meta_directory_proto_rawDesc = "" +
+const file_pb_meta_directory_proto_rawDesc = "" +
 	"\n" +
-	"\x14meta_directory.proto\x12\x04meta\x1a\x11meta_common.proto\"N\n" +
-	"\x11GetParentsRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\"\xa7\x01\n" +
+	"\x17pb/meta_directory.proto\x12\x02pb\x1a\x14pb/meta_common.proto\"L\n" +
+	"\x11GetParentsRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
+	"\x05inode\x18\x02 \x01(\x04R\x05inode\"\xa5\x01\n" +
 	"\x12GetParentsResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12?\n" +
-	"\aparents\x18\x02 \x03(\v2%.meta.GetParentsResponse.ParentsEntryR\aparents\x1a:\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\x12=\n" +
+	"\aparents\x18\x02 \x03(\v2#.pb.GetParentsResponse.ParentsEntryR\aparents\x1a:\n" +
 	"\fParentsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\"N\n" +
-	"\x11GetDirStatRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\"L\n" +
+	"\x11GetDirStatRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\"p\n" +
 	"\x12GetDirStatResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x16\n" +
 	"\x06length\x18\x02 \x01(\x03R\x06length\x12\x14\n" +
 	"\x05space\x18\x03 \x01(\x03R\x05space\x12\x16\n" +
-	"\x06inodes\x18\x04 \x01(\x03R\x06inodesB,Z*github.com/juicedata/juicefs/pkg/meta/grpcb\x06proto3"
+	"\x06inodes\x18\x04 \x01(\x03R\x06inodesB\x06Z\x04./pbb\x06proto3"
 
 var (
-	file_meta_directory_proto_rawDescOnce sync.Once
-	file_meta_directory_proto_rawDescData []byte
+	file_pb_meta_directory_proto_rawDescOnce sync.Once
+	file_pb_meta_directory_proto_rawDescData []byte
 )
 
-func file_meta_directory_proto_rawDescGZIP() []byte {
-	file_meta_directory_proto_rawDescOnce.Do(func() {
-		file_meta_directory_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_meta_directory_proto_rawDesc), len(file_meta_directory_proto_rawDesc)))
+func file_pb_meta_directory_proto_rawDescGZIP() []byte {
+	file_pb_meta_directory_proto_rawDescOnce.Do(func() {
+		file_pb_meta_directory_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pb_meta_directory_proto_rawDesc), len(file_pb_meta_directory_proto_rawDesc)))
 	})
-	return file_meta_directory_proto_rawDescData
+	return file_pb_meta_directory_proto_rawDescData
 }
 
-var file_meta_directory_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
-var file_meta_directory_proto_goTypes = []any{
-	(*GetParentsRequest)(nil),  // 0: meta.GetParentsRequest
-	(*GetParentsResponse)(nil), // 1: meta.GetParentsResponse
-	(*GetDirStatRequest)(nil),  // 2: meta.GetDirStatRequest
-	(*GetDirStatResponse)(nil), // 3: meta.GetDirStatResponse
-	nil,                        // 4: meta.GetParentsResponse.ParentsEntry
-	(*MetaContext)(nil),        // 5: meta.MetaContext
+var file_pb_meta_directory_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_pb_meta_directory_proto_goTypes = []any{
+	(*GetParentsRequest)(nil),  // 0: pb.GetParentsRequest
+	(*GetParentsResponse)(nil), // 1: pb.GetParentsResponse
+	(*GetDirStatRequest)(nil),  // 2: pb.GetDirStatRequest
+	(*GetDirStatResponse)(nil), // 3: pb.GetDirStatResponse
+	nil,                        // 4: pb.GetParentsResponse.ParentsEntry
+	(*MetaContext)(nil),        // 5: pb.MetaContext
 }
-var file_meta_directory_proto_depIdxs = []int32{
-	5, // 0: meta.GetParentsRequest.ctx:type_name -> meta.MetaContext
-	4, // 1: meta.GetParentsResponse.parents:type_name -> meta.GetParentsResponse.ParentsEntry
-	5, // 2: meta.GetDirStatRequest.ctx:type_name -> meta.MetaContext
+var file_pb_meta_directory_proto_depIdxs = []int32{
+	5, // 0: pb.GetParentsRequest.ctx:type_name -> pb.MetaContext
+	4, // 1: pb.GetParentsResponse.parents:type_name -> pb.GetParentsResponse.ParentsEntry
+	5, // 2: pb.GetDirStatRequest.ctx:type_name -> pb.MetaContext
 	3, // [3:3] is the sub-list for method output_type
 	3, // [3:3] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name
@@ -315,27 +315,27 @@ var file_meta_directory_proto_depIdxs = []int32{
 	0, // [0:3] is the sub-list for field type_name
 }
 
-func init() { file_meta_directory_proto_init() }
-func file_meta_directory_proto_init() {
-	if File_meta_directory_proto != nil {
+func init() { file_pb_meta_directory_proto_init() }
+func file_pb_meta_directory_proto_init() {
+	if File_pb_meta_directory_proto != nil {
 		return
 	}
-	file_meta_common_proto_init()
+	file_pb_meta_common_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meta_directory_proto_rawDesc), len(file_meta_directory_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_meta_directory_proto_rawDesc), len(file_pb_meta_directory_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_meta_directory_proto_goTypes,
-		DependencyIndexes: file_meta_directory_proto_depIdxs,
-		MessageInfos:      file_meta_directory_proto_msgTypes,
+		GoTypes:           file_pb_meta_directory_proto_goTypes,
+		DependencyIndexes: file_pb_meta_directory_proto_depIdxs,
+		MessageInfos:      file_pb_meta_directory_proto_msgTypes,
 	}.Build()
-	File_meta_directory_proto = out.File
-	file_meta_directory_proto_goTypes = nil
-	file_meta_directory_proto_depIdxs = nil
+	File_pb_meta_directory_proto = out.File
+	file_pb_meta_directory_proto_goTypes = nil
+	file_pb_meta_directory_proto_depIdxs = nil
 }

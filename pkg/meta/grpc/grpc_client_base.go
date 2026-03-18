@@ -25,11 +25,12 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // Client implements meta.Meta interface using gRPC
 type Client struct {
-	client MetaServiceClient
+	client pb.MetaServiceClient
 	conn   *grpc.ClientConn
 	addr   string
 	opts   *Options
@@ -68,7 +69,7 @@ func NewClient(addr string, opts *Options) (*Client, error) {
 	}
 
 	c := &Client{
-		client: NewMetaServiceClient(conn),
+		client: pb.NewMetaServiceClient(conn),
 		conn:   conn,
 		addr:   addr,
 		opts:   opts,
@@ -100,7 +101,7 @@ func (c *Client) chroot(ino meta.Ino) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	_, err := c.client.Chroot(ctx, &ChrootRequest{
+	_, err := c.client.Chroot(ctx, &pb.ChrootRequest{
 		Ctx:    toProtoContext(nil),
 		Subdir: "",
 	})
@@ -115,7 +116,7 @@ func (c *Client) ListLocks(ctx context.Context, ino meta.Ino) ([]meta.PLockItem,
 	grpcCtx, cancel := context.WithTimeout(ctx, c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.ListLocks(grpcCtx, &ListLocksRequest{
+	resp, err := c.client.ListLocks(grpcCtx, &pb.ListLocksRequest{
 		Ctx:   toProtoContext(nil),
 		Inode: uint64(ino),
 	})

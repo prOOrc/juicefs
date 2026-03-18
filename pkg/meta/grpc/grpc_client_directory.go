@@ -21,6 +21,7 @@ import (
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // --- Directory operations ---
@@ -30,7 +31,7 @@ func (c *Client) GetParents(ctx meta.Context, ino meta.Ino) map[meta.Ino]int {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.GetParents(grpcCtx, &GetParentsRequest{
+	resp, err := c.client.GetParents(grpcCtx, &pb.GetParentsRequest{
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 	})

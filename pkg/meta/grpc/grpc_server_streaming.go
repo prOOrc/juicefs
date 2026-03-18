@@ -20,11 +20,12 @@ import (
 	"io"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-func (s *MetaProxyServer) DumpMeta(req *DumpMetaRequest, stream MetaService_DumpMetaServer) error {
+func (s *MetaProxyServer) DumpMeta(req *pb.DumpMetaRequest, stream pb.MetaService_DumpMetaServer) error {
 	pr, pw := io.Pipe()
 	go func() {
 		_ = s.meta.DumpMeta(pw, meta.Ino(req.Root), int(req.Threads), req.KeepSecret, req.Fast, req.SkipTrash)
@@ -34,7 +35,7 @@ func (s *MetaProxyServer) DumpMeta(req *DumpMetaRequest, stream MetaService_Dump
 	for {
 		n, readErr := pr.Read(buf)
 		if n > 0 {
-			if sendErr := stream.Send(&DumpMetaChunk{Data: buf[:n]}); sendErr != nil {
+			if sendErr := stream.Send(&pb.DumpMetaChunk{Data: buf[:n]}); sendErr != nil {
 				return sendErr
 			}
 		}
@@ -47,7 +48,7 @@ func (s *MetaProxyServer) DumpMeta(req *DumpMetaRequest, stream MetaService_Dump
 	}
 }
 
-func (s *MetaProxyServer) LoadMeta(stream MetaService_LoadMetaServer) error {
+func (s *MetaProxyServer) LoadMeta(stream pb.MetaService_LoadMetaServer) error {
 	pr, pw := io.Pipe()
 	go func() {
 		for {
@@ -72,10 +73,10 @@ func (s *MetaProxyServer) LoadMeta(stream MetaService_LoadMetaServer) error {
 	if err != nil {
 		return status.Error(codes.Internal, err.Error())
 	}
-	return stream.SendAndClose(&LoadMetaResponse{Errno: 0})
+	return stream.SendAndClose(&pb.LoadMetaResponse{Errno: 0})
 }
 
-func (s *MetaProxyServer) DumpMetaV2(req *DumpMetaV2Request, stream MetaService_DumpMetaV2Server) error {
+func (s *MetaProxyServer) DumpMetaV2(req *pb.DumpMetaV2Request, stream pb.MetaService_DumpMetaV2Server) error {
 	mctx := s.metaCtx(stream.Context(), req.Ctx)
 	opt := &meta.DumpOption{
 		KeepSecret: req.KeepSecret,
@@ -90,7 +91,7 @@ func (s *MetaProxyServer) DumpMetaV2(req *DumpMetaV2Request, stream MetaService_
 	for {
 		n, readErr := pr.Read(buf)
 		if n > 0 {
-			if sendErr := stream.Send(&DumpMetaV2Chunk{Data: buf[:n]}); sendErr != nil {
+			if sendErr := stream.Send(&pb.DumpMetaV2Chunk{Data: buf[:n]}); sendErr != nil {
 				return sendErr
 			}
 		}
@@ -103,7 +104,7 @@ func (s *MetaProxyServer) DumpMetaV2(req *DumpMetaV2Request, stream MetaService_
 	}
 }
 
-func (s *MetaProxyServer) LoadMetaV2(stream MetaService_LoadMetaV2Server) error {
+func (s *MetaProxyServer) LoadMetaV2(stream pb.MetaService_LoadMetaV2Server) error {
 	pr, pw := io.Pipe()
 	go func() {
 		for {
@@ -129,5 +130,5 @@ func (s *MetaProxyServer) LoadMetaV2(stream MetaService_LoadMetaV2Server) error 
 	if err != nil {
 		return status.Error(codes.Internal, err.Error())
 	}
-	return stream.SendAndClose(&LoadMetaV2Response{Errno: 0})
+	return stream.SendAndClose(&pb.LoadMetaV2Response{Errno: 0})
 }

@@ -15,10 +15,10 @@
  */
 
 syntax = "proto3";
-package meta;
-option go_package = "github.com/juicedata/juicefs/pkg/meta/grpc";
+package pb;
+option go_package = "./pb";
 
-import "meta_common.proto";
+import "pb/meta_common.proto";
 
 // =====================================================
 // Lifecycle Request/Response Messages

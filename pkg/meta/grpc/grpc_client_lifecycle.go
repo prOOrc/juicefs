@@ -21,6 +21,7 @@ import (
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // --- Lifecycle operations ---
@@ -30,7 +31,7 @@ func (c *Client) Init(format *meta.Format, force bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	req := &InitRequest{
+	req := &pb.InitRequest{
 		Format: toProtoFormat(format),
 		Force:  force,
 	}
@@ -46,7 +47,7 @@ func (c *Client) Load(checkVersion bool) (*meta.Format, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Load(ctx, &LoadRequest{
+	resp, err := c.client.Load(ctx, &pb.LoadRequest{
 		CheckVersion: checkVersion,
 	})
 	if err != nil {
@@ -63,7 +64,7 @@ func (c *Client) NewSession(record bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.NewSession(ctx, &NewSessionRequest{
+	resp, err := c.client.NewSession(ctx, &pb.NewSessionRequest{
 		Record: record,
 	})
 	if err != nil {
@@ -77,7 +78,7 @@ func (c *Client) CloseSession() error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.CloseSession(ctx, &CloseSessionRequest{})
+	resp, err := c.client.CloseSession(ctx, &pb.CloseSessionRequest{})
 	if err != nil {
 		return err
 	}
@@ -89,7 +90,7 @@ func (c *Client) FlushSession() {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.FlushSession(ctx, &FlushSessionRequest{})
+	resp, err := c.client.FlushSession(ctx, &pb.FlushSessionRequest{})
 	if err == nil && resp != nil {
 		_ = resp.GetErrno()
 	}
@@ -100,7 +101,7 @@ func (c *Client) Shutdown() error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Shutdown(ctx, &ShutdownRequest{})
+	resp, err := c.client.Shutdown(ctx, &pb.ShutdownRequest{})
 	if err != nil {
 		return err
 	}
@@ -112,7 +113,7 @@ func (c *Client) Reset() error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Reset(ctx, &ResetRequest{})
+	resp, err := c.client.Reset(ctx, &pb.ResetRequest{})
 	if err != nil {
 		return err
 	}
@@ -124,7 +125,7 @@ func (c *Client) GetSession(sid uint64, detail bool) (*meta.Session, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.GetSession(ctx, &GetSessionRequest{
+	resp, err := c.client.GetSession(ctx, &pb.GetSessionRequest{
 		Sid:    sid,
 		Detail: detail,
 	})
@@ -142,7 +143,7 @@ func (c *Client) ListSessions() ([]*meta.Session, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.ListSessions(ctx, &ListSessionsRequest{})
+	resp, err := c.client.ListSessions(ctx, &pb.ListSessionsRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +162,7 @@ func (c *Client) CleanStaleSessions(ctx meta.Context) {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.CleanStaleSessions(grpcCtx, &CleanStaleSessionsRequest{
+	resp, err := c.client.CleanStaleSessions(grpcCtx, &pb.CleanStaleSessionsRequest{
 		Ctx: toProtoContext(ctx),
 	})
 	if err == nil && resp != nil {

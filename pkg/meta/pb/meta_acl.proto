@@ -15,48 +15,29 @@
  */
 
 syntax = "proto3";
-package meta;
-option go_package = "github.com/juicedata/juicefs/pkg/meta/grpc";
+package pb;
+option go_package = "./pb";
 
-import "meta_common.proto";
+import "pb/meta_common.proto";
 
 // =====================================================
-// Tokens Request/Response Messages
+// ACL Request/Response Messages
 // =====================================================
 
-message StoreTokenRequest {
+message SetFaclRequest {
   MetaContext ctx = 1;
-  bytes token = 2;
+  uint64 ino = 2;
+  uint32 acl_type = 3;
+  ProtoACLRule rule = 4;
 }
-message StoreTokenResponse {
+message SetFaclResponse { uint32 errno = 1; }
+
+message GetFaclRequest {
+  MetaContext ctx = 1;
+  uint64 ino = 2;
+  uint32 acl_type = 3;
+}
+message GetFaclResponse {
   uint32 errno = 1;
-  uint32 id = 2;
-}
-
-message UpdateTokenRequest {
-  MetaContext ctx = 1;
-  uint32 id = 2;
-  bytes token = 3;
-}
-message UpdateTokenResponse { uint32 errno = 1; }
-
-message LoadTokenRequest {
-  MetaContext ctx = 1;
-  uint32 id = 2;
-}
-message LoadTokenResponse {
-  uint32 errno = 1;
-  bytes token = 2;
-}
-
-message DeleteTokensRequest {
-  MetaContext ctx = 1;
-  repeated uint32 ids = 2;
-}
-message DeleteTokensResponse { uint32 errno = 1; }
-
-message ListTokensRequest { MetaContext ctx = 1; }
-message ListTokensResponse {
-  uint32 errno = 1;
-  map<uint32, bytes> tokens = 2;
+  ProtoACLRule rule = 2;
 }

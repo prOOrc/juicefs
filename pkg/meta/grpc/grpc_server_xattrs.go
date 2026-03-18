@@ -20,35 +20,36 @@ import (
 	"context"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
-func (s *MetaProxyServer) GetXattr(ctx context.Context, req *GetXattrRequest) (*GetXattrResponse, error) {
+func (s *MetaProxyServer) GetXattr(ctx context.Context, req *pb.GetXattrRequest) (*pb.GetXattrResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var value []byte
 	errno := s.meta.GetXattr(mctx, meta.Ino(req.Inode), req.Name, &value)
-	return &GetXattrResponse{
+	return &pb.GetXattrResponse{
 		Errno: uint32(errno),
 		Value: value,
 	}, nil
 }
 
-func (s *MetaProxyServer) SetXattr(ctx context.Context, req *SetXattrRequest) (*SetXattrResponse, error) {
+func (s *MetaProxyServer) SetXattr(ctx context.Context, req *pb.SetXattrRequest) (*pb.SetXattrResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	errno := s.meta.SetXattr(mctx, meta.Ino(req.Inode), req.Name, req.Value, uint32(req.Flags))
-	return &SetXattrResponse{Errno: uint32(errno)}, nil
+	return &pb.SetXattrResponse{Errno: uint32(errno)}, nil
 }
 
-func (s *MetaProxyServer) RemoveXattr(ctx context.Context, req *RemoveXattrRequest) (*RemoveXattrResponse, error) {
+func (s *MetaProxyServer) RemoveXattr(ctx context.Context, req *pb.RemoveXattrRequest) (*pb.RemoveXattrResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	errno := s.meta.RemoveXattr(mctx, meta.Ino(req.Inode), req.Name)
-	return &RemoveXattrResponse{Errno: uint32(errno)}, nil
+	return &pb.RemoveXattrResponse{Errno: uint32(errno)}, nil
 }
 
-func (s *MetaProxyServer) ListXattr(ctx context.Context, req *ListXattrRequest) (*ListXattrResponse, error) {
+func (s *MetaProxyServer) ListXattr(ctx context.Context, req *pb.ListXattrRequest) (*pb.ListXattrResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var names []byte
 	errno := s.meta.ListXattr(mctx, meta.Ino(req.Inode), &names)
-	return &ListXattrResponse{
+	return &pb.ListXattrResponse{
 		Errno: uint32(errno),
 		Names: names,
 	}, nil

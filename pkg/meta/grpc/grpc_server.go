@@ -21,11 +21,12 @@ import (
 	"sync"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // MetaProxyServer implements the MetaService gRPC server
 type MetaProxyServer struct {
-	UnimplementedMetaServiceServer
+	pb.UnimplementedMetaServiceServer
 
 	meta meta.Meta
 
@@ -44,13 +45,13 @@ func NewMetaProxyServer(m meta.Meta) *MetaProxyServer {
 }
 
 // helper to convert meta.Context from proto
-func (s *MetaProxyServer) metaCtx(ctx context.Context, pb *MetaContext) meta.Context {
-	if pb == nil {
+func (s *MetaProxyServer) metaCtx(ctx context.Context, ctx2 *pb.MetaContext) meta.Context {
+	if ctx2 == nil {
 		return meta.Background()
 	}
-	gids := pb.Gids
+	gids := ctx2.Gids
 	if len(gids) == 0 {
-		gids = []uint32{pb.Gid}
+		gids = []uint32{ctx2.Gid}
 	}
-	return meta.WrapWithCancel(ctx, pb.Pid, pb.Uid, gids)
+	return meta.WrapWithCancel(ctx, ctx2.Pid, ctx2.Uid, gids)
 }

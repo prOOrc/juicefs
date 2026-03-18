@@ -15,29 +15,33 @@
  */
 
 syntax = "proto3";
-package meta;
-option go_package = "github.com/juicedata/juicefs/pkg/meta/grpc";
+package pb;
+option go_package = "./pb";
 
-import "meta_common.proto";
+import "pb/meta_common.proto";
 
 // =====================================================
-// ACL Request/Response Messages
+// Streaming Dump/Load Request/Response Messages
 // =====================================================
 
-message SetFaclRequest {
-  MetaContext ctx = 1;
-  uint64 ino = 2;
-  uint32 acl_type = 3;
-  ProtoACLRule rule = 4;
+message DumpMetaRequest {
+  uint64 root = 1;
+  int32 threads = 2;
+  bool keep_secret = 3;
+  bool fast = 4;
+  bool skip_trash = 5;
 }
-message SetFaclResponse { uint32 errno = 1; }
+message DumpMetaChunk { bytes data = 1; }
 
-message GetFaclRequest {
+message LoadMetaChunk { bytes data = 1; }
+message LoadMetaResponse { uint32 errno = 1; }
+
+message DumpMetaV2Request {
   MetaContext ctx = 1;
-  uint64 ino = 2;
-  uint32 acl_type = 3;
+  bool keep_secret = 2;
+  int32 threads = 3;
 }
-message GetFaclResponse {
-  uint32 errno = 1;
-  ProtoACLRule rule = 2;
-}
+message DumpMetaV2Chunk { bytes data = 1; }
+
+message LoadMetaV2Chunk { bytes data = 1; }
+message LoadMetaV2Response { uint32 errno = 1; }

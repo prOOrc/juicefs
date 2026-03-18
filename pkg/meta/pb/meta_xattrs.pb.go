@@ -17,9 +17,9 @@
 // versions:
 // 	protoc-gen-go v1.36.9
 // 	protoc        v6.30.2
-// source: meta_xattrs.proto
+// source: pb/meta_xattrs.proto
 
-package grpc
+package pb
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -47,7 +47,7 @@ type GetXattrRequest struct {
 
 func (x *GetXattrRequest) Reset() {
 	*x = GetXattrRequest{}
-	mi := &file_meta_xattrs_proto_msgTypes[0]
+	mi := &file_pb_meta_xattrs_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -59,7 +59,7 @@ func (x *GetXattrRequest) String() string {
 func (*GetXattrRequest) ProtoMessage() {}
 
 func (x *GetXattrRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_xattrs_proto_msgTypes[0]
+	mi := &file_pb_meta_xattrs_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -72,7 +72,7 @@ func (x *GetXattrRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetXattrRequest.ProtoReflect.Descriptor instead.
 func (*GetXattrRequest) Descriptor() ([]byte, []int) {
-	return file_meta_xattrs_proto_rawDescGZIP(), []int{0}
+	return file_pb_meta_xattrs_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *GetXattrRequest) GetCtx() *MetaContext {
@@ -106,7 +106,7 @@ type GetXattrResponse struct {
 
 func (x *GetXattrResponse) Reset() {
 	*x = GetXattrResponse{}
-	mi := &file_meta_xattrs_proto_msgTypes[1]
+	mi := &file_pb_meta_xattrs_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -118,7 +118,7 @@ func (x *GetXattrResponse) String() string {
 func (*GetXattrResponse) ProtoMessage() {}
 
 func (x *GetXattrResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_xattrs_proto_msgTypes[1]
+	mi := &file_pb_meta_xattrs_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -131,7 +131,7 @@ func (x *GetXattrResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetXattrResponse.ProtoReflect.Descriptor instead.
 func (*GetXattrResponse) Descriptor() ([]byte, []int) {
-	return file_meta_xattrs_proto_rawDescGZIP(), []int{1}
+	return file_pb_meta_xattrs_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *GetXattrResponse) GetErrno() uint32 {
@@ -161,7 +161,7 @@ type SetXattrRequest struct {
 
 func (x *SetXattrRequest) Reset() {
 	*x = SetXattrRequest{}
-	mi := &file_meta_xattrs_proto_msgTypes[2]
+	mi := &file_pb_meta_xattrs_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -173,7 +173,7 @@ func (x *SetXattrRequest) String() string {
 func (*SetXattrRequest) ProtoMessage() {}
 
 func (x *SetXattrRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_xattrs_proto_msgTypes[2]
+	mi := &file_pb_meta_xattrs_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -186,7 +186,7 @@ func (x *SetXattrRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetXattrRequest.ProtoReflect.Descriptor instead.
 func (*SetXattrRequest) Descriptor() ([]byte, []int) {
-	return file_meta_xattrs_proto_rawDescGZIP(), []int{2}
+	return file_pb_meta_xattrs_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *SetXattrRequest) GetCtx() *MetaContext {
@@ -233,7 +233,7 @@ type SetXattrResponse struct {
 
 func (x *SetXattrResponse) Reset() {
 	*x = SetXattrResponse{}
-	mi := &file_meta_xattrs_proto_msgTypes[3]
+	mi := &file_pb_meta_xattrs_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -245,7 +245,7 @@ func (x *SetXattrResponse) String() string {
 func (*SetXattrResponse) ProtoMessage() {}
 
 func (x *SetXattrResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_xattrs_proto_msgTypes[3]
+	mi := &file_pb_meta_xattrs_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -258,7 +258,7 @@ func (x *SetXattrResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetXattrResponse.ProtoReflect.Descriptor instead.
 func (*SetXattrResponse) Descriptor() ([]byte, []int) {
-	return file_meta_xattrs_proto_rawDescGZIP(), []int{3}
+	return file_pb_meta_xattrs_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *SetXattrResponse) GetErrno() uint32 {
@@ -279,7 +279,7 @@ type RemoveXattrRequest struct {
 
 func (x *RemoveXattrRequest) Reset() {
 	*x = RemoveXattrRequest{}
-	mi := &file_meta_xattrs_proto_msgTypes[4]
+	mi := &file_pb_meta_xattrs_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -291,7 +291,7 @@ func (x *RemoveXattrRequest) String() string {
 func (*RemoveXattrRequest) ProtoMessage() {}
 
 func (x *RemoveXattrRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_xattrs_proto_msgTypes[4]
+	mi := &file_pb_meta_xattrs_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -304,7 +304,7 @@ func (x *RemoveXattrRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveXattrRequest.ProtoReflect.Descriptor instead.
 func (*RemoveXattrRequest) Descriptor() ([]byte, []int) {
-	return file_meta_xattrs_proto_rawDescGZIP(), []int{4}
+	return file_pb_meta_xattrs_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RemoveXattrRequest) GetCtx() *MetaContext {
@@ -337,7 +337,7 @@ type RemoveXattrResponse struct {
 
 func (x *RemoveXattrResponse) Reset() {
 	*x = RemoveXattrResponse{}
-	mi := &file_meta_xattrs_proto_msgTypes[5]
+	mi := &file_pb_meta_xattrs_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -349,7 +349,7 @@ func (x *RemoveXattrResponse) String() string {
 func (*RemoveXattrResponse) ProtoMessage() {}
 
 func (x *RemoveXattrResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_xattrs_proto_msgTypes[5]
+	mi := &file_pb_meta_xattrs_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -362,7 +362,7 @@ func (x *RemoveXattrResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveXattrResponse.ProtoReflect.Descriptor instead.
 func (*RemoveXattrResponse) Descriptor() ([]byte, []int) {
-	return file_meta_xattrs_proto_rawDescGZIP(), []int{5}
+	return file_pb_meta_xattrs_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *RemoveXattrResponse) GetErrno() uint32 {
@@ -382,7 +382,7 @@ type ListXattrRequest struct {
 
 func (x *ListXattrRequest) Reset() {
 	*x = ListXattrRequest{}
-	mi := &file_meta_xattrs_proto_msgTypes[6]
+	mi := &file_pb_meta_xattrs_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -394,7 +394,7 @@ func (x *ListXattrRequest) String() string {
 func (*ListXattrRequest) ProtoMessage() {}
 
 func (x *ListXattrRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_xattrs_proto_msgTypes[6]
+	mi := &file_pb_meta_xattrs_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -407,7 +407,7 @@ func (x *ListXattrRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListXattrRequest.ProtoReflect.Descriptor instead.
 func (*ListXattrRequest) Descriptor() ([]byte, []int) {
-	return file_meta_xattrs_proto_rawDescGZIP(), []int{6}
+	return file_pb_meta_xattrs_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ListXattrRequest) GetCtx() *MetaContext {
@@ -434,7 +434,7 @@ type ListXattrResponse struct {
 
 func (x *ListXattrResponse) Reset() {
 	*x = ListXattrResponse{}
-	mi := &file_meta_xattrs_proto_msgTypes[7]
+	mi := &file_pb_meta_xattrs_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -446,7 +446,7 @@ func (x *ListXattrResponse) String() string {
 func (*ListXattrResponse) ProtoMessage() {}
 
 func (x *ListXattrResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_xattrs_proto_msgTypes[7]
+	mi := &file_pb_meta_xattrs_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -459,7 +459,7 @@ func (x *ListXattrResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListXattrResponse.ProtoReflect.Descriptor instead.
 func (*ListXattrResponse) Descriptor() ([]byte, []int) {
-	return file_meta_xattrs_proto_rawDescGZIP(), []int{7}
+	return file_pb_meta_xattrs_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ListXattrResponse) GetErrno() uint32 {
@@ -476,68 +476,68 @@ func (x *ListXattrResponse) GetNames() []byte {
 	return nil
 }
 
-var File_meta_xattrs_proto protoreflect.FileDescriptor
+var File_pb_meta_xattrs_proto protoreflect.FileDescriptor
 
-const file_meta_xattrs_proto_rawDesc = "" +
+const file_pb_meta_xattrs_proto_rawDesc = "" +
 	"\n" +
-	"\x11meta_xattrs.proto\x12\x04meta\x1a\x11meta_common.proto\"`\n" +
-	"\x0fGetXattrRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\x14pb/meta_xattrs.proto\x12\x02pb\x1a\x14pb/meta_common.proto\"^\n" +
+	"\x0fGetXattrRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\">\n" +
 	"\x10GetXattrResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\fR\x05value\"\x8c\x01\n" +
-	"\x0fSetXattrRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\fR\x05value\"\x8a\x01\n" +
+	"\x0fSetXattrRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x14\n" +
 	"\x05value\x18\x04 \x01(\fR\x05value\x12\x14\n" +
 	"\x05flags\x18\x05 \x01(\rR\x05flags\"(\n" +
 	"\x10SetXattrResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"c\n" +
-	"\x12RemoveXattrRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\"a\n" +
+	"\x12RemoveXattrRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\"+\n" +
 	"\x13RemoveXattrResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"M\n" +
-	"\x10ListXattrRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\"K\n" +
+	"\x10ListXattrRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\"?\n" +
 	"\x11ListXattrResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
-	"\x05names\x18\x02 \x01(\fR\x05namesB,Z*github.com/juicedata/juicefs/pkg/meta/grpcb\x06proto3"
+	"\x05names\x18\x02 \x01(\fR\x05namesB\x06Z\x04./pbb\x06proto3"
 
 var (
-	file_meta_xattrs_proto_rawDescOnce sync.Once
-	file_meta_xattrs_proto_rawDescData []byte
+	file_pb_meta_xattrs_proto_rawDescOnce sync.Once
+	file_pb_meta_xattrs_proto_rawDescData []byte
 )
 
-func file_meta_xattrs_proto_rawDescGZIP() []byte {
-	file_meta_xattrs_proto_rawDescOnce.Do(func() {
-		file_meta_xattrs_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_meta_xattrs_proto_rawDesc), len(file_meta_xattrs_proto_rawDesc)))
+func file_pb_meta_xattrs_proto_rawDescGZIP() []byte {
+	file_pb_meta_xattrs_proto_rawDescOnce.Do(func() {
+		file_pb_meta_xattrs_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pb_meta_xattrs_proto_rawDesc), len(file_pb_meta_xattrs_proto_rawDesc)))
 	})
-	return file_meta_xattrs_proto_rawDescData
+	return file_pb_meta_xattrs_proto_rawDescData
 }
 
-var file_meta_xattrs_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
-var file_meta_xattrs_proto_goTypes = []any{
-	(*GetXattrRequest)(nil),     // 0: meta.GetXattrRequest
-	(*GetXattrResponse)(nil),    // 1: meta.GetXattrResponse
-	(*SetXattrRequest)(nil),     // 2: meta.SetXattrRequest
-	(*SetXattrResponse)(nil),    // 3: meta.SetXattrResponse
-	(*RemoveXattrRequest)(nil),  // 4: meta.RemoveXattrRequest
-	(*RemoveXattrResponse)(nil), // 5: meta.RemoveXattrResponse
-	(*ListXattrRequest)(nil),    // 6: meta.ListXattrRequest
-	(*ListXattrResponse)(nil),   // 7: meta.ListXattrResponse
-	(*MetaContext)(nil),         // 8: meta.MetaContext
+var file_pb_meta_xattrs_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_pb_meta_xattrs_proto_goTypes = []any{
+	(*GetXattrRequest)(nil),     // 0: pb.GetXattrRequest
+	(*GetXattrResponse)(nil),    // 1: pb.GetXattrResponse
+	(*SetXattrRequest)(nil),     // 2: pb.SetXattrRequest
+	(*SetXattrResponse)(nil),    // 3: pb.SetXattrResponse
+	(*RemoveXattrRequest)(nil),  // 4: pb.RemoveXattrRequest
+	(*RemoveXattrResponse)(nil), // 5: pb.RemoveXattrResponse
+	(*ListXattrRequest)(nil),    // 6: pb.ListXattrRequest
+	(*ListXattrResponse)(nil),   // 7: pb.ListXattrResponse
+	(*MetaContext)(nil),         // 8: pb.MetaContext
 }
-var file_meta_xattrs_proto_depIdxs = []int32{
-	8, // 0: meta.GetXattrRequest.ctx:type_name -> meta.MetaContext
-	8, // 1: meta.SetXattrRequest.ctx:type_name -> meta.MetaContext
-	8, // 2: meta.RemoveXattrRequest.ctx:type_name -> meta.MetaContext
-	8, // 3: meta.ListXattrRequest.ctx:type_name -> meta.MetaContext
+var file_pb_meta_xattrs_proto_depIdxs = []int32{
+	8, // 0: pb.GetXattrRequest.ctx:type_name -> pb.MetaContext
+	8, // 1: pb.SetXattrRequest.ctx:type_name -> pb.MetaContext
+	8, // 2: pb.RemoveXattrRequest.ctx:type_name -> pb.MetaContext
+	8, // 3: pb.ListXattrRequest.ctx:type_name -> pb.MetaContext
 	4, // [4:4] is the sub-list for method output_type
 	4, // [4:4] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name
@@ -545,27 +545,27 @@ var file_meta_xattrs_proto_depIdxs = []int32{
 	0, // [0:4] is the sub-list for field type_name
 }
 
-func init() { file_meta_xattrs_proto_init() }
-func file_meta_xattrs_proto_init() {
-	if File_meta_xattrs_proto != nil {
+func init() { file_pb_meta_xattrs_proto_init() }
+func file_pb_meta_xattrs_proto_init() {
+	if File_pb_meta_xattrs_proto != nil {
 		return
 	}
-	file_meta_common_proto_init()
+	file_pb_meta_common_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meta_xattrs_proto_rawDesc), len(file_meta_xattrs_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_meta_xattrs_proto_rawDesc), len(file_pb_meta_xattrs_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_meta_xattrs_proto_goTypes,
-		DependencyIndexes: file_meta_xattrs_proto_depIdxs,
-		MessageInfos:      file_meta_xattrs_proto_msgTypes,
+		GoTypes:           file_pb_meta_xattrs_proto_goTypes,
+		DependencyIndexes: file_pb_meta_xattrs_proto_depIdxs,
+		MessageInfos:      file_pb_meta_xattrs_proto_msgTypes,
 	}.Build()
-	File_meta_xattrs_proto = out.File
-	file_meta_xattrs_proto_goTypes = nil
-	file_meta_xattrs_proto_depIdxs = nil
+	File_pb_meta_xattrs_proto = out.File
+	file_pb_meta_xattrs_proto_goTypes = nil
+	file_pb_meta_xattrs_proto_depIdxs = nil
 }

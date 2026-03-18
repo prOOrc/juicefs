@@ -21,26 +21,27 @@ import (
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
-func (s *MetaProxyServer) GetParents(ctx context.Context, req *GetParentsRequest) (*GetParentsResponse, error) {
+func (s *MetaProxyServer) GetParents(ctx context.Context, req *pb.GetParentsRequest) (*pb.GetParentsResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	parents := s.meta.GetParents(mctx, meta.Ino(req.Inode))
 	protoParents := make(map[uint64]int32, len(parents))
 	for ino, depth := range parents {
 		protoParents[uint64(ino)] = int32(depth)
 	}
-	return &GetParentsResponse{
+	return &pb.GetParentsResponse{
 		Errno:   0,
 		Parents: protoParents,
 	}, nil
 }
 
-func (s *MetaProxyServer) GetDirStat(ctx context.Context, req *GetDirStatRequest) (*GetDirStatResponse, error) {
+func (s *MetaProxyServer) GetDirStat(ctx context.Context, req *pb.GetDirStatRequest) (*pb.GetDirStatResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	stat, errno := s.meta.GetDirStat(mctx, meta.Ino(req.Inode))
 	if errno != 0 || stat == nil {
-		return &GetDirStatResponse{Errno: uint32(errno)}, nil
+		return &pb.GetDirStatResponse{Errno: uint32(errno)}, nil
 	}
-	return &GetDirStatResponse{Errno: uint32(syscall.ENOSYS)}, nil
+	return &pb.GetDirStatResponse{Errno: uint32(syscall.ENOSYS)}, nil
 }

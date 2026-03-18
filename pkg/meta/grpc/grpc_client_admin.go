@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // BatchUnlink removes multiple entries
@@ -29,12 +30,12 @@ func (c *Client) BatchUnlink(ctx meta.Context, parent meta.Ino, entries []*meta.
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	protoEntries := make([]*ProtoEntry, 0, len(entries))
+	protoEntries := make([]*pb.ProtoEntry, 0, len(entries))
 	for _, e := range entries {
 		protoEntries = append(protoEntries, toProtoEntry(e))
 	}
 
-	resp, err := c.client.BatchUnlink(grpcCtx, &BatchUnlinkRequest{
+	resp, err := c.client.BatchUnlink(grpcCtx, &pb.BatchUnlinkRequest{
 		Ctx:            toProtoContext(ctx),
 		Parent:         uint64(parent),
 		Entries:        protoEntries,
@@ -57,7 +58,7 @@ func (c *Client) Remove(ctx meta.Context, parent meta.Ino, name string, skipTras
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Remove(grpcCtx, &RemoveRequest{
+	resp, err := c.client.Remove(grpcCtx, &pb.RemoveRequest{
 		Ctx:        toProtoContext(ctx),
 		Parent:     uint64(parent),
 		Name:       name,
@@ -81,7 +82,7 @@ func (c *Client) GetSummary(ctx meta.Context, ino meta.Ino, recursive, strict bo
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.GetSummary(grpcCtx, &GetSummaryRequest{
+	resp, err := c.client.GetSummary(grpcCtx, &pb.GetSummaryRequest{
 		Ctx:       toProtoContext(ctx),
 		Inode:     uint64(ino),
 		Recursive: recursive,
@@ -104,7 +105,7 @@ func (c *Client) GetTreeSummary(ctx meta.Context, ino meta.Ino, depth, topN uint
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.GetTreeSummary(grpcCtx, &GetTreeSummaryRequest{
+	resp, err := c.client.GetTreeSummary(grpcCtx, &pb.GetTreeSummaryRequest{
 		Ctx:    toProtoContext(ctx),
 		Inode:  uint64(ino),
 		Depth:  depth,
@@ -128,7 +129,7 @@ func (c *Client) Clone(ctx meta.Context, srcParentIno, srcIno, dstParentIno meta
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Clone(grpcCtx, &CloneRequest{
+	resp, err := c.client.Clone(grpcCtx, &pb.CloneRequest{
 		Ctx:          toProtoContext(ctx),
 		SrcParentIno: uint64(srcParentIno),
 		SrcIno:       uint64(srcIno),
@@ -158,7 +159,7 @@ func (c *Client) GetPaths(ctx meta.Context, ino meta.Ino, paths *[]string) sysca
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.GetPaths(grpcCtx, &GetPathsRequest{
+	resp, err := c.client.GetPaths(grpcCtx, &pb.GetPathsRequest{
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 	})
@@ -179,7 +180,7 @@ func (c *Client) Check(ctx meta.Context, fpath string, repair, recursive, syncDi
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Check(grpcCtx, &CheckRequest{
+	resp, err := c.client.Check(grpcCtx, &pb.CheckRequest{
 		Ctx:           toProtoContext(ctx),
 		Fpath:         fpath,
 		Repair:        repair,
@@ -198,7 +199,7 @@ func (c *Client) CompactAll(ctx meta.Context, threads int32) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.CompactAll(grpcCtx, &CompactAllRequest{
+	resp, err := c.client.CompactAll(grpcCtx, &pb.CompactAllRequest{
 		Ctx:     toProtoContext(ctx),
 		Threads: threads,
 	})
@@ -213,7 +214,7 @@ func (c *Client) Compact(ctx meta.Context, ino meta.Ino, concurrency int32) sysc
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Compact(grpcCtx, &CompactRequest{
+	resp, err := c.client.Compact(grpcCtx, &pb.CompactRequest{
 		Ctx:         toProtoContext(ctx),
 		Inode:       uint64(ino),
 		Concurrency: concurrency,
@@ -229,24 +230,24 @@ func (c *Client) ListSlices(ctx meta.Context, slices map[meta.Ino][]meta.Slice, 
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	protoEntries := make([]*SliceMapEntry, 0, len(slices))
+	protoEntries := make([]*pb.SliceMapEntry, 0, len(slices))
 	for ino, sls := range slices {
-		protoSlices := make([]*ProtoSlice, 0, len(sls))
+		protoSlices := make([]*pb.ProtoSlice, 0, len(sls))
 		for _, s := range sls {
-			protoSlices = append(protoSlices, &ProtoSlice{
+			protoSlices = append(protoSlices, &pb.ProtoSlice{
 				Id:   s.Id,
 				Size: s.Size,
 				Off:  s.Off,
 				Len:  s.Len,
 			})
 		}
-		protoEntries = append(protoEntries, &SliceMapEntry{
+		protoEntries = append(protoEntries, &pb.SliceMapEntry{
 			Inode:  uint64(ino),
 			Slices: protoSlices,
 		})
 	}
 
-	resp, err := c.client.ListSlices(grpcCtx, &ListSlicesRequest{
+	resp, err := c.client.ListSlices(grpcCtx, &pb.ListSlicesRequest{
 		Ctx:         toProtoContext(ctx),
 		Slices:      protoEntries,
 		ScanPending: scanPending,
@@ -283,12 +284,12 @@ func (c *Client) HandleQuota(ctx meta.Context, cmd uint32, dpath string, uid, gi
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	protoQuotas := make(map[string]*ProtoQuota, len(quotas))
+	protoQuotas := make(map[string]*pb.ProtoQuota, len(quotas))
 	for k, v := range quotas {
 		protoQuotas[k] = toProtoQuota(v)
 	}
 
-	resp, err := c.client.HandleQuota(grpcCtx, &HandleQuotaRequest{
+	resp, err := c.client.HandleQuota(grpcCtx, &pb.HandleQuotaRequest{
 		Ctx:    toProtoContext(ctx),
 		Cmd:    cmd,
 		Dpath:  dpath,
@@ -310,7 +311,7 @@ func (c *Client) ScanUserGroupUsage(ctx meta.Context) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.ScanUserGroupUsage(grpcCtx, &ScanUserGroupUsageRequest{
+	resp, err := c.client.ScanUserGroupUsage(grpcCtx, &pb.ScanUserGroupUsageRequest{
 		Ctx: toProtoContext(ctx),
 	})
 	if err != nil {
@@ -324,7 +325,7 @@ func (c *Client) Chroot(ctx meta.Context, subdir string) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.Chroot(grpcCtx, &ChrootRequest{
+	resp, err := c.client.Chroot(grpcCtx, &pb.ChrootRequest{
 		Ctx:    toProtoContext(ctx),
 		Subdir: subdir,
 	})
@@ -339,7 +340,7 @@ func (c *Client) CleanupTrashBefore(ctx meta.Context, edge time.Time, increProgr
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.CleanupTrashBefore(grpcCtx, &CleanupTrashBeforeRequest{
+	resp, err := c.client.CleanupTrashBefore(grpcCtx, &pb.CleanupTrashBeforeRequest{
 		Ctx:  toProtoContext(ctx),
 		Edge: edge.Unix(),
 	})
@@ -360,7 +361,7 @@ func (c *Client) CleanupDetachedNodesBefore(ctx meta.Context, edge time.Time, in
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.CleanupDetachedNodesBefore(grpcCtx, &CleanupDetachedNodesBeforeRequest{
+	resp, err := c.client.CleanupDetachedNodesBefore(grpcCtx, &pb.CleanupDetachedNodesBeforeRequest{
 		Ctx:  toProtoContext(ctx),
 		Edge: edge.Unix(),
 	})

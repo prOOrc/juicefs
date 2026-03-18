@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // DumpMeta dumps metadata
@@ -32,7 +33,7 @@ func (c *Client) DumpMeta(root meta.Ino, threads int32, keepSecret, fast, skipTr
 		grpcCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 
-		stream, err := c.client.DumpMeta(grpcCtx, &DumpMetaRequest{
+		stream, err := c.client.DumpMeta(grpcCtx, &pb.DumpMetaRequest{
 			Root:       uint64(root),
 			Threads:    threads,
 			KeepSecret: keepSecret,
@@ -77,7 +78,7 @@ func (c *Client) LoadMeta(rc io.ReadCloser) error {
 	for {
 		n, err := rc.Read(buf)
 		if n > 0 {
-			if err := stream.Send(&LoadMetaChunk{Data: buf[:n]}); err != nil {
+			if err := stream.Send(&pb.LoadMetaChunk{Data: buf[:n]}); err != nil {
 				return err
 			}
 		}
@@ -103,7 +104,7 @@ func (c *Client) DumpMetaV2(ctx meta.Context, keepSecret bool, threads int32) (i
 		grpcCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 
-		stream, err := c.client.DumpMetaV2(grpcCtx, &DumpMetaV2Request{
+		stream, err := c.client.DumpMetaV2(grpcCtx, &pb.DumpMetaV2Request{
 			Ctx:        toProtoContext(ctx),
 			KeepSecret: keepSecret,
 			Threads:    threads,
@@ -146,7 +147,7 @@ func (c *Client) LoadMetaV2(ctx meta.Context, rc io.ReadCloser) error {
 	for {
 		n, err := rc.Read(buf)
 		if n > 0 {
-			if err := stream.Send(&LoadMetaV2Chunk{Data: buf[:n]}); err != nil {
+			if err := stream.Send(&pb.LoadMetaV2Chunk{Data: buf[:n]}); err != nil {
 				return err
 			}
 		}

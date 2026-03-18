@@ -29,6 +29,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	grpcMeta "github.com/juicedata/juicefs/pkg/meta/grpc"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
 )
@@ -109,7 +110,7 @@ func cmdMetaProxy() *cli.Command {
 			}
 
 			grpcServer := gRPC.NewServer(opts...)
-			grpcMeta.RegisterMetaServiceServer(grpcServer, server)
+			pb.RegisterMetaServiceServer(grpcServer, server)
 
 			lis, err := net.Listen("tcp", addr)
 			if err != nil {

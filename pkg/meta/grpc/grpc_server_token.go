@@ -18,48 +18,50 @@ package grpc
 
 import (
 	"context"
+
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
-func (s *MetaProxyServer) StoreToken(ctx context.Context, req *StoreTokenRequest) (*StoreTokenResponse, error) {
+func (s *MetaProxyServer) StoreToken(ctx context.Context, req *pb.StoreTokenRequest) (*pb.StoreTokenResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	id, errno := s.meta.StoreToken(mctx, req.Token)
-	return &StoreTokenResponse{
+	return &pb.StoreTokenResponse{
 		Errno: uint32(errno),
 		Id:    id,
 	}, nil
 }
 
-func (s *MetaProxyServer) UpdateToken(ctx context.Context, req *UpdateTokenRequest) (*UpdateTokenResponse, error) {
+func (s *MetaProxyServer) UpdateToken(ctx context.Context, req *pb.UpdateTokenRequest) (*pb.UpdateTokenResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	errno := s.meta.UpdateToken(mctx, req.Id, req.Token)
-	return &UpdateTokenResponse{Errno: uint32(errno)}, nil
+	return &pb.UpdateTokenResponse{Errno: uint32(errno)}, nil
 }
 
-func (s *MetaProxyServer) LoadToken(ctx context.Context, req *LoadTokenRequest) (*LoadTokenResponse, error) {
+func (s *MetaProxyServer) LoadToken(ctx context.Context, req *pb.LoadTokenRequest) (*pb.LoadTokenResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	token, errno := s.meta.LoadToken(mctx, req.Id)
-	return &LoadTokenResponse{
+	return &pb.LoadTokenResponse{
 		Errno: uint32(errno),
 		Token: token,
 	}, nil
 }
 
-func (s *MetaProxyServer) DeleteTokens(ctx context.Context, req *DeleteTokensRequest) (*DeleteTokensResponse, error) {
+func (s *MetaProxyServer) DeleteTokens(ctx context.Context, req *pb.DeleteTokensRequest) (*pb.DeleteTokensResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	ids := make([]uint32, len(req.Ids))
 	copy(ids, req.Ids)
 	errno := s.meta.DeleteTokens(mctx, ids)
-	return &DeleteTokensResponse{Errno: uint32(errno)}, nil
+	return &pb.DeleteTokensResponse{Errno: uint32(errno)}, nil
 }
 
-func (s *MetaProxyServer) ListTokens(ctx context.Context, req *ListTokensRequest) (*ListTokensResponse, error) {
+func (s *MetaProxyServer) ListTokens(ctx context.Context, req *pb.ListTokensRequest) (*pb.ListTokensResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	tokens, errno := s.meta.ListTokens(mctx)
 	protoTokens := make(map[uint32][]byte, len(tokens))
 	for id, token := range tokens {
 		protoTokens[id] = token
 	}
-	return &ListTokensResponse{
+	return &pb.ListTokensResponse{
 		Errno:  uint32(errno),
 		Tokens: protoTokens,
 	}, nil

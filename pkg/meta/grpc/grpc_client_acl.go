@@ -22,6 +22,7 @@ import (
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // --- ACL operations ---
@@ -31,7 +32,7 @@ func (c *Client) SetFacl(ctx meta.Context, ino meta.Ino, aclType uint32, rule *a
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.SetFacl(grpcCtx, &SetFaclRequest{
+	resp, err := c.client.SetFacl(grpcCtx, &pb.SetFaclRequest{
 		Ctx:     toProtoContext(ctx),
 		Ino:     uint64(ino),
 		AclType: aclType,
@@ -48,7 +49,7 @@ func (c *Client) GetFacl(ctx meta.Context, ino meta.Ino, aclType uint32, rule *a
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.GetFacl(grpcCtx, &GetFaclRequest{
+	resp, err := c.client.GetFacl(grpcCtx, &pb.GetFaclRequest{
 		Ctx:     toProtoContext(ctx),
 		Ino:     uint64(ino),
 		AclType: aclType,

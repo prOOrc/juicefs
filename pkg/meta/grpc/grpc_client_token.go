@@ -21,6 +21,7 @@ import (
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // --- Token operations ---
@@ -30,7 +31,7 @@ func (c *Client) StoreToken(ctx meta.Context, token []byte, id *uint32) syscall.
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.StoreToken(grpcCtx, &StoreTokenRequest{
+	resp, err := c.client.StoreToken(grpcCtx, &pb.StoreTokenRequest{
 		Ctx:   toProtoContext(ctx),
 		Token: token,
 	})
@@ -51,7 +52,7 @@ func (c *Client) UpdateToken(ctx meta.Context, id uint32, token []byte) syscall.
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.UpdateToken(grpcCtx, &UpdateTokenRequest{
+	resp, err := c.client.UpdateToken(grpcCtx, &pb.UpdateTokenRequest{
 		Ctx:   toProtoContext(ctx),
 		Id:    id,
 		Token: token,
@@ -67,7 +68,7 @@ func (c *Client) LoadToken(ctx meta.Context, id uint32, token *[]byte) syscall.E
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.LoadToken(grpcCtx, &LoadTokenRequest{
+	resp, err := c.client.LoadToken(grpcCtx, &pb.LoadTokenRequest{
 		Ctx: toProtoContext(ctx),
 		Id:  id,
 	})
@@ -88,7 +89,7 @@ func (c *Client) DeleteTokens(ctx meta.Context, ids []uint32) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.DeleteTokens(grpcCtx, &DeleteTokensRequest{
+	resp, err := c.client.DeleteTokens(grpcCtx, &pb.DeleteTokensRequest{
 		Ctx: toProtoContext(ctx),
 		Ids: ids,
 	})
@@ -103,7 +104,7 @@ func (c *Client) ListTokens(ctx meta.Context, tokens *map[uint32][]byte) syscall
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
-	resp, err := c.client.ListTokens(grpcCtx, &ListTokensRequest{
+	resp, err := c.client.ListTokens(grpcCtx, &pb.ListTokensRequest{
 		Ctx: toProtoContext(ctx),
 	})
 	if err != nil {

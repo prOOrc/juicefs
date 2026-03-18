@@ -15,19 +15,19 @@
  */
 
 syntax = "proto3";
-package meta;
-option go_package = "github.com/juicedata/juicefs/pkg/meta/grpc";
+package pb;
+option go_package = "./pb";
 
-import "meta_common.proto";
-import "meta_lifecycle.proto";
-import "meta_locks.proto";
-import "meta_xattrs.proto";
-import "meta_directory.proto";
-import "meta_acl.proto";
-import "meta_token.proto";
-import "meta_admin.proto";
-import "meta_streaming.proto";
-import "meta_dir_handler.proto";
+import "pb/meta_common.proto";
+import "pb/meta_lifecycle.proto";
+import "pb/meta_locks.proto";
+import "pb/meta_xattrs.proto";
+import "pb/meta_directory.proto";
+import "pb/meta_acl.proto";
+import "pb/meta_token.proto";
+import "pb/meta_admin.proto";
+import "pb/meta_streaming.proto";
+import "pb/meta_dir_handler.proto";
 
 // =====================================================
 // Core FUSE Path RPCs

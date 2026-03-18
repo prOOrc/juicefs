@@ -17,9 +17,9 @@
 // versions:
 // 	protoc-gen-go v1.36.9
 // 	protoc        v6.30.2
-// source: meta_locks.proto
+// source: pb/meta_locks.proto
 
-package grpc
+package pb
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -49,7 +49,7 @@ type FlockRequest struct {
 
 func (x *FlockRequest) Reset() {
 	*x = FlockRequest{}
-	mi := &file_meta_locks_proto_msgTypes[0]
+	mi := &file_pb_meta_locks_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -61,7 +61,7 @@ func (x *FlockRequest) String() string {
 func (*FlockRequest) ProtoMessage() {}
 
 func (x *FlockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_locks_proto_msgTypes[0]
+	mi := &file_pb_meta_locks_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -74,7 +74,7 @@ func (x *FlockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FlockRequest.ProtoReflect.Descriptor instead.
 func (*FlockRequest) Descriptor() ([]byte, []int) {
-	return file_meta_locks_proto_rawDescGZIP(), []int{0}
+	return file_pb_meta_locks_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *FlockRequest) GetCtx() *MetaContext {
@@ -121,7 +121,7 @@ type FlockResponse struct {
 
 func (x *FlockResponse) Reset() {
 	*x = FlockResponse{}
-	mi := &file_meta_locks_proto_msgTypes[1]
+	mi := &file_pb_meta_locks_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -133,7 +133,7 @@ func (x *FlockResponse) String() string {
 func (*FlockResponse) ProtoMessage() {}
 
 func (x *FlockResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_locks_proto_msgTypes[1]
+	mi := &file_pb_meta_locks_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -146,7 +146,7 @@ func (x *FlockResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FlockResponse.ProtoReflect.Descriptor instead.
 func (*FlockResponse) Descriptor() ([]byte, []int) {
-	return file_meta_locks_proto_rawDescGZIP(), []int{1}
+	return file_pb_meta_locks_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *FlockResponse) GetErrno() uint32 {
@@ -170,7 +170,7 @@ type GetlkRequest struct {
 
 func (x *GetlkRequest) Reset() {
 	*x = GetlkRequest{}
-	mi := &file_meta_locks_proto_msgTypes[2]
+	mi := &file_pb_meta_locks_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -182,7 +182,7 @@ func (x *GetlkRequest) String() string {
 func (*GetlkRequest) ProtoMessage() {}
 
 func (x *GetlkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_locks_proto_msgTypes[2]
+	mi := &file_pb_meta_locks_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -195,7 +195,7 @@ func (x *GetlkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetlkRequest.ProtoReflect.Descriptor instead.
 func (*GetlkRequest) Descriptor() ([]byte, []int) {
-	return file_meta_locks_proto_rawDescGZIP(), []int{2}
+	return file_pb_meta_locks_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *GetlkRequest) GetCtx() *MetaContext {
@@ -253,7 +253,7 @@ type GetlkResponse struct {
 
 func (x *GetlkResponse) Reset() {
 	*x = GetlkResponse{}
-	mi := &file_meta_locks_proto_msgTypes[3]
+	mi := &file_pb_meta_locks_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -265,7 +265,7 @@ func (x *GetlkResponse) String() string {
 func (*GetlkResponse) ProtoMessage() {}
 
 func (x *GetlkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_locks_proto_msgTypes[3]
+	mi := &file_pb_meta_locks_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -278,7 +278,7 @@ func (x *GetlkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetlkResponse.ProtoReflect.Descriptor instead.
 func (*GetlkResponse) Descriptor() ([]byte, []int) {
-	return file_meta_locks_proto_rawDescGZIP(), []int{3}
+	return file_pb_meta_locks_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GetlkResponse) GetErrno() uint32 {
@@ -332,7 +332,7 @@ type SetlkRequest struct {
 
 func (x *SetlkRequest) Reset() {
 	*x = SetlkRequest{}
-	mi := &file_meta_locks_proto_msgTypes[4]
+	mi := &file_pb_meta_locks_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -344,7 +344,7 @@ func (x *SetlkRequest) String() string {
 func (*SetlkRequest) ProtoMessage() {}
 
 func (x *SetlkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_locks_proto_msgTypes[4]
+	mi := &file_pb_meta_locks_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -357,7 +357,7 @@ func (x *SetlkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetlkRequest.ProtoReflect.Descriptor instead.
 func (*SetlkRequest) Descriptor() ([]byte, []int) {
-	return file_meta_locks_proto_rawDescGZIP(), []int{4}
+	return file_pb_meta_locks_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *SetlkRequest) GetCtx() *MetaContext {
@@ -425,7 +425,7 @@ type SetlkResponse struct {
 
 func (x *SetlkResponse) Reset() {
 	*x = SetlkResponse{}
-	mi := &file_meta_locks_proto_msgTypes[5]
+	mi := &file_pb_meta_locks_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -437,7 +437,7 @@ func (x *SetlkResponse) String() string {
 func (*SetlkResponse) ProtoMessage() {}
 
 func (x *SetlkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_locks_proto_msgTypes[5]
+	mi := &file_pb_meta_locks_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -450,7 +450,7 @@ func (x *SetlkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetlkResponse.ProtoReflect.Descriptor instead.
 func (*SetlkResponse) Descriptor() ([]byte, []int) {
-	return file_meta_locks_proto_rawDescGZIP(), []int{5}
+	return file_pb_meta_locks_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *SetlkResponse) GetErrno() uint32 {
@@ -470,7 +470,7 @@ type ListLocksRequest struct {
 
 func (x *ListLocksRequest) Reset() {
 	*x = ListLocksRequest{}
-	mi := &file_meta_locks_proto_msgTypes[6]
+	mi := &file_pb_meta_locks_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -482,7 +482,7 @@ func (x *ListLocksRequest) String() string {
 func (*ListLocksRequest) ProtoMessage() {}
 
 func (x *ListLocksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_locks_proto_msgTypes[6]
+	mi := &file_pb_meta_locks_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -495,7 +495,7 @@ func (x *ListLocksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLocksRequest.ProtoReflect.Descriptor instead.
 func (*ListLocksRequest) Descriptor() ([]byte, []int) {
-	return file_meta_locks_proto_rawDescGZIP(), []int{6}
+	return file_pb_meta_locks_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ListLocksRequest) GetCtx() *MetaContext {
@@ -523,7 +523,7 @@ type ListLocksResponse struct {
 
 func (x *ListLocksResponse) Reset() {
 	*x = ListLocksResponse{}
-	mi := &file_meta_locks_proto_msgTypes[7]
+	mi := &file_pb_meta_locks_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -535,7 +535,7 @@ func (x *ListLocksResponse) String() string {
 func (*ListLocksResponse) ProtoMessage() {}
 
 func (x *ListLocksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_locks_proto_msgTypes[7]
+	mi := &file_pb_meta_locks_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -548,7 +548,7 @@ func (x *ListLocksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLocksResponse.ProtoReflect.Descriptor instead.
 func (*ListLocksResponse) Descriptor() ([]byte, []int) {
-	return file_meta_locks_proto_rawDescGZIP(), []int{7}
+	return file_pb_meta_locks_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ListLocksResponse) GetErrno() uint32 {
@@ -572,21 +572,21 @@ func (x *ListLocksResponse) GetFlocks() []*ProtoFlock {
 	return nil
 }
 
-var File_meta_locks_proto protoreflect.FileDescriptor
+var File_pb_meta_locks_proto protoreflect.FileDescriptor
 
-const file_meta_locks_proto_rawDesc = "" +
+const file_pb_meta_locks_proto_rawDesc = "" +
 	"\n" +
-	"\x10meta_locks.proto\x12\x04meta\x1a\x11meta_common.proto\"\x8b\x01\n" +
-	"\fFlockRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\x13pb/meta_locks.proto\x12\x02pb\x1a\x14pb/meta_common.proto\"\x89\x01\n" +
+	"\fFlockRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x14\n" +
 	"\x05owner\x18\x03 \x01(\x04R\x05owner\x12\x14\n" +
 	"\x05ltype\x18\x04 \x01(\rR\x05ltype\x12\x14\n" +
 	"\x05block\x18\x05 \x01(\bR\x05block\"%\n" +
 	"\rFlockResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x9d\x01\n" +
-	"\fGetlkRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x9b\x01\n" +
+	"\fGetlkRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x14\n" +
 	"\x05owner\x18\x03 \x01(\x04R\x05owner\x12\x14\n" +
 	"\x05ltype\x18\x04 \x01(\rR\x05ltype\x12\x14\n" +
@@ -597,9 +597,9 @@ const file_meta_locks_proto_rawDesc = "" +
 	"\x05ltype\x18\x02 \x01(\rR\x05ltype\x12\x14\n" +
 	"\x05start\x18\x03 \x01(\x04R\x05start\x12\x10\n" +
 	"\x03end\x18\x04 \x01(\x04R\x03end\x12\x10\n" +
-	"\x03pid\x18\x05 \x01(\rR\x03pid\"\xc5\x01\n" +
-	"\fSetlkRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
+	"\x03pid\x18\x05 \x01(\rR\x03pid\"\xc3\x01\n" +
+	"\fSetlkRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x14\n" +
 	"\x05owner\x18\x03 \x01(\x04R\x05owner\x12\x14\n" +
 	"\x05block\x18\x04 \x01(\bR\x05block\x12\x14\n" +
@@ -608,48 +608,48 @@ const file_meta_locks_proto_rawDesc = "" +
 	"\x03end\x18\a \x01(\x04R\x03end\x12\x10\n" +
 	"\x03pid\x18\b \x01(\rR\x03pid\"%\n" +
 	"\rSetlkResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"M\n" +
-	"\x10ListLocksRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\"}\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\"K\n" +
+	"\x10ListLocksRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
+	"\x05inode\x18\x02 \x01(\x04R\x05inode\"y\n" +
 	"\x11ListLocksResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12(\n" +
-	"\x06plocks\x18\x02 \x03(\v2\x10.meta.ProtoPlockR\x06plocks\x12(\n" +
-	"\x06flocks\x18\x03 \x03(\v2\x10.meta.ProtoFlockR\x06flocksB,Z*github.com/juicedata/juicefs/pkg/meta/grpcb\x06proto3"
+	"\x05errno\x18\x01 \x01(\rR\x05errno\x12&\n" +
+	"\x06plocks\x18\x02 \x03(\v2\x0e.pb.ProtoPlockR\x06plocks\x12&\n" +
+	"\x06flocks\x18\x03 \x03(\v2\x0e.pb.ProtoFlockR\x06flocksB\x06Z\x04./pbb\x06proto3"
 
 var (
-	file_meta_locks_proto_rawDescOnce sync.Once
-	file_meta_locks_proto_rawDescData []byte
+	file_pb_meta_locks_proto_rawDescOnce sync.Once
+	file_pb_meta_locks_proto_rawDescData []byte
 )
 
-func file_meta_locks_proto_rawDescGZIP() []byte {
-	file_meta_locks_proto_rawDescOnce.Do(func() {
-		file_meta_locks_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_meta_locks_proto_rawDesc), len(file_meta_locks_proto_rawDesc)))
+func file_pb_meta_locks_proto_rawDescGZIP() []byte {
+	file_pb_meta_locks_proto_rawDescOnce.Do(func() {
+		file_pb_meta_locks_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pb_meta_locks_proto_rawDesc), len(file_pb_meta_locks_proto_rawDesc)))
 	})
-	return file_meta_locks_proto_rawDescData
+	return file_pb_meta_locks_proto_rawDescData
 }
 
-var file_meta_locks_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
-var file_meta_locks_proto_goTypes = []any{
-	(*FlockRequest)(nil),      // 0: meta.FlockRequest
-	(*FlockResponse)(nil),     // 1: meta.FlockResponse
-	(*GetlkRequest)(nil),      // 2: meta.GetlkRequest
-	(*GetlkResponse)(nil),     // 3: meta.GetlkResponse
-	(*SetlkRequest)(nil),      // 4: meta.SetlkRequest
-	(*SetlkResponse)(nil),     // 5: meta.SetlkResponse
-	(*ListLocksRequest)(nil),  // 6: meta.ListLocksRequest
-	(*ListLocksResponse)(nil), // 7: meta.ListLocksResponse
-	(*MetaContext)(nil),       // 8: meta.MetaContext
-	(*ProtoPlock)(nil),        // 9: meta.ProtoPlock
-	(*ProtoFlock)(nil),        // 10: meta.ProtoFlock
+var file_pb_meta_locks_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_pb_meta_locks_proto_goTypes = []any{
+	(*FlockRequest)(nil),      // 0: pb.FlockRequest
+	(*FlockResponse)(nil),     // 1: pb.FlockResponse
+	(*GetlkRequest)(nil),      // 2: pb.GetlkRequest
+	(*GetlkResponse)(nil),     // 3: pb.GetlkResponse
+	(*SetlkRequest)(nil),      // 4: pb.SetlkRequest
+	(*SetlkResponse)(nil),     // 5: pb.SetlkResponse
+	(*ListLocksRequest)(nil),  // 6: pb.ListLocksRequest
+	(*ListLocksResponse)(nil), // 7: pb.ListLocksResponse
+	(*MetaContext)(nil),       // 8: pb.MetaContext
+	(*ProtoPlock)(nil),        // 9: pb.ProtoPlock
+	(*ProtoFlock)(nil),        // 10: pb.ProtoFlock
 }
-var file_meta_locks_proto_depIdxs = []int32{
-	8,  // 0: meta.FlockRequest.ctx:type_name -> meta.MetaContext
-	8,  // 1: meta.GetlkRequest.ctx:type_name -> meta.MetaContext
-	8,  // 2: meta.SetlkRequest.ctx:type_name -> meta.MetaContext
-	8,  // 3: meta.ListLocksRequest.ctx:type_name -> meta.MetaContext
-	9,  // 4: meta.ListLocksResponse.plocks:type_name -> meta.ProtoPlock
-	10, // 5: meta.ListLocksResponse.flocks:type_name -> meta.ProtoFlock
+var file_pb_meta_locks_proto_depIdxs = []int32{
+	8,  // 0: pb.FlockRequest.ctx:type_name -> pb.MetaContext
+	8,  // 1: pb.GetlkRequest.ctx:type_name -> pb.MetaContext
+	8,  // 2: pb.SetlkRequest.ctx:type_name -> pb.MetaContext
+	8,  // 3: pb.ListLocksRequest.ctx:type_name -> pb.MetaContext
+	9,  // 4: pb.ListLocksResponse.plocks:type_name -> pb.ProtoPlock
+	10, // 5: pb.ListLocksResponse.flocks:type_name -> pb.ProtoFlock
 	6,  // [6:6] is the sub-list for method output_type
 	6,  // [6:6] is the sub-list for method input_type
 	6,  // [6:6] is the sub-list for extension type_name
@@ -657,27 +657,27 @@ var file_meta_locks_proto_depIdxs = []int32{
 	0,  // [0:6] is the sub-list for field type_name
 }
 
-func init() { file_meta_locks_proto_init() }
-func file_meta_locks_proto_init() {
-	if File_meta_locks_proto != nil {
+func init() { file_pb_meta_locks_proto_init() }
+func file_pb_meta_locks_proto_init() {
+	if File_pb_meta_locks_proto != nil {
 		return
 	}
-	file_meta_common_proto_init()
+	file_pb_meta_common_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meta_locks_proto_rawDesc), len(file_meta_locks_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_meta_locks_proto_rawDesc), len(file_pb_meta_locks_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_meta_locks_proto_goTypes,
-		DependencyIndexes: file_meta_locks_proto_depIdxs,
-		MessageInfos:      file_meta_locks_proto_msgTypes,
+		GoTypes:           file_pb_meta_locks_proto_goTypes,
+		DependencyIndexes: file_pb_meta_locks_proto_depIdxs,
+		MessageInfos:      file_pb_meta_locks_proto_msgTypes,
 	}.Build()
-	File_meta_locks_proto = out.File
-	file_meta_locks_proto_goTypes = nil
-	file_meta_locks_proto_depIdxs = nil
+	File_pb_meta_locks_proto = out.File
+	file_pb_meta_locks_proto_goTypes = nil
+	file_pb_meta_locks_proto_depIdxs = nil
 }
