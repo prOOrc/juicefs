@@ -17,7 +17,7 @@
 // versions:
 // 	protoc-gen-go v1.36.9
 // 	protoc        v6.30.2
-// source: pkg/meta/grpc/meta.proto
+// source: meta.proto
 
 package grpc
 
@@ -36,2312 +36,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// MetaContext carries uid/gid/pid for permission checks
-type MetaContext struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Uid             uint32                 `protobuf:"varint,1,opt,name=uid,proto3" json:"uid,omitempty"`
-	Gid             uint32                 `protobuf:"varint,2,opt,name=gid,proto3" json:"gid,omitempty"`
-	Gids            []uint32               `protobuf:"varint,3,rep,packed,name=gids,proto3" json:"gids,omitempty"`
-	Pid             uint32                 `protobuf:"varint,4,opt,name=pid,proto3" json:"pid,omitempty"`
-	CheckPermission bool                   `protobuf:"varint,5,opt,name=check_permission,json=checkPermission,proto3" json:"check_permission,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
-}
-
-func (x *MetaContext) Reset() {
-	*x = MetaContext{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MetaContext) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MetaContext) ProtoMessage() {}
-
-func (x *MetaContext) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MetaContext.ProtoReflect.Descriptor instead.
-func (*MetaContext) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *MetaContext) GetUid() uint32 {
-	if x != nil {
-		return x.Uid
-	}
-	return 0
-}
-
-func (x *MetaContext) GetGid() uint32 {
-	if x != nil {
-		return x.Gid
-	}
-	return 0
-}
-
-func (x *MetaContext) GetGids() []uint32 {
-	if x != nil {
-		return x.Gids
-	}
-	return nil
-}
-
-func (x *MetaContext) GetPid() uint32 {
-	if x != nil {
-		return x.Pid
-	}
-	return 0
-}
-
-func (x *MetaContext) GetCheckPermission() bool {
-	if x != nil {
-		return x.CheckPermission
-	}
-	return false
-}
-
-// Attr represents file/directory attributes
-type ProtoAttr struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Flags         uint32                 `protobuf:"varint,1,opt,name=flags,proto3" json:"flags,omitempty"`
-	Typ           uint32                 `protobuf:"varint,2,opt,name=typ,proto3" json:"typ,omitempty"`
-	Mode          uint32                 `protobuf:"varint,3,opt,name=mode,proto3" json:"mode,omitempty"`
-	Uid           uint32                 `protobuf:"varint,4,opt,name=uid,proto3" json:"uid,omitempty"`
-	Gid           uint32                 `protobuf:"varint,5,opt,name=gid,proto3" json:"gid,omitempty"`
-	Rdev          uint32                 `protobuf:"varint,6,opt,name=rdev,proto3" json:"rdev,omitempty"`
-	Atime         int64                  `protobuf:"varint,7,opt,name=atime,proto3" json:"atime,omitempty"`
-	Mtime         int64                  `protobuf:"varint,8,opt,name=mtime,proto3" json:"mtime,omitempty"`
-	Ctime         int64                  `protobuf:"varint,9,opt,name=ctime,proto3" json:"ctime,omitempty"`
-	Atimensec     uint32                 `protobuf:"varint,10,opt,name=atimensec,proto3" json:"atimensec,omitempty"`
-	Mtimensec     uint32                 `protobuf:"varint,11,opt,name=mtimensec,proto3" json:"mtimensec,omitempty"`
-	Ctimensec     uint32                 `protobuf:"varint,12,opt,name=ctimensec,proto3" json:"ctimensec,omitempty"`
-	Nlink         uint32                 `protobuf:"varint,13,opt,name=nlink,proto3" json:"nlink,omitempty"`
-	Length        uint64                 `protobuf:"varint,14,opt,name=length,proto3" json:"length,omitempty"`
-	Parent        uint64                 `protobuf:"varint,15,opt,name=parent,proto3" json:"parent,omitempty"`
-	Full          bool                   `protobuf:"varint,16,opt,name=full,proto3" json:"full,omitempty"`
-	KeepCache     bool                   `protobuf:"varint,17,opt,name=keep_cache,json=keepCache,proto3" json:"keep_cache,omitempty"`
-	AccessAcl     uint32                 `protobuf:"varint,18,opt,name=access_acl,json=accessAcl,proto3" json:"access_acl,omitempty"`
-	DefaultAcl    uint32                 `protobuf:"varint,19,opt,name=default_acl,json=defaultAcl,proto3" json:"default_acl,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ProtoAttr) Reset() {
-	*x = ProtoAttr{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoAttr) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoAttr) ProtoMessage() {}
-
-func (x *ProtoAttr) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoAttr.ProtoReflect.Descriptor instead.
-func (*ProtoAttr) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *ProtoAttr) GetFlags() uint32 {
-	if x != nil {
-		return x.Flags
-	}
-	return 0
-}
-
-func (x *ProtoAttr) GetTyp() uint32 {
-	if x != nil {
-		return x.Typ
-	}
-	return 0
-}
-
-func (x *ProtoAttr) GetMode() uint32 {
-	if x != nil {
-		return x.Mode
-	}
-	return 0
-}
-
-func (x *ProtoAttr) GetUid() uint32 {
-	if x != nil {
-		return x.Uid
-	}
-	return 0
-}
-
-func (x *ProtoAttr) GetGid() uint32 {
-	if x != nil {
-		return x.Gid
-	}
-	return 0
-}
-
-func (x *ProtoAttr) GetRdev() uint32 {
-	if x != nil {
-		return x.Rdev
-	}
-	return 0
-}
-
-func (x *ProtoAttr) GetAtime() int64 {
-	if x != nil {
-		return x.Atime
-	}
-	return 0
-}
-
-func (x *ProtoAttr) GetMtime() int64 {
-	if x != nil {
-		return x.Mtime
-	}
-	return 0
-}
-
-func (x *ProtoAttr) GetCtime() int64 {
-	if x != nil {
-		return x.Ctime
-	}
-	return 0
-}
-
-func (x *ProtoAttr) GetAtimensec() uint32 {
-	if x != nil {
-		return x.Atimensec
-	}
-	return 0
-}
-
-func (x *ProtoAttr) GetMtimensec() uint32 {
-	if x != nil {
-		return x.Mtimensec
-	}
-	return 0
-}
-
-func (x *ProtoAttr) GetCtimensec() uint32 {
-	if x != nil {
-		return x.Ctimensec
-	}
-	return 0
-}
-
-func (x *ProtoAttr) GetNlink() uint32 {
-	if x != nil {
-		return x.Nlink
-	}
-	return 0
-}
-
-func (x *ProtoAttr) GetLength() uint64 {
-	if x != nil {
-		return x.Length
-	}
-	return 0
-}
-
-func (x *ProtoAttr) GetParent() uint64 {
-	if x != nil {
-		return x.Parent
-	}
-	return 0
-}
-
-func (x *ProtoAttr) GetFull() bool {
-	if x != nil {
-		return x.Full
-	}
-	return false
-}
-
-func (x *ProtoAttr) GetKeepCache() bool {
-	if x != nil {
-		return x.KeepCache
-	}
-	return false
-}
-
-func (x *ProtoAttr) GetAccessAcl() uint32 {
-	if x != nil {
-		return x.AccessAcl
-	}
-	return 0
-}
-
-func (x *ProtoAttr) GetDefaultAcl() uint32 {
-	if x != nil {
-		return x.DefaultAcl
-	}
-	return 0
-}
-
-// Slice represents a chunk slice
-type ProtoSlice struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Size          uint32                 `protobuf:"varint,2,opt,name=size,proto3" json:"size,omitempty"`
-	Off           uint32                 `protobuf:"varint,3,opt,name=off,proto3" json:"off,omitempty"`
-	Len           uint32                 `protobuf:"varint,4,opt,name=len,proto3" json:"len,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ProtoSlice) Reset() {
-	*x = ProtoSlice{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoSlice) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoSlice) ProtoMessage() {}
-
-func (x *ProtoSlice) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoSlice.ProtoReflect.Descriptor instead.
-func (*ProtoSlice) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *ProtoSlice) GetId() uint64 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-func (x *ProtoSlice) GetSize() uint32 {
-	if x != nil {
-		return x.Size
-	}
-	return 0
-}
-
-func (x *ProtoSlice) GetOff() uint32 {
-	if x != nil {
-		return x.Off
-	}
-	return 0
-}
-
-func (x *ProtoSlice) GetLen() uint32 {
-	if x != nil {
-		return x.Len
-	}
-	return 0
-}
-
-// SliceMapEntry for map of inodes to slices
-type SliceMapEntry struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Inode         uint64                 `protobuf:"varint,1,opt,name=inode,proto3" json:"inode,omitempty"`
-	Slices        []*ProtoSlice          `protobuf:"bytes,2,rep,name=slices,proto3" json:"slices,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SliceMapEntry) Reset() {
-	*x = SliceMapEntry{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SliceMapEntry) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SliceMapEntry) ProtoMessage() {}
-
-func (x *SliceMapEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SliceMapEntry.ProtoReflect.Descriptor instead.
-func (*SliceMapEntry) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *SliceMapEntry) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-func (x *SliceMapEntry) GetSlices() []*ProtoSlice {
-	if x != nil {
-		return x.Slices
-	}
-	return nil
-}
-
-// Entry represents a directory entry
-type ProtoEntry struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Inode         uint64                 `protobuf:"varint,1,opt,name=inode,proto3" json:"inode,omitempty"`
-	Name          []byte                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Attr          *ProtoAttr             `protobuf:"bytes,3,opt,name=attr,proto3" json:"attr,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ProtoEntry) Reset() {
-	*x = ProtoEntry{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoEntry) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoEntry) ProtoMessage() {}
-
-func (x *ProtoEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoEntry.ProtoReflect.Descriptor instead.
-func (*ProtoEntry) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *ProtoEntry) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-func (x *ProtoEntry) GetName() []byte {
-	if x != nil {
-		return x.Name
-	}
-	return nil
-}
-
-func (x *ProtoEntry) GetAttr() *ProtoAttr {
-	if x != nil {
-		return x.Attr
-	}
-	return nil
-}
-
-// Summary represents directory summary
-type ProtoSummary struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Length        uint64                 `protobuf:"varint,1,opt,name=length,proto3" json:"length,omitempty"`
-	Size          uint64                 `protobuf:"varint,2,opt,name=size,proto3" json:"size,omitempty"`
-	Files         uint64                 `protobuf:"varint,3,opt,name=files,proto3" json:"files,omitempty"`
-	Dirs          uint64                 `protobuf:"varint,4,opt,name=dirs,proto3" json:"dirs,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ProtoSummary) Reset() {
-	*x = ProtoSummary{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoSummary) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoSummary) ProtoMessage() {}
-
-func (x *ProtoSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoSummary.ProtoReflect.Descriptor instead.
-func (*ProtoSummary) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *ProtoSummary) GetLength() uint64 {
-	if x != nil {
-		return x.Length
-	}
-	return 0
-}
-
-func (x *ProtoSummary) GetSize() uint64 {
-	if x != nil {
-		return x.Size
-	}
-	return 0
-}
-
-func (x *ProtoSummary) GetFiles() uint64 {
-	if x != nil {
-		return x.Files
-	}
-	return 0
-}
-
-func (x *ProtoSummary) GetDirs() uint64 {
-	if x != nil {
-		return x.Dirs
-	}
-	return 0
-}
-
-// TreeSummary for recursive summary
-type ProtoTreeSummary struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Inode         uint64                 `protobuf:"varint,1,opt,name=inode,proto3" json:"inode,omitempty"`
-	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
-	Type          uint32                 `protobuf:"varint,3,opt,name=type,proto3" json:"type,omitempty"`
-	Size          uint64                 `protobuf:"varint,4,opt,name=size,proto3" json:"size,omitempty"`
-	Files         uint64                 `protobuf:"varint,5,opt,name=files,proto3" json:"files,omitempty"`
-	Dirs          uint64                 `protobuf:"varint,6,opt,name=dirs,proto3" json:"dirs,omitempty"`
-	Children      []*ProtoTreeSummary    `protobuf:"bytes,7,rep,name=children,proto3" json:"children,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ProtoTreeSummary) Reset() {
-	*x = ProtoTreeSummary{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoTreeSummary) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoTreeSummary) ProtoMessage() {}
-
-func (x *ProtoTreeSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoTreeSummary.ProtoReflect.Descriptor instead.
-func (*ProtoTreeSummary) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *ProtoTreeSummary) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-func (x *ProtoTreeSummary) GetPath() string {
-	if x != nil {
-		return x.Path
-	}
-	return ""
-}
-
-func (x *ProtoTreeSummary) GetType() uint32 {
-	if x != nil {
-		return x.Type
-	}
-	return 0
-}
-
-func (x *ProtoTreeSummary) GetSize() uint64 {
-	if x != nil {
-		return x.Size
-	}
-	return 0
-}
-
-func (x *ProtoTreeSummary) GetFiles() uint64 {
-	if x != nil {
-		return x.Files
-	}
-	return 0
-}
-
-func (x *ProtoTreeSummary) GetDirs() uint64 {
-	if x != nil {
-		return x.Dirs
-	}
-	return 0
-}
-
-func (x *ProtoTreeSummary) GetChildren() []*ProtoTreeSummary {
-	if x != nil {
-		return x.Children
-	}
-	return nil
-}
-
-// SessionInfo for session details
-type ProtoSessionInfo struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
-	HostName      string                 `protobuf:"bytes,2,opt,name=host_name,json=hostName,proto3" json:"host_name,omitempty"`
-	IpAddrs       []string               `protobuf:"bytes,3,rep,name=ip_addrs,json=ipAddrs,proto3" json:"ip_addrs,omitempty"`
-	MountPoint    string                 `protobuf:"bytes,4,opt,name=mount_point,json=mountPoint,proto3" json:"mount_point,omitempty"`
-	MountTime     int64                  `protobuf:"varint,5,opt,name=mount_time,json=mountTime,proto3" json:"mount_time,omitempty"`
-	ProcessId     int32                  `protobuf:"varint,6,opt,name=process_id,json=processId,proto3" json:"process_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ProtoSessionInfo) Reset() {
-	*x = ProtoSessionInfo{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoSessionInfo) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoSessionInfo) ProtoMessage() {}
-
-func (x *ProtoSessionInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoSessionInfo.ProtoReflect.Descriptor instead.
-func (*ProtoSessionInfo) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *ProtoSessionInfo) GetVersion() string {
-	if x != nil {
-		return x.Version
-	}
-	return ""
-}
-
-func (x *ProtoSessionInfo) GetHostName() string {
-	if x != nil {
-		return x.HostName
-	}
-	return ""
-}
-
-func (x *ProtoSessionInfo) GetIpAddrs() []string {
-	if x != nil {
-		return x.IpAddrs
-	}
-	return nil
-}
-
-func (x *ProtoSessionInfo) GetMountPoint() string {
-	if x != nil {
-		return x.MountPoint
-	}
-	return ""
-}
-
-func (x *ProtoSessionInfo) GetMountTime() int64 {
-	if x != nil {
-		return x.MountTime
-	}
-	return 0
-}
-
-func (x *ProtoSessionInfo) GetProcessId() int32 {
-	if x != nil {
-		return x.ProcessId
-	}
-	return 0
-}
-
-// Flock for file locks
-type ProtoFlock struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Inode         uint64                 `protobuf:"varint,1,opt,name=inode,proto3" json:"inode,omitempty"`
-	Owner         uint64                 `protobuf:"varint,2,opt,name=owner,proto3" json:"owner,omitempty"`
-	Ltype         string                 `protobuf:"bytes,3,opt,name=ltype,proto3" json:"ltype,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ProtoFlock) Reset() {
-	*x = ProtoFlock{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoFlock) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoFlock) ProtoMessage() {}
-
-func (x *ProtoFlock) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoFlock.ProtoReflect.Descriptor instead.
-func (*ProtoFlock) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *ProtoFlock) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-func (x *ProtoFlock) GetOwner() uint64 {
-	if x != nil {
-		return x.Owner
-	}
-	return 0
-}
-
-func (x *ProtoFlock) GetLtype() string {
-	if x != nil {
-		return x.Ltype
-	}
-	return ""
-}
-
-// PlockRecord for range locks
-type ProtoPlockRecord struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Type          uint32                 `protobuf:"varint,1,opt,name=type,proto3" json:"type,omitempty"`
-	Pid           uint32                 `protobuf:"varint,2,opt,name=pid,proto3" json:"pid,omitempty"`
-	Start         uint64                 `protobuf:"varint,3,opt,name=start,proto3" json:"start,omitempty"`
-	End           uint64                 `protobuf:"varint,4,opt,name=end,proto3" json:"end,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ProtoPlockRecord) Reset() {
-	*x = ProtoPlockRecord{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoPlockRecord) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoPlockRecord) ProtoMessage() {}
-
-func (x *ProtoPlockRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoPlockRecord.ProtoReflect.Descriptor instead.
-func (*ProtoPlockRecord) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *ProtoPlockRecord) GetType() uint32 {
-	if x != nil {
-		return x.Type
-	}
-	return 0
-}
-
-func (x *ProtoPlockRecord) GetPid() uint32 {
-	if x != nil {
-		return x.Pid
-	}
-	return 0
-}
-
-func (x *ProtoPlockRecord) GetStart() uint64 {
-	if x != nil {
-		return x.Start
-	}
-	return 0
-}
-
-func (x *ProtoPlockRecord) GetEnd() uint64 {
-	if x != nil {
-		return x.End
-	}
-	return 0
-}
-
-// Plock for range locks
-type ProtoPlock struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Inode         uint64                 `protobuf:"varint,1,opt,name=inode,proto3" json:"inode,omitempty"`
-	Owner         uint64                 `protobuf:"varint,2,opt,name=owner,proto3" json:"owner,omitempty"`
-	Records       []*ProtoPlockRecord    `protobuf:"bytes,3,rep,name=records,proto3" json:"records,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ProtoPlock) Reset() {
-	*x = ProtoPlock{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[10]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoPlock) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoPlock) ProtoMessage() {}
-
-func (x *ProtoPlock) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[10]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoPlock.ProtoReflect.Descriptor instead.
-func (*ProtoPlock) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *ProtoPlock) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-func (x *ProtoPlock) GetOwner() uint64 {
-	if x != nil {
-		return x.Owner
-	}
-	return 0
-}
-
-func (x *ProtoPlock) GetRecords() []*ProtoPlockRecord {
-	if x != nil {
-		return x.Records
-	}
-	return nil
-}
-
-// Session for client sessions
-type ProtoSession struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Sid           uint64                 `protobuf:"varint,1,opt,name=sid,proto3" json:"sid,omitempty"`
-	Expire        int64                  `protobuf:"varint,2,opt,name=expire,proto3" json:"expire,omitempty"`
-	Info          *ProtoSessionInfo      `protobuf:"bytes,3,opt,name=info,proto3" json:"info,omitempty"`
-	Sustained     []uint64               `protobuf:"varint,4,rep,packed,name=sustained,proto3" json:"sustained,omitempty"`
-	Flocks        []*ProtoFlock          `protobuf:"bytes,5,rep,name=flocks,proto3" json:"flocks,omitempty"`
-	Plocks        []*ProtoPlock          `protobuf:"bytes,6,rep,name=plocks,proto3" json:"plocks,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ProtoSession) Reset() {
-	*x = ProtoSession{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[11]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoSession) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoSession) ProtoMessage() {}
-
-func (x *ProtoSession) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[11]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoSession.ProtoReflect.Descriptor instead.
-func (*ProtoSession) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{11}
-}
-
-func (x *ProtoSession) GetSid() uint64 {
-	if x != nil {
-		return x.Sid
-	}
-	return 0
-}
-
-func (x *ProtoSession) GetExpire() int64 {
-	if x != nil {
-		return x.Expire
-	}
-	return 0
-}
-
-func (x *ProtoSession) GetInfo() *ProtoSessionInfo {
-	if x != nil {
-		return x.Info
-	}
-	return nil
-}
-
-func (x *ProtoSession) GetSustained() []uint64 {
-	if x != nil {
-		return x.Sustained
-	}
-	return nil
-}
-
-func (x *ProtoSession) GetFlocks() []*ProtoFlock {
-	if x != nil {
-		return x.Flocks
-	}
-	return nil
-}
-
-func (x *ProtoSession) GetPlocks() []*ProtoPlock {
-	if x != nil {
-		return x.Plocks
-	}
-	return nil
-}
-
-// Format for volume format
-type ProtoFormat struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	Name             string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Uuid             string                 `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
-	Storage          string                 `protobuf:"bytes,3,opt,name=storage,proto3" json:"storage,omitempty"`
-	StorageClass     string                 `protobuf:"bytes,4,opt,name=storage_class,json=storageClass,proto3" json:"storage_class,omitempty"`
-	Bucket           string                 `protobuf:"bytes,5,opt,name=bucket,proto3" json:"bucket,omitempty"`
-	AccessKey        string                 `protobuf:"bytes,6,opt,name=access_key,json=accessKey,proto3" json:"access_key,omitempty"`
-	SecretKey        string                 `protobuf:"bytes,7,opt,name=secret_key,json=secretKey,proto3" json:"secret_key,omitempty"`
-	SessionToken     string                 `protobuf:"bytes,8,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
-	BlockSize        int32                  `protobuf:"varint,9,opt,name=block_size,json=blockSize,proto3" json:"block_size,omitempty"`
-	Compression      string                 `protobuf:"bytes,10,opt,name=compression,proto3" json:"compression,omitempty"`
-	Shards           int32                  `protobuf:"varint,11,opt,name=shards,proto3" json:"shards,omitempty"`
-	HashPrefix       bool                   `protobuf:"varint,12,opt,name=hash_prefix,json=hashPrefix,proto3" json:"hash_prefix,omitempty"`
-	Capacity         uint64                 `protobuf:"varint,13,opt,name=capacity,proto3" json:"capacity,omitempty"`
-	Inodes           uint64                 `protobuf:"varint,14,opt,name=inodes,proto3" json:"inodes,omitempty"`
-	EncryptKey       string                 `protobuf:"bytes,15,opt,name=encrypt_key,json=encryptKey,proto3" json:"encrypt_key,omitempty"`
-	EncryptAlgo      string                 `protobuf:"bytes,16,opt,name=encrypt_algo,json=encryptAlgo,proto3" json:"encrypt_algo,omitempty"`
-	KeyEncrypted     bool                   `protobuf:"varint,17,opt,name=key_encrypted,json=keyEncrypted,proto3" json:"key_encrypted,omitempty"`
-	UploadLimit      int64                  `protobuf:"varint,18,opt,name=upload_limit,json=uploadLimit,proto3" json:"upload_limit,omitempty"`
-	DownloadLimit    int64                  `protobuf:"varint,19,opt,name=download_limit,json=downloadLimit,proto3" json:"download_limit,omitempty"`
-	TrashDays        int32                  `protobuf:"varint,20,opt,name=trash_days,json=trashDays,proto3" json:"trash_days,omitempty"`
-	MetaVersion      int32                  `protobuf:"varint,21,opt,name=meta_version,json=metaVersion,proto3" json:"meta_version,omitempty"`
-	MinClientVersion string                 `protobuf:"bytes,22,opt,name=min_client_version,json=minClientVersion,proto3" json:"min_client_version,omitempty"`
-	MaxClientVersion string                 `protobuf:"bytes,23,opt,name=max_client_version,json=maxClientVersion,proto3" json:"max_client_version,omitempty"`
-	DirStats         bool                   `protobuf:"varint,24,opt,name=dir_stats,json=dirStats,proto3" json:"dir_stats,omitempty"`
-	UserGroupQuota   bool                   `protobuf:"varint,25,opt,name=user_group_quota,json=userGroupQuota,proto3" json:"user_group_quota,omitempty"`
-	EnableAcl        bool                   `protobuf:"varint,26,opt,name=enable_acl,json=enableAcl,proto3" json:"enable_acl,omitempty"`
-	RangerRestUrl    string                 `protobuf:"bytes,27,opt,name=ranger_rest_url,json=rangerRestUrl,proto3" json:"ranger_rest_url,omitempty"`
-	RangerService    string                 `protobuf:"bytes,28,opt,name=ranger_service,json=rangerService,proto3" json:"ranger_service,omitempty"`
-	KerbConf         string                 `protobuf:"bytes,29,opt,name=kerb_conf,json=kerbConf,proto3" json:"kerb_conf,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
-}
-
-func (x *ProtoFormat) Reset() {
-	*x = ProtoFormat{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[12]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoFormat) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoFormat) ProtoMessage() {}
-
-func (x *ProtoFormat) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[12]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoFormat.ProtoReflect.Descriptor instead.
-func (*ProtoFormat) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{12}
-}
-
-func (x *ProtoFormat) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *ProtoFormat) GetUuid() string {
-	if x != nil {
-		return x.Uuid
-	}
-	return ""
-}
-
-func (x *ProtoFormat) GetStorage() string {
-	if x != nil {
-		return x.Storage
-	}
-	return ""
-}
-
-func (x *ProtoFormat) GetStorageClass() string {
-	if x != nil {
-		return x.StorageClass
-	}
-	return ""
-}
-
-func (x *ProtoFormat) GetBucket() string {
-	if x != nil {
-		return x.Bucket
-	}
-	return ""
-}
-
-func (x *ProtoFormat) GetAccessKey() string {
-	if x != nil {
-		return x.AccessKey
-	}
-	return ""
-}
-
-func (x *ProtoFormat) GetSecretKey() string {
-	if x != nil {
-		return x.SecretKey
-	}
-	return ""
-}
-
-func (x *ProtoFormat) GetSessionToken() string {
-	if x != nil {
-		return x.SessionToken
-	}
-	return ""
-}
-
-func (x *ProtoFormat) GetBlockSize() int32 {
-	if x != nil {
-		return x.BlockSize
-	}
-	return 0
-}
-
-func (x *ProtoFormat) GetCompression() string {
-	if x != nil {
-		return x.Compression
-	}
-	return ""
-}
-
-func (x *ProtoFormat) GetShards() int32 {
-	if x != nil {
-		return x.Shards
-	}
-	return 0
-}
-
-func (x *ProtoFormat) GetHashPrefix() bool {
-	if x != nil {
-		return x.HashPrefix
-	}
-	return false
-}
-
-func (x *ProtoFormat) GetCapacity() uint64 {
-	if x != nil {
-		return x.Capacity
-	}
-	return 0
-}
-
-func (x *ProtoFormat) GetInodes() uint64 {
-	if x != nil {
-		return x.Inodes
-	}
-	return 0
-}
-
-func (x *ProtoFormat) GetEncryptKey() string {
-	if x != nil {
-		return x.EncryptKey
-	}
-	return ""
-}
-
-func (x *ProtoFormat) GetEncryptAlgo() string {
-	if x != nil {
-		return x.EncryptAlgo
-	}
-	return ""
-}
-
-func (x *ProtoFormat) GetKeyEncrypted() bool {
-	if x != nil {
-		return x.KeyEncrypted
-	}
-	return false
-}
-
-func (x *ProtoFormat) GetUploadLimit() int64 {
-	if x != nil {
-		return x.UploadLimit
-	}
-	return 0
-}
-
-func (x *ProtoFormat) GetDownloadLimit() int64 {
-	if x != nil {
-		return x.DownloadLimit
-	}
-	return 0
-}
-
-func (x *ProtoFormat) GetTrashDays() int32 {
-	if x != nil {
-		return x.TrashDays
-	}
-	return 0
-}
-
-func (x *ProtoFormat) GetMetaVersion() int32 {
-	if x != nil {
-		return x.MetaVersion
-	}
-	return 0
-}
-
-func (x *ProtoFormat) GetMinClientVersion() string {
-	if x != nil {
-		return x.MinClientVersion
-	}
-	return ""
-}
-
-func (x *ProtoFormat) GetMaxClientVersion() string {
-	if x != nil {
-		return x.MaxClientVersion
-	}
-	return ""
-}
-
-func (x *ProtoFormat) GetDirStats() bool {
-	if x != nil {
-		return x.DirStats
-	}
-	return false
-}
-
-func (x *ProtoFormat) GetUserGroupQuota() bool {
-	if x != nil {
-		return x.UserGroupQuota
-	}
-	return false
-}
-
-func (x *ProtoFormat) GetEnableAcl() bool {
-	if x != nil {
-		return x.EnableAcl
-	}
-	return false
-}
-
-func (x *ProtoFormat) GetRangerRestUrl() string {
-	if x != nil {
-		return x.RangerRestUrl
-	}
-	return ""
-}
-
-func (x *ProtoFormat) GetRangerService() string {
-	if x != nil {
-		return x.RangerService
-	}
-	return ""
-}
-
-func (x *ProtoFormat) GetKerbConf() string {
-	if x != nil {
-		return x.KerbConf
-	}
-	return ""
-}
-
-// Quota for quota management
-type ProtoQuota struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MaxSpace      int64                  `protobuf:"varint,1,opt,name=max_space,json=maxSpace,proto3" json:"max_space,omitempty"`
-	MaxInodes     int64                  `protobuf:"varint,2,opt,name=max_inodes,json=maxInodes,proto3" json:"max_inodes,omitempty"`
-	UsedSpace     int64                  `protobuf:"varint,3,opt,name=used_space,json=usedSpace,proto3" json:"used_space,omitempty"`
-	UsedInodes    int64                  `protobuf:"varint,4,opt,name=used_inodes,json=usedInodes,proto3" json:"used_inodes,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ProtoQuota) Reset() {
-	*x = ProtoQuota{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[13]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoQuota) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoQuota) ProtoMessage() {}
-
-func (x *ProtoQuota) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[13]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoQuota.ProtoReflect.Descriptor instead.
-func (*ProtoQuota) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{13}
-}
-
-func (x *ProtoQuota) GetMaxSpace() int64 {
-	if x != nil {
-		return x.MaxSpace
-	}
-	return 0
-}
-
-func (x *ProtoQuota) GetMaxInodes() int64 {
-	if x != nil {
-		return x.MaxInodes
-	}
-	return 0
-}
-
-func (x *ProtoQuota) GetUsedSpace() int64 {
-	if x != nil {
-		return x.UsedSpace
-	}
-	return 0
-}
-
-func (x *ProtoQuota) GetUsedInodes() int64 {
-	if x != nil {
-		return x.UsedInodes
-	}
-	return 0
-}
-
-// DirHandler handle
-type DirHandlerHandle struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	HandleId      uint64                 `protobuf:"varint,1,opt,name=handle_id,json=handleId,proto3" json:"handle_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DirHandlerHandle) Reset() {
-	*x = DirHandlerHandle{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[14]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DirHandlerHandle) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DirHandlerHandle) ProtoMessage() {}
-
-func (x *DirHandlerHandle) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[14]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DirHandlerHandle.ProtoReflect.Descriptor instead.
-func (*DirHandlerHandle) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{14}
-}
-
-func (x *DirHandlerHandle) GetHandleId() uint64 {
-	if x != nil {
-		return x.HandleId
-	}
-	return 0
-}
-
-// ACL Rule
-type ProtoACLRule struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Type          uint32                 `protobuf:"varint,2,opt,name=type,proto3" json:"type,omitempty"`
-	Perms         uint32                 `protobuf:"varint,3,opt,name=perms,proto3" json:"perms,omitempty"`
-	Entries       []uint32               `protobuf:"varint,4,rep,packed,name=entries,proto3" json:"entries,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ProtoACLRule) Reset() {
-	*x = ProtoACLRule{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[15]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ProtoACLRule) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ProtoACLRule) ProtoMessage() {}
-
-func (x *ProtoACLRule) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[15]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ProtoACLRule.ProtoReflect.Descriptor instead.
-func (*ProtoACLRule) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{15}
-}
-
-func (x *ProtoACLRule) GetId() uint32 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-func (x *ProtoACLRule) GetType() uint32 {
-	if x != nil {
-		return x.Type
-	}
-	return 0
-}
-
-func (x *ProtoACLRule) GetPerms() uint32 {
-	if x != nil {
-		return x.Perms
-	}
-	return 0
-}
-
-func (x *ProtoACLRule) GetEntries() []uint32 {
-	if x != nil {
-		return x.Entries
-	}
-	return nil
-}
-
-// --- Lifecycle ---
-type InitRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Format        *ProtoFormat           `protobuf:"bytes,1,opt,name=format,proto3" json:"format,omitempty"`
-	Force         bool                   `protobuf:"varint,2,opt,name=force,proto3" json:"force,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *InitRequest) Reset() {
-	*x = InitRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[16]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *InitRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*InitRequest) ProtoMessage() {}
-
-func (x *InitRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[16]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use InitRequest.ProtoReflect.Descriptor instead.
-func (*InitRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{16}
-}
-
-func (x *InitRequest) GetFormat() *ProtoFormat {
-	if x != nil {
-		return x.Format
-	}
-	return nil
-}
-
-func (x *InitRequest) GetForce() bool {
-	if x != nil {
-		return x.Force
-	}
-	return false
-}
-
-type InitResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *InitResponse) Reset() {
-	*x = InitResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[17]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *InitResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*InitResponse) ProtoMessage() {}
-
-func (x *InitResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[17]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use InitResponse.ProtoReflect.Descriptor instead.
-func (*InitResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{17}
-}
-
-func (x *InitResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type LoadRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	CheckVersion  bool                   `protobuf:"varint,1,opt,name=check_version,json=checkVersion,proto3" json:"check_version,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LoadRequest) Reset() {
-	*x = LoadRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[18]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LoadRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LoadRequest) ProtoMessage() {}
-
-func (x *LoadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[18]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LoadRequest.ProtoReflect.Descriptor instead.
-func (*LoadRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{18}
-}
-
-func (x *LoadRequest) GetCheckVersion() bool {
-	if x != nil {
-		return x.CheckVersion
-	}
-	return false
-}
-
-type LoadResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Format        *ProtoFormat           `protobuf:"bytes,2,opt,name=format,proto3" json:"format,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LoadResponse) Reset() {
-	*x = LoadResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[19]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LoadResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LoadResponse) ProtoMessage() {}
-
-func (x *LoadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[19]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LoadResponse.ProtoReflect.Descriptor instead.
-func (*LoadResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{19}
-}
-
-func (x *LoadResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *LoadResponse) GetFormat() *ProtoFormat {
-	if x != nil {
-		return x.Format
-	}
-	return nil
-}
-
-type NewSessionRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Record        bool                   `protobuf:"varint,1,opt,name=record,proto3" json:"record,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *NewSessionRequest) Reset() {
-	*x = NewSessionRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[20]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *NewSessionRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*NewSessionRequest) ProtoMessage() {}
-
-func (x *NewSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[20]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use NewSessionRequest.ProtoReflect.Descriptor instead.
-func (*NewSessionRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{20}
-}
-
-func (x *NewSessionRequest) GetRecord() bool {
-	if x != nil {
-		return x.Record
-	}
-	return false
-}
-
-type NewSessionResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *NewSessionResponse) Reset() {
-	*x = NewSessionResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[21]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *NewSessionResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*NewSessionResponse) ProtoMessage() {}
-
-func (x *NewSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[21]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use NewSessionResponse.ProtoReflect.Descriptor instead.
-func (*NewSessionResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{21}
-}
-
-func (x *NewSessionResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type CloseSessionRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CloseSessionRequest) Reset() {
-	*x = CloseSessionRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[22]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CloseSessionRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CloseSessionRequest) ProtoMessage() {}
-
-func (x *CloseSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[22]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CloseSessionRequest.ProtoReflect.Descriptor instead.
-func (*CloseSessionRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{22}
-}
-
-type CloseSessionResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CloseSessionResponse) Reset() {
-	*x = CloseSessionResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[23]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CloseSessionResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CloseSessionResponse) ProtoMessage() {}
-
-func (x *CloseSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[23]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CloseSessionResponse.ProtoReflect.Descriptor instead.
-func (*CloseSessionResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{23}
-}
-
-func (x *CloseSessionResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type FlushSessionRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *FlushSessionRequest) Reset() {
-	*x = FlushSessionRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[24]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *FlushSessionRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*FlushSessionRequest) ProtoMessage() {}
-
-func (x *FlushSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[24]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use FlushSessionRequest.ProtoReflect.Descriptor instead.
-func (*FlushSessionRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{24}
-}
-
-type FlushSessionResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *FlushSessionResponse) Reset() {
-	*x = FlushSessionResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[25]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *FlushSessionResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*FlushSessionResponse) ProtoMessage() {}
-
-func (x *FlushSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[25]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use FlushSessionResponse.ProtoReflect.Descriptor instead.
-func (*FlushSessionResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{25}
-}
-
-func (x *FlushSessionResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type ShutdownRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ShutdownRequest) Reset() {
-	*x = ShutdownRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[26]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ShutdownRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ShutdownRequest) ProtoMessage() {}
-
-func (x *ShutdownRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[26]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ShutdownRequest.ProtoReflect.Descriptor instead.
-func (*ShutdownRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{26}
-}
-
-type ShutdownResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ShutdownResponse) Reset() {
-	*x = ShutdownResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[27]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ShutdownResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ShutdownResponse) ProtoMessage() {}
-
-func (x *ShutdownResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[27]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ShutdownResponse.ProtoReflect.Descriptor instead.
-func (*ShutdownResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{27}
-}
-
-func (x *ShutdownResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type ResetRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ResetRequest) Reset() {
-	*x = ResetRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[28]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ResetRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ResetRequest) ProtoMessage() {}
-
-func (x *ResetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[28]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ResetRequest.ProtoReflect.Descriptor instead.
-func (*ResetRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{28}
-}
-
-type ResetResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ResetResponse) Reset() {
-	*x = ResetResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[29]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ResetResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ResetResponse) ProtoMessage() {}
-
-func (x *ResetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[29]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ResetResponse.ProtoReflect.Descriptor instead.
-func (*ResetResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{29}
-}
-
-func (x *ResetResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type GetSessionRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Sid           uint64                 `protobuf:"varint,1,opt,name=sid,proto3" json:"sid,omitempty"`
-	Detail        bool                   `protobuf:"varint,2,opt,name=detail,proto3" json:"detail,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetSessionRequest) Reset() {
-	*x = GetSessionRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[30]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetSessionRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetSessionRequest) ProtoMessage() {}
-
-func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[30]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetSessionRequest.ProtoReflect.Descriptor instead.
-func (*GetSessionRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{30}
-}
-
-func (x *GetSessionRequest) GetSid() uint64 {
-	if x != nil {
-		return x.Sid
-	}
-	return 0
-}
-
-func (x *GetSessionRequest) GetDetail() bool {
-	if x != nil {
-		return x.Detail
-	}
-	return false
-}
-
-type GetSessionResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Session       *ProtoSession          `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetSessionResponse) Reset() {
-	*x = GetSessionResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[31]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetSessionResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetSessionResponse) ProtoMessage() {}
-
-func (x *GetSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[31]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetSessionResponse.ProtoReflect.Descriptor instead.
-func (*GetSessionResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{31}
-}
-
-func (x *GetSessionResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *GetSessionResponse) GetSession() *ProtoSession {
-	if x != nil {
-		return x.Session
-	}
-	return nil
-}
-
-type ListSessionsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListSessionsRequest) Reset() {
-	*x = ListSessionsRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[32]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListSessionsRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListSessionsRequest) ProtoMessage() {}
-
-func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[32]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListSessionsRequest.ProtoReflect.Descriptor instead.
-func (*ListSessionsRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{32}
-}
-
-type ListSessionsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Sessions      []*ProtoSession        `protobuf:"bytes,2,rep,name=sessions,proto3" json:"sessions,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListSessionsResponse) Reset() {
-	*x = ListSessionsResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[33]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListSessionsResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListSessionsResponse) ProtoMessage() {}
-
-func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[33]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListSessionsResponse.ProtoReflect.Descriptor instead.
-func (*ListSessionsResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{33}
-}
-
-func (x *ListSessionsResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *ListSessionsResponse) GetSessions() []*ProtoSession {
-	if x != nil {
-		return x.Sessions
-	}
-	return nil
-}
-
-type CleanStaleSessionsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CleanStaleSessionsRequest) Reset() {
-	*x = CleanStaleSessionsRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[34]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CleanStaleSessionsRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CleanStaleSessionsRequest) ProtoMessage() {}
-
-func (x *CleanStaleSessionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[34]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CleanStaleSessionsRequest.ProtoReflect.Descriptor instead.
-func (*CleanStaleSessionsRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{34}
-}
-
-func (x *CleanStaleSessionsRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-type CleanStaleSessionsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CleanStaleSessionsResponse) Reset() {
-	*x = CleanStaleSessionsResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[35]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CleanStaleSessionsResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CleanStaleSessionsResponse) ProtoMessage() {}
-
-func (x *CleanStaleSessionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[35]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CleanStaleSessionsResponse.ProtoReflect.Descriptor instead.
-func (*CleanStaleSessionsResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{35}
-}
-
-func (x *CleanStaleSessionsResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-// --- Core operations ---
 type StatFSRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
@@ -2352,7 +46,7 @@ type StatFSRequest struct {
 
 func (x *StatFSRequest) Reset() {
 	*x = StatFSRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[36]
+	mi := &file_meta_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2364,7 +58,7 @@ func (x *StatFSRequest) String() string {
 func (*StatFSRequest) ProtoMessage() {}
 
 func (x *StatFSRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[36]
+	mi := &file_meta_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2377,7 +71,7 @@ func (x *StatFSRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatFSRequest.ProtoReflect.Descriptor instead.
 func (*StatFSRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{36}
+	return file_meta_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *StatFSRequest) GetCtx() *MetaContext {
@@ -2407,7 +101,7 @@ type StatFSResponse struct {
 
 func (x *StatFSResponse) Reset() {
 	*x = StatFSResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[37]
+	mi := &file_meta_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2419,7 +113,7 @@ func (x *StatFSResponse) String() string {
 func (*StatFSResponse) ProtoMessage() {}
 
 func (x *StatFSResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[37]
+	mi := &file_meta_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2432,7 +126,7 @@ func (x *StatFSResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatFSResponse.ProtoReflect.Descriptor instead.
 func (*StatFSResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{37}
+	return file_meta_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *StatFSResponse) GetErrno() uint32 {
@@ -2482,7 +176,7 @@ type LookupRequest struct {
 
 func (x *LookupRequest) Reset() {
 	*x = LookupRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[38]
+	mi := &file_meta_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2494,7 +188,7 @@ func (x *LookupRequest) String() string {
 func (*LookupRequest) ProtoMessage() {}
 
 func (x *LookupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[38]
+	mi := &file_meta_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2507,7 +201,7 @@ func (x *LookupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LookupRequest.ProtoReflect.Descriptor instead.
 func (*LookupRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{38}
+	return file_meta_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *LookupRequest) GetCtx() *MetaContext {
@@ -2549,7 +243,7 @@ type LookupResponse struct {
 
 func (x *LookupResponse) Reset() {
 	*x = LookupResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[39]
+	mi := &file_meta_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2561,7 +255,7 @@ func (x *LookupResponse) String() string {
 func (*LookupResponse) ProtoMessage() {}
 
 func (x *LookupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[39]
+	mi := &file_meta_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2574,7 +268,7 @@ func (x *LookupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LookupResponse.ProtoReflect.Descriptor instead.
 func (*LookupResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{39}
+	return file_meta_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *LookupResponse) GetErrno() uint32 {
@@ -2609,7 +303,7 @@ type ResolveRequest struct {
 
 func (x *ResolveRequest) Reset() {
 	*x = ResolveRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[40]
+	mi := &file_meta_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2621,7 +315,7 @@ func (x *ResolveRequest) String() string {
 func (*ResolveRequest) ProtoMessage() {}
 
 func (x *ResolveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[40]
+	mi := &file_meta_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2634,7 +328,7 @@ func (x *ResolveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveRequest.ProtoReflect.Descriptor instead.
 func (*ResolveRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{40}
+	return file_meta_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ResolveRequest) GetCtx() *MetaContext {
@@ -2669,7 +363,7 @@ type ResolveResponse struct {
 
 func (x *ResolveResponse) Reset() {
 	*x = ResolveResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[41]
+	mi := &file_meta_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2681,7 +375,7 @@ func (x *ResolveResponse) String() string {
 func (*ResolveResponse) ProtoMessage() {}
 
 func (x *ResolveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[41]
+	mi := &file_meta_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2694,7 +388,7 @@ func (x *ResolveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveResponse.ProtoReflect.Descriptor instead.
 func (*ResolveResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{41}
+	return file_meta_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ResolveResponse) GetErrno() uint32 {
@@ -2729,7 +423,7 @@ type AccessRequest struct {
 
 func (x *AccessRequest) Reset() {
 	*x = AccessRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[42]
+	mi := &file_meta_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2741,7 +435,7 @@ func (x *AccessRequest) String() string {
 func (*AccessRequest) ProtoMessage() {}
 
 func (x *AccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[42]
+	mi := &file_meta_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2754,7 +448,7 @@ func (x *AccessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccessRequest.ProtoReflect.Descriptor instead.
 func (*AccessRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{42}
+	return file_meta_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *AccessRequest) GetCtx() *MetaContext {
@@ -2788,7 +482,7 @@ type AccessResponse struct {
 
 func (x *AccessResponse) Reset() {
 	*x = AccessResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[43]
+	mi := &file_meta_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2800,7 +494,7 @@ func (x *AccessResponse) String() string {
 func (*AccessResponse) ProtoMessage() {}
 
 func (x *AccessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[43]
+	mi := &file_meta_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2813,7 +507,7 @@ func (x *AccessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccessResponse.ProtoReflect.Descriptor instead.
 func (*AccessResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{43}
+	return file_meta_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *AccessResponse) GetErrno() uint32 {
@@ -2840,7 +534,7 @@ type GetAttrRequest struct {
 
 func (x *GetAttrRequest) Reset() {
 	*x = GetAttrRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[44]
+	mi := &file_meta_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2852,7 +546,7 @@ func (x *GetAttrRequest) String() string {
 func (*GetAttrRequest) ProtoMessage() {}
 
 func (x *GetAttrRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[44]
+	mi := &file_meta_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2865,7 +559,7 @@ func (x *GetAttrRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAttrRequest.ProtoReflect.Descriptor instead.
 func (*GetAttrRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{44}
+	return file_meta_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetAttrRequest) GetCtx() *MetaContext {
@@ -2892,7 +586,7 @@ type GetAttrResponse struct {
 
 func (x *GetAttrResponse) Reset() {
 	*x = GetAttrResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[45]
+	mi := &file_meta_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2904,7 +598,7 @@ func (x *GetAttrResponse) String() string {
 func (*GetAttrResponse) ProtoMessage() {}
 
 func (x *GetAttrResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[45]
+	mi := &file_meta_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2917,7 +611,7 @@ func (x *GetAttrResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAttrResponse.ProtoReflect.Descriptor instead.
 func (*GetAttrResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{45}
+	return file_meta_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *GetAttrResponse) GetErrno() uint32 {
@@ -2947,7 +641,7 @@ type SetAttrRequest struct {
 
 func (x *SetAttrRequest) Reset() {
 	*x = SetAttrRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[46]
+	mi := &file_meta_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2959,7 +653,7 @@ func (x *SetAttrRequest) String() string {
 func (*SetAttrRequest) ProtoMessage() {}
 
 func (x *SetAttrRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[46]
+	mi := &file_meta_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2972,7 +666,7 @@ func (x *SetAttrRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetAttrRequest.ProtoReflect.Descriptor instead.
 func (*SetAttrRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{46}
+	return file_meta_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *SetAttrRequest) GetCtx() *MetaContext {
@@ -3019,7 +713,7 @@ type SetAttrResponse struct {
 
 func (x *SetAttrResponse) Reset() {
 	*x = SetAttrResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[47]
+	mi := &file_meta_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3031,7 +725,7 @@ func (x *SetAttrResponse) String() string {
 func (*SetAttrResponse) ProtoMessage() {}
 
 func (x *SetAttrResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[47]
+	mi := &file_meta_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3044,7 +738,7 @@ func (x *SetAttrResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetAttrResponse.ProtoReflect.Descriptor instead.
 func (*SetAttrResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{47}
+	return file_meta_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *SetAttrResponse) GetErrno() uint32 {
@@ -3066,7 +760,7 @@ type CheckSetAttrRequest struct {
 
 func (x *CheckSetAttrRequest) Reset() {
 	*x = CheckSetAttrRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[48]
+	mi := &file_meta_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3078,7 +772,7 @@ func (x *CheckSetAttrRequest) String() string {
 func (*CheckSetAttrRequest) ProtoMessage() {}
 
 func (x *CheckSetAttrRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[48]
+	mi := &file_meta_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3091,7 +785,7 @@ func (x *CheckSetAttrRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckSetAttrRequest.ProtoReflect.Descriptor instead.
 func (*CheckSetAttrRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{48}
+	return file_meta_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *CheckSetAttrRequest) GetCtx() *MetaContext {
@@ -3131,7 +825,7 @@ type CheckSetAttrResponse struct {
 
 func (x *CheckSetAttrResponse) Reset() {
 	*x = CheckSetAttrResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[49]
+	mi := &file_meta_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3143,7 +837,7 @@ func (x *CheckSetAttrResponse) String() string {
 func (*CheckSetAttrResponse) ProtoMessage() {}
 
 func (x *CheckSetAttrResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[49]
+	mi := &file_meta_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3156,7 +850,7 @@ func (x *CheckSetAttrResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckSetAttrResponse.ProtoReflect.Descriptor instead.
 func (*CheckSetAttrResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{49}
+	return file_meta_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *CheckSetAttrResponse) GetErrno() uint32 {
@@ -3182,7 +876,7 @@ type MknodRequest struct {
 
 func (x *MknodRequest) Reset() {
 	*x = MknodRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[50]
+	mi := &file_meta_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3194,7 +888,7 @@ func (x *MknodRequest) String() string {
 func (*MknodRequest) ProtoMessage() {}
 
 func (x *MknodRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[50]
+	mi := &file_meta_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3207,7 +901,7 @@ func (x *MknodRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MknodRequest.ProtoReflect.Descriptor instead.
 func (*MknodRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{50}
+	return file_meta_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *MknodRequest) GetCtx() *MetaContext {
@@ -3277,7 +971,7 @@ type MknodResponse struct {
 
 func (x *MknodResponse) Reset() {
 	*x = MknodResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[51]
+	mi := &file_meta_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3289,7 +983,7 @@ func (x *MknodResponse) String() string {
 func (*MknodResponse) ProtoMessage() {}
 
 func (x *MknodResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[51]
+	mi := &file_meta_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3302,7 +996,7 @@ func (x *MknodResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MknodResponse.ProtoReflect.Descriptor instead.
 func (*MknodResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{51}
+	return file_meta_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *MknodResponse) GetErrno() uint32 {
@@ -3340,7 +1034,7 @@ type MkdirRequest struct {
 
 func (x *MkdirRequest) Reset() {
 	*x = MkdirRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[52]
+	mi := &file_meta_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3352,7 +1046,7 @@ func (x *MkdirRequest) String() string {
 func (*MkdirRequest) ProtoMessage() {}
 
 func (x *MkdirRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[52]
+	mi := &file_meta_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3365,7 +1059,7 @@ func (x *MkdirRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MkdirRequest.ProtoReflect.Descriptor instead.
 func (*MkdirRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{52}
+	return file_meta_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *MkdirRequest) GetCtx() *MetaContext {
@@ -3421,7 +1115,7 @@ type MkdirResponse struct {
 
 func (x *MkdirResponse) Reset() {
 	*x = MkdirResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[53]
+	mi := &file_meta_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3433,7 +1127,7 @@ func (x *MkdirResponse) String() string {
 func (*MkdirResponse) ProtoMessage() {}
 
 func (x *MkdirResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[53]
+	mi := &file_meta_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3446,7 +1140,7 @@ func (x *MkdirResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MkdirResponse.ProtoReflect.Descriptor instead.
 func (*MkdirResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{53}
+	return file_meta_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *MkdirResponse) GetErrno() uint32 {
@@ -3484,7 +1178,7 @@ type CreateRequest struct {
 
 func (x *CreateRequest) Reset() {
 	*x = CreateRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[54]
+	mi := &file_meta_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3496,7 +1190,7 @@ func (x *CreateRequest) String() string {
 func (*CreateRequest) ProtoMessage() {}
 
 func (x *CreateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[54]
+	mi := &file_meta_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3509,7 +1203,7 @@ func (x *CreateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRequest.ProtoReflect.Descriptor instead.
 func (*CreateRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{54}
+	return file_meta_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *CreateRequest) GetCtx() *MetaContext {
@@ -3565,7 +1259,7 @@ type CreateResponse struct {
 
 func (x *CreateResponse) Reset() {
 	*x = CreateResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[55]
+	mi := &file_meta_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3577,7 +1271,7 @@ func (x *CreateResponse) String() string {
 func (*CreateResponse) ProtoMessage() {}
 
 func (x *CreateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[55]
+	mi := &file_meta_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3590,7 +1284,7 @@ func (x *CreateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateResponse.ProtoReflect.Descriptor instead.
 func (*CreateResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{55}
+	return file_meta_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *CreateResponse) GetErrno() uint32 {
@@ -3625,7 +1319,7 @@ type OpenRequest struct {
 
 func (x *OpenRequest) Reset() {
 	*x = OpenRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[56]
+	mi := &file_meta_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3637,7 +1331,7 @@ func (x *OpenRequest) String() string {
 func (*OpenRequest) ProtoMessage() {}
 
 func (x *OpenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[56]
+	mi := &file_meta_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3650,7 +1344,7 @@ func (x *OpenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenRequest.ProtoReflect.Descriptor instead.
 func (*OpenRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{56}
+	return file_meta_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *OpenRequest) GetCtx() *MetaContext {
@@ -3684,7 +1378,7 @@ type OpenResponse struct {
 
 func (x *OpenResponse) Reset() {
 	*x = OpenResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[57]
+	mi := &file_meta_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3696,7 +1390,7 @@ func (x *OpenResponse) String() string {
 func (*OpenResponse) ProtoMessage() {}
 
 func (x *OpenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[57]
+	mi := &file_meta_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3709,7 +1403,7 @@ func (x *OpenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenResponse.ProtoReflect.Descriptor instead.
 func (*OpenResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{57}
+	return file_meta_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *OpenResponse) GetErrno() uint32 {
@@ -3736,7 +1430,7 @@ type CloseRequest struct {
 
 func (x *CloseRequest) Reset() {
 	*x = CloseRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[58]
+	mi := &file_meta_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3748,7 +1442,7 @@ func (x *CloseRequest) String() string {
 func (*CloseRequest) ProtoMessage() {}
 
 func (x *CloseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[58]
+	mi := &file_meta_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3761,7 +1455,7 @@ func (x *CloseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CloseRequest.ProtoReflect.Descriptor instead.
 func (*CloseRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{58}
+	return file_meta_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *CloseRequest) GetCtx() *MetaContext {
@@ -3787,7 +1481,7 @@ type CloseResponse struct {
 
 func (x *CloseResponse) Reset() {
 	*x = CloseResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[59]
+	mi := &file_meta_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3799,7 +1493,7 @@ func (x *CloseResponse) String() string {
 func (*CloseResponse) ProtoMessage() {}
 
 func (x *CloseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[59]
+	mi := &file_meta_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3812,7 +1506,7 @@ func (x *CloseResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CloseResponse.ProtoReflect.Descriptor instead.
 func (*CloseResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{59}
+	return file_meta_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *CloseResponse) GetErrno() uint32 {
@@ -3834,7 +1528,7 @@ type UnlinkRequest struct {
 
 func (x *UnlinkRequest) Reset() {
 	*x = UnlinkRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[60]
+	mi := &file_meta_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3846,7 +1540,7 @@ func (x *UnlinkRequest) String() string {
 func (*UnlinkRequest) ProtoMessage() {}
 
 func (x *UnlinkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[60]
+	mi := &file_meta_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3859,7 +1553,7 @@ func (x *UnlinkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlinkRequest.ProtoReflect.Descriptor instead.
 func (*UnlinkRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{60}
+	return file_meta_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *UnlinkRequest) GetCtx() *MetaContext {
@@ -3899,7 +1593,7 @@ type UnlinkResponse struct {
 
 func (x *UnlinkResponse) Reset() {
 	*x = UnlinkResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[61]
+	mi := &file_meta_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3911,7 +1605,7 @@ func (x *UnlinkResponse) String() string {
 func (*UnlinkResponse) ProtoMessage() {}
 
 func (x *UnlinkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[61]
+	mi := &file_meta_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3924,7 +1618,7 @@ func (x *UnlinkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlinkResponse.ProtoReflect.Descriptor instead.
 func (*UnlinkResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{61}
+	return file_meta_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *UnlinkResponse) GetErrno() uint32 {
@@ -3946,7 +1640,7 @@ type RmdirRequest struct {
 
 func (x *RmdirRequest) Reset() {
 	*x = RmdirRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[62]
+	mi := &file_meta_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3958,7 +1652,7 @@ func (x *RmdirRequest) String() string {
 func (*RmdirRequest) ProtoMessage() {}
 
 func (x *RmdirRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[62]
+	mi := &file_meta_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3971,7 +1665,7 @@ func (x *RmdirRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RmdirRequest.ProtoReflect.Descriptor instead.
 func (*RmdirRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{62}
+	return file_meta_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *RmdirRequest) GetCtx() *MetaContext {
@@ -4011,7 +1705,7 @@ type RmdirResponse struct {
 
 func (x *RmdirResponse) Reset() {
 	*x = RmdirResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[63]
+	mi := &file_meta_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4023,7 +1717,7 @@ func (x *RmdirResponse) String() string {
 func (*RmdirResponse) ProtoMessage() {}
 
 func (x *RmdirResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[63]
+	mi := &file_meta_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4036,7 +1730,7 @@ func (x *RmdirResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RmdirResponse.ProtoReflect.Descriptor instead.
 func (*RmdirResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{63}
+	return file_meta_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *RmdirResponse) GetErrno() uint32 {
@@ -4060,7 +1754,7 @@ type RenameRequest struct {
 
 func (x *RenameRequest) Reset() {
 	*x = RenameRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[64]
+	mi := &file_meta_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4072,7 +1766,7 @@ func (x *RenameRequest) String() string {
 func (*RenameRequest) ProtoMessage() {}
 
 func (x *RenameRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[64]
+	mi := &file_meta_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4085,7 +1779,7 @@ func (x *RenameRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameRequest.ProtoReflect.Descriptor instead.
 func (*RenameRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{64}
+	return file_meta_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *RenameRequest) GetCtx() *MetaContext {
@@ -4141,7 +1835,7 @@ type RenameResponse struct {
 
 func (x *RenameResponse) Reset() {
 	*x = RenameResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[65]
+	mi := &file_meta_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4153,7 +1847,7 @@ func (x *RenameResponse) String() string {
 func (*RenameResponse) ProtoMessage() {}
 
 func (x *RenameResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[65]
+	mi := &file_meta_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4166,7 +1860,7 @@ func (x *RenameResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameResponse.ProtoReflect.Descriptor instead.
 func (*RenameResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{65}
+	return file_meta_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *RenameResponse) GetErrno() uint32 {
@@ -4202,7 +1896,7 @@ type LinkRequest struct {
 
 func (x *LinkRequest) Reset() {
 	*x = LinkRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[66]
+	mi := &file_meta_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4214,7 +1908,7 @@ func (x *LinkRequest) String() string {
 func (*LinkRequest) ProtoMessage() {}
 
 func (x *LinkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[66]
+	mi := &file_meta_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4227,7 +1921,7 @@ func (x *LinkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkRequest.ProtoReflect.Descriptor instead.
 func (*LinkRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{66}
+	return file_meta_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *LinkRequest) GetCtx() *MetaContext {
@@ -4268,7 +1962,7 @@ type LinkResponse struct {
 
 func (x *LinkResponse) Reset() {
 	*x = LinkResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[67]
+	mi := &file_meta_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4280,7 +1974,7 @@ func (x *LinkResponse) String() string {
 func (*LinkResponse) ProtoMessage() {}
 
 func (x *LinkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[67]
+	mi := &file_meta_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4293,7 +1987,7 @@ func (x *LinkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkResponse.ProtoReflect.Descriptor instead.
 func (*LinkResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{67}
+	return file_meta_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *LinkResponse) GetErrno() uint32 {
@@ -4322,7 +2016,7 @@ type SymlinkRequest struct {
 
 func (x *SymlinkRequest) Reset() {
 	*x = SymlinkRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[68]
+	mi := &file_meta_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4334,7 +2028,7 @@ func (x *SymlinkRequest) String() string {
 func (*SymlinkRequest) ProtoMessage() {}
 
 func (x *SymlinkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[68]
+	mi := &file_meta_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4347,7 +2041,7 @@ func (x *SymlinkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SymlinkRequest.ProtoReflect.Descriptor instead.
 func (*SymlinkRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{68}
+	return file_meta_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *SymlinkRequest) GetCtx() *MetaContext {
@@ -4389,7 +2083,7 @@ type SymlinkResponse struct {
 
 func (x *SymlinkResponse) Reset() {
 	*x = SymlinkResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[69]
+	mi := &file_meta_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4401,7 +2095,7 @@ func (x *SymlinkResponse) String() string {
 func (*SymlinkResponse) ProtoMessage() {}
 
 func (x *SymlinkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[69]
+	mi := &file_meta_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4414,7 +2108,7 @@ func (x *SymlinkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SymlinkResponse.ProtoReflect.Descriptor instead.
 func (*SymlinkResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{69}
+	return file_meta_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *SymlinkResponse) GetErrno() uint32 {
@@ -4448,7 +2142,7 @@ type ReadLinkRequest struct {
 
 func (x *ReadLinkRequest) Reset() {
 	*x = ReadLinkRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[70]
+	mi := &file_meta_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4460,7 +2154,7 @@ func (x *ReadLinkRequest) String() string {
 func (*ReadLinkRequest) ProtoMessage() {}
 
 func (x *ReadLinkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[70]
+	mi := &file_meta_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4473,7 +2167,7 @@ func (x *ReadLinkRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadLinkRequest.ProtoReflect.Descriptor instead.
 func (*ReadLinkRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{70}
+	return file_meta_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ReadLinkRequest) GetCtx() *MetaContext {
@@ -4500,7 +2194,7 @@ type ReadLinkResponse struct {
 
 func (x *ReadLinkResponse) Reset() {
 	*x = ReadLinkResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[71]
+	mi := &file_meta_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4512,7 +2206,7 @@ func (x *ReadLinkResponse) String() string {
 func (*ReadLinkResponse) ProtoMessage() {}
 
 func (x *ReadLinkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[71]
+	mi := &file_meta_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4525,7 +2219,7 @@ func (x *ReadLinkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadLinkResponse.ProtoReflect.Descriptor instead.
 func (*ReadLinkResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{71}
+	return file_meta_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ReadLinkResponse) GetErrno() uint32 {
@@ -4555,7 +2249,7 @@ type TruncateRequest struct {
 
 func (x *TruncateRequest) Reset() {
 	*x = TruncateRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[72]
+	mi := &file_meta_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4567,7 +2261,7 @@ func (x *TruncateRequest) String() string {
 func (*TruncateRequest) ProtoMessage() {}
 
 func (x *TruncateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[72]
+	mi := &file_meta_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4580,7 +2274,7 @@ func (x *TruncateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TruncateRequest.ProtoReflect.Descriptor instead.
 func (*TruncateRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{72}
+	return file_meta_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *TruncateRequest) GetCtx() *MetaContext {
@@ -4628,7 +2322,7 @@ type TruncateResponse struct {
 
 func (x *TruncateResponse) Reset() {
 	*x = TruncateResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[73]
+	mi := &file_meta_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4640,7 +2334,7 @@ func (x *TruncateResponse) String() string {
 func (*TruncateResponse) ProtoMessage() {}
 
 func (x *TruncateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[73]
+	mi := &file_meta_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4653,7 +2347,7 @@ func (x *TruncateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TruncateResponse.ProtoReflect.Descriptor instead.
 func (*TruncateResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{73}
+	return file_meta_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *TruncateResponse) GetErrno() uint32 {
@@ -4683,7 +2377,7 @@ type FallocateRequest struct {
 
 func (x *FallocateRequest) Reset() {
 	*x = FallocateRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[74]
+	mi := &file_meta_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4695,7 +2389,7 @@ func (x *FallocateRequest) String() string {
 func (*FallocateRequest) ProtoMessage() {}
 
 func (x *FallocateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[74]
+	mi := &file_meta_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4708,7 +2402,7 @@ func (x *FallocateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FallocateRequest.ProtoReflect.Descriptor instead.
 func (*FallocateRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{74}
+	return file_meta_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *FallocateRequest) GetCtx() *MetaContext {
@@ -4756,7 +2450,7 @@ type FallocateResponse struct {
 
 func (x *FallocateResponse) Reset() {
 	*x = FallocateResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[75]
+	mi := &file_meta_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4768,7 +2462,7 @@ func (x *FallocateResponse) String() string {
 func (*FallocateResponse) ProtoMessage() {}
 
 func (x *FallocateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[75]
+	mi := &file_meta_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4781,7 +2475,7 @@ func (x *FallocateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FallocateResponse.ProtoReflect.Descriptor instead.
 func (*FallocateResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{75}
+	return file_meta_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *FallocateResponse) GetErrno() uint32 {
@@ -4809,7 +2503,7 @@ type ReaddirRequest struct {
 
 func (x *ReaddirRequest) Reset() {
 	*x = ReaddirRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[76]
+	mi := &file_meta_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4821,7 +2515,7 @@ func (x *ReaddirRequest) String() string {
 func (*ReaddirRequest) ProtoMessage() {}
 
 func (x *ReaddirRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[76]
+	mi := &file_meta_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4834,7 +2528,7 @@ func (x *ReaddirRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReaddirRequest.ProtoReflect.Descriptor instead.
 func (*ReaddirRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{76}
+	return file_meta_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *ReaddirRequest) GetCtx() *MetaContext {
@@ -4868,7 +2562,7 @@ type ReaddirResponse struct {
 
 func (x *ReaddirResponse) Reset() {
 	*x = ReaddirResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[77]
+	mi := &file_meta_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4880,7 +2574,7 @@ func (x *ReaddirResponse) String() string {
 func (*ReaddirResponse) ProtoMessage() {}
 
 func (x *ReaddirResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[77]
+	mi := &file_meta_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4893,7 +2587,7 @@ func (x *ReaddirResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReaddirResponse.ProtoReflect.Descriptor instead.
 func (*ReaddirResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{77}
+	return file_meta_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *ReaddirResponse) GetErrno() uint32 {
@@ -4910,7 +2604,6 @@ func (x *ReaddirResponse) GetEntries() []*ProtoEntry {
 	return nil
 }
 
-// --- Data path ---
 type ReadRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
@@ -4922,7 +2615,7 @@ type ReadRequest struct {
 
 func (x *ReadRequest) Reset() {
 	*x = ReadRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[78]
+	mi := &file_meta_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4934,7 +2627,7 @@ func (x *ReadRequest) String() string {
 func (*ReadRequest) ProtoMessage() {}
 
 func (x *ReadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[78]
+	mi := &file_meta_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4947,7 +2640,7 @@ func (x *ReadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadRequest.ProtoReflect.Descriptor instead.
 func (*ReadRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{78}
+	return file_meta_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ReadRequest) GetCtx() *MetaContext {
@@ -4981,7 +2674,7 @@ type ReadResponse struct {
 
 func (x *ReadResponse) Reset() {
 	*x = ReadResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[79]
+	mi := &file_meta_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4993,7 +2686,7 @@ func (x *ReadResponse) String() string {
 func (*ReadResponse) ProtoMessage() {}
 
 func (x *ReadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[79]
+	mi := &file_meta_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5006,7 +2699,7 @@ func (x *ReadResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadResponse.ProtoReflect.Descriptor instead.
 func (*ReadResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{79}
+	return file_meta_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ReadResponse) GetErrno() uint32 {
@@ -5037,7 +2730,7 @@ type WriteRequest struct {
 
 func (x *WriteRequest) Reset() {
 	*x = WriteRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[80]
+	mi := &file_meta_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5049,7 +2742,7 @@ func (x *WriteRequest) String() string {
 func (*WriteRequest) ProtoMessage() {}
 
 func (x *WriteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[80]
+	mi := &file_meta_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5062,7 +2755,7 @@ func (x *WriteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WriteRequest.ProtoReflect.Descriptor instead.
 func (*WriteRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{80}
+	return file_meta_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *WriteRequest) GetCtx() *MetaContext {
@@ -5116,7 +2809,7 @@ type WriteResponse struct {
 
 func (x *WriteResponse) Reset() {
 	*x = WriteResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[81]
+	mi := &file_meta_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5128,7 +2821,7 @@ func (x *WriteResponse) String() string {
 func (*WriteResponse) ProtoMessage() {}
 
 func (x *WriteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[81]
+	mi := &file_meta_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5141,7 +2834,7 @@ func (x *WriteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WriteResponse.ProtoReflect.Descriptor instead.
 func (*WriteResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{81}
+	return file_meta_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *WriteResponse) GetErrno() uint32 {
@@ -5160,7 +2853,7 @@ type NewSliceRequest struct {
 
 func (x *NewSliceRequest) Reset() {
 	*x = NewSliceRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[82]
+	mi := &file_meta_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5172,7 +2865,7 @@ func (x *NewSliceRequest) String() string {
 func (*NewSliceRequest) ProtoMessage() {}
 
 func (x *NewSliceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[82]
+	mi := &file_meta_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5185,7 +2878,7 @@ func (x *NewSliceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NewSliceRequest.ProtoReflect.Descriptor instead.
 func (*NewSliceRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{82}
+	return file_meta_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *NewSliceRequest) GetCtx() *MetaContext {
@@ -5205,7 +2898,7 @@ type NewSliceResponse struct {
 
 func (x *NewSliceResponse) Reset() {
 	*x = NewSliceResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[83]
+	mi := &file_meta_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5217,7 +2910,7 @@ func (x *NewSliceResponse) String() string {
 func (*NewSliceResponse) ProtoMessage() {}
 
 func (x *NewSliceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[83]
+	mi := &file_meta_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5230,7 +2923,7 @@ func (x *NewSliceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NewSliceResponse.ProtoReflect.Descriptor instead.
 func (*NewSliceResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{83}
+	return file_meta_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *NewSliceResponse) GetErrno() uint32 {
@@ -5258,7 +2951,7 @@ type InvalidateChunkCacheRequest struct {
 
 func (x *InvalidateChunkCacheRequest) Reset() {
 	*x = InvalidateChunkCacheRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[84]
+	mi := &file_meta_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5270,7 +2963,7 @@ func (x *InvalidateChunkCacheRequest) String() string {
 func (*InvalidateChunkCacheRequest) ProtoMessage() {}
 
 func (x *InvalidateChunkCacheRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[84]
+	mi := &file_meta_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5283,7 +2976,7 @@ func (x *InvalidateChunkCacheRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvalidateChunkCacheRequest.ProtoReflect.Descriptor instead.
 func (*InvalidateChunkCacheRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{84}
+	return file_meta_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *InvalidateChunkCacheRequest) GetCtx() *MetaContext {
@@ -5316,7 +3009,7 @@ type InvalidateChunkCacheResponse struct {
 
 func (x *InvalidateChunkCacheResponse) Reset() {
 	*x = InvalidateChunkCacheResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[85]
+	mi := &file_meta_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5328,7 +3021,7 @@ func (x *InvalidateChunkCacheResponse) String() string {
 func (*InvalidateChunkCacheResponse) ProtoMessage() {}
 
 func (x *InvalidateChunkCacheResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[85]
+	mi := &file_meta_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5341,7 +3034,7 @@ func (x *InvalidateChunkCacheResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvalidateChunkCacheResponse.ProtoReflect.Descriptor instead.
 func (*InvalidateChunkCacheResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{85}
+	return file_meta_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *InvalidateChunkCacheResponse) GetErrno() uint32 {
@@ -5366,7 +3059,7 @@ type CopyFileRangeRequest struct {
 
 func (x *CopyFileRangeRequest) Reset() {
 	*x = CopyFileRangeRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[86]
+	mi := &file_meta_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5378,7 +3071,7 @@ func (x *CopyFileRangeRequest) String() string {
 func (*CopyFileRangeRequest) ProtoMessage() {}
 
 func (x *CopyFileRangeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[86]
+	mi := &file_meta_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5391,7 +3084,7 @@ func (x *CopyFileRangeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CopyFileRangeRequest.ProtoReflect.Descriptor instead.
 func (*CopyFileRangeRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{86}
+	return file_meta_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *CopyFileRangeRequest) GetCtx() *MetaContext {
@@ -5454,7 +3147,7 @@ type CopyFileRangeResponse struct {
 
 func (x *CopyFileRangeResponse) Reset() {
 	*x = CopyFileRangeResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[87]
+	mi := &file_meta_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5466,7 +3159,7 @@ func (x *CopyFileRangeResponse) String() string {
 func (*CopyFileRangeResponse) ProtoMessage() {}
 
 func (x *CopyFileRangeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[87]
+	mi := &file_meta_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5479,7 +3172,7 @@ func (x *CopyFileRangeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CopyFileRangeResponse.ProtoReflect.Descriptor instead.
 func (*CopyFileRangeResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{87}
+	return file_meta_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *CopyFileRangeResponse) GetErrno() uint32 {
@@ -5503,4882 +3196,12 @@ func (x *CopyFileRangeResponse) GetOutLength() uint64 {
 	return 0
 }
 
-// --- Locks ---
-type FlockRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Inode         uint64                 `protobuf:"varint,2,opt,name=inode,proto3" json:"inode,omitempty"`
-	Owner         uint64                 `protobuf:"varint,3,opt,name=owner,proto3" json:"owner,omitempty"`
-	Ltype         uint32                 `protobuf:"varint,4,opt,name=ltype,proto3" json:"ltype,omitempty"`
-	Block         bool                   `protobuf:"varint,5,opt,name=block,proto3" json:"block,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
+var File_meta_proto protoreflect.FileDescriptor
 
-func (x *FlockRequest) Reset() {
-	*x = FlockRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[88]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *FlockRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*FlockRequest) ProtoMessage() {}
-
-func (x *FlockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[88]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use FlockRequest.ProtoReflect.Descriptor instead.
-func (*FlockRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{88}
-}
-
-func (x *FlockRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *FlockRequest) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-func (x *FlockRequest) GetOwner() uint64 {
-	if x != nil {
-		return x.Owner
-	}
-	return 0
-}
-
-func (x *FlockRequest) GetLtype() uint32 {
-	if x != nil {
-		return x.Ltype
-	}
-	return 0
-}
-
-func (x *FlockRequest) GetBlock() bool {
-	if x != nil {
-		return x.Block
-	}
-	return false
-}
-
-type FlockResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *FlockResponse) Reset() {
-	*x = FlockResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[89]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *FlockResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*FlockResponse) ProtoMessage() {}
-
-func (x *FlockResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[89]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use FlockResponse.ProtoReflect.Descriptor instead.
-func (*FlockResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{89}
-}
-
-func (x *FlockResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type GetlkRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Inode         uint64                 `protobuf:"varint,2,opt,name=inode,proto3" json:"inode,omitempty"`
-	Owner         uint64                 `protobuf:"varint,3,opt,name=owner,proto3" json:"owner,omitempty"`
-	Ltype         uint32                 `protobuf:"varint,4,opt,name=ltype,proto3" json:"ltype,omitempty"`
-	Start         uint64                 `protobuf:"varint,5,opt,name=start,proto3" json:"start,omitempty"`
-	End           uint64                 `protobuf:"varint,6,opt,name=end,proto3" json:"end,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetlkRequest) Reset() {
-	*x = GetlkRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[90]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetlkRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetlkRequest) ProtoMessage() {}
-
-func (x *GetlkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[90]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetlkRequest.ProtoReflect.Descriptor instead.
-func (*GetlkRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{90}
-}
-
-func (x *GetlkRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *GetlkRequest) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-func (x *GetlkRequest) GetOwner() uint64 {
-	if x != nil {
-		return x.Owner
-	}
-	return 0
-}
-
-func (x *GetlkRequest) GetLtype() uint32 {
-	if x != nil {
-		return x.Ltype
-	}
-	return 0
-}
-
-func (x *GetlkRequest) GetStart() uint64 {
-	if x != nil {
-		return x.Start
-	}
-	return 0
-}
-
-func (x *GetlkRequest) GetEnd() uint64 {
-	if x != nil {
-		return x.End
-	}
-	return 0
-}
-
-type GetlkResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Ltype         uint32                 `protobuf:"varint,2,opt,name=ltype,proto3" json:"ltype,omitempty"`
-	Start         uint64                 `protobuf:"varint,3,opt,name=start,proto3" json:"start,omitempty"`
-	End           uint64                 `protobuf:"varint,4,opt,name=end,proto3" json:"end,omitempty"`
-	Pid           uint32                 `protobuf:"varint,5,opt,name=pid,proto3" json:"pid,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetlkResponse) Reset() {
-	*x = GetlkResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[91]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetlkResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetlkResponse) ProtoMessage() {}
-
-func (x *GetlkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[91]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetlkResponse.ProtoReflect.Descriptor instead.
-func (*GetlkResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{91}
-}
-
-func (x *GetlkResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *GetlkResponse) GetLtype() uint32 {
-	if x != nil {
-		return x.Ltype
-	}
-	return 0
-}
-
-func (x *GetlkResponse) GetStart() uint64 {
-	if x != nil {
-		return x.Start
-	}
-	return 0
-}
-
-func (x *GetlkResponse) GetEnd() uint64 {
-	if x != nil {
-		return x.End
-	}
-	return 0
-}
-
-func (x *GetlkResponse) GetPid() uint32 {
-	if x != nil {
-		return x.Pid
-	}
-	return 0
-}
-
-type SetlkRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Inode         uint64                 `protobuf:"varint,2,opt,name=inode,proto3" json:"inode,omitempty"`
-	Owner         uint64                 `protobuf:"varint,3,opt,name=owner,proto3" json:"owner,omitempty"`
-	Block         bool                   `protobuf:"varint,4,opt,name=block,proto3" json:"block,omitempty"`
-	Ltype         uint32                 `protobuf:"varint,5,opt,name=ltype,proto3" json:"ltype,omitempty"`
-	Start         uint64                 `protobuf:"varint,6,opt,name=start,proto3" json:"start,omitempty"`
-	End           uint64                 `protobuf:"varint,7,opt,name=end,proto3" json:"end,omitempty"`
-	Pid           uint32                 `protobuf:"varint,8,opt,name=pid,proto3" json:"pid,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SetlkRequest) Reset() {
-	*x = SetlkRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[92]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SetlkRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SetlkRequest) ProtoMessage() {}
-
-func (x *SetlkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[92]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SetlkRequest.ProtoReflect.Descriptor instead.
-func (*SetlkRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{92}
-}
-
-func (x *SetlkRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *SetlkRequest) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-func (x *SetlkRequest) GetOwner() uint64 {
-	if x != nil {
-		return x.Owner
-	}
-	return 0
-}
-
-func (x *SetlkRequest) GetBlock() bool {
-	if x != nil {
-		return x.Block
-	}
-	return false
-}
-
-func (x *SetlkRequest) GetLtype() uint32 {
-	if x != nil {
-		return x.Ltype
-	}
-	return 0
-}
-
-func (x *SetlkRequest) GetStart() uint64 {
-	if x != nil {
-		return x.Start
-	}
-	return 0
-}
-
-func (x *SetlkRequest) GetEnd() uint64 {
-	if x != nil {
-		return x.End
-	}
-	return 0
-}
-
-func (x *SetlkRequest) GetPid() uint32 {
-	if x != nil {
-		return x.Pid
-	}
-	return 0
-}
-
-type SetlkResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SetlkResponse) Reset() {
-	*x = SetlkResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[93]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SetlkResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SetlkResponse) ProtoMessage() {}
-
-func (x *SetlkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[93]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SetlkResponse.ProtoReflect.Descriptor instead.
-func (*SetlkResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{93}
-}
-
-func (x *SetlkResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type ListLocksRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Inode         uint64                 `protobuf:"varint,2,opt,name=inode,proto3" json:"inode,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListLocksRequest) Reset() {
-	*x = ListLocksRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[94]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListLocksRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListLocksRequest) ProtoMessage() {}
-
-func (x *ListLocksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[94]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListLocksRequest.ProtoReflect.Descriptor instead.
-func (*ListLocksRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{94}
-}
-
-func (x *ListLocksRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *ListLocksRequest) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-type ListLocksResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Plocks        []*ProtoPlock          `protobuf:"bytes,2,rep,name=plocks,proto3" json:"plocks,omitempty"`
-	Flocks        []*ProtoFlock          `protobuf:"bytes,3,rep,name=flocks,proto3" json:"flocks,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListLocksResponse) Reset() {
-	*x = ListLocksResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[95]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListLocksResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListLocksResponse) ProtoMessage() {}
-
-func (x *ListLocksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[95]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListLocksResponse.ProtoReflect.Descriptor instead.
-func (*ListLocksResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{95}
-}
-
-func (x *ListLocksResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *ListLocksResponse) GetPlocks() []*ProtoPlock {
-	if x != nil {
-		return x.Plocks
-	}
-	return nil
-}
-
-func (x *ListLocksResponse) GetFlocks() []*ProtoFlock {
-	if x != nil {
-		return x.Flocks
-	}
-	return nil
-}
-
-// --- Xattrs ---
-type GetXattrRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Inode         uint64                 `protobuf:"varint,2,opt,name=inode,proto3" json:"inode,omitempty"`
-	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetXattrRequest) Reset() {
-	*x = GetXattrRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[96]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetXattrRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetXattrRequest) ProtoMessage() {}
-
-func (x *GetXattrRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[96]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetXattrRequest.ProtoReflect.Descriptor instead.
-func (*GetXattrRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{96}
-}
-
-func (x *GetXattrRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *GetXattrRequest) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-func (x *GetXattrRequest) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-type GetXattrResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Value         []byte                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetXattrResponse) Reset() {
-	*x = GetXattrResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[97]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetXattrResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetXattrResponse) ProtoMessage() {}
-
-func (x *GetXattrResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[97]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetXattrResponse.ProtoReflect.Descriptor instead.
-func (*GetXattrResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{97}
-}
-
-func (x *GetXattrResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *GetXattrResponse) GetValue() []byte {
-	if x != nil {
-		return x.Value
-	}
-	return nil
-}
-
-type SetXattrRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Inode         uint64                 `protobuf:"varint,2,opt,name=inode,proto3" json:"inode,omitempty"`
-	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Value         []byte                 `protobuf:"bytes,4,opt,name=value,proto3" json:"value,omitempty"`
-	Flags         uint32                 `protobuf:"varint,5,opt,name=flags,proto3" json:"flags,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SetXattrRequest) Reset() {
-	*x = SetXattrRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[98]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SetXattrRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SetXattrRequest) ProtoMessage() {}
-
-func (x *SetXattrRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[98]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SetXattrRequest.ProtoReflect.Descriptor instead.
-func (*SetXattrRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{98}
-}
-
-func (x *SetXattrRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *SetXattrRequest) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-func (x *SetXattrRequest) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *SetXattrRequest) GetValue() []byte {
-	if x != nil {
-		return x.Value
-	}
-	return nil
-}
-
-func (x *SetXattrRequest) GetFlags() uint32 {
-	if x != nil {
-		return x.Flags
-	}
-	return 0
-}
-
-type SetXattrResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SetXattrResponse) Reset() {
-	*x = SetXattrResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[99]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SetXattrResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SetXattrResponse) ProtoMessage() {}
-
-func (x *SetXattrResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[99]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SetXattrResponse.ProtoReflect.Descriptor instead.
-func (*SetXattrResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{99}
-}
-
-func (x *SetXattrResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type RemoveXattrRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Inode         uint64                 `protobuf:"varint,2,opt,name=inode,proto3" json:"inode,omitempty"`
-	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RemoveXattrRequest) Reset() {
-	*x = RemoveXattrRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[100]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RemoveXattrRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RemoveXattrRequest) ProtoMessage() {}
-
-func (x *RemoveXattrRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[100]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RemoveXattrRequest.ProtoReflect.Descriptor instead.
-func (*RemoveXattrRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{100}
-}
-
-func (x *RemoveXattrRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *RemoveXattrRequest) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-func (x *RemoveXattrRequest) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-type RemoveXattrResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RemoveXattrResponse) Reset() {
-	*x = RemoveXattrResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[101]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RemoveXattrResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RemoveXattrResponse) ProtoMessage() {}
-
-func (x *RemoveXattrResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[101]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RemoveXattrResponse.ProtoReflect.Descriptor instead.
-func (*RemoveXattrResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{101}
-}
-
-func (x *RemoveXattrResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type ListXattrRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Inode         uint64                 `protobuf:"varint,2,opt,name=inode,proto3" json:"inode,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListXattrRequest) Reset() {
-	*x = ListXattrRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[102]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListXattrRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListXattrRequest) ProtoMessage() {}
-
-func (x *ListXattrRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[102]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListXattrRequest.ProtoReflect.Descriptor instead.
-func (*ListXattrRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{102}
-}
-
-func (x *ListXattrRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *ListXattrRequest) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-type ListXattrResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Names         []byte                 `protobuf:"bytes,2,opt,name=names,proto3" json:"names,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListXattrResponse) Reset() {
-	*x = ListXattrResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[103]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListXattrResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListXattrResponse) ProtoMessage() {}
-
-func (x *ListXattrResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[103]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListXattrResponse.ProtoReflect.Descriptor instead.
-func (*ListXattrResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{103}
-}
-
-func (x *ListXattrResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *ListXattrResponse) GetNames() []byte {
-	if x != nil {
-		return x.Names
-	}
-	return nil
-}
-
-// --- Directory ---
-type GetParentsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Inode         uint64                 `protobuf:"varint,2,opt,name=inode,proto3" json:"inode,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetParentsRequest) Reset() {
-	*x = GetParentsRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[104]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetParentsRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetParentsRequest) ProtoMessage() {}
-
-func (x *GetParentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[104]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetParentsRequest.ProtoReflect.Descriptor instead.
-func (*GetParentsRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{104}
-}
-
-func (x *GetParentsRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *GetParentsRequest) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-type GetParentsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Parents       map[uint64]int32       `protobuf:"bytes,2,rep,name=parents,proto3" json:"parents,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetParentsResponse) Reset() {
-	*x = GetParentsResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[105]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetParentsResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetParentsResponse) ProtoMessage() {}
-
-func (x *GetParentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[105]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetParentsResponse.ProtoReflect.Descriptor instead.
-func (*GetParentsResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{105}
-}
-
-func (x *GetParentsResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *GetParentsResponse) GetParents() map[uint64]int32 {
-	if x != nil {
-		return x.Parents
-	}
-	return nil
-}
-
-type GetDirStatRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Inode         uint64                 `protobuf:"varint,2,opt,name=inode,proto3" json:"inode,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetDirStatRequest) Reset() {
-	*x = GetDirStatRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[106]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetDirStatRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetDirStatRequest) ProtoMessage() {}
-
-func (x *GetDirStatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[106]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetDirStatRequest.ProtoReflect.Descriptor instead.
-func (*GetDirStatRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{106}
-}
-
-func (x *GetDirStatRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *GetDirStatRequest) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-type GetDirStatResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Length        int64                  `protobuf:"varint,2,opt,name=length,proto3" json:"length,omitempty"`
-	Space         int64                  `protobuf:"varint,3,opt,name=space,proto3" json:"space,omitempty"`
-	Inodes        int64                  `protobuf:"varint,4,opt,name=inodes,proto3" json:"inodes,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetDirStatResponse) Reset() {
-	*x = GetDirStatResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[107]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetDirStatResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetDirStatResponse) ProtoMessage() {}
-
-func (x *GetDirStatResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[107]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetDirStatResponse.ProtoReflect.Descriptor instead.
-func (*GetDirStatResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{107}
-}
-
-func (x *GetDirStatResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *GetDirStatResponse) GetLength() int64 {
-	if x != nil {
-		return x.Length
-	}
-	return 0
-}
-
-func (x *GetDirStatResponse) GetSpace() int64 {
-	if x != nil {
-		return x.Space
-	}
-	return 0
-}
-
-func (x *GetDirStatResponse) GetInodes() int64 {
-	if x != nil {
-		return x.Inodes
-	}
-	return 0
-}
-
-// --- ACL ---
-type SetFaclRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Ino           uint64                 `protobuf:"varint,2,opt,name=ino,proto3" json:"ino,omitempty"`
-	AclType       uint32                 `protobuf:"varint,3,opt,name=acl_type,json=aclType,proto3" json:"acl_type,omitempty"`
-	Rule          *ProtoACLRule          `protobuf:"bytes,4,opt,name=rule,proto3" json:"rule,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SetFaclRequest) Reset() {
-	*x = SetFaclRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[108]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SetFaclRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SetFaclRequest) ProtoMessage() {}
-
-func (x *SetFaclRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[108]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SetFaclRequest.ProtoReflect.Descriptor instead.
-func (*SetFaclRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{108}
-}
-
-func (x *SetFaclRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *SetFaclRequest) GetIno() uint64 {
-	if x != nil {
-		return x.Ino
-	}
-	return 0
-}
-
-func (x *SetFaclRequest) GetAclType() uint32 {
-	if x != nil {
-		return x.AclType
-	}
-	return 0
-}
-
-func (x *SetFaclRequest) GetRule() *ProtoACLRule {
-	if x != nil {
-		return x.Rule
-	}
-	return nil
-}
-
-type SetFaclResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SetFaclResponse) Reset() {
-	*x = SetFaclResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[109]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SetFaclResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SetFaclResponse) ProtoMessage() {}
-
-func (x *SetFaclResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[109]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SetFaclResponse.ProtoReflect.Descriptor instead.
-func (*SetFaclResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{109}
-}
-
-func (x *SetFaclResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type GetFaclRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Ino           uint64                 `protobuf:"varint,2,opt,name=ino,proto3" json:"ino,omitempty"`
-	AclType       uint32                 `protobuf:"varint,3,opt,name=acl_type,json=aclType,proto3" json:"acl_type,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetFaclRequest) Reset() {
-	*x = GetFaclRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[110]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetFaclRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetFaclRequest) ProtoMessage() {}
-
-func (x *GetFaclRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[110]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetFaclRequest.ProtoReflect.Descriptor instead.
-func (*GetFaclRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{110}
-}
-
-func (x *GetFaclRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *GetFaclRequest) GetIno() uint64 {
-	if x != nil {
-		return x.Ino
-	}
-	return 0
-}
-
-func (x *GetFaclRequest) GetAclType() uint32 {
-	if x != nil {
-		return x.AclType
-	}
-	return 0
-}
-
-type GetFaclResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Rule          *ProtoACLRule          `protobuf:"bytes,2,opt,name=rule,proto3" json:"rule,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetFaclResponse) Reset() {
-	*x = GetFaclResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[111]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetFaclResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetFaclResponse) ProtoMessage() {}
-
-func (x *GetFaclResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[111]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetFaclResponse.ProtoReflect.Descriptor instead.
-func (*GetFaclResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{111}
-}
-
-func (x *GetFaclResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *GetFaclResponse) GetRule() *ProtoACLRule {
-	if x != nil {
-		return x.Rule
-	}
-	return nil
-}
-
-// --- Tokens ---
-type StoreTokenRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Token         []byte                 `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *StoreTokenRequest) Reset() {
-	*x = StoreTokenRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[112]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *StoreTokenRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*StoreTokenRequest) ProtoMessage() {}
-
-func (x *StoreTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[112]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use StoreTokenRequest.ProtoReflect.Descriptor instead.
-func (*StoreTokenRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{112}
-}
-
-func (x *StoreTokenRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *StoreTokenRequest) GetToken() []byte {
-	if x != nil {
-		return x.Token
-	}
-	return nil
-}
-
-type StoreTokenResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Id            uint32                 `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *StoreTokenResponse) Reset() {
-	*x = StoreTokenResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[113]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *StoreTokenResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*StoreTokenResponse) ProtoMessage() {}
-
-func (x *StoreTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[113]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use StoreTokenResponse.ProtoReflect.Descriptor instead.
-func (*StoreTokenResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{113}
-}
-
-func (x *StoreTokenResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *StoreTokenResponse) GetId() uint32 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-type UpdateTokenRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Id            uint32                 `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
-	Token         []byte                 `protobuf:"bytes,3,opt,name=token,proto3" json:"token,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *UpdateTokenRequest) Reset() {
-	*x = UpdateTokenRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[114]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *UpdateTokenRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*UpdateTokenRequest) ProtoMessage() {}
-
-func (x *UpdateTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[114]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use UpdateTokenRequest.ProtoReflect.Descriptor instead.
-func (*UpdateTokenRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{114}
-}
-
-func (x *UpdateTokenRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *UpdateTokenRequest) GetId() uint32 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-func (x *UpdateTokenRequest) GetToken() []byte {
-	if x != nil {
-		return x.Token
-	}
-	return nil
-}
-
-type UpdateTokenResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *UpdateTokenResponse) Reset() {
-	*x = UpdateTokenResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[115]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *UpdateTokenResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*UpdateTokenResponse) ProtoMessage() {}
-
-func (x *UpdateTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[115]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use UpdateTokenResponse.ProtoReflect.Descriptor instead.
-func (*UpdateTokenResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{115}
-}
-
-func (x *UpdateTokenResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type LoadTokenRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Id            uint32                 `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LoadTokenRequest) Reset() {
-	*x = LoadTokenRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[116]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LoadTokenRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LoadTokenRequest) ProtoMessage() {}
-
-func (x *LoadTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[116]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LoadTokenRequest.ProtoReflect.Descriptor instead.
-func (*LoadTokenRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{116}
-}
-
-func (x *LoadTokenRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *LoadTokenRequest) GetId() uint32 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-type LoadTokenResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Token         []byte                 `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LoadTokenResponse) Reset() {
-	*x = LoadTokenResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[117]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LoadTokenResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LoadTokenResponse) ProtoMessage() {}
-
-func (x *LoadTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[117]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LoadTokenResponse.ProtoReflect.Descriptor instead.
-func (*LoadTokenResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{117}
-}
-
-func (x *LoadTokenResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *LoadTokenResponse) GetToken() []byte {
-	if x != nil {
-		return x.Token
-	}
-	return nil
-}
-
-type DeleteTokensRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Ids           []uint32               `protobuf:"varint,2,rep,packed,name=ids,proto3" json:"ids,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DeleteTokensRequest) Reset() {
-	*x = DeleteTokensRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[118]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DeleteTokensRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DeleteTokensRequest) ProtoMessage() {}
-
-func (x *DeleteTokensRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[118]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DeleteTokensRequest.ProtoReflect.Descriptor instead.
-func (*DeleteTokensRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{118}
-}
-
-func (x *DeleteTokensRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *DeleteTokensRequest) GetIds() []uint32 {
-	if x != nil {
-		return x.Ids
-	}
-	return nil
-}
-
-type DeleteTokensResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DeleteTokensResponse) Reset() {
-	*x = DeleteTokensResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[119]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DeleteTokensResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DeleteTokensResponse) ProtoMessage() {}
-
-func (x *DeleteTokensResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[119]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DeleteTokensResponse.ProtoReflect.Descriptor instead.
-func (*DeleteTokensResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{119}
-}
-
-func (x *DeleteTokensResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type ListTokensRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListTokensRequest) Reset() {
-	*x = ListTokensRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[120]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListTokensRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListTokensRequest) ProtoMessage() {}
-
-func (x *ListTokensRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[120]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListTokensRequest.ProtoReflect.Descriptor instead.
-func (*ListTokensRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{120}
-}
-
-func (x *ListTokensRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-type ListTokensResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Tokens        map[uint32][]byte      `protobuf:"bytes,2,rep,name=tokens,proto3" json:"tokens,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListTokensResponse) Reset() {
-	*x = ListTokensResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[121]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListTokensResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListTokensResponse) ProtoMessage() {}
-
-func (x *ListTokensResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[121]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListTokensResponse.ProtoReflect.Descriptor instead.
-func (*ListTokensResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{121}
-}
-
-func (x *ListTokensResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *ListTokensResponse) GetTokens() map[uint32][]byte {
-	if x != nil {
-		return x.Tokens
-	}
-	return nil
-}
-
-// --- Admin operations ---
-type GetFormatRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetFormatRequest) Reset() {
-	*x = GetFormatRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[122]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetFormatRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetFormatRequest) ProtoMessage() {}
-
-func (x *GetFormatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[122]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetFormatRequest.ProtoReflect.Descriptor instead.
-func (*GetFormatRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{122}
-}
-
-type GetFormatResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Format        *ProtoFormat           `protobuf:"bytes,2,opt,name=format,proto3" json:"format,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetFormatResponse) Reset() {
-	*x = GetFormatResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[123]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetFormatResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetFormatResponse) ProtoMessage() {}
-
-func (x *GetFormatResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[123]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetFormatResponse.ProtoReflect.Descriptor instead.
-func (*GetFormatResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{123}
-}
-
-func (x *GetFormatResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *GetFormatResponse) GetFormat() *ProtoFormat {
-	if x != nil {
-		return x.Format
-	}
-	return nil
-}
-
-type RemoveRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Parent        uint64                 `protobuf:"varint,2,opt,name=parent,proto3" json:"parent,omitempty"`
-	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	SkipTrash     bool                   `protobuf:"varint,4,opt,name=skip_trash,json=skipTrash,proto3" json:"skip_trash,omitempty"`
-	NumThreads    int32                  `protobuf:"varint,5,opt,name=num_threads,json=numThreads,proto3" json:"num_threads,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RemoveRequest) Reset() {
-	*x = RemoveRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[124]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RemoveRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RemoveRequest) ProtoMessage() {}
-
-func (x *RemoveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[124]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RemoveRequest.ProtoReflect.Descriptor instead.
-func (*RemoveRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{124}
-}
-
-func (x *RemoveRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *RemoveRequest) GetParent() uint64 {
-	if x != nil {
-		return x.Parent
-	}
-	return 0
-}
-
-func (x *RemoveRequest) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *RemoveRequest) GetSkipTrash() bool {
-	if x != nil {
-		return x.SkipTrash
-	}
-	return false
-}
-
-func (x *RemoveRequest) GetNumThreads() int32 {
-	if x != nil {
-		return x.NumThreads
-	}
-	return 0
-}
-
-type RemoveResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Count         uint64                 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RemoveResponse) Reset() {
-	*x = RemoveResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[125]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RemoveResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RemoveResponse) ProtoMessage() {}
-
-func (x *RemoveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[125]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RemoveResponse.ProtoReflect.Descriptor instead.
-func (*RemoveResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{125}
-}
-
-func (x *RemoveResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *RemoveResponse) GetCount() uint64 {
-	if x != nil {
-		return x.Count
-	}
-	return 0
-}
-
-type BatchUnlinkRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Ctx            *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Parent         uint64                 `protobuf:"varint,2,opt,name=parent,proto3" json:"parent,omitempty"`
-	Entries        []*ProtoEntry          `protobuf:"bytes,3,rep,name=entries,proto3" json:"entries,omitempty"`
-	SkipCheckTrash bool                   `protobuf:"varint,4,opt,name=skip_check_trash,json=skipCheckTrash,proto3" json:"skip_check_trash,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *BatchUnlinkRequest) Reset() {
-	*x = BatchUnlinkRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[126]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *BatchUnlinkRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*BatchUnlinkRequest) ProtoMessage() {}
-
-func (x *BatchUnlinkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[126]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use BatchUnlinkRequest.ProtoReflect.Descriptor instead.
-func (*BatchUnlinkRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{126}
-}
-
-func (x *BatchUnlinkRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *BatchUnlinkRequest) GetParent() uint64 {
-	if x != nil {
-		return x.Parent
-	}
-	return 0
-}
-
-func (x *BatchUnlinkRequest) GetEntries() []*ProtoEntry {
-	if x != nil {
-		return x.Entries
-	}
-	return nil
-}
-
-func (x *BatchUnlinkRequest) GetSkipCheckTrash() bool {
-	if x != nil {
-		return x.SkipCheckTrash
-	}
-	return false
-}
-
-type BatchUnlinkResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Count         uint64                 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *BatchUnlinkResponse) Reset() {
-	*x = BatchUnlinkResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[127]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *BatchUnlinkResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*BatchUnlinkResponse) ProtoMessage() {}
-
-func (x *BatchUnlinkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[127]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use BatchUnlinkResponse.ProtoReflect.Descriptor instead.
-func (*BatchUnlinkResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{127}
-}
-
-func (x *BatchUnlinkResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *BatchUnlinkResponse) GetCount() uint64 {
-	if x != nil {
-		return x.Count
-	}
-	return 0
-}
-
-type GetSummaryRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Inode         uint64                 `protobuf:"varint,2,opt,name=inode,proto3" json:"inode,omitempty"`
-	Recursive     bool                   `protobuf:"varint,3,opt,name=recursive,proto3" json:"recursive,omitempty"`
-	Strict        bool                   `protobuf:"varint,4,opt,name=strict,proto3" json:"strict,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetSummaryRequest) Reset() {
-	*x = GetSummaryRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[128]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetSummaryRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetSummaryRequest) ProtoMessage() {}
-
-func (x *GetSummaryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[128]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetSummaryRequest.ProtoReflect.Descriptor instead.
-func (*GetSummaryRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{128}
-}
-
-func (x *GetSummaryRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *GetSummaryRequest) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-func (x *GetSummaryRequest) GetRecursive() bool {
-	if x != nil {
-		return x.Recursive
-	}
-	return false
-}
-
-func (x *GetSummaryRequest) GetStrict() bool {
-	if x != nil {
-		return x.Strict
-	}
-	return false
-}
-
-type GetSummaryResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Summary       *ProtoSummary          `protobuf:"bytes,2,opt,name=summary,proto3" json:"summary,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetSummaryResponse) Reset() {
-	*x = GetSummaryResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[129]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetSummaryResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetSummaryResponse) ProtoMessage() {}
-
-func (x *GetSummaryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[129]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetSummaryResponse.ProtoReflect.Descriptor instead.
-func (*GetSummaryResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{129}
-}
-
-func (x *GetSummaryResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *GetSummaryResponse) GetSummary() *ProtoSummary {
-	if x != nil {
-		return x.Summary
-	}
-	return nil
-}
-
-type GetTreeSummaryRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Inode         uint64                 `protobuf:"varint,2,opt,name=inode,proto3" json:"inode,omitempty"`
-	Depth         uint32                 `protobuf:"varint,3,opt,name=depth,proto3" json:"depth,omitempty"`
-	TopN          uint32                 `protobuf:"varint,4,opt,name=top_n,json=topN,proto3" json:"top_n,omitempty"`
-	Strict        bool                   `protobuf:"varint,5,opt,name=strict,proto3" json:"strict,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetTreeSummaryRequest) Reset() {
-	*x = GetTreeSummaryRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[130]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetTreeSummaryRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetTreeSummaryRequest) ProtoMessage() {}
-
-func (x *GetTreeSummaryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[130]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetTreeSummaryRequest.ProtoReflect.Descriptor instead.
-func (*GetTreeSummaryRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{130}
-}
-
-func (x *GetTreeSummaryRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *GetTreeSummaryRequest) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-func (x *GetTreeSummaryRequest) GetDepth() uint32 {
-	if x != nil {
-		return x.Depth
-	}
-	return 0
-}
-
-func (x *GetTreeSummaryRequest) GetTopN() uint32 {
-	if x != nil {
-		return x.TopN
-	}
-	return 0
-}
-
-func (x *GetTreeSummaryRequest) GetStrict() bool {
-	if x != nil {
-		return x.Strict
-	}
-	return false
-}
-
-type GetTreeSummaryResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Tree          *ProtoTreeSummary      `protobuf:"bytes,2,opt,name=tree,proto3" json:"tree,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetTreeSummaryResponse) Reset() {
-	*x = GetTreeSummaryResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[131]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetTreeSummaryResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetTreeSummaryResponse) ProtoMessage() {}
-
-func (x *GetTreeSummaryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[131]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetTreeSummaryResponse.ProtoReflect.Descriptor instead.
-func (*GetTreeSummaryResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{131}
-}
-
-func (x *GetTreeSummaryResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *GetTreeSummaryResponse) GetTree() *ProtoTreeSummary {
-	if x != nil {
-		return x.Tree
-	}
-	return nil
-}
-
-type CloneRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	SrcParentIno  uint64                 `protobuf:"varint,2,opt,name=src_parent_ino,json=srcParentIno,proto3" json:"src_parent_ino,omitempty"`
-	SrcIno        uint64                 `protobuf:"varint,3,opt,name=src_ino,json=srcIno,proto3" json:"src_ino,omitempty"`
-	DstParentIno  uint64                 `protobuf:"varint,4,opt,name=dst_parent_ino,json=dstParentIno,proto3" json:"dst_parent_ino,omitempty"`
-	DstName       string                 `protobuf:"bytes,5,opt,name=dst_name,json=dstName,proto3" json:"dst_name,omitempty"`
-	Cmode         uint32                 `protobuf:"varint,6,opt,name=cmode,proto3" json:"cmode,omitempty"`
-	Cumask        uint32                 `protobuf:"varint,7,opt,name=cumask,proto3" json:"cumask,omitempty"`
-	Concurrency   uint32                 `protobuf:"varint,8,opt,name=concurrency,proto3" json:"concurrency,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CloneRequest) Reset() {
-	*x = CloneRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[132]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CloneRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CloneRequest) ProtoMessage() {}
-
-func (x *CloneRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[132]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CloneRequest.ProtoReflect.Descriptor instead.
-func (*CloneRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{132}
-}
-
-func (x *CloneRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *CloneRequest) GetSrcParentIno() uint64 {
-	if x != nil {
-		return x.SrcParentIno
-	}
-	return 0
-}
-
-func (x *CloneRequest) GetSrcIno() uint64 {
-	if x != nil {
-		return x.SrcIno
-	}
-	return 0
-}
-
-func (x *CloneRequest) GetDstParentIno() uint64 {
-	if x != nil {
-		return x.DstParentIno
-	}
-	return 0
-}
-
-func (x *CloneRequest) GetDstName() string {
-	if x != nil {
-		return x.DstName
-	}
-	return ""
-}
-
-func (x *CloneRequest) GetCmode() uint32 {
-	if x != nil {
-		return x.Cmode
-	}
-	return 0
-}
-
-func (x *CloneRequest) GetCumask() uint32 {
-	if x != nil {
-		return x.Cumask
-	}
-	return 0
-}
-
-func (x *CloneRequest) GetConcurrency() uint32 {
-	if x != nil {
-		return x.Concurrency
-	}
-	return 0
-}
-
-type CloneResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Count         uint64                 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
-	Total         uint64                 `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CloneResponse) Reset() {
-	*x = CloneResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[133]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CloneResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CloneResponse) ProtoMessage() {}
-
-func (x *CloneResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[133]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CloneResponse.ProtoReflect.Descriptor instead.
-func (*CloneResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{133}
-}
-
-func (x *CloneResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *CloneResponse) GetCount() uint64 {
-	if x != nil {
-		return x.Count
-	}
-	return 0
-}
-
-func (x *CloneResponse) GetTotal() uint64 {
-	if x != nil {
-		return x.Total
-	}
-	return 0
-}
-
-type GetPathsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Inode         uint64                 `protobuf:"varint,2,opt,name=inode,proto3" json:"inode,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetPathsRequest) Reset() {
-	*x = GetPathsRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[134]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetPathsRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetPathsRequest) ProtoMessage() {}
-
-func (x *GetPathsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[134]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetPathsRequest.ProtoReflect.Descriptor instead.
-func (*GetPathsRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{134}
-}
-
-func (x *GetPathsRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *GetPathsRequest) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-type GetPathsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Paths         []string               `protobuf:"bytes,2,rep,name=paths,proto3" json:"paths,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetPathsResponse) Reset() {
-	*x = GetPathsResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[135]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetPathsResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetPathsResponse) ProtoMessage() {}
-
-func (x *GetPathsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[135]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetPathsResponse.ProtoReflect.Descriptor instead.
-func (*GetPathsResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{135}
-}
-
-func (x *GetPathsResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *GetPathsResponse) GetPaths() []string {
-	if x != nil {
-		return x.Paths
-	}
-	return nil
-}
-
-type CheckRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Fpath         string                 `protobuf:"bytes,2,opt,name=fpath,proto3" json:"fpath,omitempty"`
-	Repair        bool                   `protobuf:"varint,3,opt,name=repair,proto3" json:"repair,omitempty"`
-	Recursive     bool                   `protobuf:"varint,4,opt,name=recursive,proto3" json:"recursive,omitempty"`
-	SyncDirStat   bool                   `protobuf:"varint,5,opt,name=sync_dir_stat,json=syncDirStat,proto3" json:"sync_dir_stat,omitempty"`
-	RepairDirMode uint32                 `protobuf:"varint,6,opt,name=repair_dir_mode,json=repairDirMode,proto3" json:"repair_dir_mode,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CheckRequest) Reset() {
-	*x = CheckRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[136]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CheckRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CheckRequest) ProtoMessage() {}
-
-func (x *CheckRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[136]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CheckRequest.ProtoReflect.Descriptor instead.
-func (*CheckRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{136}
-}
-
-func (x *CheckRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *CheckRequest) GetFpath() string {
-	if x != nil {
-		return x.Fpath
-	}
-	return ""
-}
-
-func (x *CheckRequest) GetRepair() bool {
-	if x != nil {
-		return x.Repair
-	}
-	return false
-}
-
-func (x *CheckRequest) GetRecursive() bool {
-	if x != nil {
-		return x.Recursive
-	}
-	return false
-}
-
-func (x *CheckRequest) GetSyncDirStat() bool {
-	if x != nil {
-		return x.SyncDirStat
-	}
-	return false
-}
-
-func (x *CheckRequest) GetRepairDirMode() uint32 {
-	if x != nil {
-		return x.RepairDirMode
-	}
-	return 0
-}
-
-type CheckResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CheckResponse) Reset() {
-	*x = CheckResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[137]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CheckResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CheckResponse) ProtoMessage() {}
-
-func (x *CheckResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[137]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CheckResponse.ProtoReflect.Descriptor instead.
-func (*CheckResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{137}
-}
-
-func (x *CheckResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type CompactAllRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Threads       int32                  `protobuf:"varint,2,opt,name=threads,proto3" json:"threads,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CompactAllRequest) Reset() {
-	*x = CompactAllRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[138]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CompactAllRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CompactAllRequest) ProtoMessage() {}
-
-func (x *CompactAllRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[138]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CompactAllRequest.ProtoReflect.Descriptor instead.
-func (*CompactAllRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{138}
-}
-
-func (x *CompactAllRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *CompactAllRequest) GetThreads() int32 {
-	if x != nil {
-		return x.Threads
-	}
-	return 0
-}
-
-type CompactAllResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CompactAllResponse) Reset() {
-	*x = CompactAllResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[139]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CompactAllResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CompactAllResponse) ProtoMessage() {}
-
-func (x *CompactAllResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[139]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CompactAllResponse.ProtoReflect.Descriptor instead.
-func (*CompactAllResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{139}
-}
-
-func (x *CompactAllResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type CompactRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Inode         uint64                 `protobuf:"varint,2,opt,name=inode,proto3" json:"inode,omitempty"`
-	Concurrency   int32                  `protobuf:"varint,3,opt,name=concurrency,proto3" json:"concurrency,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CompactRequest) Reset() {
-	*x = CompactRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[140]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CompactRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CompactRequest) ProtoMessage() {}
-
-func (x *CompactRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[140]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CompactRequest.ProtoReflect.Descriptor instead.
-func (*CompactRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{140}
-}
-
-func (x *CompactRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *CompactRequest) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-func (x *CompactRequest) GetConcurrency() int32 {
-	if x != nil {
-		return x.Concurrency
-	}
-	return 0
-}
-
-type CompactResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CompactResponse) Reset() {
-	*x = CompactResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[141]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CompactResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CompactResponse) ProtoMessage() {}
-
-func (x *CompactResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[141]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CompactResponse.ProtoReflect.Descriptor instead.
-func (*CompactResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{141}
-}
-
-func (x *CompactResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type ListSlicesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Slices        []*SliceMapEntry       `protobuf:"bytes,2,rep,name=slices,proto3" json:"slices,omitempty"`
-	ScanPending   bool                   `protobuf:"varint,3,opt,name=scan_pending,json=scanPending,proto3" json:"scan_pending,omitempty"`
-	Delete        bool                   `protobuf:"varint,4,opt,name=delete,proto3" json:"delete,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListSlicesRequest) Reset() {
-	*x = ListSlicesRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[142]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListSlicesRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListSlicesRequest) ProtoMessage() {}
-
-func (x *ListSlicesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[142]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListSlicesRequest.ProtoReflect.Descriptor instead.
-func (*ListSlicesRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{142}
-}
-
-func (x *ListSlicesRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *ListSlicesRequest) GetSlices() []*SliceMapEntry {
-	if x != nil {
-		return x.Slices
-	}
-	return nil
-}
-
-func (x *ListSlicesRequest) GetScanPending() bool {
-	if x != nil {
-		return x.ScanPending
-	}
-	return false
-}
-
-func (x *ListSlicesRequest) GetDelete() bool {
-	if x != nil {
-		return x.Delete
-	}
-	return false
-}
-
-type ListSlicesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Slices        []*SliceMapEntry       `protobuf:"bytes,2,rep,name=slices,proto3" json:"slices,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListSlicesResponse) Reset() {
-	*x = ListSlicesResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[143]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListSlicesResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListSlicesResponse) ProtoMessage() {}
-
-func (x *ListSlicesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[143]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListSlicesResponse.ProtoReflect.Descriptor instead.
-func (*ListSlicesResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{143}
-}
-
-func (x *ListSlicesResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *ListSlicesResponse) GetSlices() []*SliceMapEntry {
-	if x != nil {
-		return x.Slices
-	}
-	return nil
-}
-
-type HandleQuotaRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Cmd           uint32                 `protobuf:"varint,2,opt,name=cmd,proto3" json:"cmd,omitempty"`
-	Dpath         string                 `protobuf:"bytes,3,opt,name=dpath,proto3" json:"dpath,omitempty"`
-	Uid           uint32                 `protobuf:"varint,4,opt,name=uid,proto3" json:"uid,omitempty"`
-	Gid           uint32                 `protobuf:"varint,5,opt,name=gid,proto3" json:"gid,omitempty"`
-	Quotas        map[string]*ProtoQuota `protobuf:"bytes,6,rep,name=quotas,proto3" json:"quotas,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Strict        bool                   `protobuf:"varint,7,opt,name=strict,proto3" json:"strict,omitempty"`
-	Repair        bool                   `protobuf:"varint,8,opt,name=repair,proto3" json:"repair,omitempty"`
-	Create        bool                   `protobuf:"varint,9,opt,name=create,proto3" json:"create,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *HandleQuotaRequest) Reset() {
-	*x = HandleQuotaRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[144]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *HandleQuotaRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*HandleQuotaRequest) ProtoMessage() {}
-
-func (x *HandleQuotaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[144]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use HandleQuotaRequest.ProtoReflect.Descriptor instead.
-func (*HandleQuotaRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{144}
-}
-
-func (x *HandleQuotaRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *HandleQuotaRequest) GetCmd() uint32 {
-	if x != nil {
-		return x.Cmd
-	}
-	return 0
-}
-
-func (x *HandleQuotaRequest) GetDpath() string {
-	if x != nil {
-		return x.Dpath
-	}
-	return ""
-}
-
-func (x *HandleQuotaRequest) GetUid() uint32 {
-	if x != nil {
-		return x.Uid
-	}
-	return 0
-}
-
-func (x *HandleQuotaRequest) GetGid() uint32 {
-	if x != nil {
-		return x.Gid
-	}
-	return 0
-}
-
-func (x *HandleQuotaRequest) GetQuotas() map[string]*ProtoQuota {
-	if x != nil {
-		return x.Quotas
-	}
-	return nil
-}
-
-func (x *HandleQuotaRequest) GetStrict() bool {
-	if x != nil {
-		return x.Strict
-	}
-	return false
-}
-
-func (x *HandleQuotaRequest) GetRepair() bool {
-	if x != nil {
-		return x.Repair
-	}
-	return false
-}
-
-func (x *HandleQuotaRequest) GetCreate() bool {
-	if x != nil {
-		return x.Create
-	}
-	return false
-}
-
-type HandleQuotaResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *HandleQuotaResponse) Reset() {
-	*x = HandleQuotaResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[145]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *HandleQuotaResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*HandleQuotaResponse) ProtoMessage() {}
-
-func (x *HandleQuotaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[145]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use HandleQuotaResponse.ProtoReflect.Descriptor instead.
-func (*HandleQuotaResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{145}
-}
-
-func (x *HandleQuotaResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type ScanUserGroupUsageRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ScanUserGroupUsageRequest) Reset() {
-	*x = ScanUserGroupUsageRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[146]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ScanUserGroupUsageRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ScanUserGroupUsageRequest) ProtoMessage() {}
-
-func (x *ScanUserGroupUsageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[146]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ScanUserGroupUsageRequest.ProtoReflect.Descriptor instead.
-func (*ScanUserGroupUsageRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{146}
-}
-
-func (x *ScanUserGroupUsageRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-type ScanUserGroupUsageResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ScanUserGroupUsageResponse) Reset() {
-	*x = ScanUserGroupUsageResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[147]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ScanUserGroupUsageResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ScanUserGroupUsageResponse) ProtoMessage() {}
-
-func (x *ScanUserGroupUsageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[147]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ScanUserGroupUsageResponse.ProtoReflect.Descriptor instead.
-func (*ScanUserGroupUsageResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{147}
-}
-
-func (x *ScanUserGroupUsageResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type ChrootRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Subdir        string                 `protobuf:"bytes,2,opt,name=subdir,proto3" json:"subdir,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ChrootRequest) Reset() {
-	*x = ChrootRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[148]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ChrootRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ChrootRequest) ProtoMessage() {}
-
-func (x *ChrootRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[148]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ChrootRequest.ProtoReflect.Descriptor instead.
-func (*ChrootRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{148}
-}
-
-func (x *ChrootRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *ChrootRequest) GetSubdir() string {
-	if x != nil {
-		return x.Subdir
-	}
-	return ""
-}
-
-type ChrootResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ChrootResponse) Reset() {
-	*x = ChrootResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[149]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ChrootResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ChrootResponse) ProtoMessage() {}
-
-func (x *ChrootResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[149]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ChrootResponse.ProtoReflect.Descriptor instead.
-func (*ChrootResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{149}
-}
-
-func (x *ChrootResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type CleanupTrashBeforeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Edge          int64                  `protobuf:"varint,2,opt,name=edge,proto3" json:"edge,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CleanupTrashBeforeRequest) Reset() {
-	*x = CleanupTrashBeforeRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[150]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CleanupTrashBeforeRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CleanupTrashBeforeRequest) ProtoMessage() {}
-
-func (x *CleanupTrashBeforeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[150]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CleanupTrashBeforeRequest.ProtoReflect.Descriptor instead.
-func (*CleanupTrashBeforeRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{150}
-}
-
-func (x *CleanupTrashBeforeRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *CleanupTrashBeforeRequest) GetEdge() int64 {
-	if x != nil {
-		return x.Edge
-	}
-	return 0
-}
-
-type CleanupTrashBeforeResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	DeletedFiles  int64                  `protobuf:"varint,2,opt,name=deleted_files,json=deletedFiles,proto3" json:"deleted_files,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CleanupTrashBeforeResponse) Reset() {
-	*x = CleanupTrashBeforeResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[151]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CleanupTrashBeforeResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CleanupTrashBeforeResponse) ProtoMessage() {}
-
-func (x *CleanupTrashBeforeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[151]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CleanupTrashBeforeResponse.ProtoReflect.Descriptor instead.
-func (*CleanupTrashBeforeResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{151}
-}
-
-func (x *CleanupTrashBeforeResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *CleanupTrashBeforeResponse) GetDeletedFiles() int64 {
-	if x != nil {
-		return x.DeletedFiles
-	}
-	return 0
-}
-
-type CleanupDetachedNodesBeforeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Edge          int64                  `protobuf:"varint,2,opt,name=edge,proto3" json:"edge,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CleanupDetachedNodesBeforeRequest) Reset() {
-	*x = CleanupDetachedNodesBeforeRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[152]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CleanupDetachedNodesBeforeRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CleanupDetachedNodesBeforeRequest) ProtoMessage() {}
-
-func (x *CleanupDetachedNodesBeforeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[152]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CleanupDetachedNodesBeforeRequest.ProtoReflect.Descriptor instead.
-func (*CleanupDetachedNodesBeforeRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{152}
-}
-
-func (x *CleanupDetachedNodesBeforeRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *CleanupDetachedNodesBeforeRequest) GetEdge() int64 {
-	if x != nil {
-		return x.Edge
-	}
-	return 0
-}
-
-type CleanupDetachedNodesBeforeResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CleanupDetachedNodesBeforeResponse) Reset() {
-	*x = CleanupDetachedNodesBeforeResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[153]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CleanupDetachedNodesBeforeResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CleanupDetachedNodesBeforeResponse) ProtoMessage() {}
-
-func (x *CleanupDetachedNodesBeforeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[153]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CleanupDetachedNodesBeforeResponse.ProtoReflect.Descriptor instead.
-func (*CleanupDetachedNodesBeforeResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{153}
-}
-
-func (x *CleanupDetachedNodesBeforeResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-// --- DirHandler ---
-type NewDirHandlerRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Inode         uint64                 `protobuf:"varint,2,opt,name=inode,proto3" json:"inode,omitempty"`
-	Plus          bool                   `protobuf:"varint,3,opt,name=plus,proto3" json:"plus,omitempty"`
-	InitEntries   []*ProtoEntry          `protobuf:"bytes,4,rep,name=init_entries,json=initEntries,proto3" json:"init_entries,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *NewDirHandlerRequest) Reset() {
-	*x = NewDirHandlerRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[154]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *NewDirHandlerRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*NewDirHandlerRequest) ProtoMessage() {}
-
-func (x *NewDirHandlerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[154]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use NewDirHandlerRequest.ProtoReflect.Descriptor instead.
-func (*NewDirHandlerRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{154}
-}
-
-func (x *NewDirHandlerRequest) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *NewDirHandlerRequest) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-func (x *NewDirHandlerRequest) GetPlus() bool {
-	if x != nil {
-		return x.Plus
-	}
-	return false
-}
-
-func (x *NewDirHandlerRequest) GetInitEntries() []*ProtoEntry {
-	if x != nil {
-		return x.InitEntries
-	}
-	return nil
-}
-
-type NewDirHandlerResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Handle        *DirHandlerHandle      `protobuf:"bytes,2,opt,name=handle,proto3" json:"handle,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *NewDirHandlerResponse) Reset() {
-	*x = NewDirHandlerResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[155]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *NewDirHandlerResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*NewDirHandlerResponse) ProtoMessage() {}
-
-func (x *NewDirHandlerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[155]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use NewDirHandlerResponse.ProtoReflect.Descriptor instead.
-func (*NewDirHandlerResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{155}
-}
-
-func (x *NewDirHandlerResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *NewDirHandlerResponse) GetHandle() *DirHandlerHandle {
-	if x != nil {
-		return x.Handle
-	}
-	return nil
-}
-
-type DirHandlerListRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Handle        *DirHandlerHandle      `protobuf:"bytes,1,opt,name=handle,proto3" json:"handle,omitempty"`
-	Offset        int32                  `protobuf:"varint,2,opt,name=offset,proto3" json:"offset,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DirHandlerListRequest) Reset() {
-	*x = DirHandlerListRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[156]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DirHandlerListRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DirHandlerListRequest) ProtoMessage() {}
-
-func (x *DirHandlerListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[156]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DirHandlerListRequest.ProtoReflect.Descriptor instead.
-func (*DirHandlerListRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{156}
-}
-
-func (x *DirHandlerListRequest) GetHandle() *DirHandlerHandle {
-	if x != nil {
-		return x.Handle
-	}
-	return nil
-}
-
-func (x *DirHandlerListRequest) GetOffset() int32 {
-	if x != nil {
-		return x.Offset
-	}
-	return 0
-}
-
-type DirHandlerListResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	Entries       []*ProtoEntry          `protobuf:"bytes,2,rep,name=entries,proto3" json:"entries,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DirHandlerListResponse) Reset() {
-	*x = DirHandlerListResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[157]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DirHandlerListResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DirHandlerListResponse) ProtoMessage() {}
-
-func (x *DirHandlerListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[157]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DirHandlerListResponse.ProtoReflect.Descriptor instead.
-func (*DirHandlerListResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{157}
-}
-
-func (x *DirHandlerListResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-func (x *DirHandlerListResponse) GetEntries() []*ProtoEntry {
-	if x != nil {
-		return x.Entries
-	}
-	return nil
-}
-
-type DirHandlerInsertRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Handle        *DirHandlerHandle      `protobuf:"bytes,1,opt,name=handle,proto3" json:"handle,omitempty"`
-	Inode         uint64                 `protobuf:"varint,2,opt,name=inode,proto3" json:"inode,omitempty"`
-	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Attr          *ProtoAttr             `protobuf:"bytes,4,opt,name=attr,proto3" json:"attr,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DirHandlerInsertRequest) Reset() {
-	*x = DirHandlerInsertRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[158]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DirHandlerInsertRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DirHandlerInsertRequest) ProtoMessage() {}
-
-func (x *DirHandlerInsertRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[158]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DirHandlerInsertRequest.ProtoReflect.Descriptor instead.
-func (*DirHandlerInsertRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{158}
-}
-
-func (x *DirHandlerInsertRequest) GetHandle() *DirHandlerHandle {
-	if x != nil {
-		return x.Handle
-	}
-	return nil
-}
-
-func (x *DirHandlerInsertRequest) GetInode() uint64 {
-	if x != nil {
-		return x.Inode
-	}
-	return 0
-}
-
-func (x *DirHandlerInsertRequest) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *DirHandlerInsertRequest) GetAttr() *ProtoAttr {
-	if x != nil {
-		return x.Attr
-	}
-	return nil
-}
-
-type DirHandlerInsertResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DirHandlerInsertResponse) Reset() {
-	*x = DirHandlerInsertResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[159]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DirHandlerInsertResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DirHandlerInsertResponse) ProtoMessage() {}
-
-func (x *DirHandlerInsertResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[159]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DirHandlerInsertResponse.ProtoReflect.Descriptor instead.
-func (*DirHandlerInsertResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{159}
-}
-
-func (x *DirHandlerInsertResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type DirHandlerDeleteRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Handle        *DirHandlerHandle      `protobuf:"bytes,1,opt,name=handle,proto3" json:"handle,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DirHandlerDeleteRequest) Reset() {
-	*x = DirHandlerDeleteRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[160]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DirHandlerDeleteRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DirHandlerDeleteRequest) ProtoMessage() {}
-
-func (x *DirHandlerDeleteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[160]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DirHandlerDeleteRequest.ProtoReflect.Descriptor instead.
-func (*DirHandlerDeleteRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{160}
-}
-
-func (x *DirHandlerDeleteRequest) GetHandle() *DirHandlerHandle {
-	if x != nil {
-		return x.Handle
-	}
-	return nil
-}
-
-func (x *DirHandlerDeleteRequest) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-type DirHandlerDeleteResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DirHandlerDeleteResponse) Reset() {
-	*x = DirHandlerDeleteResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[161]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DirHandlerDeleteResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DirHandlerDeleteResponse) ProtoMessage() {}
-
-func (x *DirHandlerDeleteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[161]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DirHandlerDeleteResponse.ProtoReflect.Descriptor instead.
-func (*DirHandlerDeleteResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{161}
-}
-
-func (x *DirHandlerDeleteResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type DirHandlerCloseRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Handle        *DirHandlerHandle      `protobuf:"bytes,1,opt,name=handle,proto3" json:"handle,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DirHandlerCloseRequest) Reset() {
-	*x = DirHandlerCloseRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[162]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DirHandlerCloseRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DirHandlerCloseRequest) ProtoMessage() {}
-
-func (x *DirHandlerCloseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[162]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DirHandlerCloseRequest.ProtoReflect.Descriptor instead.
-func (*DirHandlerCloseRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{162}
-}
-
-func (x *DirHandlerCloseRequest) GetHandle() *DirHandlerHandle {
-	if x != nil {
-		return x.Handle
-	}
-	return nil
-}
-
-type DirHandlerCloseResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DirHandlerCloseResponse) Reset() {
-	*x = DirHandlerCloseResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[163]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DirHandlerCloseResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DirHandlerCloseResponse) ProtoMessage() {}
-
-func (x *DirHandlerCloseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[163]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DirHandlerCloseResponse.ProtoReflect.Descriptor instead.
-func (*DirHandlerCloseResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{163}
-}
-
-func (x *DirHandlerCloseResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-// --- Streaming Dump/Load ---
-type DumpMetaRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Root          uint64                 `protobuf:"varint,1,opt,name=root,proto3" json:"root,omitempty"`
-	Threads       int32                  `protobuf:"varint,2,opt,name=threads,proto3" json:"threads,omitempty"`
-	KeepSecret    bool                   `protobuf:"varint,3,opt,name=keep_secret,json=keepSecret,proto3" json:"keep_secret,omitempty"`
-	Fast          bool                   `protobuf:"varint,4,opt,name=fast,proto3" json:"fast,omitempty"`
-	SkipTrash     bool                   `protobuf:"varint,5,opt,name=skip_trash,json=skipTrash,proto3" json:"skip_trash,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DumpMetaRequest) Reset() {
-	*x = DumpMetaRequest{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[164]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DumpMetaRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DumpMetaRequest) ProtoMessage() {}
-
-func (x *DumpMetaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[164]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DumpMetaRequest.ProtoReflect.Descriptor instead.
-func (*DumpMetaRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{164}
-}
-
-func (x *DumpMetaRequest) GetRoot() uint64 {
-	if x != nil {
-		return x.Root
-	}
-	return 0
-}
-
-func (x *DumpMetaRequest) GetThreads() int32 {
-	if x != nil {
-		return x.Threads
-	}
-	return 0
-}
-
-func (x *DumpMetaRequest) GetKeepSecret() bool {
-	if x != nil {
-		return x.KeepSecret
-	}
-	return false
-}
-
-func (x *DumpMetaRequest) GetFast() bool {
-	if x != nil {
-		return x.Fast
-	}
-	return false
-}
-
-func (x *DumpMetaRequest) GetSkipTrash() bool {
-	if x != nil {
-		return x.SkipTrash
-	}
-	return false
-}
-
-type DumpMetaChunk struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Data          []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DumpMetaChunk) Reset() {
-	*x = DumpMetaChunk{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[165]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DumpMetaChunk) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DumpMetaChunk) ProtoMessage() {}
-
-func (x *DumpMetaChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[165]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DumpMetaChunk.ProtoReflect.Descriptor instead.
-func (*DumpMetaChunk) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{165}
-}
-
-func (x *DumpMetaChunk) GetData() []byte {
-	if x != nil {
-		return x.Data
-	}
-	return nil
-}
-
-type LoadMetaChunk struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Data          []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LoadMetaChunk) Reset() {
-	*x = LoadMetaChunk{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[166]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LoadMetaChunk) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LoadMetaChunk) ProtoMessage() {}
-
-func (x *LoadMetaChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[166]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LoadMetaChunk.ProtoReflect.Descriptor instead.
-func (*LoadMetaChunk) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{166}
-}
-
-func (x *LoadMetaChunk) GetData() []byte {
-	if x != nil {
-		return x.Data
-	}
-	return nil
-}
-
-type LoadMetaResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LoadMetaResponse) Reset() {
-	*x = LoadMetaResponse{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[167]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LoadMetaResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LoadMetaResponse) ProtoMessage() {}
-
-func (x *LoadMetaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[167]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LoadMetaResponse.ProtoReflect.Descriptor instead.
-func (*LoadMetaResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{167}
-}
-
-func (x *LoadMetaResponse) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-type DumpMetaV2Request struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	KeepSecret    bool                   `protobuf:"varint,2,opt,name=keep_secret,json=keepSecret,proto3" json:"keep_secret,omitempty"`
-	Threads       int32                  `protobuf:"varint,3,opt,name=threads,proto3" json:"threads,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DumpMetaV2Request) Reset() {
-	*x = DumpMetaV2Request{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[168]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DumpMetaV2Request) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DumpMetaV2Request) ProtoMessage() {}
-
-func (x *DumpMetaV2Request) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[168]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DumpMetaV2Request.ProtoReflect.Descriptor instead.
-func (*DumpMetaV2Request) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{168}
-}
-
-func (x *DumpMetaV2Request) GetCtx() *MetaContext {
-	if x != nil {
-		return x.Ctx
-	}
-	return nil
-}
-
-func (x *DumpMetaV2Request) GetKeepSecret() bool {
-	if x != nil {
-		return x.KeepSecret
-	}
-	return false
-}
-
-func (x *DumpMetaV2Request) GetThreads() int32 {
-	if x != nil {
-		return x.Threads
-	}
-	return 0
-}
-
-type DumpMetaV2Chunk struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Data          []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DumpMetaV2Chunk) Reset() {
-	*x = DumpMetaV2Chunk{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[169]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DumpMetaV2Chunk) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DumpMetaV2Chunk) ProtoMessage() {}
-
-func (x *DumpMetaV2Chunk) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[169]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DumpMetaV2Chunk.ProtoReflect.Descriptor instead.
-func (*DumpMetaV2Chunk) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{169}
-}
-
-func (x *DumpMetaV2Chunk) GetData() []byte {
-	if x != nil {
-		return x.Data
-	}
-	return nil
-}
-
-type LoadMetaV2Chunk struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Data          []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LoadMetaV2Chunk) Reset() {
-	*x = LoadMetaV2Chunk{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[170]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LoadMetaV2Chunk) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LoadMetaV2Chunk) ProtoMessage() {}
-
-func (x *LoadMetaV2Chunk) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[170]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LoadMetaV2Chunk.ProtoReflect.Descriptor instead.
-func (*LoadMetaV2Chunk) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{170}
-}
-
-func (x *LoadMetaV2Chunk) GetData() []byte {
-	if x != nil {
-		return x.Data
-	}
-	return nil
-}
-
-type LoadMetaV2Response struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LoadMetaV2Response) Reset() {
-	*x = LoadMetaV2Response{}
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[171]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LoadMetaV2Response) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LoadMetaV2Response) ProtoMessage() {}
-
-func (x *LoadMetaV2Response) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_grpc_meta_proto_msgTypes[171]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LoadMetaV2Response.ProtoReflect.Descriptor instead.
-func (*LoadMetaV2Response) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_grpc_meta_proto_rawDescGZIP(), []int{171}
-}
-
-func (x *LoadMetaV2Response) GetErrno() uint32 {
-	if x != nil {
-		return x.Errno
-	}
-	return 0
-}
-
-var File_pkg_meta_grpc_meta_proto protoreflect.FileDescriptor
-
-const file_pkg_meta_grpc_meta_proto_rawDesc = "" +
+const file_meta_proto_rawDesc = "" +
 	"\n" +
-	"\x18pkg/meta/grpc/meta.proto\x12\x04meta\"\x82\x01\n" +
-	"\vMetaContext\x12\x10\n" +
-	"\x03uid\x18\x01 \x01(\rR\x03uid\x12\x10\n" +
-	"\x03gid\x18\x02 \x01(\rR\x03gid\x12\x12\n" +
-	"\x04gids\x18\x03 \x03(\rR\x04gids\x12\x10\n" +
-	"\x03pid\x18\x04 \x01(\rR\x03pid\x12)\n" +
-	"\x10check_permission\x18\x05 \x01(\bR\x0fcheckPermission\"\xd4\x03\n" +
-	"\tProtoAttr\x12\x14\n" +
-	"\x05flags\x18\x01 \x01(\rR\x05flags\x12\x10\n" +
-	"\x03typ\x18\x02 \x01(\rR\x03typ\x12\x12\n" +
-	"\x04mode\x18\x03 \x01(\rR\x04mode\x12\x10\n" +
-	"\x03uid\x18\x04 \x01(\rR\x03uid\x12\x10\n" +
-	"\x03gid\x18\x05 \x01(\rR\x03gid\x12\x12\n" +
-	"\x04rdev\x18\x06 \x01(\rR\x04rdev\x12\x14\n" +
-	"\x05atime\x18\a \x01(\x03R\x05atime\x12\x14\n" +
-	"\x05mtime\x18\b \x01(\x03R\x05mtime\x12\x14\n" +
-	"\x05ctime\x18\t \x01(\x03R\x05ctime\x12\x1c\n" +
-	"\tatimensec\x18\n" +
-	" \x01(\rR\tatimensec\x12\x1c\n" +
-	"\tmtimensec\x18\v \x01(\rR\tmtimensec\x12\x1c\n" +
-	"\tctimensec\x18\f \x01(\rR\tctimensec\x12\x14\n" +
-	"\x05nlink\x18\r \x01(\rR\x05nlink\x12\x16\n" +
-	"\x06length\x18\x0e \x01(\x04R\x06length\x12\x16\n" +
-	"\x06parent\x18\x0f \x01(\x04R\x06parent\x12\x12\n" +
-	"\x04full\x18\x10 \x01(\bR\x04full\x12\x1d\n" +
 	"\n" +
-	"keep_cache\x18\x11 \x01(\bR\tkeepCache\x12\x1d\n" +
-	"\n" +
-	"access_acl\x18\x12 \x01(\rR\taccessAcl\x12\x1f\n" +
-	"\vdefault_acl\x18\x13 \x01(\rR\n" +
-	"defaultAcl\"T\n" +
-	"\n" +
-	"ProtoSlice\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x12\n" +
-	"\x04size\x18\x02 \x01(\rR\x04size\x12\x10\n" +
-	"\x03off\x18\x03 \x01(\rR\x03off\x12\x10\n" +
-	"\x03len\x18\x04 \x01(\rR\x03len\"O\n" +
-	"\rSliceMapEntry\x12\x14\n" +
-	"\x05inode\x18\x01 \x01(\x04R\x05inode\x12(\n" +
-	"\x06slices\x18\x02 \x03(\v2\x10.meta.ProtoSliceR\x06slices\"[\n" +
-	"\n" +
-	"ProtoEntry\x12\x14\n" +
-	"\x05inode\x18\x01 \x01(\x04R\x05inode\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\fR\x04name\x12#\n" +
-	"\x04attr\x18\x03 \x01(\v2\x0f.meta.ProtoAttrR\x04attr\"d\n" +
-	"\fProtoSummary\x12\x16\n" +
-	"\x06length\x18\x01 \x01(\x04R\x06length\x12\x12\n" +
-	"\x04size\x18\x02 \x01(\x04R\x04size\x12\x14\n" +
-	"\x05files\x18\x03 \x01(\x04R\x05files\x12\x12\n" +
-	"\x04dirs\x18\x04 \x01(\x04R\x04dirs\"\xc2\x01\n" +
-	"\x10ProtoTreeSummary\x12\x14\n" +
-	"\x05inode\x18\x01 \x01(\x04R\x05inode\x12\x12\n" +
-	"\x04path\x18\x02 \x01(\tR\x04path\x12\x12\n" +
-	"\x04type\x18\x03 \x01(\rR\x04type\x12\x12\n" +
-	"\x04size\x18\x04 \x01(\x04R\x04size\x12\x14\n" +
-	"\x05files\x18\x05 \x01(\x04R\x05files\x12\x12\n" +
-	"\x04dirs\x18\x06 \x01(\x04R\x04dirs\x122\n" +
-	"\bchildren\x18\a \x03(\v2\x16.meta.ProtoTreeSummaryR\bchildren\"\xc3\x01\n" +
-	"\x10ProtoSessionInfo\x12\x18\n" +
-	"\aversion\x18\x01 \x01(\tR\aversion\x12\x1b\n" +
-	"\thost_name\x18\x02 \x01(\tR\bhostName\x12\x19\n" +
-	"\bip_addrs\x18\x03 \x03(\tR\aipAddrs\x12\x1f\n" +
-	"\vmount_point\x18\x04 \x01(\tR\n" +
-	"mountPoint\x12\x1d\n" +
-	"\n" +
-	"mount_time\x18\x05 \x01(\x03R\tmountTime\x12\x1d\n" +
-	"\n" +
-	"process_id\x18\x06 \x01(\x05R\tprocessId\"N\n" +
-	"\n" +
-	"ProtoFlock\x12\x14\n" +
-	"\x05inode\x18\x01 \x01(\x04R\x05inode\x12\x14\n" +
-	"\x05owner\x18\x02 \x01(\x04R\x05owner\x12\x14\n" +
-	"\x05ltype\x18\x03 \x01(\tR\x05ltype\"`\n" +
-	"\x10ProtoPlockRecord\x12\x12\n" +
-	"\x04type\x18\x01 \x01(\rR\x04type\x12\x10\n" +
-	"\x03pid\x18\x02 \x01(\rR\x03pid\x12\x14\n" +
-	"\x05start\x18\x03 \x01(\x04R\x05start\x12\x10\n" +
-	"\x03end\x18\x04 \x01(\x04R\x03end\"j\n" +
-	"\n" +
-	"ProtoPlock\x12\x14\n" +
-	"\x05inode\x18\x01 \x01(\x04R\x05inode\x12\x14\n" +
-	"\x05owner\x18\x02 \x01(\x04R\x05owner\x120\n" +
-	"\arecords\x18\x03 \x03(\v2\x16.meta.ProtoPlockRecordR\arecords\"\xd6\x01\n" +
-	"\fProtoSession\x12\x10\n" +
-	"\x03sid\x18\x01 \x01(\x04R\x03sid\x12\x16\n" +
-	"\x06expire\x18\x02 \x01(\x03R\x06expire\x12*\n" +
-	"\x04info\x18\x03 \x01(\v2\x16.meta.ProtoSessionInfoR\x04info\x12\x1c\n" +
-	"\tsustained\x18\x04 \x03(\x04R\tsustained\x12(\n" +
-	"\x06flocks\x18\x05 \x03(\v2\x10.meta.ProtoFlockR\x06flocks\x12(\n" +
-	"\x06plocks\x18\x06 \x03(\v2\x10.meta.ProtoPlockR\x06plocks\"\xc0\a\n" +
-	"\vProtoFormat\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
-	"\x04uuid\x18\x02 \x01(\tR\x04uuid\x12\x18\n" +
-	"\astorage\x18\x03 \x01(\tR\astorage\x12#\n" +
-	"\rstorage_class\x18\x04 \x01(\tR\fstorageClass\x12\x16\n" +
-	"\x06bucket\x18\x05 \x01(\tR\x06bucket\x12\x1d\n" +
-	"\n" +
-	"access_key\x18\x06 \x01(\tR\taccessKey\x12\x1d\n" +
-	"\n" +
-	"secret_key\x18\a \x01(\tR\tsecretKey\x12#\n" +
-	"\rsession_token\x18\b \x01(\tR\fsessionToken\x12\x1d\n" +
-	"\n" +
-	"block_size\x18\t \x01(\x05R\tblockSize\x12 \n" +
-	"\vcompression\x18\n" +
-	" \x01(\tR\vcompression\x12\x16\n" +
-	"\x06shards\x18\v \x01(\x05R\x06shards\x12\x1f\n" +
-	"\vhash_prefix\x18\f \x01(\bR\n" +
-	"hashPrefix\x12\x1a\n" +
-	"\bcapacity\x18\r \x01(\x04R\bcapacity\x12\x16\n" +
-	"\x06inodes\x18\x0e \x01(\x04R\x06inodes\x12\x1f\n" +
-	"\vencrypt_key\x18\x0f \x01(\tR\n" +
-	"encryptKey\x12!\n" +
-	"\fencrypt_algo\x18\x10 \x01(\tR\vencryptAlgo\x12#\n" +
-	"\rkey_encrypted\x18\x11 \x01(\bR\fkeyEncrypted\x12!\n" +
-	"\fupload_limit\x18\x12 \x01(\x03R\vuploadLimit\x12%\n" +
-	"\x0edownload_limit\x18\x13 \x01(\x03R\rdownloadLimit\x12\x1d\n" +
-	"\n" +
-	"trash_days\x18\x14 \x01(\x05R\ttrashDays\x12!\n" +
-	"\fmeta_version\x18\x15 \x01(\x05R\vmetaVersion\x12,\n" +
-	"\x12min_client_version\x18\x16 \x01(\tR\x10minClientVersion\x12,\n" +
-	"\x12max_client_version\x18\x17 \x01(\tR\x10maxClientVersion\x12\x1b\n" +
-	"\tdir_stats\x18\x18 \x01(\bR\bdirStats\x12(\n" +
-	"\x10user_group_quota\x18\x19 \x01(\bR\x0euserGroupQuota\x12\x1d\n" +
-	"\n" +
-	"enable_acl\x18\x1a \x01(\bR\tenableAcl\x12&\n" +
-	"\x0franger_rest_url\x18\x1b \x01(\tR\rrangerRestUrl\x12%\n" +
-	"\x0eranger_service\x18\x1c \x01(\tR\rrangerService\x12\x1b\n" +
-	"\tkerb_conf\x18\x1d \x01(\tR\bkerbConf\"\x88\x01\n" +
-	"\n" +
-	"ProtoQuota\x12\x1b\n" +
-	"\tmax_space\x18\x01 \x01(\x03R\bmaxSpace\x12\x1d\n" +
-	"\n" +
-	"max_inodes\x18\x02 \x01(\x03R\tmaxInodes\x12\x1d\n" +
-	"\n" +
-	"used_space\x18\x03 \x01(\x03R\tusedSpace\x12\x1f\n" +
-	"\vused_inodes\x18\x04 \x01(\x03R\n" +
-	"usedInodes\"/\n" +
-	"\x10DirHandlerHandle\x12\x1b\n" +
-	"\thandle_id\x18\x01 \x01(\x04R\bhandleId\"b\n" +
-	"\fProtoACLRule\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
-	"\x04type\x18\x02 \x01(\rR\x04type\x12\x14\n" +
-	"\x05perms\x18\x03 \x01(\rR\x05perms\x12\x18\n" +
-	"\aentries\x18\x04 \x03(\rR\aentries\"N\n" +
-	"\vInitRequest\x12)\n" +
-	"\x06format\x18\x01 \x01(\v2\x11.meta.ProtoFormatR\x06format\x12\x14\n" +
-	"\x05force\x18\x02 \x01(\bR\x05force\"$\n" +
-	"\fInitResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"2\n" +
-	"\vLoadRequest\x12#\n" +
-	"\rcheck_version\x18\x01 \x01(\bR\fcheckVersion\"O\n" +
-	"\fLoadResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12)\n" +
-	"\x06format\x18\x02 \x01(\v2\x11.meta.ProtoFormatR\x06format\"+\n" +
-	"\x11NewSessionRequest\x12\x16\n" +
-	"\x06record\x18\x01 \x01(\bR\x06record\"*\n" +
-	"\x12NewSessionResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x15\n" +
-	"\x13CloseSessionRequest\",\n" +
-	"\x14CloseSessionResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x15\n" +
-	"\x13FlushSessionRequest\",\n" +
-	"\x14FlushSessionResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x11\n" +
-	"\x0fShutdownRequest\"(\n" +
-	"\x10ShutdownResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x0e\n" +
-	"\fResetRequest\"%\n" +
-	"\rResetResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"=\n" +
-	"\x11GetSessionRequest\x12\x10\n" +
-	"\x03sid\x18\x01 \x01(\x04R\x03sid\x12\x16\n" +
-	"\x06detail\x18\x02 \x01(\bR\x06detail\"X\n" +
-	"\x12GetSessionResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12,\n" +
-	"\asession\x18\x02 \x01(\v2\x12.meta.ProtoSessionR\asession\"\x15\n" +
-	"\x13ListSessionsRequest\"\\\n" +
-	"\x14ListSessionsResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12.\n" +
-	"\bsessions\x18\x02 \x03(\v2\x12.meta.ProtoSessionR\bsessions\"@\n" +
-	"\x19CleanStaleSessionsRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\"2\n" +
-	"\x1aCleanStaleSessionsResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"F\n" +
+	"meta.proto\x12\x04meta\x1a\x11meta_common.proto\x1a\x14meta_lifecycle.proto\x1a\x10meta_locks.proto\x1a\x11meta_xattrs.proto\x1a\x14meta_directory.proto\x1a\x0emeta_acl.proto\x1a\x10meta_token.proto\x1a\x10meta_admin.proto\x1a\x14meta_streaming.proto\x1a\x16meta_dir_handler.proto\"F\n" +
 	"\rStatFSRequest\x12#\n" +
 	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x10\n" +
 	"\x03ino\x18\x02 \x01(\x04R\x03ino\"\x96\x01\n" +
@@ -10596,312 +3419,7 @@ const file_pkg_meta_grpc_meta_proto_rawDesc = "" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x16\n" +
 	"\x06copied\x18\x02 \x01(\x04R\x06copied\x12\x1d\n" +
 	"\n" +
-	"out_length\x18\x03 \x01(\x04R\toutLength\"\x8b\x01\n" +
-	"\fFlockRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x14\n" +
-	"\x05owner\x18\x03 \x01(\x04R\x05owner\x12\x14\n" +
-	"\x05ltype\x18\x04 \x01(\rR\x05ltype\x12\x14\n" +
-	"\x05block\x18\x05 \x01(\bR\x05block\"%\n" +
-	"\rFlockResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x9d\x01\n" +
-	"\fGetlkRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x14\n" +
-	"\x05owner\x18\x03 \x01(\x04R\x05owner\x12\x14\n" +
-	"\x05ltype\x18\x04 \x01(\rR\x05ltype\x12\x14\n" +
-	"\x05start\x18\x05 \x01(\x04R\x05start\x12\x10\n" +
-	"\x03end\x18\x06 \x01(\x04R\x03end\"u\n" +
-	"\rGetlkResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
-	"\x05ltype\x18\x02 \x01(\rR\x05ltype\x12\x14\n" +
-	"\x05start\x18\x03 \x01(\x04R\x05start\x12\x10\n" +
-	"\x03end\x18\x04 \x01(\x04R\x03end\x12\x10\n" +
-	"\x03pid\x18\x05 \x01(\rR\x03pid\"\xc5\x01\n" +
-	"\fSetlkRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x14\n" +
-	"\x05owner\x18\x03 \x01(\x04R\x05owner\x12\x14\n" +
-	"\x05block\x18\x04 \x01(\bR\x05block\x12\x14\n" +
-	"\x05ltype\x18\x05 \x01(\rR\x05ltype\x12\x14\n" +
-	"\x05start\x18\x06 \x01(\x04R\x05start\x12\x10\n" +
-	"\x03end\x18\a \x01(\x04R\x03end\x12\x10\n" +
-	"\x03pid\x18\b \x01(\rR\x03pid\"%\n" +
-	"\rSetlkResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"M\n" +
-	"\x10ListLocksRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\"}\n" +
-	"\x11ListLocksResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12(\n" +
-	"\x06plocks\x18\x02 \x03(\v2\x10.meta.ProtoPlockR\x06plocks\x12(\n" +
-	"\x06flocks\x18\x03 \x03(\v2\x10.meta.ProtoFlockR\x06flocks\"`\n" +
-	"\x0fGetXattrRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x12\n" +
-	"\x04name\x18\x03 \x01(\tR\x04name\">\n" +
-	"\x10GetXattrResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\fR\x05value\"\x8c\x01\n" +
-	"\x0fSetXattrRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x12\n" +
-	"\x04name\x18\x03 \x01(\tR\x04name\x12\x14\n" +
-	"\x05value\x18\x04 \x01(\fR\x05value\x12\x14\n" +
-	"\x05flags\x18\x05 \x01(\rR\x05flags\"(\n" +
-	"\x10SetXattrResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"c\n" +
-	"\x12RemoveXattrRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x12\n" +
-	"\x04name\x18\x03 \x01(\tR\x04name\"+\n" +
-	"\x13RemoveXattrResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"M\n" +
-	"\x10ListXattrRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\"?\n" +
-	"\x11ListXattrResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
-	"\x05names\x18\x02 \x01(\fR\x05names\"N\n" +
-	"\x11GetParentsRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\"\xa7\x01\n" +
-	"\x12GetParentsResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12?\n" +
-	"\aparents\x18\x02 \x03(\v2%.meta.GetParentsResponse.ParentsEntryR\aparents\x1a:\n" +
-	"\fParentsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\"N\n" +
-	"\x11GetDirStatRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\"p\n" +
-	"\x12GetDirStatResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x16\n" +
-	"\x06length\x18\x02 \x01(\x03R\x06length\x12\x14\n" +
-	"\x05space\x18\x03 \x01(\x03R\x05space\x12\x16\n" +
-	"\x06inodes\x18\x04 \x01(\x03R\x06inodes\"\x8a\x01\n" +
-	"\x0eSetFaclRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x10\n" +
-	"\x03ino\x18\x02 \x01(\x04R\x03ino\x12\x19\n" +
-	"\bacl_type\x18\x03 \x01(\rR\aaclType\x12&\n" +
-	"\x04rule\x18\x04 \x01(\v2\x12.meta.ProtoACLRuleR\x04rule\"'\n" +
-	"\x0fSetFaclResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"b\n" +
-	"\x0eGetFaclRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x10\n" +
-	"\x03ino\x18\x02 \x01(\x04R\x03ino\x12\x19\n" +
-	"\bacl_type\x18\x03 \x01(\rR\aaclType\"O\n" +
-	"\x0fGetFaclResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12&\n" +
-	"\x04rule\x18\x02 \x01(\v2\x12.meta.ProtoACLRuleR\x04rule\"N\n" +
-	"\x11StoreTokenRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05token\x18\x02 \x01(\fR\x05token\":\n" +
-	"\x12StoreTokenResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x0e\n" +
-	"\x02id\x18\x02 \x01(\rR\x02id\"_\n" +
-	"\x12UpdateTokenRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x0e\n" +
-	"\x02id\x18\x02 \x01(\rR\x02id\x12\x14\n" +
-	"\x05token\x18\x03 \x01(\fR\x05token\"+\n" +
-	"\x13UpdateTokenResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"G\n" +
-	"\x10LoadTokenRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x0e\n" +
-	"\x02id\x18\x02 \x01(\rR\x02id\"?\n" +
-	"\x11LoadTokenResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
-	"\x05token\x18\x02 \x01(\fR\x05token\"L\n" +
-	"\x13DeleteTokensRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x10\n" +
-	"\x03ids\x18\x02 \x03(\rR\x03ids\",\n" +
-	"\x14DeleteTokensResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"8\n" +
-	"\x11ListTokensRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\"\xa3\x01\n" +
-	"\x12ListTokensResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12<\n" +
-	"\x06tokens\x18\x02 \x03(\v2$.meta.ListTokensResponse.TokensEntryR\x06tokens\x1a9\n" +
-	"\vTokensEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\fR\x05value:\x028\x01\"\x12\n" +
-	"\x10GetFormatRequest\"T\n" +
-	"\x11GetFormatResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12)\n" +
-	"\x06format\x18\x02 \x01(\v2\x11.meta.ProtoFormatR\x06format\"\xa0\x01\n" +
-	"\rRemoveRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x16\n" +
-	"\x06parent\x18\x02 \x01(\x04R\x06parent\x12\x12\n" +
-	"\x04name\x18\x03 \x01(\tR\x04name\x12\x1d\n" +
-	"\n" +
-	"skip_trash\x18\x04 \x01(\bR\tskipTrash\x12\x1f\n" +
-	"\vnum_threads\x18\x05 \x01(\x05R\n" +
-	"numThreads\"<\n" +
-	"\x0eRemoveResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\xa7\x01\n" +
-	"\x12BatchUnlinkRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x16\n" +
-	"\x06parent\x18\x02 \x01(\x04R\x06parent\x12*\n" +
-	"\aentries\x18\x03 \x03(\v2\x10.meta.ProtoEntryR\aentries\x12(\n" +
-	"\x10skip_check_trash\x18\x04 \x01(\bR\x0eskipCheckTrash\"A\n" +
-	"\x13BatchUnlinkResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\x84\x01\n" +
-	"\x11GetSummaryRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x1c\n" +
-	"\trecursive\x18\x03 \x01(\bR\trecursive\x12\x16\n" +
-	"\x06strict\x18\x04 \x01(\bR\x06strict\"X\n" +
-	"\x12GetSummaryResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12,\n" +
-	"\asummary\x18\x02 \x01(\v2\x12.meta.ProtoSummaryR\asummary\"\x95\x01\n" +
-	"\x15GetTreeSummaryRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x14\n" +
-	"\x05depth\x18\x03 \x01(\rR\x05depth\x12\x13\n" +
-	"\x05top_n\x18\x04 \x01(\rR\x04topN\x12\x16\n" +
-	"\x06strict\x18\x05 \x01(\bR\x06strict\"Z\n" +
-	"\x16GetTreeSummaryResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12*\n" +
-	"\x04tree\x18\x02 \x01(\v2\x16.meta.ProtoTreeSummaryR\x04tree\"\x83\x02\n" +
-	"\fCloneRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12$\n" +
-	"\x0esrc_parent_ino\x18\x02 \x01(\x04R\fsrcParentIno\x12\x17\n" +
-	"\asrc_ino\x18\x03 \x01(\x04R\x06srcIno\x12$\n" +
-	"\x0edst_parent_ino\x18\x04 \x01(\x04R\fdstParentIno\x12\x19\n" +
-	"\bdst_name\x18\x05 \x01(\tR\adstName\x12\x14\n" +
-	"\x05cmode\x18\x06 \x01(\rR\x05cmode\x12\x16\n" +
-	"\x06cumask\x18\a \x01(\rR\x06cumask\x12 \n" +
-	"\vconcurrency\x18\b \x01(\rR\vconcurrency\"Q\n" +
-	"\rCloneResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\x12\x14\n" +
-	"\x05total\x18\x03 \x01(\x04R\x05total\"L\n" +
-	"\x0fGetPathsRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\">\n" +
-	"\x10GetPathsResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
-	"\x05paths\x18\x02 \x03(\tR\x05paths\"\xcb\x01\n" +
-	"\fCheckRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05fpath\x18\x02 \x01(\tR\x05fpath\x12\x16\n" +
-	"\x06repair\x18\x03 \x01(\bR\x06repair\x12\x1c\n" +
-	"\trecursive\x18\x04 \x01(\bR\trecursive\x12\"\n" +
-	"\rsync_dir_stat\x18\x05 \x01(\bR\vsyncDirStat\x12&\n" +
-	"\x0frepair_dir_mode\x18\x06 \x01(\rR\rrepairDirMode\"%\n" +
-	"\rCheckResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"R\n" +
-	"\x11CompactAllRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x18\n" +
-	"\athreads\x18\x02 \x01(\x05R\athreads\"*\n" +
-	"\x12CompactAllResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"m\n" +
-	"\x0eCompactRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12 \n" +
-	"\vconcurrency\x18\x03 \x01(\x05R\vconcurrency\"'\n" +
-	"\x0fCompactResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"\xa0\x01\n" +
-	"\x11ListSlicesRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12+\n" +
-	"\x06slices\x18\x02 \x03(\v2\x13.meta.SliceMapEntryR\x06slices\x12!\n" +
-	"\fscan_pending\x18\x03 \x01(\bR\vscanPending\x12\x16\n" +
-	"\x06delete\x18\x04 \x01(\bR\x06delete\"W\n" +
-	"\x12ListSlicesResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12+\n" +
-	"\x06slices\x18\x02 \x03(\v2\x13.meta.SliceMapEntryR\x06slices\"\xd8\x02\n" +
-	"\x12HandleQuotaRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x10\n" +
-	"\x03cmd\x18\x02 \x01(\rR\x03cmd\x12\x14\n" +
-	"\x05dpath\x18\x03 \x01(\tR\x05dpath\x12\x10\n" +
-	"\x03uid\x18\x04 \x01(\rR\x03uid\x12\x10\n" +
-	"\x03gid\x18\x05 \x01(\rR\x03gid\x12<\n" +
-	"\x06quotas\x18\x06 \x03(\v2$.meta.HandleQuotaRequest.QuotasEntryR\x06quotas\x12\x16\n" +
-	"\x06strict\x18\a \x01(\bR\x06strict\x12\x16\n" +
-	"\x06repair\x18\b \x01(\bR\x06repair\x12\x16\n" +
-	"\x06create\x18\t \x01(\bR\x06create\x1aK\n" +
-	"\vQuotasEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12&\n" +
-	"\x05value\x18\x02 \x01(\v2\x10.meta.ProtoQuotaR\x05value:\x028\x01\"+\n" +
-	"\x13HandleQuotaResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"@\n" +
-	"\x19ScanUserGroupUsageRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\"2\n" +
-	"\x1aScanUserGroupUsageResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"L\n" +
-	"\rChrootRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x16\n" +
-	"\x06subdir\x18\x02 \x01(\tR\x06subdir\"&\n" +
-	"\x0eChrootResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"T\n" +
-	"\x19CleanupTrashBeforeRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x12\n" +
-	"\x04edge\x18\x02 \x01(\x03R\x04edge\"W\n" +
-	"\x1aCleanupTrashBeforeResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12#\n" +
-	"\rdeleted_files\x18\x02 \x01(\x03R\fdeletedFiles\"\\\n" +
-	"!CleanupDetachedNodesBeforeRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x12\n" +
-	"\x04edge\x18\x02 \x01(\x03R\x04edge\":\n" +
-	"\"CleanupDetachedNodesBeforeResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x9a\x01\n" +
-	"\x14NewDirHandlerRequest\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x12\n" +
-	"\x04plus\x18\x03 \x01(\bR\x04plus\x123\n" +
-	"\finit_entries\x18\x04 \x03(\v2\x10.meta.ProtoEntryR\vinitEntries\"]\n" +
-	"\x15NewDirHandlerResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12.\n" +
-	"\x06handle\x18\x02 \x01(\v2\x16.meta.DirHandlerHandleR\x06handle\"_\n" +
-	"\x15DirHandlerListRequest\x12.\n" +
-	"\x06handle\x18\x01 \x01(\v2\x16.meta.DirHandlerHandleR\x06handle\x12\x16\n" +
-	"\x06offset\x18\x02 \x01(\x05R\x06offset\"Z\n" +
-	"\x16DirHandlerListResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\x12*\n" +
-	"\aentries\x18\x02 \x03(\v2\x10.meta.ProtoEntryR\aentries\"\x98\x01\n" +
-	"\x17DirHandlerInsertRequest\x12.\n" +
-	"\x06handle\x18\x01 \x01(\v2\x16.meta.DirHandlerHandleR\x06handle\x12\x14\n" +
-	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x12\n" +
-	"\x04name\x18\x03 \x01(\tR\x04name\x12#\n" +
-	"\x04attr\x18\x04 \x01(\v2\x0f.meta.ProtoAttrR\x04attr\"0\n" +
-	"\x18DirHandlerInsertResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"]\n" +
-	"\x17DirHandlerDeleteRequest\x12.\n" +
-	"\x06handle\x18\x01 \x01(\v2\x16.meta.DirHandlerHandleR\x06handle\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\"0\n" +
-	"\x18DirHandlerDeleteResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"H\n" +
-	"\x16DirHandlerCloseRequest\x12.\n" +
-	"\x06handle\x18\x01 \x01(\v2\x16.meta.DirHandlerHandleR\x06handle\"/\n" +
-	"\x17DirHandlerCloseResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x93\x01\n" +
-	"\x0fDumpMetaRequest\x12\x12\n" +
-	"\x04root\x18\x01 \x01(\x04R\x04root\x12\x18\n" +
-	"\athreads\x18\x02 \x01(\x05R\athreads\x12\x1f\n" +
-	"\vkeep_secret\x18\x03 \x01(\bR\n" +
-	"keepSecret\x12\x12\n" +
-	"\x04fast\x18\x04 \x01(\bR\x04fast\x12\x1d\n" +
-	"\n" +
-	"skip_trash\x18\x05 \x01(\bR\tskipTrash\"#\n" +
-	"\rDumpMetaChunk\x12\x12\n" +
-	"\x04data\x18\x01 \x01(\fR\x04data\"#\n" +
-	"\rLoadMetaChunk\x12\x12\n" +
-	"\x04data\x18\x01 \x01(\fR\x04data\"(\n" +
-	"\x10LoadMetaResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"s\n" +
-	"\x11DumpMetaV2Request\x12#\n" +
-	"\x03ctx\x18\x01 \x01(\v2\x11.meta.MetaContextR\x03ctx\x12\x1f\n" +
-	"\vkeep_secret\x18\x02 \x01(\bR\n" +
-	"keepSecret\x12\x18\n" +
-	"\athreads\x18\x03 \x01(\x05R\athreads\"%\n" +
-	"\x0fDumpMetaV2Chunk\x12\x12\n" +
-	"\x04data\x18\x01 \x01(\fR\x04data\"%\n" +
-	"\x0fLoadMetaV2Chunk\x12\x12\n" +
-	"\x04data\x18\x01 \x01(\fR\x04data\"*\n" +
-	"\x12LoadMetaV2Response\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno2\x8a&\n" +
+	"out_length\x18\x03 \x01(\x04R\toutLength2\x8a&\n" +
 	"\vMetaService\x12-\n" +
 	"\x04Init\x12\x11.meta.InitRequest\x1a\x12.meta.InitResponse\x12-\n" +
 	"\x04Load\x12\x11.meta.LoadRequest\x1a\x12.meta.LoadResponse\x12?\n" +
@@ -10994,490 +3512,417 @@ const file_pkg_meta_grpc_meta_proto_rawDesc = "" +
 	"LoadMetaV2\x12\x15.meta.LoadMetaV2Chunk\x1a\x18.meta.LoadMetaV2Response(\x01B,Z*github.com/juicedata/juicefs/pkg/meta/grpcb\x06proto3"
 
 var (
-	file_pkg_meta_grpc_meta_proto_rawDescOnce sync.Once
-	file_pkg_meta_grpc_meta_proto_rawDescData []byte
+	file_meta_proto_rawDescOnce sync.Once
+	file_meta_proto_rawDescData []byte
 )
 
-func file_pkg_meta_grpc_meta_proto_rawDescGZIP() []byte {
-	file_pkg_meta_grpc_meta_proto_rawDescOnce.Do(func() {
-		file_pkg_meta_grpc_meta_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pkg_meta_grpc_meta_proto_rawDesc), len(file_pkg_meta_grpc_meta_proto_rawDesc)))
+func file_meta_proto_rawDescGZIP() []byte {
+	file_meta_proto_rawDescOnce.Do(func() {
+		file_meta_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_meta_proto_rawDesc), len(file_meta_proto_rawDesc)))
 	})
-	return file_pkg_meta_grpc_meta_proto_rawDescData
+	return file_meta_proto_rawDescData
 }
 
-var file_pkg_meta_grpc_meta_proto_msgTypes = make([]protoimpl.MessageInfo, 175)
-var file_pkg_meta_grpc_meta_proto_goTypes = []any{
-	(*MetaContext)(nil),                        // 0: meta.MetaContext
-	(*ProtoAttr)(nil),                          // 1: meta.ProtoAttr
-	(*ProtoSlice)(nil),                         // 2: meta.ProtoSlice
-	(*SliceMapEntry)(nil),                      // 3: meta.SliceMapEntry
-	(*ProtoEntry)(nil),                         // 4: meta.ProtoEntry
-	(*ProtoSummary)(nil),                       // 5: meta.ProtoSummary
-	(*ProtoTreeSummary)(nil),                   // 6: meta.ProtoTreeSummary
-	(*ProtoSessionInfo)(nil),                   // 7: meta.ProtoSessionInfo
-	(*ProtoFlock)(nil),                         // 8: meta.ProtoFlock
-	(*ProtoPlockRecord)(nil),                   // 9: meta.ProtoPlockRecord
-	(*ProtoPlock)(nil),                         // 10: meta.ProtoPlock
-	(*ProtoSession)(nil),                       // 11: meta.ProtoSession
-	(*ProtoFormat)(nil),                        // 12: meta.ProtoFormat
-	(*ProtoQuota)(nil),                         // 13: meta.ProtoQuota
-	(*DirHandlerHandle)(nil),                   // 14: meta.DirHandlerHandle
-	(*ProtoACLRule)(nil),                       // 15: meta.ProtoACLRule
-	(*InitRequest)(nil),                        // 16: meta.InitRequest
-	(*InitResponse)(nil),                       // 17: meta.InitResponse
-	(*LoadRequest)(nil),                        // 18: meta.LoadRequest
-	(*LoadResponse)(nil),                       // 19: meta.LoadResponse
-	(*NewSessionRequest)(nil),                  // 20: meta.NewSessionRequest
-	(*NewSessionResponse)(nil),                 // 21: meta.NewSessionResponse
-	(*CloseSessionRequest)(nil),                // 22: meta.CloseSessionRequest
-	(*CloseSessionResponse)(nil),               // 23: meta.CloseSessionResponse
-	(*FlushSessionRequest)(nil),                // 24: meta.FlushSessionRequest
-	(*FlushSessionResponse)(nil),               // 25: meta.FlushSessionResponse
-	(*ShutdownRequest)(nil),                    // 26: meta.ShutdownRequest
-	(*ShutdownResponse)(nil),                   // 27: meta.ShutdownResponse
-	(*ResetRequest)(nil),                       // 28: meta.ResetRequest
-	(*ResetResponse)(nil),                      // 29: meta.ResetResponse
-	(*GetSessionRequest)(nil),                  // 30: meta.GetSessionRequest
-	(*GetSessionResponse)(nil),                 // 31: meta.GetSessionResponse
-	(*ListSessionsRequest)(nil),                // 32: meta.ListSessionsRequest
-	(*ListSessionsResponse)(nil),               // 33: meta.ListSessionsResponse
-	(*CleanStaleSessionsRequest)(nil),          // 34: meta.CleanStaleSessionsRequest
-	(*CleanStaleSessionsResponse)(nil),         // 35: meta.CleanStaleSessionsResponse
-	(*StatFSRequest)(nil),                      // 36: meta.StatFSRequest
-	(*StatFSResponse)(nil),                     // 37: meta.StatFSResponse
-	(*LookupRequest)(nil),                      // 38: meta.LookupRequest
-	(*LookupResponse)(nil),                     // 39: meta.LookupResponse
-	(*ResolveRequest)(nil),                     // 40: meta.ResolveRequest
-	(*ResolveResponse)(nil),                    // 41: meta.ResolveResponse
-	(*AccessRequest)(nil),                      // 42: meta.AccessRequest
-	(*AccessResponse)(nil),                     // 43: meta.AccessResponse
-	(*GetAttrRequest)(nil),                     // 44: meta.GetAttrRequest
-	(*GetAttrResponse)(nil),                    // 45: meta.GetAttrResponse
-	(*SetAttrRequest)(nil),                     // 46: meta.SetAttrRequest
-	(*SetAttrResponse)(nil),                    // 47: meta.SetAttrResponse
-	(*CheckSetAttrRequest)(nil),                // 48: meta.CheckSetAttrRequest
-	(*CheckSetAttrResponse)(nil),               // 49: meta.CheckSetAttrResponse
-	(*MknodRequest)(nil),                       // 50: meta.MknodRequest
-	(*MknodResponse)(nil),                      // 51: meta.MknodResponse
-	(*MkdirRequest)(nil),                       // 52: meta.MkdirRequest
-	(*MkdirResponse)(nil),                      // 53: meta.MkdirResponse
-	(*CreateRequest)(nil),                      // 54: meta.CreateRequest
-	(*CreateResponse)(nil),                     // 55: meta.CreateResponse
-	(*OpenRequest)(nil),                        // 56: meta.OpenRequest
-	(*OpenResponse)(nil),                       // 57: meta.OpenResponse
-	(*CloseRequest)(nil),                       // 58: meta.CloseRequest
-	(*CloseResponse)(nil),                      // 59: meta.CloseResponse
-	(*UnlinkRequest)(nil),                      // 60: meta.UnlinkRequest
-	(*UnlinkResponse)(nil),                     // 61: meta.UnlinkResponse
-	(*RmdirRequest)(nil),                       // 62: meta.RmdirRequest
-	(*RmdirResponse)(nil),                      // 63: meta.RmdirResponse
-	(*RenameRequest)(nil),                      // 64: meta.RenameRequest
-	(*RenameResponse)(nil),                     // 65: meta.RenameResponse
-	(*LinkRequest)(nil),                        // 66: meta.LinkRequest
-	(*LinkResponse)(nil),                       // 67: meta.LinkResponse
-	(*SymlinkRequest)(nil),                     // 68: meta.SymlinkRequest
-	(*SymlinkResponse)(nil),                    // 69: meta.SymlinkResponse
-	(*ReadLinkRequest)(nil),                    // 70: meta.ReadLinkRequest
-	(*ReadLinkResponse)(nil),                   // 71: meta.ReadLinkResponse
-	(*TruncateRequest)(nil),                    // 72: meta.TruncateRequest
-	(*TruncateResponse)(nil),                   // 73: meta.TruncateResponse
-	(*FallocateRequest)(nil),                   // 74: meta.FallocateRequest
-	(*FallocateResponse)(nil),                  // 75: meta.FallocateResponse
-	(*ReaddirRequest)(nil),                     // 76: meta.ReaddirRequest
-	(*ReaddirResponse)(nil),                    // 77: meta.ReaddirResponse
-	(*ReadRequest)(nil),                        // 78: meta.ReadRequest
-	(*ReadResponse)(nil),                       // 79: meta.ReadResponse
-	(*WriteRequest)(nil),                       // 80: meta.WriteRequest
-	(*WriteResponse)(nil),                      // 81: meta.WriteResponse
-	(*NewSliceRequest)(nil),                    // 82: meta.NewSliceRequest
-	(*NewSliceResponse)(nil),                   // 83: meta.NewSliceResponse
-	(*InvalidateChunkCacheRequest)(nil),        // 84: meta.InvalidateChunkCacheRequest
-	(*InvalidateChunkCacheResponse)(nil),       // 85: meta.InvalidateChunkCacheResponse
-	(*CopyFileRangeRequest)(nil),               // 86: meta.CopyFileRangeRequest
-	(*CopyFileRangeResponse)(nil),              // 87: meta.CopyFileRangeResponse
-	(*FlockRequest)(nil),                       // 88: meta.FlockRequest
-	(*FlockResponse)(nil),                      // 89: meta.FlockResponse
-	(*GetlkRequest)(nil),                       // 90: meta.GetlkRequest
-	(*GetlkResponse)(nil),                      // 91: meta.GetlkResponse
-	(*SetlkRequest)(nil),                       // 92: meta.SetlkRequest
-	(*SetlkResponse)(nil),                      // 93: meta.SetlkResponse
-	(*ListLocksRequest)(nil),                   // 94: meta.ListLocksRequest
-	(*ListLocksResponse)(nil),                  // 95: meta.ListLocksResponse
-	(*GetXattrRequest)(nil),                    // 96: meta.GetXattrRequest
-	(*GetXattrResponse)(nil),                   // 97: meta.GetXattrResponse
-	(*SetXattrRequest)(nil),                    // 98: meta.SetXattrRequest
-	(*SetXattrResponse)(nil),                   // 99: meta.SetXattrResponse
-	(*RemoveXattrRequest)(nil),                 // 100: meta.RemoveXattrRequest
-	(*RemoveXattrResponse)(nil),                // 101: meta.RemoveXattrResponse
-	(*ListXattrRequest)(nil),                   // 102: meta.ListXattrRequest
-	(*ListXattrResponse)(nil),                  // 103: meta.ListXattrResponse
-	(*GetParentsRequest)(nil),                  // 104: meta.GetParentsRequest
-	(*GetParentsResponse)(nil),                 // 105: meta.GetParentsResponse
-	(*GetDirStatRequest)(nil),                  // 106: meta.GetDirStatRequest
-	(*GetDirStatResponse)(nil),                 // 107: meta.GetDirStatResponse
-	(*SetFaclRequest)(nil),                     // 108: meta.SetFaclRequest
-	(*SetFaclResponse)(nil),                    // 109: meta.SetFaclResponse
-	(*GetFaclRequest)(nil),                     // 110: meta.GetFaclRequest
-	(*GetFaclResponse)(nil),                    // 111: meta.GetFaclResponse
-	(*StoreTokenRequest)(nil),                  // 112: meta.StoreTokenRequest
-	(*StoreTokenResponse)(nil),                 // 113: meta.StoreTokenResponse
-	(*UpdateTokenRequest)(nil),                 // 114: meta.UpdateTokenRequest
-	(*UpdateTokenResponse)(nil),                // 115: meta.UpdateTokenResponse
-	(*LoadTokenRequest)(nil),                   // 116: meta.LoadTokenRequest
-	(*LoadTokenResponse)(nil),                  // 117: meta.LoadTokenResponse
-	(*DeleteTokensRequest)(nil),                // 118: meta.DeleteTokensRequest
-	(*DeleteTokensResponse)(nil),               // 119: meta.DeleteTokensResponse
-	(*ListTokensRequest)(nil),                  // 120: meta.ListTokensRequest
-	(*ListTokensResponse)(nil),                 // 121: meta.ListTokensResponse
-	(*GetFormatRequest)(nil),                   // 122: meta.GetFormatRequest
-	(*GetFormatResponse)(nil),                  // 123: meta.GetFormatResponse
-	(*RemoveRequest)(nil),                      // 124: meta.RemoveRequest
-	(*RemoveResponse)(nil),                     // 125: meta.RemoveResponse
-	(*BatchUnlinkRequest)(nil),                 // 126: meta.BatchUnlinkRequest
-	(*BatchUnlinkResponse)(nil),                // 127: meta.BatchUnlinkResponse
-	(*GetSummaryRequest)(nil),                  // 128: meta.GetSummaryRequest
-	(*GetSummaryResponse)(nil),                 // 129: meta.GetSummaryResponse
-	(*GetTreeSummaryRequest)(nil),              // 130: meta.GetTreeSummaryRequest
-	(*GetTreeSummaryResponse)(nil),             // 131: meta.GetTreeSummaryResponse
-	(*CloneRequest)(nil),                       // 132: meta.CloneRequest
-	(*CloneResponse)(nil),                      // 133: meta.CloneResponse
-	(*GetPathsRequest)(nil),                    // 134: meta.GetPathsRequest
-	(*GetPathsResponse)(nil),                   // 135: meta.GetPathsResponse
-	(*CheckRequest)(nil),                       // 136: meta.CheckRequest
-	(*CheckResponse)(nil),                      // 137: meta.CheckResponse
-	(*CompactAllRequest)(nil),                  // 138: meta.CompactAllRequest
-	(*CompactAllResponse)(nil),                 // 139: meta.CompactAllResponse
-	(*CompactRequest)(nil),                     // 140: meta.CompactRequest
-	(*CompactResponse)(nil),                    // 141: meta.CompactResponse
-	(*ListSlicesRequest)(nil),                  // 142: meta.ListSlicesRequest
-	(*ListSlicesResponse)(nil),                 // 143: meta.ListSlicesResponse
-	(*HandleQuotaRequest)(nil),                 // 144: meta.HandleQuotaRequest
-	(*HandleQuotaResponse)(nil),                // 145: meta.HandleQuotaResponse
-	(*ScanUserGroupUsageRequest)(nil),          // 146: meta.ScanUserGroupUsageRequest
+var file_meta_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
+var file_meta_proto_goTypes = []any{
+	(*StatFSRequest)(nil),                      // 0: meta.StatFSRequest
+	(*StatFSResponse)(nil),                     // 1: meta.StatFSResponse
+	(*LookupRequest)(nil),                      // 2: meta.LookupRequest
+	(*LookupResponse)(nil),                     // 3: meta.LookupResponse
+	(*ResolveRequest)(nil),                     // 4: meta.ResolveRequest
+	(*ResolveResponse)(nil),                    // 5: meta.ResolveResponse
+	(*AccessRequest)(nil),                      // 6: meta.AccessRequest
+	(*AccessResponse)(nil),                     // 7: meta.AccessResponse
+	(*GetAttrRequest)(nil),                     // 8: meta.GetAttrRequest
+	(*GetAttrResponse)(nil),                    // 9: meta.GetAttrResponse
+	(*SetAttrRequest)(nil),                     // 10: meta.SetAttrRequest
+	(*SetAttrResponse)(nil),                    // 11: meta.SetAttrResponse
+	(*CheckSetAttrRequest)(nil),                // 12: meta.CheckSetAttrRequest
+	(*CheckSetAttrResponse)(nil),               // 13: meta.CheckSetAttrResponse
+	(*MknodRequest)(nil),                       // 14: meta.MknodRequest
+	(*MknodResponse)(nil),                      // 15: meta.MknodResponse
+	(*MkdirRequest)(nil),                       // 16: meta.MkdirRequest
+	(*MkdirResponse)(nil),                      // 17: meta.MkdirResponse
+	(*CreateRequest)(nil),                      // 18: meta.CreateRequest
+	(*CreateResponse)(nil),                     // 19: meta.CreateResponse
+	(*OpenRequest)(nil),                        // 20: meta.OpenRequest
+	(*OpenResponse)(nil),                       // 21: meta.OpenResponse
+	(*CloseRequest)(nil),                       // 22: meta.CloseRequest
+	(*CloseResponse)(nil),                      // 23: meta.CloseResponse
+	(*UnlinkRequest)(nil),                      // 24: meta.UnlinkRequest
+	(*UnlinkResponse)(nil),                     // 25: meta.UnlinkResponse
+	(*RmdirRequest)(nil),                       // 26: meta.RmdirRequest
+	(*RmdirResponse)(nil),                      // 27: meta.RmdirResponse
+	(*RenameRequest)(nil),                      // 28: meta.RenameRequest
+	(*RenameResponse)(nil),                     // 29: meta.RenameResponse
+	(*LinkRequest)(nil),                        // 30: meta.LinkRequest
+	(*LinkResponse)(nil),                       // 31: meta.LinkResponse
+	(*SymlinkRequest)(nil),                     // 32: meta.SymlinkRequest
+	(*SymlinkResponse)(nil),                    // 33: meta.SymlinkResponse
+	(*ReadLinkRequest)(nil),                    // 34: meta.ReadLinkRequest
+	(*ReadLinkResponse)(nil),                   // 35: meta.ReadLinkResponse
+	(*TruncateRequest)(nil),                    // 36: meta.TruncateRequest
+	(*TruncateResponse)(nil),                   // 37: meta.TruncateResponse
+	(*FallocateRequest)(nil),                   // 38: meta.FallocateRequest
+	(*FallocateResponse)(nil),                  // 39: meta.FallocateResponse
+	(*ReaddirRequest)(nil),                     // 40: meta.ReaddirRequest
+	(*ReaddirResponse)(nil),                    // 41: meta.ReaddirResponse
+	(*ReadRequest)(nil),                        // 42: meta.ReadRequest
+	(*ReadResponse)(nil),                       // 43: meta.ReadResponse
+	(*WriteRequest)(nil),                       // 44: meta.WriteRequest
+	(*WriteResponse)(nil),                      // 45: meta.WriteResponse
+	(*NewSliceRequest)(nil),                    // 46: meta.NewSliceRequest
+	(*NewSliceResponse)(nil),                   // 47: meta.NewSliceResponse
+	(*InvalidateChunkCacheRequest)(nil),        // 48: meta.InvalidateChunkCacheRequest
+	(*InvalidateChunkCacheResponse)(nil),       // 49: meta.InvalidateChunkCacheResponse
+	(*CopyFileRangeRequest)(nil),               // 50: meta.CopyFileRangeRequest
+	(*CopyFileRangeResponse)(nil),              // 51: meta.CopyFileRangeResponse
+	(*MetaContext)(nil),                        // 52: meta.MetaContext
+	(*ProtoAttr)(nil),                          // 53: meta.ProtoAttr
+	(*ProtoEntry)(nil),                         // 54: meta.ProtoEntry
+	(*ProtoSlice)(nil),                         // 55: meta.ProtoSlice
+	(*InitRequest)(nil),                        // 56: meta.InitRequest
+	(*LoadRequest)(nil),                        // 57: meta.LoadRequest
+	(*NewSessionRequest)(nil),                  // 58: meta.NewSessionRequest
+	(*CloseSessionRequest)(nil),                // 59: meta.CloseSessionRequest
+	(*FlushSessionRequest)(nil),                // 60: meta.FlushSessionRequest
+	(*ShutdownRequest)(nil),                    // 61: meta.ShutdownRequest
+	(*ResetRequest)(nil),                       // 62: meta.ResetRequest
+	(*GetSessionRequest)(nil),                  // 63: meta.GetSessionRequest
+	(*ListSessionsRequest)(nil),                // 64: meta.ListSessionsRequest
+	(*CleanStaleSessionsRequest)(nil),          // 65: meta.CleanStaleSessionsRequest
+	(*FlockRequest)(nil),                       // 66: meta.FlockRequest
+	(*GetlkRequest)(nil),                       // 67: meta.GetlkRequest
+	(*SetlkRequest)(nil),                       // 68: meta.SetlkRequest
+	(*ListLocksRequest)(nil),                   // 69: meta.ListLocksRequest
+	(*GetXattrRequest)(nil),                    // 70: meta.GetXattrRequest
+	(*SetXattrRequest)(nil),                    // 71: meta.SetXattrRequest
+	(*RemoveXattrRequest)(nil),                 // 72: meta.RemoveXattrRequest
+	(*ListXattrRequest)(nil),                   // 73: meta.ListXattrRequest
+	(*GetParentsRequest)(nil),                  // 74: meta.GetParentsRequest
+	(*GetDirStatRequest)(nil),                  // 75: meta.GetDirStatRequest
+	(*SetFaclRequest)(nil),                     // 76: meta.SetFaclRequest
+	(*GetFaclRequest)(nil),                     // 77: meta.GetFaclRequest
+	(*StoreTokenRequest)(nil),                  // 78: meta.StoreTokenRequest
+	(*UpdateTokenRequest)(nil),                 // 79: meta.UpdateTokenRequest
+	(*LoadTokenRequest)(nil),                   // 80: meta.LoadTokenRequest
+	(*DeleteTokensRequest)(nil),                // 81: meta.DeleteTokensRequest
+	(*ListTokensRequest)(nil),                  // 82: meta.ListTokensRequest
+	(*GetFormatRequest)(nil),                   // 83: meta.GetFormatRequest
+	(*RemoveRequest)(nil),                      // 84: meta.RemoveRequest
+	(*BatchUnlinkRequest)(nil),                 // 85: meta.BatchUnlinkRequest
+	(*GetSummaryRequest)(nil),                  // 86: meta.GetSummaryRequest
+	(*GetTreeSummaryRequest)(nil),              // 87: meta.GetTreeSummaryRequest
+	(*CloneRequest)(nil),                       // 88: meta.CloneRequest
+	(*GetPathsRequest)(nil),                    // 89: meta.GetPathsRequest
+	(*CheckRequest)(nil),                       // 90: meta.CheckRequest
+	(*CompactAllRequest)(nil),                  // 91: meta.CompactAllRequest
+	(*CompactRequest)(nil),                     // 92: meta.CompactRequest
+	(*ListSlicesRequest)(nil),                  // 93: meta.ListSlicesRequest
+	(*HandleQuotaRequest)(nil),                 // 94: meta.HandleQuotaRequest
+	(*ScanUserGroupUsageRequest)(nil),          // 95: meta.ScanUserGroupUsageRequest
+	(*ChrootRequest)(nil),                      // 96: meta.ChrootRequest
+	(*CleanupTrashBeforeRequest)(nil),          // 97: meta.CleanupTrashBeforeRequest
+	(*CleanupDetachedNodesBeforeRequest)(nil),  // 98: meta.CleanupDetachedNodesBeforeRequest
+	(*NewDirHandlerRequest)(nil),               // 99: meta.NewDirHandlerRequest
+	(*DirHandlerListRequest)(nil),              // 100: meta.DirHandlerListRequest
+	(*DirHandlerInsertRequest)(nil),            // 101: meta.DirHandlerInsertRequest
+	(*DirHandlerDeleteRequest)(nil),            // 102: meta.DirHandlerDeleteRequest
+	(*DirHandlerCloseRequest)(nil),             // 103: meta.DirHandlerCloseRequest
+	(*DumpMetaRequest)(nil),                    // 104: meta.DumpMetaRequest
+	(*LoadMetaChunk)(nil),                      // 105: meta.LoadMetaChunk
+	(*DumpMetaV2Request)(nil),                  // 106: meta.DumpMetaV2Request
+	(*LoadMetaV2Chunk)(nil),                    // 107: meta.LoadMetaV2Chunk
+	(*InitResponse)(nil),                       // 108: meta.InitResponse
+	(*LoadResponse)(nil),                       // 109: meta.LoadResponse
+	(*NewSessionResponse)(nil),                 // 110: meta.NewSessionResponse
+	(*CloseSessionResponse)(nil),               // 111: meta.CloseSessionResponse
+	(*FlushSessionResponse)(nil),               // 112: meta.FlushSessionResponse
+	(*ShutdownResponse)(nil),                   // 113: meta.ShutdownResponse
+	(*ResetResponse)(nil),                      // 114: meta.ResetResponse
+	(*GetSessionResponse)(nil),                 // 115: meta.GetSessionResponse
+	(*ListSessionsResponse)(nil),               // 116: meta.ListSessionsResponse
+	(*CleanStaleSessionsResponse)(nil),         // 117: meta.CleanStaleSessionsResponse
+	(*FlockResponse)(nil),                      // 118: meta.FlockResponse
+	(*GetlkResponse)(nil),                      // 119: meta.GetlkResponse
+	(*SetlkResponse)(nil),                      // 120: meta.SetlkResponse
+	(*ListLocksResponse)(nil),                  // 121: meta.ListLocksResponse
+	(*GetXattrResponse)(nil),                   // 122: meta.GetXattrResponse
+	(*SetXattrResponse)(nil),                   // 123: meta.SetXattrResponse
+	(*RemoveXattrResponse)(nil),                // 124: meta.RemoveXattrResponse
+	(*ListXattrResponse)(nil),                  // 125: meta.ListXattrResponse
+	(*GetParentsResponse)(nil),                 // 126: meta.GetParentsResponse
+	(*GetDirStatResponse)(nil),                 // 127: meta.GetDirStatResponse
+	(*SetFaclResponse)(nil),                    // 128: meta.SetFaclResponse
+	(*GetFaclResponse)(nil),                    // 129: meta.GetFaclResponse
+	(*StoreTokenResponse)(nil),                 // 130: meta.StoreTokenResponse
+	(*UpdateTokenResponse)(nil),                // 131: meta.UpdateTokenResponse
+	(*LoadTokenResponse)(nil),                  // 132: meta.LoadTokenResponse
+	(*DeleteTokensResponse)(nil),               // 133: meta.DeleteTokensResponse
+	(*ListTokensResponse)(nil),                 // 134: meta.ListTokensResponse
+	(*GetFormatResponse)(nil),                  // 135: meta.GetFormatResponse
+	(*RemoveResponse)(nil),                     // 136: meta.RemoveResponse
+	(*BatchUnlinkResponse)(nil),                // 137: meta.BatchUnlinkResponse
+	(*GetSummaryResponse)(nil),                 // 138: meta.GetSummaryResponse
+	(*GetTreeSummaryResponse)(nil),             // 139: meta.GetTreeSummaryResponse
+	(*CloneResponse)(nil),                      // 140: meta.CloneResponse
+	(*GetPathsResponse)(nil),                   // 141: meta.GetPathsResponse
+	(*CheckResponse)(nil),                      // 142: meta.CheckResponse
+	(*CompactAllResponse)(nil),                 // 143: meta.CompactAllResponse
+	(*CompactResponse)(nil),                    // 144: meta.CompactResponse
+	(*ListSlicesResponse)(nil),                 // 145: meta.ListSlicesResponse
+	(*HandleQuotaResponse)(nil),                // 146: meta.HandleQuotaResponse
 	(*ScanUserGroupUsageResponse)(nil),         // 147: meta.ScanUserGroupUsageResponse
-	(*ChrootRequest)(nil),                      // 148: meta.ChrootRequest
-	(*ChrootResponse)(nil),                     // 149: meta.ChrootResponse
-	(*CleanupTrashBeforeRequest)(nil),          // 150: meta.CleanupTrashBeforeRequest
-	(*CleanupTrashBeforeResponse)(nil),         // 151: meta.CleanupTrashBeforeResponse
-	(*CleanupDetachedNodesBeforeRequest)(nil),  // 152: meta.CleanupDetachedNodesBeforeRequest
-	(*CleanupDetachedNodesBeforeResponse)(nil), // 153: meta.CleanupDetachedNodesBeforeResponse
-	(*NewDirHandlerRequest)(nil),               // 154: meta.NewDirHandlerRequest
-	(*NewDirHandlerResponse)(nil),              // 155: meta.NewDirHandlerResponse
-	(*DirHandlerListRequest)(nil),              // 156: meta.DirHandlerListRequest
-	(*DirHandlerListResponse)(nil),             // 157: meta.DirHandlerListResponse
-	(*DirHandlerInsertRequest)(nil),            // 158: meta.DirHandlerInsertRequest
-	(*DirHandlerInsertResponse)(nil),           // 159: meta.DirHandlerInsertResponse
-	(*DirHandlerDeleteRequest)(nil),            // 160: meta.DirHandlerDeleteRequest
-	(*DirHandlerDeleteResponse)(nil),           // 161: meta.DirHandlerDeleteResponse
-	(*DirHandlerCloseRequest)(nil),             // 162: meta.DirHandlerCloseRequest
-	(*DirHandlerCloseResponse)(nil),            // 163: meta.DirHandlerCloseResponse
-	(*DumpMetaRequest)(nil),                    // 164: meta.DumpMetaRequest
-	(*DumpMetaChunk)(nil),                      // 165: meta.DumpMetaChunk
-	(*LoadMetaChunk)(nil),                      // 166: meta.LoadMetaChunk
-	(*LoadMetaResponse)(nil),                   // 167: meta.LoadMetaResponse
-	(*DumpMetaV2Request)(nil),                  // 168: meta.DumpMetaV2Request
-	(*DumpMetaV2Chunk)(nil),                    // 169: meta.DumpMetaV2Chunk
-	(*LoadMetaV2Chunk)(nil),                    // 170: meta.LoadMetaV2Chunk
-	(*LoadMetaV2Response)(nil),                 // 171: meta.LoadMetaV2Response
-	nil,                                        // 172: meta.GetParentsResponse.ParentsEntry
-	nil,                                        // 173: meta.ListTokensResponse.TokensEntry
-	nil,                                        // 174: meta.HandleQuotaRequest.QuotasEntry
+	(*ChrootResponse)(nil),                     // 148: meta.ChrootResponse
+	(*CleanupTrashBeforeResponse)(nil),         // 149: meta.CleanupTrashBeforeResponse
+	(*CleanupDetachedNodesBeforeResponse)(nil), // 150: meta.CleanupDetachedNodesBeforeResponse
+	(*NewDirHandlerResponse)(nil),              // 151: meta.NewDirHandlerResponse
+	(*DirHandlerListResponse)(nil),             // 152: meta.DirHandlerListResponse
+	(*DirHandlerInsertResponse)(nil),           // 153: meta.DirHandlerInsertResponse
+	(*DirHandlerDeleteResponse)(nil),           // 154: meta.DirHandlerDeleteResponse
+	(*DirHandlerCloseResponse)(nil),            // 155: meta.DirHandlerCloseResponse
+	(*DumpMetaChunk)(nil),                      // 156: meta.DumpMetaChunk
+	(*LoadMetaResponse)(nil),                   // 157: meta.LoadMetaResponse
+	(*DumpMetaV2Chunk)(nil),                    // 158: meta.DumpMetaV2Chunk
+	(*LoadMetaV2Response)(nil),                 // 159: meta.LoadMetaV2Response
 }
-var file_pkg_meta_grpc_meta_proto_depIdxs = []int32{
-	2,   // 0: meta.SliceMapEntry.slices:type_name -> meta.ProtoSlice
-	1,   // 1: meta.ProtoEntry.attr:type_name -> meta.ProtoAttr
-	6,   // 2: meta.ProtoTreeSummary.children:type_name -> meta.ProtoTreeSummary
-	9,   // 3: meta.ProtoPlock.records:type_name -> meta.ProtoPlockRecord
-	7,   // 4: meta.ProtoSession.info:type_name -> meta.ProtoSessionInfo
-	8,   // 5: meta.ProtoSession.flocks:type_name -> meta.ProtoFlock
-	10,  // 6: meta.ProtoSession.plocks:type_name -> meta.ProtoPlock
-	12,  // 7: meta.InitRequest.format:type_name -> meta.ProtoFormat
-	12,  // 8: meta.LoadResponse.format:type_name -> meta.ProtoFormat
-	11,  // 9: meta.GetSessionResponse.session:type_name -> meta.ProtoSession
-	11,  // 10: meta.ListSessionsResponse.sessions:type_name -> meta.ProtoSession
-	0,   // 11: meta.CleanStaleSessionsRequest.ctx:type_name -> meta.MetaContext
-	0,   // 12: meta.StatFSRequest.ctx:type_name -> meta.MetaContext
-	0,   // 13: meta.LookupRequest.ctx:type_name -> meta.MetaContext
-	1,   // 14: meta.LookupResponse.attr:type_name -> meta.ProtoAttr
-	0,   // 15: meta.ResolveRequest.ctx:type_name -> meta.MetaContext
-	1,   // 16: meta.ResolveResponse.attr:type_name -> meta.ProtoAttr
-	0,   // 17: meta.AccessRequest.ctx:type_name -> meta.MetaContext
-	1,   // 18: meta.AccessResponse.attr:type_name -> meta.ProtoAttr
-	0,   // 19: meta.GetAttrRequest.ctx:type_name -> meta.MetaContext
-	1,   // 20: meta.GetAttrResponse.attr:type_name -> meta.ProtoAttr
-	0,   // 21: meta.SetAttrRequest.ctx:type_name -> meta.MetaContext
-	1,   // 22: meta.SetAttrRequest.attr:type_name -> meta.ProtoAttr
-	0,   // 23: meta.CheckSetAttrRequest.ctx:type_name -> meta.MetaContext
-	1,   // 24: meta.CheckSetAttrRequest.attr:type_name -> meta.ProtoAttr
-	0,   // 25: meta.MknodRequest.ctx:type_name -> meta.MetaContext
-	1,   // 26: meta.MknodResponse.attr:type_name -> meta.ProtoAttr
-	0,   // 27: meta.MkdirRequest.ctx:type_name -> meta.MetaContext
-	1,   // 28: meta.MkdirResponse.attr:type_name -> meta.ProtoAttr
-	0,   // 29: meta.CreateRequest.ctx:type_name -> meta.MetaContext
-	1,   // 30: meta.CreateResponse.attr:type_name -> meta.ProtoAttr
-	0,   // 31: meta.OpenRequest.ctx:type_name -> meta.MetaContext
-	1,   // 32: meta.OpenResponse.attr:type_name -> meta.ProtoAttr
-	0,   // 33: meta.CloseRequest.ctx:type_name -> meta.MetaContext
-	0,   // 34: meta.UnlinkRequest.ctx:type_name -> meta.MetaContext
-	0,   // 35: meta.RmdirRequest.ctx:type_name -> meta.MetaContext
-	0,   // 36: meta.RenameRequest.ctx:type_name -> meta.MetaContext
-	1,   // 37: meta.RenameResponse.attr:type_name -> meta.ProtoAttr
-	0,   // 38: meta.LinkRequest.ctx:type_name -> meta.MetaContext
-	1,   // 39: meta.LinkResponse.attr:type_name -> meta.ProtoAttr
-	0,   // 40: meta.SymlinkRequest.ctx:type_name -> meta.MetaContext
-	1,   // 41: meta.SymlinkResponse.attr:type_name -> meta.ProtoAttr
-	0,   // 42: meta.ReadLinkRequest.ctx:type_name -> meta.MetaContext
-	0,   // 43: meta.TruncateRequest.ctx:type_name -> meta.MetaContext
-	1,   // 44: meta.TruncateResponse.attr:type_name -> meta.ProtoAttr
-	0,   // 45: meta.FallocateRequest.ctx:type_name -> meta.MetaContext
-	0,   // 46: meta.ReaddirRequest.ctx:type_name -> meta.MetaContext
-	4,   // 47: meta.ReaddirResponse.entries:type_name -> meta.ProtoEntry
-	0,   // 48: meta.ReadRequest.ctx:type_name -> meta.MetaContext
-	2,   // 49: meta.ReadResponse.slices:type_name -> meta.ProtoSlice
-	0,   // 50: meta.WriteRequest.ctx:type_name -> meta.MetaContext
-	2,   // 51: meta.WriteRequest.slice:type_name -> meta.ProtoSlice
-	0,   // 52: meta.NewSliceRequest.ctx:type_name -> meta.MetaContext
-	0,   // 53: meta.InvalidateChunkCacheRequest.ctx:type_name -> meta.MetaContext
-	0,   // 54: meta.CopyFileRangeRequest.ctx:type_name -> meta.MetaContext
-	0,   // 55: meta.FlockRequest.ctx:type_name -> meta.MetaContext
-	0,   // 56: meta.GetlkRequest.ctx:type_name -> meta.MetaContext
-	0,   // 57: meta.SetlkRequest.ctx:type_name -> meta.MetaContext
-	0,   // 58: meta.ListLocksRequest.ctx:type_name -> meta.MetaContext
-	10,  // 59: meta.ListLocksResponse.plocks:type_name -> meta.ProtoPlock
-	8,   // 60: meta.ListLocksResponse.flocks:type_name -> meta.ProtoFlock
-	0,   // 61: meta.GetXattrRequest.ctx:type_name -> meta.MetaContext
-	0,   // 62: meta.SetXattrRequest.ctx:type_name -> meta.MetaContext
-	0,   // 63: meta.RemoveXattrRequest.ctx:type_name -> meta.MetaContext
-	0,   // 64: meta.ListXattrRequest.ctx:type_name -> meta.MetaContext
-	0,   // 65: meta.GetParentsRequest.ctx:type_name -> meta.MetaContext
-	172, // 66: meta.GetParentsResponse.parents:type_name -> meta.GetParentsResponse.ParentsEntry
-	0,   // 67: meta.GetDirStatRequest.ctx:type_name -> meta.MetaContext
-	0,   // 68: meta.SetFaclRequest.ctx:type_name -> meta.MetaContext
-	15,  // 69: meta.SetFaclRequest.rule:type_name -> meta.ProtoACLRule
-	0,   // 70: meta.GetFaclRequest.ctx:type_name -> meta.MetaContext
-	15,  // 71: meta.GetFaclResponse.rule:type_name -> meta.ProtoACLRule
-	0,   // 72: meta.StoreTokenRequest.ctx:type_name -> meta.MetaContext
-	0,   // 73: meta.UpdateTokenRequest.ctx:type_name -> meta.MetaContext
-	0,   // 74: meta.LoadTokenRequest.ctx:type_name -> meta.MetaContext
-	0,   // 75: meta.DeleteTokensRequest.ctx:type_name -> meta.MetaContext
-	0,   // 76: meta.ListTokensRequest.ctx:type_name -> meta.MetaContext
-	173, // 77: meta.ListTokensResponse.tokens:type_name -> meta.ListTokensResponse.TokensEntry
-	12,  // 78: meta.GetFormatResponse.format:type_name -> meta.ProtoFormat
-	0,   // 79: meta.RemoveRequest.ctx:type_name -> meta.MetaContext
-	0,   // 80: meta.BatchUnlinkRequest.ctx:type_name -> meta.MetaContext
-	4,   // 81: meta.BatchUnlinkRequest.entries:type_name -> meta.ProtoEntry
-	0,   // 82: meta.GetSummaryRequest.ctx:type_name -> meta.MetaContext
-	5,   // 83: meta.GetSummaryResponse.summary:type_name -> meta.ProtoSummary
-	0,   // 84: meta.GetTreeSummaryRequest.ctx:type_name -> meta.MetaContext
-	6,   // 85: meta.GetTreeSummaryResponse.tree:type_name -> meta.ProtoTreeSummary
-	0,   // 86: meta.CloneRequest.ctx:type_name -> meta.MetaContext
-	0,   // 87: meta.GetPathsRequest.ctx:type_name -> meta.MetaContext
-	0,   // 88: meta.CheckRequest.ctx:type_name -> meta.MetaContext
-	0,   // 89: meta.CompactAllRequest.ctx:type_name -> meta.MetaContext
-	0,   // 90: meta.CompactRequest.ctx:type_name -> meta.MetaContext
-	0,   // 91: meta.ListSlicesRequest.ctx:type_name -> meta.MetaContext
-	3,   // 92: meta.ListSlicesRequest.slices:type_name -> meta.SliceMapEntry
-	3,   // 93: meta.ListSlicesResponse.slices:type_name -> meta.SliceMapEntry
-	0,   // 94: meta.HandleQuotaRequest.ctx:type_name -> meta.MetaContext
-	174, // 95: meta.HandleQuotaRequest.quotas:type_name -> meta.HandleQuotaRequest.QuotasEntry
-	0,   // 96: meta.ScanUserGroupUsageRequest.ctx:type_name -> meta.MetaContext
-	0,   // 97: meta.ChrootRequest.ctx:type_name -> meta.MetaContext
-	0,   // 98: meta.CleanupTrashBeforeRequest.ctx:type_name -> meta.MetaContext
-	0,   // 99: meta.CleanupDetachedNodesBeforeRequest.ctx:type_name -> meta.MetaContext
-	0,   // 100: meta.NewDirHandlerRequest.ctx:type_name -> meta.MetaContext
-	4,   // 101: meta.NewDirHandlerRequest.init_entries:type_name -> meta.ProtoEntry
-	14,  // 102: meta.NewDirHandlerResponse.handle:type_name -> meta.DirHandlerHandle
-	14,  // 103: meta.DirHandlerListRequest.handle:type_name -> meta.DirHandlerHandle
-	4,   // 104: meta.DirHandlerListResponse.entries:type_name -> meta.ProtoEntry
-	14,  // 105: meta.DirHandlerInsertRequest.handle:type_name -> meta.DirHandlerHandle
-	1,   // 106: meta.DirHandlerInsertRequest.attr:type_name -> meta.ProtoAttr
-	14,  // 107: meta.DirHandlerDeleteRequest.handle:type_name -> meta.DirHandlerHandle
-	14,  // 108: meta.DirHandlerCloseRequest.handle:type_name -> meta.DirHandlerHandle
-	0,   // 109: meta.DumpMetaV2Request.ctx:type_name -> meta.MetaContext
-	13,  // 110: meta.HandleQuotaRequest.QuotasEntry.value:type_name -> meta.ProtoQuota
-	16,  // 111: meta.MetaService.Init:input_type -> meta.InitRequest
-	18,  // 112: meta.MetaService.Load:input_type -> meta.LoadRequest
-	20,  // 113: meta.MetaService.NewSession:input_type -> meta.NewSessionRequest
-	22,  // 114: meta.MetaService.CloseSession:input_type -> meta.CloseSessionRequest
-	24,  // 115: meta.MetaService.FlushSession:input_type -> meta.FlushSessionRequest
-	26,  // 116: meta.MetaService.Shutdown:input_type -> meta.ShutdownRequest
-	28,  // 117: meta.MetaService.Reset:input_type -> meta.ResetRequest
-	30,  // 118: meta.MetaService.GetSession:input_type -> meta.GetSessionRequest
-	32,  // 119: meta.MetaService.ListSessions:input_type -> meta.ListSessionsRequest
-	34,  // 120: meta.MetaService.CleanStaleSessions:input_type -> meta.CleanStaleSessionsRequest
-	36,  // 121: meta.MetaService.StatFS:input_type -> meta.StatFSRequest
-	38,  // 122: meta.MetaService.Lookup:input_type -> meta.LookupRequest
-	40,  // 123: meta.MetaService.Resolve:input_type -> meta.ResolveRequest
-	42,  // 124: meta.MetaService.Access:input_type -> meta.AccessRequest
-	44,  // 125: meta.MetaService.GetAttr:input_type -> meta.GetAttrRequest
-	46,  // 126: meta.MetaService.SetAttr:input_type -> meta.SetAttrRequest
-	48,  // 127: meta.MetaService.CheckSetAttr:input_type -> meta.CheckSetAttrRequest
-	50,  // 128: meta.MetaService.Mknod:input_type -> meta.MknodRequest
-	52,  // 129: meta.MetaService.Mkdir:input_type -> meta.MkdirRequest
-	54,  // 130: meta.MetaService.Create:input_type -> meta.CreateRequest
-	56,  // 131: meta.MetaService.Open:input_type -> meta.OpenRequest
-	58,  // 132: meta.MetaService.Close:input_type -> meta.CloseRequest
-	60,  // 133: meta.MetaService.Unlink:input_type -> meta.UnlinkRequest
-	62,  // 134: meta.MetaService.Rmdir:input_type -> meta.RmdirRequest
-	64,  // 135: meta.MetaService.Rename:input_type -> meta.RenameRequest
-	66,  // 136: meta.MetaService.Link:input_type -> meta.LinkRequest
-	68,  // 137: meta.MetaService.Symlink:input_type -> meta.SymlinkRequest
-	70,  // 138: meta.MetaService.ReadLink:input_type -> meta.ReadLinkRequest
-	72,  // 139: meta.MetaService.Truncate:input_type -> meta.TruncateRequest
-	74,  // 140: meta.MetaService.Fallocate:input_type -> meta.FallocateRequest
-	76,  // 141: meta.MetaService.Readdir:input_type -> meta.ReaddirRequest
-	78,  // 142: meta.MetaService.Read:input_type -> meta.ReadRequest
-	80,  // 143: meta.MetaService.Write:input_type -> meta.WriteRequest
-	82,  // 144: meta.MetaService.NewSlice:input_type -> meta.NewSliceRequest
-	84,  // 145: meta.MetaService.InvalidateChunkCache:input_type -> meta.InvalidateChunkCacheRequest
-	86,  // 146: meta.MetaService.CopyFileRange:input_type -> meta.CopyFileRangeRequest
-	88,  // 147: meta.MetaService.Flock:input_type -> meta.FlockRequest
-	90,  // 148: meta.MetaService.Getlk:input_type -> meta.GetlkRequest
-	92,  // 149: meta.MetaService.Setlk:input_type -> meta.SetlkRequest
-	94,  // 150: meta.MetaService.ListLocks:input_type -> meta.ListLocksRequest
-	96,  // 151: meta.MetaService.GetXattr:input_type -> meta.GetXattrRequest
-	98,  // 152: meta.MetaService.SetXattr:input_type -> meta.SetXattrRequest
-	100, // 153: meta.MetaService.RemoveXattr:input_type -> meta.RemoveXattrRequest
-	102, // 154: meta.MetaService.ListXattr:input_type -> meta.ListXattrRequest
-	104, // 155: meta.MetaService.GetParents:input_type -> meta.GetParentsRequest
-	106, // 156: meta.MetaService.GetDirStat:input_type -> meta.GetDirStatRequest
-	108, // 157: meta.MetaService.SetFacl:input_type -> meta.SetFaclRequest
-	110, // 158: meta.MetaService.GetFacl:input_type -> meta.GetFaclRequest
-	112, // 159: meta.MetaService.StoreToken:input_type -> meta.StoreTokenRequest
-	114, // 160: meta.MetaService.UpdateToken:input_type -> meta.UpdateTokenRequest
-	116, // 161: meta.MetaService.LoadToken:input_type -> meta.LoadTokenRequest
-	118, // 162: meta.MetaService.DeleteTokens:input_type -> meta.DeleteTokensRequest
-	120, // 163: meta.MetaService.ListTokens:input_type -> meta.ListTokensRequest
-	122, // 164: meta.MetaService.GetFormat:input_type -> meta.GetFormatRequest
-	124, // 165: meta.MetaService.Remove:input_type -> meta.RemoveRequest
-	126, // 166: meta.MetaService.BatchUnlink:input_type -> meta.BatchUnlinkRequest
-	128, // 167: meta.MetaService.GetSummary:input_type -> meta.GetSummaryRequest
-	130, // 168: meta.MetaService.GetTreeSummary:input_type -> meta.GetTreeSummaryRequest
-	132, // 169: meta.MetaService.Clone:input_type -> meta.CloneRequest
-	134, // 170: meta.MetaService.GetPaths:input_type -> meta.GetPathsRequest
-	136, // 171: meta.MetaService.Check:input_type -> meta.CheckRequest
-	138, // 172: meta.MetaService.CompactAll:input_type -> meta.CompactAllRequest
-	140, // 173: meta.MetaService.Compact:input_type -> meta.CompactRequest
-	142, // 174: meta.MetaService.ListSlices:input_type -> meta.ListSlicesRequest
-	144, // 175: meta.MetaService.HandleQuota:input_type -> meta.HandleQuotaRequest
-	146, // 176: meta.MetaService.ScanUserGroupUsage:input_type -> meta.ScanUserGroupUsageRequest
-	148, // 177: meta.MetaService.Chroot:input_type -> meta.ChrootRequest
-	150, // 178: meta.MetaService.CleanupTrashBefore:input_type -> meta.CleanupTrashBeforeRequest
-	152, // 179: meta.MetaService.CleanupDetachedNodesBefore:input_type -> meta.CleanupDetachedNodesBeforeRequest
-	154, // 180: meta.MetaService.NewDirHandler:input_type -> meta.NewDirHandlerRequest
-	156, // 181: meta.MetaService.DirHandlerList:input_type -> meta.DirHandlerListRequest
-	158, // 182: meta.MetaService.DirHandlerInsert:input_type -> meta.DirHandlerInsertRequest
-	160, // 183: meta.MetaService.DirHandlerDelete:input_type -> meta.DirHandlerDeleteRequest
-	162, // 184: meta.MetaService.DirHandlerClose:input_type -> meta.DirHandlerCloseRequest
-	164, // 185: meta.MetaService.DumpMeta:input_type -> meta.DumpMetaRequest
-	166, // 186: meta.MetaService.LoadMeta:input_type -> meta.LoadMetaChunk
-	168, // 187: meta.MetaService.DumpMetaV2:input_type -> meta.DumpMetaV2Request
-	170, // 188: meta.MetaService.LoadMetaV2:input_type -> meta.LoadMetaV2Chunk
-	17,  // 189: meta.MetaService.Init:output_type -> meta.InitResponse
-	19,  // 190: meta.MetaService.Load:output_type -> meta.LoadResponse
-	21,  // 191: meta.MetaService.NewSession:output_type -> meta.NewSessionResponse
-	23,  // 192: meta.MetaService.CloseSession:output_type -> meta.CloseSessionResponse
-	25,  // 193: meta.MetaService.FlushSession:output_type -> meta.FlushSessionResponse
-	27,  // 194: meta.MetaService.Shutdown:output_type -> meta.ShutdownResponse
-	29,  // 195: meta.MetaService.Reset:output_type -> meta.ResetResponse
-	31,  // 196: meta.MetaService.GetSession:output_type -> meta.GetSessionResponse
-	33,  // 197: meta.MetaService.ListSessions:output_type -> meta.ListSessionsResponse
-	35,  // 198: meta.MetaService.CleanStaleSessions:output_type -> meta.CleanStaleSessionsResponse
-	37,  // 199: meta.MetaService.StatFS:output_type -> meta.StatFSResponse
-	39,  // 200: meta.MetaService.Lookup:output_type -> meta.LookupResponse
-	41,  // 201: meta.MetaService.Resolve:output_type -> meta.ResolveResponse
-	43,  // 202: meta.MetaService.Access:output_type -> meta.AccessResponse
-	45,  // 203: meta.MetaService.GetAttr:output_type -> meta.GetAttrResponse
-	47,  // 204: meta.MetaService.SetAttr:output_type -> meta.SetAttrResponse
-	49,  // 205: meta.MetaService.CheckSetAttr:output_type -> meta.CheckSetAttrResponse
-	51,  // 206: meta.MetaService.Mknod:output_type -> meta.MknodResponse
-	53,  // 207: meta.MetaService.Mkdir:output_type -> meta.MkdirResponse
-	55,  // 208: meta.MetaService.Create:output_type -> meta.CreateResponse
-	57,  // 209: meta.MetaService.Open:output_type -> meta.OpenResponse
-	59,  // 210: meta.MetaService.Close:output_type -> meta.CloseResponse
-	61,  // 211: meta.MetaService.Unlink:output_type -> meta.UnlinkResponse
-	63,  // 212: meta.MetaService.Rmdir:output_type -> meta.RmdirResponse
-	65,  // 213: meta.MetaService.Rename:output_type -> meta.RenameResponse
-	67,  // 214: meta.MetaService.Link:output_type -> meta.LinkResponse
-	69,  // 215: meta.MetaService.Symlink:output_type -> meta.SymlinkResponse
-	71,  // 216: meta.MetaService.ReadLink:output_type -> meta.ReadLinkResponse
-	73,  // 217: meta.MetaService.Truncate:output_type -> meta.TruncateResponse
-	75,  // 218: meta.MetaService.Fallocate:output_type -> meta.FallocateResponse
-	77,  // 219: meta.MetaService.Readdir:output_type -> meta.ReaddirResponse
-	79,  // 220: meta.MetaService.Read:output_type -> meta.ReadResponse
-	81,  // 221: meta.MetaService.Write:output_type -> meta.WriteResponse
-	83,  // 222: meta.MetaService.NewSlice:output_type -> meta.NewSliceResponse
-	85,  // 223: meta.MetaService.InvalidateChunkCache:output_type -> meta.InvalidateChunkCacheResponse
-	87,  // 224: meta.MetaService.CopyFileRange:output_type -> meta.CopyFileRangeResponse
-	89,  // 225: meta.MetaService.Flock:output_type -> meta.FlockResponse
-	91,  // 226: meta.MetaService.Getlk:output_type -> meta.GetlkResponse
-	93,  // 227: meta.MetaService.Setlk:output_type -> meta.SetlkResponse
-	95,  // 228: meta.MetaService.ListLocks:output_type -> meta.ListLocksResponse
-	97,  // 229: meta.MetaService.GetXattr:output_type -> meta.GetXattrResponse
-	99,  // 230: meta.MetaService.SetXattr:output_type -> meta.SetXattrResponse
-	101, // 231: meta.MetaService.RemoveXattr:output_type -> meta.RemoveXattrResponse
-	103, // 232: meta.MetaService.ListXattr:output_type -> meta.ListXattrResponse
-	105, // 233: meta.MetaService.GetParents:output_type -> meta.GetParentsResponse
-	107, // 234: meta.MetaService.GetDirStat:output_type -> meta.GetDirStatResponse
-	109, // 235: meta.MetaService.SetFacl:output_type -> meta.SetFaclResponse
-	111, // 236: meta.MetaService.GetFacl:output_type -> meta.GetFaclResponse
-	113, // 237: meta.MetaService.StoreToken:output_type -> meta.StoreTokenResponse
-	115, // 238: meta.MetaService.UpdateToken:output_type -> meta.UpdateTokenResponse
-	117, // 239: meta.MetaService.LoadToken:output_type -> meta.LoadTokenResponse
-	119, // 240: meta.MetaService.DeleteTokens:output_type -> meta.DeleteTokensResponse
-	121, // 241: meta.MetaService.ListTokens:output_type -> meta.ListTokensResponse
-	123, // 242: meta.MetaService.GetFormat:output_type -> meta.GetFormatResponse
-	125, // 243: meta.MetaService.Remove:output_type -> meta.RemoveResponse
-	127, // 244: meta.MetaService.BatchUnlink:output_type -> meta.BatchUnlinkResponse
-	129, // 245: meta.MetaService.GetSummary:output_type -> meta.GetSummaryResponse
-	131, // 246: meta.MetaService.GetTreeSummary:output_type -> meta.GetTreeSummaryResponse
-	133, // 247: meta.MetaService.Clone:output_type -> meta.CloneResponse
-	135, // 248: meta.MetaService.GetPaths:output_type -> meta.GetPathsResponse
-	137, // 249: meta.MetaService.Check:output_type -> meta.CheckResponse
-	139, // 250: meta.MetaService.CompactAll:output_type -> meta.CompactAllResponse
-	141, // 251: meta.MetaService.Compact:output_type -> meta.CompactResponse
-	143, // 252: meta.MetaService.ListSlices:output_type -> meta.ListSlicesResponse
-	145, // 253: meta.MetaService.HandleQuota:output_type -> meta.HandleQuotaResponse
-	147, // 254: meta.MetaService.ScanUserGroupUsage:output_type -> meta.ScanUserGroupUsageResponse
-	149, // 255: meta.MetaService.Chroot:output_type -> meta.ChrootResponse
-	151, // 256: meta.MetaService.CleanupTrashBefore:output_type -> meta.CleanupTrashBeforeResponse
-	153, // 257: meta.MetaService.CleanupDetachedNodesBefore:output_type -> meta.CleanupDetachedNodesBeforeResponse
-	155, // 258: meta.MetaService.NewDirHandler:output_type -> meta.NewDirHandlerResponse
-	157, // 259: meta.MetaService.DirHandlerList:output_type -> meta.DirHandlerListResponse
-	159, // 260: meta.MetaService.DirHandlerInsert:output_type -> meta.DirHandlerInsertResponse
-	161, // 261: meta.MetaService.DirHandlerDelete:output_type -> meta.DirHandlerDeleteResponse
-	163, // 262: meta.MetaService.DirHandlerClose:output_type -> meta.DirHandlerCloseResponse
-	165, // 263: meta.MetaService.DumpMeta:output_type -> meta.DumpMetaChunk
-	167, // 264: meta.MetaService.LoadMeta:output_type -> meta.LoadMetaResponse
-	169, // 265: meta.MetaService.DumpMetaV2:output_type -> meta.DumpMetaV2Chunk
-	171, // 266: meta.MetaService.LoadMetaV2:output_type -> meta.LoadMetaV2Response
-	189, // [189:267] is the sub-list for method output_type
-	111, // [111:189] is the sub-list for method input_type
-	111, // [111:111] is the sub-list for extension type_name
-	111, // [111:111] is the sub-list for extension extendee
-	0,   // [0:111] is the sub-list for field type_name
+var file_meta_proto_depIdxs = []int32{
+	52,  // 0: meta.StatFSRequest.ctx:type_name -> meta.MetaContext
+	52,  // 1: meta.LookupRequest.ctx:type_name -> meta.MetaContext
+	53,  // 2: meta.LookupResponse.attr:type_name -> meta.ProtoAttr
+	52,  // 3: meta.ResolveRequest.ctx:type_name -> meta.MetaContext
+	53,  // 4: meta.ResolveResponse.attr:type_name -> meta.ProtoAttr
+	52,  // 5: meta.AccessRequest.ctx:type_name -> meta.MetaContext
+	53,  // 6: meta.AccessResponse.attr:type_name -> meta.ProtoAttr
+	52,  // 7: meta.GetAttrRequest.ctx:type_name -> meta.MetaContext
+	53,  // 8: meta.GetAttrResponse.attr:type_name -> meta.ProtoAttr
+	52,  // 9: meta.SetAttrRequest.ctx:type_name -> meta.MetaContext
+	53,  // 10: meta.SetAttrRequest.attr:type_name -> meta.ProtoAttr
+	52,  // 11: meta.CheckSetAttrRequest.ctx:type_name -> meta.MetaContext
+	53,  // 12: meta.CheckSetAttrRequest.attr:type_name -> meta.ProtoAttr
+	52,  // 13: meta.MknodRequest.ctx:type_name -> meta.MetaContext
+	53,  // 14: meta.MknodResponse.attr:type_name -> meta.ProtoAttr
+	52,  // 15: meta.MkdirRequest.ctx:type_name -> meta.MetaContext
+	53,  // 16: meta.MkdirResponse.attr:type_name -> meta.ProtoAttr
+	52,  // 17: meta.CreateRequest.ctx:type_name -> meta.MetaContext
+	53,  // 18: meta.CreateResponse.attr:type_name -> meta.ProtoAttr
+	52,  // 19: meta.OpenRequest.ctx:type_name -> meta.MetaContext
+	53,  // 20: meta.OpenResponse.attr:type_name -> meta.ProtoAttr
+	52,  // 21: meta.CloseRequest.ctx:type_name -> meta.MetaContext
+	52,  // 22: meta.UnlinkRequest.ctx:type_name -> meta.MetaContext
+	52,  // 23: meta.RmdirRequest.ctx:type_name -> meta.MetaContext
+	52,  // 24: meta.RenameRequest.ctx:type_name -> meta.MetaContext
+	53,  // 25: meta.RenameResponse.attr:type_name -> meta.ProtoAttr
+	52,  // 26: meta.LinkRequest.ctx:type_name -> meta.MetaContext
+	53,  // 27: meta.LinkResponse.attr:type_name -> meta.ProtoAttr
+	52,  // 28: meta.SymlinkRequest.ctx:type_name -> meta.MetaContext
+	53,  // 29: meta.SymlinkResponse.attr:type_name -> meta.ProtoAttr
+	52,  // 30: meta.ReadLinkRequest.ctx:type_name -> meta.MetaContext
+	52,  // 31: meta.TruncateRequest.ctx:type_name -> meta.MetaContext
+	53,  // 32: meta.TruncateResponse.attr:type_name -> meta.ProtoAttr
+	52,  // 33: meta.FallocateRequest.ctx:type_name -> meta.MetaContext
+	52,  // 34: meta.ReaddirRequest.ctx:type_name -> meta.MetaContext
+	54,  // 35: meta.ReaddirResponse.entries:type_name -> meta.ProtoEntry
+	52,  // 36: meta.ReadRequest.ctx:type_name -> meta.MetaContext
+	55,  // 37: meta.ReadResponse.slices:type_name -> meta.ProtoSlice
+	52,  // 38: meta.WriteRequest.ctx:type_name -> meta.MetaContext
+	55,  // 39: meta.WriteRequest.slice:type_name -> meta.ProtoSlice
+	52,  // 40: meta.NewSliceRequest.ctx:type_name -> meta.MetaContext
+	52,  // 41: meta.InvalidateChunkCacheRequest.ctx:type_name -> meta.MetaContext
+	52,  // 42: meta.CopyFileRangeRequest.ctx:type_name -> meta.MetaContext
+	56,  // 43: meta.MetaService.Init:input_type -> meta.InitRequest
+	57,  // 44: meta.MetaService.Load:input_type -> meta.LoadRequest
+	58,  // 45: meta.MetaService.NewSession:input_type -> meta.NewSessionRequest
+	59,  // 46: meta.MetaService.CloseSession:input_type -> meta.CloseSessionRequest
+	60,  // 47: meta.MetaService.FlushSession:input_type -> meta.FlushSessionRequest
+	61,  // 48: meta.MetaService.Shutdown:input_type -> meta.ShutdownRequest
+	62,  // 49: meta.MetaService.Reset:input_type -> meta.ResetRequest
+	63,  // 50: meta.MetaService.GetSession:input_type -> meta.GetSessionRequest
+	64,  // 51: meta.MetaService.ListSessions:input_type -> meta.ListSessionsRequest
+	65,  // 52: meta.MetaService.CleanStaleSessions:input_type -> meta.CleanStaleSessionsRequest
+	0,   // 53: meta.MetaService.StatFS:input_type -> meta.StatFSRequest
+	2,   // 54: meta.MetaService.Lookup:input_type -> meta.LookupRequest
+	4,   // 55: meta.MetaService.Resolve:input_type -> meta.ResolveRequest
+	6,   // 56: meta.MetaService.Access:input_type -> meta.AccessRequest
+	8,   // 57: meta.MetaService.GetAttr:input_type -> meta.GetAttrRequest
+	10,  // 58: meta.MetaService.SetAttr:input_type -> meta.SetAttrRequest
+	12,  // 59: meta.MetaService.CheckSetAttr:input_type -> meta.CheckSetAttrRequest
+	14,  // 60: meta.MetaService.Mknod:input_type -> meta.MknodRequest
+	16,  // 61: meta.MetaService.Mkdir:input_type -> meta.MkdirRequest
+	18,  // 62: meta.MetaService.Create:input_type -> meta.CreateRequest
+	20,  // 63: meta.MetaService.Open:input_type -> meta.OpenRequest
+	22,  // 64: meta.MetaService.Close:input_type -> meta.CloseRequest
+	24,  // 65: meta.MetaService.Unlink:input_type -> meta.UnlinkRequest
+	26,  // 66: meta.MetaService.Rmdir:input_type -> meta.RmdirRequest
+	28,  // 67: meta.MetaService.Rename:input_type -> meta.RenameRequest
+	30,  // 68: meta.MetaService.Link:input_type -> meta.LinkRequest
+	32,  // 69: meta.MetaService.Symlink:input_type -> meta.SymlinkRequest
+	34,  // 70: meta.MetaService.ReadLink:input_type -> meta.ReadLinkRequest
+	36,  // 71: meta.MetaService.Truncate:input_type -> meta.TruncateRequest
+	38,  // 72: meta.MetaService.Fallocate:input_type -> meta.FallocateRequest
+	40,  // 73: meta.MetaService.Readdir:input_type -> meta.ReaddirRequest
+	42,  // 74: meta.MetaService.Read:input_type -> meta.ReadRequest
+	44,  // 75: meta.MetaService.Write:input_type -> meta.WriteRequest
+	46,  // 76: meta.MetaService.NewSlice:input_type -> meta.NewSliceRequest
+	48,  // 77: meta.MetaService.InvalidateChunkCache:input_type -> meta.InvalidateChunkCacheRequest
+	50,  // 78: meta.MetaService.CopyFileRange:input_type -> meta.CopyFileRangeRequest
+	66,  // 79: meta.MetaService.Flock:input_type -> meta.FlockRequest
+	67,  // 80: meta.MetaService.Getlk:input_type -> meta.GetlkRequest
+	68,  // 81: meta.MetaService.Setlk:input_type -> meta.SetlkRequest
+	69,  // 82: meta.MetaService.ListLocks:input_type -> meta.ListLocksRequest
+	70,  // 83: meta.MetaService.GetXattr:input_type -> meta.GetXattrRequest
+	71,  // 84: meta.MetaService.SetXattr:input_type -> meta.SetXattrRequest
+	72,  // 85: meta.MetaService.RemoveXattr:input_type -> meta.RemoveXattrRequest
+	73,  // 86: meta.MetaService.ListXattr:input_type -> meta.ListXattrRequest
+	74,  // 87: meta.MetaService.GetParents:input_type -> meta.GetParentsRequest
+	75,  // 88: meta.MetaService.GetDirStat:input_type -> meta.GetDirStatRequest
+	76,  // 89: meta.MetaService.SetFacl:input_type -> meta.SetFaclRequest
+	77,  // 90: meta.MetaService.GetFacl:input_type -> meta.GetFaclRequest
+	78,  // 91: meta.MetaService.StoreToken:input_type -> meta.StoreTokenRequest
+	79,  // 92: meta.MetaService.UpdateToken:input_type -> meta.UpdateTokenRequest
+	80,  // 93: meta.MetaService.LoadToken:input_type -> meta.LoadTokenRequest
+	81,  // 94: meta.MetaService.DeleteTokens:input_type -> meta.DeleteTokensRequest
+	82,  // 95: meta.MetaService.ListTokens:input_type -> meta.ListTokensRequest
+	83,  // 96: meta.MetaService.GetFormat:input_type -> meta.GetFormatRequest
+	84,  // 97: meta.MetaService.Remove:input_type -> meta.RemoveRequest
+	85,  // 98: meta.MetaService.BatchUnlink:input_type -> meta.BatchUnlinkRequest
+	86,  // 99: meta.MetaService.GetSummary:input_type -> meta.GetSummaryRequest
+	87,  // 100: meta.MetaService.GetTreeSummary:input_type -> meta.GetTreeSummaryRequest
+	88,  // 101: meta.MetaService.Clone:input_type -> meta.CloneRequest
+	89,  // 102: meta.MetaService.GetPaths:input_type -> meta.GetPathsRequest
+	90,  // 103: meta.MetaService.Check:input_type -> meta.CheckRequest
+	91,  // 104: meta.MetaService.CompactAll:input_type -> meta.CompactAllRequest
+	92,  // 105: meta.MetaService.Compact:input_type -> meta.CompactRequest
+	93,  // 106: meta.MetaService.ListSlices:input_type -> meta.ListSlicesRequest
+	94,  // 107: meta.MetaService.HandleQuota:input_type -> meta.HandleQuotaRequest
+	95,  // 108: meta.MetaService.ScanUserGroupUsage:input_type -> meta.ScanUserGroupUsageRequest
+	96,  // 109: meta.MetaService.Chroot:input_type -> meta.ChrootRequest
+	97,  // 110: meta.MetaService.CleanupTrashBefore:input_type -> meta.CleanupTrashBeforeRequest
+	98,  // 111: meta.MetaService.CleanupDetachedNodesBefore:input_type -> meta.CleanupDetachedNodesBeforeRequest
+	99,  // 112: meta.MetaService.NewDirHandler:input_type -> meta.NewDirHandlerRequest
+	100, // 113: meta.MetaService.DirHandlerList:input_type -> meta.DirHandlerListRequest
+	101, // 114: meta.MetaService.DirHandlerInsert:input_type -> meta.DirHandlerInsertRequest
+	102, // 115: meta.MetaService.DirHandlerDelete:input_type -> meta.DirHandlerDeleteRequest
+	103, // 116: meta.MetaService.DirHandlerClose:input_type -> meta.DirHandlerCloseRequest
+	104, // 117: meta.MetaService.DumpMeta:input_type -> meta.DumpMetaRequest
+	105, // 118: meta.MetaService.LoadMeta:input_type -> meta.LoadMetaChunk
+	106, // 119: meta.MetaService.DumpMetaV2:input_type -> meta.DumpMetaV2Request
+	107, // 120: meta.MetaService.LoadMetaV2:input_type -> meta.LoadMetaV2Chunk
+	108, // 121: meta.MetaService.Init:output_type -> meta.InitResponse
+	109, // 122: meta.MetaService.Load:output_type -> meta.LoadResponse
+	110, // 123: meta.MetaService.NewSession:output_type -> meta.NewSessionResponse
+	111, // 124: meta.MetaService.CloseSession:output_type -> meta.CloseSessionResponse
+	112, // 125: meta.MetaService.FlushSession:output_type -> meta.FlushSessionResponse
+	113, // 126: meta.MetaService.Shutdown:output_type -> meta.ShutdownResponse
+	114, // 127: meta.MetaService.Reset:output_type -> meta.ResetResponse
+	115, // 128: meta.MetaService.GetSession:output_type -> meta.GetSessionResponse
+	116, // 129: meta.MetaService.ListSessions:output_type -> meta.ListSessionsResponse
+	117, // 130: meta.MetaService.CleanStaleSessions:output_type -> meta.CleanStaleSessionsResponse
+	1,   // 131: meta.MetaService.StatFS:output_type -> meta.StatFSResponse
+	3,   // 132: meta.MetaService.Lookup:output_type -> meta.LookupResponse
+	5,   // 133: meta.MetaService.Resolve:output_type -> meta.ResolveResponse
+	7,   // 134: meta.MetaService.Access:output_type -> meta.AccessResponse
+	9,   // 135: meta.MetaService.GetAttr:output_type -> meta.GetAttrResponse
+	11,  // 136: meta.MetaService.SetAttr:output_type -> meta.SetAttrResponse
+	13,  // 137: meta.MetaService.CheckSetAttr:output_type -> meta.CheckSetAttrResponse
+	15,  // 138: meta.MetaService.Mknod:output_type -> meta.MknodResponse
+	17,  // 139: meta.MetaService.Mkdir:output_type -> meta.MkdirResponse
+	19,  // 140: meta.MetaService.Create:output_type -> meta.CreateResponse
+	21,  // 141: meta.MetaService.Open:output_type -> meta.OpenResponse
+	23,  // 142: meta.MetaService.Close:output_type -> meta.CloseResponse
+	25,  // 143: meta.MetaService.Unlink:output_type -> meta.UnlinkResponse
+	27,  // 144: meta.MetaService.Rmdir:output_type -> meta.RmdirResponse
+	29,  // 145: meta.MetaService.Rename:output_type -> meta.RenameResponse
+	31,  // 146: meta.MetaService.Link:output_type -> meta.LinkResponse
+	33,  // 147: meta.MetaService.Symlink:output_type -> meta.SymlinkResponse
+	35,  // 148: meta.MetaService.ReadLink:output_type -> meta.ReadLinkResponse
+	37,  // 149: meta.MetaService.Truncate:output_type -> meta.TruncateResponse
+	39,  // 150: meta.MetaService.Fallocate:output_type -> meta.FallocateResponse
+	41,  // 151: meta.MetaService.Readdir:output_type -> meta.ReaddirResponse
+	43,  // 152: meta.MetaService.Read:output_type -> meta.ReadResponse
+	45,  // 153: meta.MetaService.Write:output_type -> meta.WriteResponse
+	47,  // 154: meta.MetaService.NewSlice:output_type -> meta.NewSliceResponse
+	49,  // 155: meta.MetaService.InvalidateChunkCache:output_type -> meta.InvalidateChunkCacheResponse
+	51,  // 156: meta.MetaService.CopyFileRange:output_type -> meta.CopyFileRangeResponse
+	118, // 157: meta.MetaService.Flock:output_type -> meta.FlockResponse
+	119, // 158: meta.MetaService.Getlk:output_type -> meta.GetlkResponse
+	120, // 159: meta.MetaService.Setlk:output_type -> meta.SetlkResponse
+	121, // 160: meta.MetaService.ListLocks:output_type -> meta.ListLocksResponse
+	122, // 161: meta.MetaService.GetXattr:output_type -> meta.GetXattrResponse
+	123, // 162: meta.MetaService.SetXattr:output_type -> meta.SetXattrResponse
+	124, // 163: meta.MetaService.RemoveXattr:output_type -> meta.RemoveXattrResponse
+	125, // 164: meta.MetaService.ListXattr:output_type -> meta.ListXattrResponse
+	126, // 165: meta.MetaService.GetParents:output_type -> meta.GetParentsResponse
+	127, // 166: meta.MetaService.GetDirStat:output_type -> meta.GetDirStatResponse
+	128, // 167: meta.MetaService.SetFacl:output_type -> meta.SetFaclResponse
+	129, // 168: meta.MetaService.GetFacl:output_type -> meta.GetFaclResponse
+	130, // 169: meta.MetaService.StoreToken:output_type -> meta.StoreTokenResponse
+	131, // 170: meta.MetaService.UpdateToken:output_type -> meta.UpdateTokenResponse
+	132, // 171: meta.MetaService.LoadToken:output_type -> meta.LoadTokenResponse
+	133, // 172: meta.MetaService.DeleteTokens:output_type -> meta.DeleteTokensResponse
+	134, // 173: meta.MetaService.ListTokens:output_type -> meta.ListTokensResponse
+	135, // 174: meta.MetaService.GetFormat:output_type -> meta.GetFormatResponse
+	136, // 175: meta.MetaService.Remove:output_type -> meta.RemoveResponse
+	137, // 176: meta.MetaService.BatchUnlink:output_type -> meta.BatchUnlinkResponse
+	138, // 177: meta.MetaService.GetSummary:output_type -> meta.GetSummaryResponse
+	139, // 178: meta.MetaService.GetTreeSummary:output_type -> meta.GetTreeSummaryResponse
+	140, // 179: meta.MetaService.Clone:output_type -> meta.CloneResponse
+	141, // 180: meta.MetaService.GetPaths:output_type -> meta.GetPathsResponse
+	142, // 181: meta.MetaService.Check:output_type -> meta.CheckResponse
+	143, // 182: meta.MetaService.CompactAll:output_type -> meta.CompactAllResponse
+	144, // 183: meta.MetaService.Compact:output_type -> meta.CompactResponse
+	145, // 184: meta.MetaService.ListSlices:output_type -> meta.ListSlicesResponse
+	146, // 185: meta.MetaService.HandleQuota:output_type -> meta.HandleQuotaResponse
+	147, // 186: meta.MetaService.ScanUserGroupUsage:output_type -> meta.ScanUserGroupUsageResponse
+	148, // 187: meta.MetaService.Chroot:output_type -> meta.ChrootResponse
+	149, // 188: meta.MetaService.CleanupTrashBefore:output_type -> meta.CleanupTrashBeforeResponse
+	150, // 189: meta.MetaService.CleanupDetachedNodesBefore:output_type -> meta.CleanupDetachedNodesBeforeResponse
+	151, // 190: meta.MetaService.NewDirHandler:output_type -> meta.NewDirHandlerResponse
+	152, // 191: meta.MetaService.DirHandlerList:output_type -> meta.DirHandlerListResponse
+	153, // 192: meta.MetaService.DirHandlerInsert:output_type -> meta.DirHandlerInsertResponse
+	154, // 193: meta.MetaService.DirHandlerDelete:output_type -> meta.DirHandlerDeleteResponse
+	155, // 194: meta.MetaService.DirHandlerClose:output_type -> meta.DirHandlerCloseResponse
+	156, // 195: meta.MetaService.DumpMeta:output_type -> meta.DumpMetaChunk
+	157, // 196: meta.MetaService.LoadMeta:output_type -> meta.LoadMetaResponse
+	158, // 197: meta.MetaService.DumpMetaV2:output_type -> meta.DumpMetaV2Chunk
+	159, // 198: meta.MetaService.LoadMetaV2:output_type -> meta.LoadMetaV2Response
+	121, // [121:199] is the sub-list for method output_type
+	43,  // [43:121] is the sub-list for method input_type
+	43,  // [43:43] is the sub-list for extension type_name
+	43,  // [43:43] is the sub-list for extension extendee
+	0,   // [0:43] is the sub-list for field type_name
 }
 
-func init() { file_pkg_meta_grpc_meta_proto_init() }
-func file_pkg_meta_grpc_meta_proto_init() {
-	if File_pkg_meta_grpc_meta_proto != nil {
+func init() { file_meta_proto_init() }
+func file_meta_proto_init() {
+	if File_meta_proto != nil {
 		return
 	}
+	file_meta_common_proto_init()
+	file_meta_lifecycle_proto_init()
+	file_meta_locks_proto_init()
+	file_meta_xattrs_proto_init()
+	file_meta_directory_proto_init()
+	file_meta_acl_proto_init()
+	file_meta_token_proto_init()
+	file_meta_admin_proto_init()
+	file_meta_streaming_proto_init()
+	file_meta_dir_handler_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_meta_grpc_meta_proto_rawDesc), len(file_pkg_meta_grpc_meta_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meta_proto_rawDesc), len(file_meta_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   175,
+			NumMessages:   52,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_pkg_meta_grpc_meta_proto_goTypes,
-		DependencyIndexes: file_pkg_meta_grpc_meta_proto_depIdxs,
-		MessageInfos:      file_pkg_meta_grpc_meta_proto_msgTypes,
+		GoTypes:           file_meta_proto_goTypes,
+		DependencyIndexes: file_meta_proto_depIdxs,
+		MessageInfos:      file_meta_proto_msgTypes,
 	}.Build()
-	File_pkg_meta_grpc_meta_proto = out.File
-	file_pkg_meta_grpc_meta_proto_goTypes = nil
-	file_pkg_meta_grpc_meta_proto_depIdxs = nil
+	File_meta_proto = out.File
+	file_meta_proto_goTypes = nil
+	file_meta_proto_depIdxs = nil
 }

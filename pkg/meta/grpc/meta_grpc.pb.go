@@ -17,13 +17,12 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v6.30.2
-// source: pkg/meta/grpc/meta.proto
+// source: meta.proto
 
 package grpc
 
 import (
 	context "context"
-
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -3074,5 +3073,5 @@ var MetaService_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: "pkg/meta/grpc/meta.proto",
+	Metadata: "meta.proto",
 }

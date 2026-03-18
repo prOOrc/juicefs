@@ -1,0 +1,187 @@
+/*
+ * JuiceFS, Copyright 2021 Juicedata, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+syntax = "proto3";
+package meta;
+option go_package = "github.com/juicedata/juicefs/pkg/meta/grpc";
+
+// MetaContext carries uid/gid/pid for permission checks
+message MetaContext {
+  uint32 uid = 1;
+  uint32 gid = 2;
+  repeated uint32 gids = 3;
+  uint32 pid = 4;
+  bool check_permission = 5;
+}
+
+// Attr represents file/directory attributes
+message ProtoAttr {
+  uint32 flags = 1;
+  uint32 typ = 2;
+  uint32 mode = 3;
+  uint32 uid = 4;
+  uint32 gid = 5;
+  uint32 rdev = 6;
+  int64 atime = 7;
+  int64 mtime = 8;
+  int64 ctime = 9;
+  uint32 atimensec = 10;
+  uint32 mtimensec = 11;
+  uint32 ctimensec = 12;
+  uint32 nlink = 13;
+  uint64 length = 14;
+  uint64 parent = 15;
+  bool full = 16;
+  bool keep_cache = 17;
+  uint32 access_acl = 18;
+  uint32 default_acl = 19;
+}
+
+// Slice represents a chunk slice
+message ProtoSlice {
+  uint64 id = 1;
+  uint32 size = 2;
+  uint32 off = 3;
+  uint32 len = 4;
+}
+
+// Entry represents a directory entry
+message ProtoEntry {
+  uint64 inode = 1;
+  bytes name = 2;
+  ProtoAttr attr = 3;
+}
+
+// SessionInfo for session details
+message ProtoSessionInfo {
+  string version = 1;
+  string host_name = 2;
+  repeated string ip_addrs = 3;
+  string mount_point = 4;
+  int64 mount_time = 5;
+  int32 process_id = 6;
+}
+
+// Flock for file locks
+message ProtoFlock {
+  uint64 inode = 1;
+  uint64 owner = 2;
+  string ltype = 3;
+}
+
+// PlockRecord for range locks
+message ProtoPlockRecord {
+  uint32 type = 1;
+  uint32 pid = 2;
+  uint64 start = 3;
+  uint64 end = 4;
+}
+
+// Plock for range locks
+message ProtoPlock {
+  uint64 inode = 1;
+  uint64 owner = 2;
+  repeated ProtoPlockRecord records = 3;
+}
+
+// Session for client sessions
+message ProtoSession {
+  uint64 sid = 1;
+  int64 expire = 2;
+  ProtoSessionInfo info = 3;
+  repeated uint64 sustained = 4;
+  repeated ProtoFlock flocks = 5;
+  repeated ProtoPlock plocks = 6;
+}
+
+// Format for volume format
+message ProtoFormat {
+  string name = 1;
+  string uuid = 2;
+  string storage = 3;
+  string storage_class = 4;
+  string bucket = 5;
+  string access_key = 6;
+  string secret_key = 7;
+  string session_token = 8;
+  int32 block_size = 9;
+  string compression = 10;
+  int32 shards = 11;
+  bool hash_prefix = 12;
+  uint64 capacity = 13;
+  uint64 inodes = 14;
+  string encrypt_key = 15;
+  string encrypt_algo = 16;
+  bool key_encrypted = 17;
+  int64 upload_limit = 18;
+  int64 download_limit = 19;
+  int32 trash_days = 20;
+  int32 meta_version = 21;
+  string min_client_version = 22;
+  string max_client_version = 23;
+  bool dir_stats = 24;
+  bool user_group_quota = 25;
+  bool enable_acl = 26;
+  string ranger_rest_url = 27;
+  string ranger_service = 28;
+  string kerb_conf = 29;
+}
+
+// SliceMapEntry for map of inodes to slices
+message SliceMapEntry {
+  uint64 inode = 1;
+  repeated ProtoSlice slices = 2;
+}
+
+// Summary represents directory summary
+message ProtoSummary {
+  uint64 length = 1;
+  uint64 size = 2;
+  uint64 files = 3;
+  uint64 dirs = 4;
+}
+
+// TreeSummary for recursive summary
+message ProtoTreeSummary {
+  uint64 inode = 1;
+  string path = 2;
+  uint32 type = 3;
+  uint64 size = 4;
+  uint64 files = 5;
+  uint64 dirs = 6;
+  repeated ProtoTreeSummary children = 7;
+}
+
+// Quota for quota management
+message ProtoQuota {
+  int64 max_space = 1;
+  int64 max_inodes = 2;
+  int64 used_space = 3;
+  int64 used_inodes = 4;
+}
+
+// DirHandler handle
+message DirHandlerHandle {
+  uint64 handle_id = 1;
+}
+
+// ACL Rule
+message ProtoACLRule {
+  uint32 id = 1;
+  uint32 type = 2;
+  uint32 perms = 3;
+  repeated uint32 entries = 4;
+}
