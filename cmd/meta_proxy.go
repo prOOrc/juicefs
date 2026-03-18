@@ -41,8 +41,8 @@ func cmdMetaProxy() *cli.Command {
 		Usage: "Start a gRPC proxy for JuiceFS metadata backend",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:  "redis",
-				Usage: "Redis URL for metadata backend (e.g., redis://localhost:6379/0)",
+				Name:  "meta-backend",
+				Usage: "Metadata backend URL (e.g., redis://localhost:6379/0, postgresql://...)",
 				Value: "redis://localhost:6379/0",
 			},
 			&cli.StringFlag{
@@ -80,7 +80,7 @@ func cmdMetaProxy() *cli.Command {
 				utils.SetLogLevel(0)
 			}
 
-			redisUrl := c.String("redis")
+			metaBackendUrl := c.String("meta-backend")
 			addr := c.String("addr")
 			maxSendMsgSize := c.Int("grpc-max-send-msg-size") * 1024 * 1024
 			maxRecvMsgSize := c.Int("grpc-max-recv-msg-size") * 1024 * 1024
@@ -88,10 +88,10 @@ func cmdMetaProxy() *cli.Command {
 			keepaliveTimeout := c.Duration("grpc-keepalive-timeout")
 
 			loggerProxy.Info("Starting JuiceFS metadata proxy server")
-			loggerProxy.Infof("Redis URL: %s", redisUrl)
+			loggerProxy.Infof("Metadata backend URL: %s", metaBackendUrl)
 			loggerProxy.Infof("gRPC address: %s", addr)
 
-			m := meta.NewClient(redisUrl, meta.DefaultConf())
+			m := meta.NewClient(metaBackendUrl, meta.DefaultConf())
 
 			server := meta.NewMetaProxyServer(m)
 
