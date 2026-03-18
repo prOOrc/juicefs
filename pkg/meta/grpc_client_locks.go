@@ -14,20 +14,19 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"context"
 	"syscall"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // --- Locks operations ---
 
 // Flock manages file locks
-func (c *Client) Flock(ctx meta.Context, ino meta.Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
+func (c *GRPCClient) Flock(ctx Context, ino Ino, owner uint64, ltype uint32, block bool) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -45,7 +44,7 @@ func (c *Client) Flock(ctx meta.Context, ino meta.Ino, owner uint64, ltype uint3
 }
 
 // Getlk gets lock information
-func (c *Client) Getlk(ctx meta.Context, ino meta.Ino, owner uint64, ltype uint32, start, end uint64) (ltypeOut uint32, startOut uint64, endOut uint64, pid uint32, errno syscall.Errno) {
+func (c *GRPCClient) Getlk(ctx Context, ino Ino, owner uint64, ltype uint32, start, end uint64) (ltypeOut uint32, startOut uint64, endOut uint64, pid uint32, errno syscall.Errno) {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -64,7 +63,7 @@ func (c *Client) Getlk(ctx meta.Context, ino meta.Ino, owner uint64, ltype uint3
 }
 
 // Setlk sets a lock
-func (c *Client) Setlk(ctx meta.Context, ino meta.Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
+func (c *GRPCClient) Setlk(ctx Context, ino Ino, owner uint64, block bool, ltype uint32, start, end uint64, pid uint32) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 

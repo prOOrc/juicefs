@@ -14,20 +14,19 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"context"
 	"syscall"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // --- Xattrs operations ---
 
 // GetXattr gets extended attribute
-func (c *Client) GetXattr(ctx meta.Context, ino meta.Ino, name string, vbuff *[]byte) syscall.Errno {
+func (c *GRPCClient) GetXattr(ctx Context, ino Ino, name string, vbuff *[]byte) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -49,7 +48,7 @@ func (c *Client) GetXattr(ctx meta.Context, ino meta.Ino, name string, vbuff *[]
 }
 
 // SetXattr sets extended attribute
-func (c *Client) SetXattr(ctx meta.Context, ino meta.Ino, name string, value []byte, flags uint32) syscall.Errno {
+func (c *GRPCClient) SetXattr(ctx Context, ino Ino, name string, value []byte, flags uint32) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -67,7 +66,7 @@ func (c *Client) SetXattr(ctx meta.Context, ino meta.Ino, name string, value []b
 }
 
 // RemoveXattr removes extended attribute
-func (c *Client) RemoveXattr(ctx meta.Context, ino meta.Ino, name string) syscall.Errno {
+func (c *GRPCClient) RemoveXattr(ctx Context, ino Ino, name string) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -83,7 +82,7 @@ func (c *Client) RemoveXattr(ctx meta.Context, ino meta.Ino, name string) syscal
 }
 
 // ListXattr lists extended attributes
-func (c *Client) ListXattr(ctx meta.Context, ino meta.Ino, names *[]byte) syscall.Errno {
+func (c *GRPCClient) ListXattr(ctx Context, ino Ino, names *[]byte) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 

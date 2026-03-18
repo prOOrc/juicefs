@@ -14,21 +14,20 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"context"
 	"syscall"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // --- Core FUSE operations ---
 
 // StatFS gets filesystem stats
-func (c *Client) StatFS(ctx meta.Context, ino meta.Ino, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
+func (c *GRPCClient) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -58,7 +57,7 @@ func (c *Client) StatFS(ctx meta.Context, ino meta.Ino, totalspace, availspace, 
 }
 
 // Lookup looks up a directory entry
-func (c *Client) Lookup(ctx meta.Context, parent meta.Ino, name string, inode *meta.Ino, attr *meta.Attr, checkPerm bool) syscall.Errno {
+func (c *GRPCClient) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr, checkPerm bool) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -75,7 +74,7 @@ func (c *Client) Lookup(ctx meta.Context, parent meta.Ino, name string, inode *m
 		return syscall.Errno(resp.GetErrno())
 	}
 	if inode != nil {
-		*inode = meta.Ino(resp.GetInode())
+		*inode = Ino(resp.GetInode())
 	}
 	if attr != nil {
 		*attr = *fromProtoAttr(resp.GetAttr())
@@ -84,7 +83,7 @@ func (c *Client) Lookup(ctx meta.Context, parent meta.Ino, name string, inode *m
 }
 
 // Resolve resolves a path
-func (c *Client) Resolve(ctx meta.Context, parent meta.Ino, path string, inode *meta.Ino, attr *meta.Attr) syscall.Errno {
+func (c *GRPCClient) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -100,7 +99,7 @@ func (c *Client) Resolve(ctx meta.Context, parent meta.Ino, path string, inode *
 		return syscall.Errno(resp.GetErrno())
 	}
 	if inode != nil {
-		*inode = meta.Ino(resp.GetInode())
+		*inode = Ino(resp.GetInode())
 	}
 	if attr != nil {
 		*attr = *fromProtoAttr(resp.GetAttr())
@@ -109,7 +108,7 @@ func (c *Client) Resolve(ctx meta.Context, parent meta.Ino, path string, inode *
 }
 
 // Access checks access permissions
-func (c *Client) Access(ctx meta.Context, ino meta.Ino, mode uint8, attr *meta.Attr) syscall.Errno {
+func (c *GRPCClient) Access(ctx Context, ino Ino, mode uint8, attr *Attr) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -131,7 +130,7 @@ func (c *Client) Access(ctx meta.Context, ino meta.Ino, mode uint8, attr *meta.A
 }
 
 // GetAttr gets file attributes
-func (c *Client) GetAttr(ctx meta.Context, ino meta.Ino, attr *meta.Attr) syscall.Errno {
+func (c *GRPCClient) GetAttr(ctx Context, ino Ino, attr *Attr) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -152,7 +151,7 @@ func (c *Client) GetAttr(ctx meta.Context, ino meta.Ino, attr *meta.Attr) syscal
 }
 
 // SetAttr sets file attributes
-func (c *Client) SetAttr(ctx meta.Context, ino meta.Ino, set uint16, sggidclearmode uint8, attr *meta.Attr) syscall.Errno {
+func (c *GRPCClient) SetAttr(ctx Context, ino Ino, set uint16, sggidclearmode uint8, attr *Attr) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -171,7 +170,7 @@ func (c *Client) SetAttr(ctx meta.Context, ino meta.Ino, set uint16, sggidclearm
 }
 
 // CheckSetAttr checks if attributes can be set
-func (c *Client) CheckSetAttr(ctx meta.Context, ino meta.Ino, set uint16, attr meta.Attr) syscall.Errno {
+func (c *GRPCClient) CheckSetAttr(ctx Context, ino Ino, set uint16, attr Attr) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -188,7 +187,7 @@ func (c *Client) CheckSetAttr(ctx meta.Context, ino meta.Ino, set uint16, attr m
 }
 
 // Mknod creates a special file
-func (c *Client) Mknod(ctx meta.Context, parent meta.Ino, name string, typ uint8, mode, cumask uint16, rdev uint32, fpath string, inode *meta.Ino, attr *meta.Attr) syscall.Errno {
+func (c *GRPCClient) Mknod(ctx Context, parent Ino, name string, typ uint8, mode, cumask uint16, rdev uint32, fpath string, inode *Ino, attr *Attr) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -209,7 +208,7 @@ func (c *Client) Mknod(ctx meta.Context, parent meta.Ino, name string, typ uint8
 		return syscall.Errno(resp.GetErrno())
 	}
 	if inode != nil {
-		*inode = meta.Ino(resp.GetInode())
+		*inode = Ino(resp.GetInode())
 	}
 	if attr != nil {
 		*attr = *fromProtoAttr(resp.GetAttr())
@@ -218,7 +217,7 @@ func (c *Client) Mknod(ctx meta.Context, parent meta.Ino, name string, typ uint8
 }
 
 // Mkdir creates a directory
-func (c *Client) Mkdir(ctx meta.Context, parent meta.Ino, name string, mode, cumask uint16, copysgid uint8, inode *meta.Ino, attr *meta.Attr) syscall.Errno {
+func (c *GRPCClient) Mkdir(ctx Context, parent Ino, name string, mode, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -237,7 +236,7 @@ func (c *Client) Mkdir(ctx meta.Context, parent meta.Ino, name string, mode, cum
 		return syscall.Errno(resp.GetErrno())
 	}
 	if inode != nil {
-		*inode = meta.Ino(resp.GetInode())
+		*inode = Ino(resp.GetInode())
 	}
 	if attr != nil {
 		*attr = *fromProtoAttr(resp.GetAttr())
@@ -246,7 +245,7 @@ func (c *Client) Mkdir(ctx meta.Context, parent meta.Ino, name string, mode, cum
 }
 
 // Create creates a file
-func (c *Client) Create(ctx meta.Context, parent meta.Ino, name string, mode, cumask uint16, flags uint32, inode *meta.Ino, attr *meta.Attr) syscall.Errno {
+func (c *GRPCClient) Create(ctx Context, parent Ino, name string, mode, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -265,7 +264,7 @@ func (c *Client) Create(ctx meta.Context, parent meta.Ino, name string, mode, cu
 		return syscall.Errno(resp.GetErrno())
 	}
 	if inode != nil {
-		*inode = meta.Ino(resp.GetInode())
+		*inode = Ino(resp.GetInode())
 	}
 	if attr != nil {
 		*attr = *fromProtoAttr(resp.GetAttr())
@@ -274,7 +273,7 @@ func (c *Client) Create(ctx meta.Context, parent meta.Ino, name string, mode, cu
 }
 
 // Open opens a file
-func (c *Client) Open(ctx meta.Context, ino meta.Ino, flags uint32, attr *meta.Attr) syscall.Errno {
+func (c *GRPCClient) Open(ctx Context, ino Ino, flags uint32, attr *Attr) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -296,7 +295,7 @@ func (c *Client) Open(ctx meta.Context, ino meta.Ino, flags uint32, attr *meta.A
 }
 
 // Close closes a file
-func (c *Client) Close(ctx meta.Context, ino meta.Ino) syscall.Errno {
+func (c *GRPCClient) Close(ctx Context, ino Ino) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -311,7 +310,7 @@ func (c *Client) Close(ctx meta.Context, ino meta.Ino) syscall.Errno {
 }
 
 // Unlink removes a file
-func (c *Client) Unlink(ctx meta.Context, parent meta.Ino, name string, skipCheckTrash ...bool) syscall.Errno {
+func (c *GRPCClient) Unlink(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -333,7 +332,7 @@ func (c *Client) Unlink(ctx meta.Context, parent meta.Ino, name string, skipChec
 }
 
 // Rmdir removes a directory
-func (c *Client) Rmdir(ctx meta.Context, parent meta.Ino, name string, skipCheckTrash ...bool) syscall.Errno {
+func (c *GRPCClient) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -355,7 +354,7 @@ func (c *Client) Rmdir(ctx meta.Context, parent meta.Ino, name string, skipCheck
 }
 
 // Rename renames a file/directory
-func (c *Client) Rename(ctx meta.Context, srcParent meta.Ino, srcName string, dstParent meta.Ino, dstName string, flags uint32, inode *meta.Ino, attr *meta.Attr) syscall.Errno {
+func (c *GRPCClient) Rename(ctx Context, srcParent Ino, srcName string, dstParent Ino, dstName string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -374,7 +373,7 @@ func (c *Client) Rename(ctx meta.Context, srcParent meta.Ino, srcName string, ds
 		return syscall.Errno(resp.GetErrno())
 	}
 	if inode != nil {
-		*inode = meta.Ino(resp.GetInode())
+		*inode = Ino(resp.GetInode())
 	}
 	if attr != nil {
 		*attr = *fromProtoAttr(resp.GetAttr())
@@ -383,7 +382,7 @@ func (c *Client) Rename(ctx meta.Context, srcParent meta.Ino, srcName string, ds
 }
 
 // Link creates a hard link
-func (c *Client) Link(ctx meta.Context, srcIno, parent meta.Ino, name string, attr *meta.Attr) syscall.Errno {
+func (c *GRPCClient) Link(ctx Context, srcIno, parent Ino, name string, attr *Attr) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -406,7 +405,7 @@ func (c *Client) Link(ctx meta.Context, srcIno, parent meta.Ino, name string, at
 }
 
 // Symlink creates a symbolic link
-func (c *Client) Symlink(ctx meta.Context, parent meta.Ino, name, path string, inode *meta.Ino, attr *meta.Attr) syscall.Errno {
+func (c *GRPCClient) Symlink(ctx Context, parent Ino, name, path string, inode *Ino, attr *Attr) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -423,7 +422,7 @@ func (c *Client) Symlink(ctx meta.Context, parent meta.Ino, name, path string, i
 		return syscall.Errno(resp.GetErrno())
 	}
 	if inode != nil {
-		*inode = meta.Ino(resp.GetInode())
+		*inode = Ino(resp.GetInode())
 	}
 	if attr != nil {
 		*attr = *fromProtoAttr(resp.GetAttr())
@@ -432,7 +431,7 @@ func (c *Client) Symlink(ctx meta.Context, parent meta.Ino, name, path string, i
 }
 
 // ReadLink reads a symbolic link
-func (c *Client) ReadLink(ctx meta.Context, ino meta.Ino, path *[]byte) syscall.Errno {
+func (c *GRPCClient) ReadLink(ctx Context, ino Ino, path *[]byte) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -453,7 +452,7 @@ func (c *Client) ReadLink(ctx meta.Context, ino meta.Ino, path *[]byte) syscall.
 }
 
 // Truncate truncates a file
-func (c *Client) Truncate(ctx meta.Context, ino meta.Ino, flags uint8, length uint64, attr *meta.Attr, skipPermCheck bool) syscall.Errno {
+func (c *GRPCClient) Truncate(ctx Context, ino Ino, flags uint8, length uint64, attr *Attr, skipPermCheck bool) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -477,7 +476,7 @@ func (c *Client) Truncate(ctx meta.Context, ino meta.Ino, flags uint8, length ui
 }
 
 // Fallocate allocates file space
-func (c *Client) Fallocate(ctx meta.Context, ino meta.Ino, mode uint8, off, size uint64, length *uint64) syscall.Errno {
+func (c *GRPCClient) Fallocate(ctx Context, ino Ino, mode uint8, off, size uint64, length *uint64) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -501,7 +500,7 @@ func (c *Client) Fallocate(ctx meta.Context, ino meta.Ino, mode uint8, off, size
 }
 
 // Readdir reads directory entries
-func (c *Client) Readdir(ctx meta.Context, ino meta.Ino, wantAttr uint8, entries *[]*meta.Entry) syscall.Errno {
+func (c *GRPCClient) Readdir(ctx Context, ino Ino, wantAttr uint8, entries *[]*Entry) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -516,7 +515,7 @@ func (c *Client) Readdir(ctx meta.Context, ino meta.Ino, wantAttr uint8, entries
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
 	}
-	result := make([]*meta.Entry, 0, len(resp.GetEntries()))
+	result := make([]*Entry, 0, len(resp.GetEntries()))
 	for _, e := range resp.GetEntries() {
 		result = append(result, fromProtoEntry(e))
 	}
@@ -527,7 +526,7 @@ func (c *Client) Readdir(ctx meta.Context, ino meta.Ino, wantAttr uint8, entries
 }
 
 // Read reads file slices
-func (c *Client) Read(ctx meta.Context, ino meta.Ino, indx uint32, slices *[]meta.Slice) syscall.Errno {
+func (c *GRPCClient) Read(ctx Context, ino Ino, indx uint32, slices *[]Slice) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -542,9 +541,9 @@ func (c *Client) Read(ctx meta.Context, ino meta.Ino, indx uint32, slices *[]met
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
 	}
-	result := make([]meta.Slice, 0, len(resp.GetSlices()))
+	result := make([]Slice, 0, len(resp.GetSlices()))
 	for _, s := range resp.GetSlices() {
-		result = append(result, meta.Slice{
+		result = append(result, Slice{
 			Id:   s.Id,
 			Size: s.Size,
 			Off:  s.Off,
@@ -558,7 +557,7 @@ func (c *Client) Read(ctx meta.Context, ino meta.Ino, indx uint32, slices *[]met
 }
 
 // Write writes file slices
-func (c *Client) Write(ctx meta.Context, ino meta.Ino, indx, off uint32, slice meta.Slice, mtime time.Time) syscall.Errno {
+func (c *GRPCClient) Write(ctx Context, ino Ino, indx, off uint32, slice Slice, mtime time.Time) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -582,7 +581,7 @@ func (c *Client) Write(ctx meta.Context, ino meta.Ino, indx, off uint32, slice m
 }
 
 // NewSlice creates a new slice
-func (c *Client) NewSlice(ctx meta.Context, id *uint64) syscall.Errno {
+func (c *GRPCClient) NewSlice(ctx Context, id *uint64) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -602,7 +601,7 @@ func (c *Client) NewSlice(ctx meta.Context, id *uint64) syscall.Errno {
 }
 
 // InvalidateChunkCache invalidates chunk cache
-func (c *Client) InvalidateChunkCache(ctx meta.Context, ino meta.Ino, indx uint32) syscall.Errno {
+func (c *GRPCClient) InvalidateChunkCache(ctx Context, ino Ino, indx uint32) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -618,7 +617,7 @@ func (c *Client) InvalidateChunkCache(ctx meta.Context, ino meta.Ino, indx uint3
 }
 
 // CopyFileRange copies file range
-func (c *Client) CopyFileRange(ctx meta.Context, fin, offIn, fout, offOut, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {
+func (c *GRPCClient) CopyFileRange(ctx Context, fin, offIn, fout, offOut, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 

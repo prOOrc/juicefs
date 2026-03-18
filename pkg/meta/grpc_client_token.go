@@ -14,20 +14,19 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"context"
 	"syscall"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // --- Token operations ---
 
 // StoreToken stores a token
-func (c *Client) StoreToken(ctx meta.Context, token []byte, id *uint32) syscall.Errno {
+func (c *GRPCClient) StoreToken(ctx Context, token []byte, id *uint32) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -48,7 +47,7 @@ func (c *Client) StoreToken(ctx meta.Context, token []byte, id *uint32) syscall.
 }
 
 // UpdateToken updates a token
-func (c *Client) UpdateToken(ctx meta.Context, id uint32, token []byte) syscall.Errno {
+func (c *GRPCClient) UpdateToken(ctx Context, id uint32, token []byte) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -64,7 +63,7 @@ func (c *Client) UpdateToken(ctx meta.Context, id uint32, token []byte) syscall.
 }
 
 // LoadToken loads a token
-func (c *Client) LoadToken(ctx meta.Context, id uint32, token *[]byte) syscall.Errno {
+func (c *GRPCClient) LoadToken(ctx Context, id uint32, token *[]byte) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -85,7 +84,7 @@ func (c *Client) LoadToken(ctx meta.Context, id uint32, token *[]byte) syscall.E
 }
 
 // DeleteTokens deletes tokens
-func (c *Client) DeleteTokens(ctx meta.Context, ids []uint32) syscall.Errno {
+func (c *GRPCClient) DeleteTokens(ctx Context, ids []uint32) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -100,7 +99,7 @@ func (c *Client) DeleteTokens(ctx meta.Context, ids []uint32) syscall.Errno {
 }
 
 // ListTokens lists tokens
-func (c *Client) ListTokens(ctx meta.Context, tokens *map[uint32][]byte) syscall.Errno {
+func (c *GRPCClient) ListTokens(ctx Context, tokens *map[uint32][]byte) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 

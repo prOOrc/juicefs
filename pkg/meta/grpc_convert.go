@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"time"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // Attr conversion
 
-func AttrToProto(a *meta.Attr) *pb.ProtoAttr {
+func AttrToProto(a *Attr) *pb.ProtoAttr {
 	if a == nil {
 		return nil
 	}
@@ -53,11 +52,11 @@ func AttrToProto(a *meta.Attr) *pb.ProtoAttr {
 	}
 }
 
-func ProtoToAttr(p *pb.ProtoAttr) *meta.Attr {
+func ProtoToAttr(p *pb.ProtoAttr) *Attr {
 	if p == nil {
 		return nil
 	}
-	return &meta.Attr{
+	return &Attr{
 		Flags:      uint8(p.Flags),
 		Typ:        uint8(p.Typ),
 		Mode:       uint16(p.Mode),
@@ -72,7 +71,7 @@ func ProtoToAttr(p *pb.ProtoAttr) *meta.Attr {
 		Ctimensec:  p.Ctimensec,
 		Nlink:      p.Nlink,
 		Length:     p.Length,
-		Parent:     meta.Ino(p.Parent),
+		Parent:     Ino(p.Parent),
 		Full:       p.Full,
 		KeepCache:  p.KeepCache,
 		AccessACL:  p.AccessAcl,
@@ -82,7 +81,7 @@ func ProtoToAttr(p *pb.ProtoAttr) *meta.Attr {
 
 // Slice conversion
 
-func SliceToProto(s meta.Slice) *pb.ProtoSlice {
+func SliceToProto(s Slice) *pb.ProtoSlice {
 	return &pb.ProtoSlice{
 		Id:   s.Id,
 		Size: s.Size,
@@ -91,11 +90,11 @@ func SliceToProto(s meta.Slice) *pb.ProtoSlice {
 	}
 }
 
-func ProtoToSlice(p *pb.ProtoSlice) meta.Slice {
+func ProtoToSlice(p *pb.ProtoSlice) Slice {
 	if p == nil {
-		return meta.Slice{}
+		return Slice{}
 	}
-	return meta.Slice{
+	return Slice{
 		Id:   p.Id,
 		Size: p.Size,
 		Off:  p.Off,
@@ -103,7 +102,7 @@ func ProtoToSlice(p *pb.ProtoSlice) meta.Slice {
 	}
 }
 
-func SlicesToProto(ss []meta.Slice) []*pb.ProtoSlice {
+func SlicesToProto(ss []Slice) []*pb.ProtoSlice {
 	if ss == nil {
 		return nil
 	}
@@ -114,11 +113,11 @@ func SlicesToProto(ss []meta.Slice) []*pb.ProtoSlice {
 	return result
 }
 
-func ProtoToSlices(pp []*pb.ProtoSlice) []meta.Slice {
+func ProtoToSlices(pp []*pb.ProtoSlice) []Slice {
 	if pp == nil {
 		return nil
 	}
-	result := make([]meta.Slice, len(pp))
+	result := make([]Slice, len(pp))
 	for i, p := range pp {
 		result[i] = ProtoToSlice(p)
 	}
@@ -127,7 +126,7 @@ func ProtoToSlices(pp []*pb.ProtoSlice) []meta.Slice {
 
 // Entry conversion
 
-func EntryToProto(e *meta.Entry) *pb.ProtoEntry {
+func EntryToProto(e *Entry) *pb.ProtoEntry {
 	if e == nil {
 		return nil
 	}
@@ -138,18 +137,18 @@ func EntryToProto(e *meta.Entry) *pb.ProtoEntry {
 	}
 }
 
-func ProtoToEntry(p *pb.ProtoEntry) *meta.Entry {
+func ProtoToEntry(p *pb.ProtoEntry) *Entry {
 	if p == nil {
 		return nil
 	}
-	return &meta.Entry{
-		Inode: meta.Ino(p.Inode),
+	return &Entry{
+		Inode: Ino(p.Inode),
 		Name:  p.Name,
 		Attr:  ProtoToAttr(p.Attr),
 	}
 }
 
-func EntriesToProto(ees []*meta.Entry) []*pb.ProtoEntry {
+func EntriesToProto(ees []*Entry) []*pb.ProtoEntry {
 	if ees == nil {
 		return nil
 	}
@@ -160,11 +159,11 @@ func EntriesToProto(ees []*meta.Entry) []*pb.ProtoEntry {
 	return result
 }
 
-func ProtoToEntries(pp []*pb.ProtoEntry) []*meta.Entry {
+func ProtoToEntries(pp []*pb.ProtoEntry) []*Entry {
 	if pp == nil {
 		return nil
 	}
-	result := make([]*meta.Entry, len(pp))
+	result := make([]*Entry, len(pp))
 	for i, p := range pp {
 		result[i] = ProtoToEntry(p)
 	}
@@ -173,7 +172,7 @@ func ProtoToEntries(pp []*pb.ProtoEntry) []*meta.Entry {
 
 // Summary conversion
 
-func SummaryToProto(s *meta.Summary) *pb.ProtoSummary {
+func SummaryToProto(s *Summary) *pb.ProtoSummary {
 	if s == nil {
 		return nil
 	}
@@ -185,11 +184,11 @@ func SummaryToProto(s *meta.Summary) *pb.ProtoSummary {
 	}
 }
 
-func ProtoToSummary(p *pb.ProtoSummary) *meta.Summary {
+func ProtoToSummary(p *pb.ProtoSummary) *Summary {
 	if p == nil {
 		return nil
 	}
-	return &meta.Summary{
+	return &Summary{
 		Length: p.Length,
 		Size:   p.Size,
 		Files:  p.Files,
@@ -199,7 +198,7 @@ func ProtoToSummary(p *pb.ProtoSummary) *meta.Summary {
 
 // TreeSummary conversion
 
-func TreeSummaryToProto(t *meta.TreeSummary) *pb.ProtoTreeSummary {
+func TreeSummaryToProto(t *TreeSummary) *pb.ProtoTreeSummary {
 	if t == nil {
 		return nil
 	}
@@ -218,16 +217,16 @@ func TreeSummaryToProto(t *meta.TreeSummary) *pb.ProtoTreeSummary {
 	}
 }
 
-func ProtoToTreeSummary(p *pb.ProtoTreeSummary) *meta.TreeSummary {
+func ProtoToTreeSummary(p *pb.ProtoTreeSummary) *TreeSummary {
 	if p == nil {
 		return nil
 	}
-	children := make([]*meta.TreeSummary, len(p.Children))
+	children := make([]*TreeSummary, len(p.Children))
 	for i, c := range p.Children {
 		children[i] = ProtoToTreeSummary(c)
 	}
-	return &meta.TreeSummary{
-		Inode:    meta.Ino(p.Inode),
+	return &TreeSummary{
+		Inode:    Ino(p.Inode),
 		Path:     p.Path,
 		Type:     uint8(p.Type),
 		Size:     p.Size,
@@ -239,11 +238,11 @@ func ProtoToTreeSummary(p *pb.ProtoTreeSummary) *meta.TreeSummary {
 
 // Format conversion - handle both pointer and value
 
-func FormatToProto(f meta.Format) *pb.ProtoFormat {
+func FormatToProto(f Format) *pb.ProtoFormat {
 	return FormatToProtoPtr(&f)
 }
 
-func FormatToProtoPtr(f *meta.Format) *pb.ProtoFormat {
+func FormatToProtoPtr(f *Format) *pb.ProtoFormat {
 	if f == nil {
 		return nil
 	}
@@ -280,11 +279,11 @@ func FormatToProtoPtr(f *meta.Format) *pb.ProtoFormat {
 	}
 }
 
-func ProtoToFormat(p *pb.ProtoFormat) *meta.Format {
+func ProtoToFormat(p *pb.ProtoFormat) *Format {
 	if p == nil {
 		return nil
 	}
-	return &meta.Format{
+	return &Format{
 		Name:             p.Name,
 		UUID:             p.Uuid,
 		Storage:          p.Storage,
@@ -319,7 +318,7 @@ func ProtoToFormat(p *pb.ProtoFormat) *meta.Format {
 
 // Quota conversion
 
-func QuotaToProto(q *meta.Quota) *pb.ProtoQuota {
+func QuotaToProto(q *Quota) *pb.ProtoQuota {
 	if q == nil {
 		return nil
 	}
@@ -331,11 +330,11 @@ func QuotaToProto(q *meta.Quota) *pb.ProtoQuota {
 	}
 }
 
-func ProtoToQuota(p *pb.ProtoQuota) *meta.Quota {
+func ProtoToQuota(p *pb.ProtoQuota) *Quota {
 	if p == nil {
 		return nil
 	}
-	return &meta.Quota{
+	return &Quota{
 		MaxSpace:   p.MaxSpace,
 		MaxInodes:  p.MaxInodes,
 		UsedSpace:  p.UsedSpace,
@@ -345,7 +344,7 @@ func ProtoToQuota(p *pb.ProtoQuota) *meta.Quota {
 
 // SliceMapEntry conversion
 
-func SliceMapToProto(m map[meta.Ino][]meta.Slice) []*pb.SliceMapEntry {
+func SliceMapToProto(m map[Ino][]Slice) []*pb.SliceMapEntry {
 	if m == nil {
 		return nil
 	}
@@ -360,20 +359,20 @@ func SliceMapToProto(m map[meta.Ino][]meta.Slice) []*pb.SliceMapEntry {
 	return result
 }
 
-func ProtoToSliceMap(pp []*pb.SliceMapEntry) map[meta.Ino][]meta.Slice {
+func ProtoToSliceMap(pp []*pb.SliceMapEntry) map[Ino][]Slice {
 	if pp == nil {
 		return nil
 	}
-	result := make(map[meta.Ino][]meta.Slice, len(pp))
+	result := make(map[Ino][]Slice, len(pp))
 	for _, p := range pp {
-		result[meta.Ino(p.Inode)] = ProtoToSlices(p.Slices)
+		result[Ino(p.Inode)] = ProtoToSlices(p.Slices)
 	}
 	return result
 }
 
 // Session conversion
 
-func SessionToProto(s *meta.Session) *pb.ProtoSession {
+func SessionToProto(s *Session) *pb.ProtoSession {
 	if s == nil {
 		return nil
 	}
@@ -424,11 +423,11 @@ func SessionToProto(s *meta.Session) *pb.ProtoSession {
 	}
 }
 
-func ProtoToSession(p *pb.ProtoSession) *meta.Session {
+func ProtoToSession(p *pb.ProtoSession) *Session {
 	if p == nil {
 		return nil
 	}
-	info := meta.SessionInfo{
+	info := SessionInfo{
 		Version:    p.Info.Version,
 		HostName:   p.Info.HostName,
 		IPAddrs:    p.Info.IpAddrs,
@@ -436,21 +435,21 @@ func ProtoToSession(p *pb.ProtoSession) *meta.Session {
 		MountTime:  time.Unix(p.Info.MountTime, 0),
 		ProcessID:  int(p.Info.ProcessId),
 	}
-	flocks := make([]meta.Flock, len(p.Flocks))
+	flocks := make([]Flock, len(p.Flocks))
 	for i, f := range p.Flocks {
-		flocks[i] = meta.Flock{
-			Inode: meta.Ino(f.Inode),
+		flocks[i] = Flock{
+			Inode: Ino(f.Inode),
 			Owner: f.Owner,
 			Ltype: f.Ltype,
 		}
 	}
 	// Note: plocks use unexported plockRecord type, so we can't convert them back
 	// This is OK since we only need SessionToProto for the server
-	sustained := make([]meta.Ino, len(p.Sustained))
+	sustained := make([]Ino, len(p.Sustained))
 	for i, id := range p.Sustained {
-		sustained[i] = meta.Ino(id)
+		sustained[i] = Ino(id)
 	}
-	return &meta.Session{
+	return &Session{
 		Sid:         p.Sid,
 		Expire:      time.Unix(p.Expire, 0),
 		SessionInfo: info,
@@ -461,26 +460,26 @@ func ProtoToSession(p *pb.ProtoSession) *meta.Session {
 
 // Alias functions for simpler names used in grpc_client.go
 
-func toProtoAttr(a *meta.Attr) *pb.ProtoAttr {
+func toProtoAttr(a *Attr) *pb.ProtoAttr {
 	return AttrToProto(a)
 }
 
-func fromProtoAttr(p *pb.ProtoAttr) *meta.Attr {
+func fromProtoAttr(p *pb.ProtoAttr) *Attr {
 	return ProtoToAttr(p)
 }
 
-func toProtoSlice(s *meta.Slice) *pb.ProtoSlice {
+func toProtoSlice(s *Slice) *pb.ProtoSlice {
 	if s == nil {
 		return nil
 	}
 	return SliceToProto(*s)
 }
 
-func fromProtoSlice(p *pb.ProtoSlice) *meta.Slice {
+func fromProtoSlice(p *pb.ProtoSlice) *Slice {
 	if p == nil {
 		return nil
 	}
-	return &meta.Slice{
+	return &Slice{
 		Id:   p.Id,
 		Size: p.Size,
 		Off:  p.Off,
@@ -488,55 +487,55 @@ func fromProtoSlice(p *pb.ProtoSlice) *meta.Slice {
 	}
 }
 
-func toProtoEntry(e *meta.Entry) *pb.ProtoEntry {
+func toProtoEntry(e *Entry) *pb.ProtoEntry {
 	return EntryToProto(e)
 }
 
-func fromProtoEntry(p *pb.ProtoEntry) *meta.Entry {
+func fromProtoEntry(p *pb.ProtoEntry) *Entry {
 	return ProtoToEntry(p)
 }
 
-func toProtoSummary(s *meta.Summary) *pb.ProtoSummary {
+func toProtoSummary(s *Summary) *pb.ProtoSummary {
 	return SummaryToProto(s)
 }
 
-func fromProtoSummary(p *pb.ProtoSummary) *meta.Summary {
+func fromProtoSummary(p *pb.ProtoSummary) *Summary {
 	return ProtoToSummary(p)
 }
 
-func toProtoTreeSummary(t *meta.TreeSummary) *pb.ProtoTreeSummary {
+func toProtoTreeSummary(t *TreeSummary) *pb.ProtoTreeSummary {
 	return TreeSummaryToProto(t)
 }
 
-func fromProtoTreeSummary(p *pb.ProtoTreeSummary) *meta.TreeSummary {
+func fromProtoTreeSummary(p *pb.ProtoTreeSummary) *TreeSummary {
 	return ProtoToTreeSummary(p)
 }
 
-func toProtoFormat(f *meta.Format) *pb.ProtoFormat {
+func toProtoFormat(f *Format) *pb.ProtoFormat {
 	return FormatToProtoPtr(f)
 }
 
-func fromProtoFormat(p *pb.ProtoFormat) *meta.Format {
+func fromProtoFormat(p *pb.ProtoFormat) *Format {
 	return ProtoToFormat(p)
 }
 
-func toProtoQuota(q *meta.Quota) *pb.ProtoQuota {
+func toProtoQuota(q *Quota) *pb.ProtoQuota {
 	return QuotaToProto(q)
 }
 
-func fromProtoQuota(p *pb.ProtoQuota) *meta.Quota {
+func fromProtoQuota(p *pb.ProtoQuota) *Quota {
 	return ProtoToQuota(p)
 }
 
-func toProtoSession(s *meta.Session) *pb.ProtoSession {
+func toProtoSession(s *Session) *pb.ProtoSession {
 	return SessionToProto(s)
 }
 
-func fromProtoSession(p *pb.ProtoSession) *meta.Session {
+func fromProtoSession(p *pb.ProtoSession) *Session {
 	return ProtoToSession(p)
 }
 
-func toProtoFlock(f *meta.Flock) *pb.ProtoFlock {
+func toProtoFlock(f *Flock) *pb.ProtoFlock {
 	if f == nil {
 		return nil
 	}
@@ -547,18 +546,18 @@ func toProtoFlock(f *meta.Flock) *pb.ProtoFlock {
 	}
 }
 
-func fromProtoFlock(p *pb.ProtoFlock) *meta.Flock {
+func fromProtoFlock(p *pb.ProtoFlock) *Flock {
 	if p == nil {
 		return nil
 	}
-	return &meta.Flock{
-		Inode: meta.Ino(p.Inode),
+	return &Flock{
+		Inode: Ino(p.Inode),
 		Owner: p.Owner,
 		Ltype: p.Ltype,
 	}
 }
 
-func toProtoPlock(plock *meta.Plock) *pb.ProtoPlock {
+func toProtoPlock(plock *Plock) *pb.ProtoPlock {
 	if plock == nil {
 		return nil
 	}
@@ -578,14 +577,14 @@ func toProtoPlock(plock *meta.Plock) *pb.ProtoPlock {
 	}
 }
 
-func fromProtoPlock(p *pb.ProtoPlock) *meta.Plock {
+func fromProtoPlock(p *pb.ProtoPlock) *Plock {
 	if p == nil {
 		return nil
 	}
 	// plockRecord is unexported, so we create a Plock with empty Records
 	// The actual records are stored in the server's internal representation
-	return &meta.Plock{
-		Inode: meta.Ino(p.Inode),
+	return &Plock{
+		Inode: Ino(p.Inode),
 		Owner: p.Owner,
 		// Records field is unexported (plockRecord type), can't populate it here
 	}

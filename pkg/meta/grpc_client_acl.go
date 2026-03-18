@@ -14,21 +14,20 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"context"
 	"syscall"
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // --- ACL operations ---
 
 // SetFacl sets ACL
-func (c *Client) SetFacl(ctx meta.Context, ino meta.Ino, aclType uint32, rule *aclAPI.Rule) syscall.Errno {
+func (c *GRPCClient) SetFacl(ctx Context, ino Ino, aclType uint32, rule *aclAPI.Rule) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -45,7 +44,7 @@ func (c *Client) SetFacl(ctx meta.Context, ino meta.Ino, aclType uint32, rule *a
 }
 
 // GetFacl gets ACL
-func (c *Client) GetFacl(ctx meta.Context, ino meta.Ino, aclType uint32, rule *aclAPI.Rule) syscall.Errno {
+func (c *GRPCClient) GetFacl(ctx Context, ino Ino, aclType uint32, rule *aclAPI.Rule) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 

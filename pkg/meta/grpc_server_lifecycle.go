@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"context"

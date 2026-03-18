@@ -14,20 +14,19 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"context"
 	"syscall"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 func (s *MetaProxyServer) NewDirHandler(ctx context.Context, req *pb.NewDirHandlerRequest) (*pb.NewDirHandlerResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	initEntries := ProtoToEntries(req.InitEntries)
-	handler, errno := s.meta.NewDirHandler(mctx, meta.Ino(req.Inode), req.Plus, initEntries)
+	handler, errno := s.meta.NewDirHandler(mctx, Ino(req.Inode), req.Plus, initEntries)
 	if errno != 0 {
 		return &pb.NewDirHandlerResponse{Errno: uint32(errno)}, nil
 	}
@@ -49,7 +48,7 @@ func (s *MetaProxyServer) DirHandlerList(ctx context.Context, req *pb.DirHandler
 	if !ok {
 		return &pb.DirHandlerListResponse{Errno: uint32(syscall.EBADF)}, nil
 	}
-	entries, errno := handler.List(meta.Background(), int(req.Offset))
+	entries, errno := handler.List(Background(), int(req.Offset))
 	return &pb.DirHandlerListResponse{
 		Errno:   uint32(errno),
 		Entries: EntriesToProto(entries),
@@ -63,7 +62,7 @@ func (s *MetaProxyServer) DirHandlerInsert(ctx context.Context, req *pb.DirHandl
 	if !ok {
 		return &pb.DirHandlerInsertResponse{Errno: uint32(syscall.EBADF)}, nil
 	}
-	handler.Insert(meta.Ino(req.Inode), req.Name, ProtoToAttr(req.Attr))
+	handler.Insert(Ino(req.Inode), req.Name, ProtoToAttr(req.Attr))
 	return &pb.DirHandlerInsertResponse{Errno: 0}, nil
 }
 

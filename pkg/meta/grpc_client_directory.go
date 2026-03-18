@@ -14,20 +14,19 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"context"
 	"syscall"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // --- Directory operations ---
 
 // GetParents gets parent inodes
-func (c *Client) GetParents(ctx meta.Context, ino meta.Ino) map[meta.Ino]int {
+func (c *GRPCClient) GetParents(ctx Context, ino Ino) map[Ino]int {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -41,14 +40,14 @@ func (c *Client) GetParents(ctx meta.Context, ino meta.Ino) map[meta.Ino]int {
 	if resp.GetErrno() != 0 {
 		return nil
 	}
-	parents := make(map[meta.Ino]int, len(resp.GetParents()))
+	parents := make(map[Ino]int, len(resp.GetParents()))
 	for k, v := range resp.GetParents() {
-		parents[meta.Ino(k)] = int(v)
+		parents[Ino(k)] = int(v)
 	}
 	return parents
 }
 
 // GetDirStat gets directory statistics
-func (c *Client) GetDirStat(ctx meta.Context, ino meta.Ino) (stat interface{}, st syscall.Errno) {
+func (c *GRPCClient) GetDirStat(ctx Context, ino Ino) (stat interface{}, st syscall.Errno) {
 	return nil, syscall.ENOSYS
 }

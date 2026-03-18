@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"context"
@@ -22,12 +22,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // DumpMeta dumps metadata
-func (c *Client) DumpMeta(root meta.Ino, threads int32, keepSecret, fast, skipTrash bool) (io.ReadCloser, error) {
+func (c *GRPCClient) DumpMeta(root Ino, threads int32, keepSecret, fast, skipTrash bool) (io.ReadCloser, error) {
 	pr, pw := io.Pipe()
 	go func() {
 		grpcCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -65,7 +64,7 @@ func (c *Client) DumpMeta(root meta.Ino, threads int32, keepSecret, fast, skipTr
 }
 
 // LoadMeta loads metadata
-func (c *Client) LoadMeta(rc io.ReadCloser) error {
+func (c *GRPCClient) LoadMeta(rc io.ReadCloser) error {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
@@ -98,7 +97,7 @@ func (c *Client) LoadMeta(rc io.ReadCloser) error {
 }
 
 // DumpMetaV2 dumps metadata v2
-func (c *Client) DumpMetaV2(ctx meta.Context, keepSecret bool, threads int32) (io.ReadCloser, error) {
+func (c *GRPCClient) DumpMetaV2(ctx Context, keepSecret bool, threads int32) (io.ReadCloser, error) {
 	pr, pw := io.Pipe()
 	go func() {
 		grpcCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -134,7 +133,7 @@ func (c *Client) DumpMetaV2(ctx meta.Context, keepSecret bool, threads int32) (i
 }
 
 // LoadMetaV2 loads metadata v2
-func (c *Client) LoadMetaV2(ctx meta.Context, rc io.ReadCloser) error {
+func (c *GRPCClient) LoadMetaV2(ctx Context, rc io.ReadCloser) error {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 

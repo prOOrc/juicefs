@@ -28,7 +28,6 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	"github.com/juicedata/juicefs/pkg/meta"
-	grpcMeta "github.com/juicedata/juicefs/pkg/meta/grpc"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
@@ -94,7 +93,7 @@ func cmdMetaProxy() *cli.Command {
 
 			m := meta.NewClient(redisUrl, meta.DefaultConf())
 
-			server := grpcMeta.NewMetaProxyServer(m)
+			server := meta.NewMetaProxyServer(m)
 
 			opts := []gRPC.ServerOption{
 				gRPC.MaxRecvMsgSize(maxRecvMsgSize),

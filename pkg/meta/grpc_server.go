@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"context"
 	"sync"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
@@ -28,30 +27,30 @@ import (
 type MetaProxyServer struct {
 	pb.UnimplementedMetaServiceServer
 
-	meta meta.Meta
+	meta Meta
 
 	// DirHandler state management
 	mu         sync.Mutex
 	nextHandle uint64
-	handlers   map[uint64]meta.DirHandler
+	handlers   map[uint64]DirHandler
 }
 
 // NewMetaProxyServer creates a new MetaProxyServer
-func NewMetaProxyServer(m meta.Meta) *MetaProxyServer {
+func NewMetaProxyServer(m Meta) *MetaProxyServer {
 	return &MetaProxyServer{
 		meta:     m,
-		handlers: make(map[uint64]meta.DirHandler),
+		handlers: make(map[uint64]DirHandler),
 	}
 }
 
-// helper to convert meta.Context from proto
-func (s *MetaProxyServer) metaCtx(ctx context.Context, ctx2 *pb.MetaContext) meta.Context {
+// helper to convert Context from proto
+func (s *MetaProxyServer) metaCtx(ctx context.Context, ctx2 *pb.MetaContext) Context {
 	if ctx2 == nil {
-		return meta.Background()
+		return Background()
 	}
 	gids := ctx2.Gids
 	if len(gids) == 0 {
 		gids = []uint32{ctx2.Gid}
 	}
-	return meta.WrapWithCancel(ctx, ctx2.Pid, ctx2.Uid, gids)
+	return WrapWithCancel(ctx, ctx2.Pid, ctx2.Uid, gids)
 }

@@ -14,20 +14,19 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"context"
 	"syscall"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // --- Lifecycle operations ---
 
 // Init initializes the volume
-func (c *Client) Init(format *meta.Format, force bool) error {
+func (c *GRPCClient) Init(format *Format, force bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -43,7 +42,7 @@ func (c *Client) Init(format *meta.Format, force bool) error {
 }
 
 // Load loads the volume
-func (c *Client) Load(checkVersion bool) (*meta.Format, error) {
+func (c *GRPCClient) Load(checkVersion bool) (*Format, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -60,7 +59,7 @@ func (c *Client) Load(checkVersion bool) (*meta.Format, error) {
 }
 
 // NewSession creates a new session
-func (c *Client) NewSession(record bool) error {
+func (c *GRPCClient) NewSession(record bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -74,7 +73,7 @@ func (c *Client) NewSession(record bool) error {
 }
 
 // CloseSession closes a session
-func (c *Client) CloseSession() error {
+func (c *GRPCClient) CloseSession() error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -86,7 +85,7 @@ func (c *Client) CloseSession() error {
 }
 
 // FlushSession flushes session data
-func (c *Client) FlushSession() {
+func (c *GRPCClient) FlushSession() {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -97,7 +96,7 @@ func (c *Client) FlushSession() {
 }
 
 // Shutdown shuts down the volume
-func (c *Client) Shutdown() error {
+func (c *GRPCClient) Shutdown() error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -109,7 +108,7 @@ func (c *Client) Shutdown() error {
 }
 
 // Reset resets the volume
-func (c *Client) Reset() error {
+func (c *GRPCClient) Reset() error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -121,7 +120,7 @@ func (c *Client) Reset() error {
 }
 
 // GetSession gets session info
-func (c *Client) GetSession(sid uint64, detail bool) (*meta.Session, error) {
+func (c *GRPCClient) GetSession(sid uint64, detail bool) (*Session, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -139,7 +138,7 @@ func (c *Client) GetSession(sid uint64, detail bool) (*meta.Session, error) {
 }
 
 // ListSessions lists all sessions
-func (c *Client) ListSessions() ([]*meta.Session, error) {
+func (c *GRPCClient) ListSessions() ([]*Session, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -150,7 +149,7 @@ func (c *Client) ListSessions() ([]*meta.Session, error) {
 	if resp.GetErrno() != 0 {
 		return nil, syscall.Errno(resp.GetErrno())
 	}
-	sessions := make([]*meta.Session, 0, len(resp.GetSessions()))
+	sessions := make([]*Session, 0, len(resp.GetSessions()))
 	for _, s := range resp.GetSessions() {
 		sessions = append(sessions, fromProtoSession(s))
 	}
@@ -158,7 +157,7 @@ func (c *Client) ListSessions() ([]*meta.Session, error) {
 }
 
 // CleanStaleSessions cleans stale sessions
-func (c *Client) CleanStaleSessions(ctx meta.Context) {
+func (c *GRPCClient) CleanStaleSessions(ctx Context) {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"context"
@@ -22,19 +22,18 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
-// dirHandler implements meta.DirHandler interface
-type dirHandler struct {
+// grpcDirHandler implements DirHandler interface
+type grpcDirHandler struct {
 	handleID uint64
 	client   pb.MetaServiceClient
 	mu       sync.Mutex
 }
 
 // NewDirHandler creates a new directory handler
-func (c *Client) NewDirHandler(ctx meta.Context, ino meta.Ino, plus bool, initEntries []*meta.Entry) (meta.DirHandler, syscall.Errno) {
+func (c *GRPCClient) NewDirHandler(ctx Context, ino Ino, plus bool, initEntries []*Entry) (DirHandler, syscall.Errno) {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -56,14 +55,14 @@ func (c *Client) NewDirHandler(ctx meta.Context, ino meta.Ino, plus bool, initEn
 		return nil, syscall.Errno(resp.GetErrno())
 	}
 
-	return &dirHandler{
+	return &grpcDirHandler{
 		handleID: resp.GetHandle().GetHandleId(),
 		client:   c.client,
 	}, 0
 }
 
 // List lists directory entries
-func (h *dirHandler) List(ctx meta.Context, offset int) ([]*meta.Entry, syscall.Errno) {
+func (h *grpcDirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno) {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -81,7 +80,7 @@ func (h *dirHandler) List(ctx meta.Context, offset int) ([]*meta.Entry, syscall.
 		return nil, syscall.Errno(resp.GetErrno())
 	}
 
-	entries := make([]*meta.Entry, 0, len(resp.GetEntries()))
+	entries := make([]*Entry, 0, len(resp.GetEntries()))
 	for _, e := range resp.GetEntries() {
 		entries = append(entries, fromProtoEntry(e))
 	}
@@ -89,7 +88,7 @@ func (h *dirHandler) List(ctx meta.Context, offset int) ([]*meta.Entry, syscall.
 }
 
 // Insert inserts a directory entry
-func (h *dirHandler) Insert(ino meta.Ino, name string, attr *meta.Attr) {
+func (h *grpcDirHandler) Insert(ino Ino, name string, attr *Attr) {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -106,7 +105,7 @@ func (h *dirHandler) Insert(ino meta.Ino, name string, attr *meta.Attr) {
 }
 
 // Delete deletes a directory entry
-func (h *dirHandler) Delete(name string) {
+func (h *grpcDirHandler) Delete(name string) {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -121,7 +120,7 @@ func (h *dirHandler) Delete(name string) {
 }
 
 // Close closes the directory handler
-func (h *dirHandler) Close() {
+func (h *grpcDirHandler) Close() {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -135,6 +134,6 @@ func (h *dirHandler) Close() {
 }
 
 // Read reads directory entries (not implemented)
-func (h *dirHandler) Read(offset int) {
+func (h *grpcDirHandler) Read(offset int) {
 	// Not implemented
 }

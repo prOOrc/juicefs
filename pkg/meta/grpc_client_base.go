@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"context"
@@ -24,36 +24,35 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
-// Client implements meta.Meta interface using gRPC
-type Client struct {
+// GRPCClient implements meta.Meta interface using gRPC
+type GRPCClient struct {
 	client pb.MetaServiceClient
 	conn   *grpc.ClientConn
 	addr   string
-	opts   *Options
+	opts   *GRPCOptions
 }
 
-// Options for gRPC client
-type Options struct {
+// GRPCOptions for gRPC client
+type GRPCOptions struct {
 	Timeout     time.Duration
 	MaxRetries  int
 	DialOptions []grpc.DialOption
 }
 
-// DefaultOptions returns default client options
-func DefaultOptions() *Options {
-	return &Options{
+// DefaultGRPCOptions returns default client options
+func DefaultGRPCOptions() *GRPCOptions {
+	return &GRPCOptions{
 		Timeout: 30 * time.Second,
 	}
 }
 
-// NewClient creates a new gRPC client
-func NewClient(addr string, opts *Options) (*Client, error) {
+// NewGRPCClient creates a new gRPC client
+func NewGRPCClient(addr string, opts *GRPCOptions) (*GRPCClient, error) {
 	if opts == nil {
-		opts = DefaultOptions()
+		opts = DefaultGRPCOptions()
 	}
 
 	dialOpts := opts.DialOptions
@@ -68,7 +67,7 @@ func NewClient(addr string, opts *Options) (*Client, error) {
 		return nil, err
 	}
 
-	c := &Client{
+	c := &GRPCClient{
 		client: pb.NewMetaServiceClient(conn),
 		conn:   conn,
 		addr:   addr,
@@ -79,7 +78,7 @@ func NewClient(addr string, opts *Options) (*Client, error) {
 }
 
 // CloseConn closes the gRPC connection
-func (c *Client) CloseConn() error {
+func (c *GRPCClient) CloseConn() error {
 	if c.conn != nil {
 		return c.conn.Close()
 	}
@@ -87,17 +86,17 @@ func (c *Client) CloseConn() error {
 }
 
 // Name returns the name of the meta backend
-func (c *Client) Name() string {
+func (c *GRPCClient) Name() string {
 	return "grpc"
 }
 
 // getBase returns nil - this client implements Meta directly without baseMeta
-func (c *Client) getBase() interface{} {
+func (c *GRPCClient) getBase() interface{} {
 	return nil
 }
 
 // chroot changes the root directory
-func (c *Client) chroot(ino meta.Ino) error {
+func (c *GRPCClient) chroot(ino Ino) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -112,7 +111,7 @@ func (c *Client) chroot(ino meta.Ino) error {
 }
 
 // ListLocks lists locks
-func (c *Client) ListLocks(ctx context.Context, ino meta.Ino) ([]meta.PLockItem, []meta.FLockItem, error) {
+func (c *GRPCClient) ListLocks(ctx context.Context, ino Ino) ([]PLockItem, []FLockItem, error) {
 	grpcCtx, cancel := context.WithTimeout(ctx, c.opts.Timeout)
 	defer cancel()
 

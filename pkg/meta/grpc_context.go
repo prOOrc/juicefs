@@ -14,21 +14,20 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"context"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
-// ContextKey is the key for storing meta.Context in gRPC context
+// ContextKey is the key for storing Context in gRPC context
 type ContextKey string
 
 const metaContextKey ContextKey = "meta-context"
 
-// grpcContext wraps meta.Context for gRPC metadata
+// grpcContext wraps Context for gRPC metadata
 type grpcContext struct {
 	context.Context
 	uid             uint32
@@ -38,7 +37,7 @@ type grpcContext struct {
 	checkPermission bool
 }
 
-// NewGRPCContext creates a new grpcContext from meta.Context fields
+// NewGRPCContext creates a new grpcContext from Context fields
 func NewGRPCContext(ctx context.Context, uid, gid, pid uint32, gids []uint32, checkPermission bool) *grpcContext {
 	return &grpcContext{
 		Context:         ctx,
@@ -76,7 +75,7 @@ func (c *grpcContext) CheckPermission() bool {
 }
 
 // WithValue returns a new context with the given key-value pair
-func (c *grpcContext) WithValue(k, v interface{}) meta.Context {
+func (c *grpcContext) WithValue(k, v interface{}) Context {
 	newCtx := &grpcContext{
 		Context:         context.WithValue(c.Context, k, v),
 		uid:             c.uid,
@@ -102,17 +101,17 @@ func (c *grpcContext) Canceled() bool {
 	return c.Err() != nil
 }
 
-// protoToMetaContext converts a ProtoMetaContext to meta.Context
-func ProtoToMetaContext(ctx context.Context, ctx2 *pb.MetaContext) meta.Context {
+// protoToMetaContext converts a ProtoMetaContext to Context
+func ProtoToMetaContext(ctx context.Context, ctx2 *pb.MetaContext) Context {
 	gids := ctx2.Gids
 	if len(gids) == 0 {
 		gids = []uint32{ctx2.Gid}
 	}
-	return meta.WrapWithCancel(ctx, ctx2.Pid, ctx2.Uid, gids)
+	return WrapWithCancel(ctx, ctx2.Pid, ctx2.Uid, gids)
 }
 
-// metaContextToProto converts a meta.Context to ProtoMetaContext
-func MetaContextToProto(ctx meta.Context) *pb.MetaContext {
+// metaContextToProto converts a Context to ProtoMetaContext
+func MetaContextToProto(ctx Context) *pb.MetaContext {
 	gids := ctx.Gids()
 	if len(gids) == 0 {
 		gids = []uint32{ctx.Gid()}
@@ -126,31 +125,31 @@ func MetaContextToProto(ctx meta.Context) *pb.MetaContext {
 	}
 }
 
-// GetMetaContextFromGRPCContext extracts meta.Context from gRPC context
-func GetMetaContextFromGRPCContext(ctx context.Context) meta.Context {
-	if c, ok := ctx.Value(metaContextKey).(meta.Context); ok {
+// GetMetaContextFromGRPCContext extracts Context from gRPC context
+func GetMetaContextFromGRPCContext(ctx context.Context) Context {
+	if c, ok := ctx.Value(metaContextKey).(Context); ok {
 		return c
 	}
-	return meta.Background()
+	return Background()
 }
 
-// WithMetaContextInGRPCContext adds meta.Context to gRPC context
-func WithMetaContextInGRPCContext(ctx context.Context, mc meta.Context) context.Context {
+// WithMetaContextInGRPCContext adds Context to gRPC context
+func WithMetaContextInGRPCContext(ctx context.Context, mc Context) context.Context {
 	return context.WithValue(ctx, metaContextKey, mc)
 }
 
 // Alias functions for simpler names used in grpc_client.go and server.go
 
-func toProtoContext(ctx meta.Context) *pb.MetaContext {
+func toProtoContext(ctx Context) *pb.MetaContext {
 	if ctx == nil {
 		return &pb.MetaContext{}
 	}
 	return MetaContextToProto(ctx)
 }
 
-func fromProtoContext(ctx2 *pb.MetaContext) meta.Context {
+func fromProtoContext(ctx2 *pb.MetaContext) Context {
 	if ctx2 == nil {
-		return meta.Background()
+		return Background()
 	}
 	return ProtoToMetaContext(context.Background(), ctx2)
 }

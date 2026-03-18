@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"io"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -28,7 +27,7 @@ import (
 func (s *MetaProxyServer) DumpMeta(req *pb.DumpMetaRequest, stream pb.MetaService_DumpMetaServer) error {
 	pr, pw := io.Pipe()
 	go func() {
-		_ = s.meta.DumpMeta(pw, meta.Ino(req.Root), int(req.Threads), req.KeepSecret, req.Fast, req.SkipTrash)
+		_ = s.meta.DumpMeta(pw, Ino(req.Root), int(req.Threads), req.KeepSecret, req.Fast, req.SkipTrash)
 		pw.Close()
 	}()
 	buf := make([]byte, 64*1024)
@@ -78,7 +77,7 @@ func (s *MetaProxyServer) LoadMeta(stream pb.MetaService_LoadMetaServer) error {
 
 func (s *MetaProxyServer) DumpMetaV2(req *pb.DumpMetaV2Request, stream pb.MetaService_DumpMetaV2Server) error {
 	mctx := s.metaCtx(stream.Context(), req.Ctx)
-	opt := &meta.DumpOption{
+	opt := &DumpOption{
 		KeepSecret: req.KeepSecret,
 		Threads:    int(req.Threads),
 	}
@@ -124,8 +123,8 @@ func (s *MetaProxyServer) LoadMetaV2(stream pb.MetaService_LoadMetaV2Server) err
 			}
 		}
 	}()
-	opt := &meta.LoadOption{Threads: 10}
-	err := s.meta.LoadMetaV2(meta.Background(), pr, opt)
+	opt := &LoadOption{Threads: 10}
+	err := s.meta.LoadMetaV2(Background(), pr, opt)
 	pw.Close()
 	if err != nil {
 		return status.Error(codes.Internal, err.Error())

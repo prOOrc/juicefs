@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"context"
 	"syscall"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 // BatchUnlink removes multiple entries
-func (c *Client) BatchUnlink(ctx meta.Context, parent meta.Ino, entries []*meta.Entry, count *uint64, skipCheckTrash bool) syscall.Errno {
+func (c *GRPCClient) BatchUnlink(ctx Context, parent Ino, entries []*Entry, count *uint64, skipCheckTrash bool) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -54,7 +53,7 @@ func (c *Client) BatchUnlink(ctx meta.Context, parent meta.Ino, entries []*meta.
 }
 
 // Remove removes a directory recursively
-func (c *Client) Remove(ctx meta.Context, parent meta.Ino, name string, skipTrash bool, numThreads int32, count *uint64) syscall.Errno {
+func (c *GRPCClient) Remove(ctx Context, parent Ino, name string, skipTrash bool, numThreads int32, count *uint64) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -78,7 +77,7 @@ func (c *Client) Remove(ctx meta.Context, parent meta.Ino, name string, skipTras
 }
 
 // GetSummary gets directory summary
-func (c *Client) GetSummary(ctx meta.Context, ino meta.Ino, recursive, strict bool, summary *meta.Summary) syscall.Errno {
+func (c *GRPCClient) GetSummary(ctx Context, ino Ino, recursive, strict bool, summary *Summary) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -101,7 +100,7 @@ func (c *Client) GetSummary(ctx meta.Context, ino meta.Ino, recursive, strict bo
 }
 
 // GetTreeSummary gets tree summary
-func (c *Client) GetTreeSummary(ctx meta.Context, ino meta.Ino, depth, topN uint32, strict bool, tree *meta.TreeSummary) syscall.Errno {
+func (c *GRPCClient) GetTreeSummary(ctx Context, ino Ino, depth, topN uint32, strict bool, tree *TreeSummary) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -125,7 +124,7 @@ func (c *Client) GetTreeSummary(ctx meta.Context, ino meta.Ino, depth, topN uint
 }
 
 // Clone clones a file
-func (c *Client) Clone(ctx meta.Context, srcParentIno, srcIno, dstParentIno meta.Ino, dstName string, cmode, cumask, concurrency uint32, count, total *uint64) syscall.Errno {
+func (c *GRPCClient) Clone(ctx Context, srcParentIno, srcIno, dstParentIno Ino, dstName string, cmode, cumask, concurrency uint32, count, total *uint64) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -155,7 +154,7 @@ func (c *Client) Clone(ctx meta.Context, srcParentIno, srcIno, dstParentIno meta
 }
 
 // GetPaths gets paths for an inode
-func (c *Client) GetPaths(ctx meta.Context, ino meta.Ino, paths *[]string) syscall.Errno {
+func (c *GRPCClient) GetPaths(ctx Context, ino Ino, paths *[]string) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -176,7 +175,7 @@ func (c *Client) GetPaths(ctx meta.Context, ino meta.Ino, paths *[]string) sysca
 }
 
 // Check checks filesystem consistency
-func (c *Client) Check(ctx meta.Context, fpath string, repair, recursive, syncDirStat bool, repairDirMode uint32) syscall.Errno {
+func (c *GRPCClient) Check(ctx Context, fpath string, repair, recursive, syncDirStat bool, repairDirMode uint32) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -195,7 +194,7 @@ func (c *Client) Check(ctx meta.Context, fpath string, repair, recursive, syncDi
 }
 
 // CompactAll compacts all files
-func (c *Client) CompactAll(ctx meta.Context, threads int32) syscall.Errno {
+func (c *GRPCClient) CompactAll(ctx Context, threads int32) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -210,7 +209,7 @@ func (c *Client) CompactAll(ctx meta.Context, threads int32) syscall.Errno {
 }
 
 // Compact compacts a file
-func (c *Client) Compact(ctx meta.Context, ino meta.Ino, concurrency int32) syscall.Errno {
+func (c *GRPCClient) Compact(ctx Context, ino Ino, concurrency int32) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -226,7 +225,7 @@ func (c *Client) Compact(ctx meta.Context, ino meta.Ino, concurrency int32) sysc
 }
 
 // ListSlices lists slices
-func (c *Client) ListSlices(ctx meta.Context, slices map[meta.Ino][]meta.Slice, scanPending, delete bool, result *map[meta.Ino][]meta.Slice) syscall.Errno {
+func (c *GRPCClient) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, result *map[Ino][]Slice) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -260,18 +259,18 @@ func (c *Client) ListSlices(ctx meta.Context, slices map[meta.Ino][]meta.Slice, 
 		return syscall.Errno(resp.GetErrno())
 	}
 
-	out := make(map[meta.Ino][]meta.Slice)
+	out := make(map[Ino][]Slice)
 	for _, e := range resp.GetSlices() {
-		sls := make([]meta.Slice, 0, len(e.GetSlices()))
+		sls := make([]Slice, 0, len(e.GetSlices()))
 		for _, s := range e.GetSlices() {
-			sls = append(sls, meta.Slice{
+			sls = append(sls, Slice{
 				Id:   s.Id,
 				Size: s.Size,
 				Off:  s.Off,
 				Len:  s.Len,
 			})
 		}
-		out[meta.Ino(e.GetInode())] = sls
+		out[Ino(e.GetInode())] = sls
 	}
 	if result != nil {
 		*result = out
@@ -280,7 +279,7 @@ func (c *Client) ListSlices(ctx meta.Context, slices map[meta.Ino][]meta.Slice, 
 }
 
 // HandleQuota handles quota
-func (c *Client) HandleQuota(ctx meta.Context, cmd uint32, dpath string, uid, gid uint32, quotas map[string]*meta.Quota, strict, repair, create bool) syscall.Errno {
+func (c *GRPCClient) HandleQuota(ctx Context, cmd uint32, dpath string, uid, gid uint32, quotas map[string]*Quota, strict, repair, create bool) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -307,7 +306,7 @@ func (c *Client) HandleQuota(ctx meta.Context, cmd uint32, dpath string, uid, gi
 }
 
 // ScanUserGroupUsage scans user/group usage
-func (c *Client) ScanUserGroupUsage(ctx meta.Context) syscall.Errno {
+func (c *GRPCClient) ScanUserGroupUsage(ctx Context) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -321,7 +320,7 @@ func (c *Client) ScanUserGroupUsage(ctx meta.Context) syscall.Errno {
 }
 
 // Chroot changes the root directory
-func (c *Client) Chroot(ctx meta.Context, subdir string) syscall.Errno {
+func (c *GRPCClient) Chroot(ctx Context, subdir string) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -336,7 +335,7 @@ func (c *Client) Chroot(ctx meta.Context, subdir string) syscall.Errno {
 }
 
 // CleanupTrashBefore cleans up trash before a timestamp
-func (c *Client) CleanupTrashBefore(ctx meta.Context, edge time.Time, increProgress func(int), stats *meta.CleanupTrashStats) syscall.Errno {
+func (c *GRPCClient) CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int), stats *CleanupTrashStats) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -357,7 +356,7 @@ func (c *Client) CleanupTrashBefore(ctx meta.Context, edge time.Time, increProgr
 }
 
 // CleanupDetachedNodesBefore cleans up detached nodes before a timestamp
-func (c *Client) CleanupDetachedNodesBefore(ctx meta.Context, edge time.Time, increProgress func()) {
+func (c *GRPCClient) CleanupDetachedNodesBefore(ctx Context, edge time.Time, increProgress func()) {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -371,7 +370,7 @@ func (c *Client) CleanupDetachedNodesBefore(ctx meta.Context, edge time.Time, in
 }
 
 // ScanDeletedObject scans deleted objects
-func (c *Client) ScanDeletedObject(ctx meta.Context, tss interface{}, pss interface{}, tfs interface{}, pfs interface{}) error {
+func (c *GRPCClient) ScanDeletedObject(ctx Context, tss interface{}, pss interface{}, tfs interface{}, pfs interface{}) error {
 	// Not implemented - returns ENOSYS
 	return syscall.ENOSYS
 }

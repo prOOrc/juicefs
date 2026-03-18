@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"context"
 	"syscall"
 	"time"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
@@ -36,7 +35,7 @@ func (s *MetaProxyServer) GetFormat(ctx context.Context, req *pb.GetFormatReques
 func (s *MetaProxyServer) Remove(ctx context.Context, req *pb.RemoveRequest) (*pb.RemoveResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var count uint64
-	errno := s.meta.Remove(mctx, meta.Ino(req.Parent), req.Name, req.SkipTrash, int(req.NumThreads), &count)
+	errno := s.meta.Remove(mctx, Ino(req.Parent), req.Name, req.SkipTrash, int(req.NumThreads), &count)
 	return &pb.RemoveResponse{
 		Errno: uint32(errno),
 		Count: count,
@@ -47,7 +46,7 @@ func (s *MetaProxyServer) BatchUnlink(ctx context.Context, req *pb.BatchUnlinkRe
 	mctx := s.metaCtx(ctx, req.Ctx)
 	entries := ProtoToEntries(req.Entries)
 	var count uint64
-	errno := s.meta.BatchUnlink(mctx, meta.Ino(req.Parent), entries, &count, req.SkipCheckTrash)
+	errno := s.meta.BatchUnlink(mctx, Ino(req.Parent), entries, &count, req.SkipCheckTrash)
 	return &pb.BatchUnlinkResponse{
 		Errno: uint32(errno),
 		Count: count,
@@ -56,8 +55,8 @@ func (s *MetaProxyServer) BatchUnlink(ctx context.Context, req *pb.BatchUnlinkRe
 
 func (s *MetaProxyServer) GetSummary(ctx context.Context, req *pb.GetSummaryRequest) (*pb.GetSummaryResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
-	var summary meta.Summary
-	errno := s.meta.GetSummary(mctx, meta.Ino(req.Inode), &summary, req.Recursive, req.Strict)
+	var summary Summary
+	errno := s.meta.GetSummary(mctx, Ino(req.Inode), &summary, req.Recursive, req.Strict)
 	return &pb.GetSummaryResponse{
 		Errno:   uint32(errno),
 		Summary: SummaryToProto(&summary),
@@ -66,7 +65,7 @@ func (s *MetaProxyServer) GetSummary(ctx context.Context, req *pb.GetSummaryRequ
 
 func (s *MetaProxyServer) GetTreeSummary(ctx context.Context, req *pb.GetTreeSummaryRequest) (*pb.GetTreeSummaryResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
-	var tree meta.TreeSummary
+	var tree TreeSummary
 	errno := s.meta.GetTreeSummary(mctx, &tree, uint8(req.Depth), uint8(req.TopN), req.Strict, func(uint64, uint64) {})
 	return &pb.GetTreeSummaryResponse{
 		Errno: uint32(errno),
@@ -77,8 +76,8 @@ func (s *MetaProxyServer) GetTreeSummary(ctx context.Context, req *pb.GetTreeSum
 func (s *MetaProxyServer) Clone(ctx context.Context, req *pb.CloneRequest) (*pb.CloneResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var count, total uint64
-	errno := s.meta.Clone(mctx, meta.Ino(req.SrcParentIno), meta.Ino(req.SrcIno),
-		meta.Ino(req.DstParentIno), req.DstName, uint8(req.Cmode), uint16(req.Cumask),
+	errno := s.meta.Clone(mctx, Ino(req.SrcParentIno), Ino(req.SrcIno),
+		Ino(req.DstParentIno), req.DstName, uint8(req.Cmode), uint16(req.Cumask),
 		uint8(req.Concurrency), &count, &total)
 	return &pb.CloneResponse{
 		Errno: uint32(errno),
@@ -89,7 +88,7 @@ func (s *MetaProxyServer) Clone(ctx context.Context, req *pb.CloneRequest) (*pb.
 
 func (s *MetaProxyServer) GetPaths(ctx context.Context, req *pb.GetPathsRequest) (*pb.GetPathsResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
-	paths := s.meta.GetPaths(mctx, meta.Ino(req.Inode))
+	paths := s.meta.GetPaths(mctx, Ino(req.Inode))
 	return &pb.GetPathsResponse{
 		Errno: 0,
 		Paths: paths,
@@ -98,7 +97,7 @@ func (s *MetaProxyServer) GetPaths(ctx context.Context, req *pb.GetPathsRequest)
 
 func (s *MetaProxyServer) Check(ctx context.Context, req *pb.CheckRequest) (*pb.CheckResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
-	opt := &meta.CheckOpt{
+	opt := &CheckOpt{
 		Repair:        req.Repair,
 		Recursive:     req.Recursive,
 		SyncDirStat:   req.SyncDirStat,
@@ -120,7 +119,7 @@ func (s *MetaProxyServer) CompactAll(ctx context.Context, req *pb.CompactAllRequ
 
 func (s *MetaProxyServer) Compact(ctx context.Context, req *pb.CompactRequest) (*pb.CompactResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
-	errno := s.meta.Compact(mctx, meta.Ino(req.Inode), int(req.Concurrency), nil, nil)
+	errno := s.meta.Compact(mctx, Ino(req.Inode), int(req.Concurrency), nil, nil)
 	return &pb.CompactResponse{Errno: uint32(errno)}, nil
 }
 
@@ -136,7 +135,7 @@ func (s *MetaProxyServer) ListSlices(ctx context.Context, req *pb.ListSlicesRequ
 
 func (s *MetaProxyServer) HandleQuota(ctx context.Context, req *pb.HandleQuotaRequest) (*pb.HandleQuotaResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
-	quotas := make(map[string]*meta.Quota)
+	quotas := make(map[string]*Quota)
 	for k, v := range req.Quotas {
 		quotas[k] = ProtoToQuota(v)
 	}
@@ -167,7 +166,7 @@ func (s *MetaProxyServer) Chroot(ctx context.Context, req *pb.ChrootRequest) (*p
 
 func (s *MetaProxyServer) CleanupTrashBefore(ctx context.Context, req *pb.CleanupTrashBeforeRequest) (*pb.CleanupTrashBeforeResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
-	var stats meta.CleanupTrashStats
+	var stats CleanupTrashStats
 	errno := s.meta.CleanupTrashBefore(mctx, time.Unix(req.Edge, 0), func(int) {}, &stats)
 	return &pb.CleanupTrashBeforeResponse{
 		Errno:        uint32(errno),

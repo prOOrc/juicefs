@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"context"
 	"syscall"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 func (s *MetaProxyServer) GetParents(ctx context.Context, req *pb.GetParentsRequest) (*pb.GetParentsResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
-	parents := s.meta.GetParents(mctx, meta.Ino(req.Inode))
+	parents := s.meta.GetParents(mctx, Ino(req.Inode))
 	protoParents := make(map[uint64]int32, len(parents))
 	for ino, depth := range parents {
 		protoParents[uint64(ino)] = int32(depth)
@@ -39,7 +38,7 @@ func (s *MetaProxyServer) GetParents(ctx context.Context, req *pb.GetParentsRequ
 
 func (s *MetaProxyServer) GetDirStat(ctx context.Context, req *pb.GetDirStatRequest) (*pb.GetDirStatResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
-	stat, errno := s.meta.GetDirStat(mctx, meta.Ino(req.Inode))
+	stat, errno := s.meta.GetDirStat(mctx, Ino(req.Inode))
 	if errno != 0 || stat == nil {
 		return &pb.GetDirStatResponse{Errno: uint32(errno)}, nil
 	}

@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 
-package grpc
+package meta
 
 import (
 	"context"
 
-	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
 func (s *MetaProxyServer) GetXattr(ctx context.Context, req *pb.GetXattrRequest) (*pb.GetXattrResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var value []byte
-	errno := s.meta.GetXattr(mctx, meta.Ino(req.Inode), req.Name, &value)
+	errno := s.meta.GetXattr(mctx, Ino(req.Inode), req.Name, &value)
 	return &pb.GetXattrResponse{
 		Errno: uint32(errno),
 		Value: value,
@@ -35,20 +34,20 @@ func (s *MetaProxyServer) GetXattr(ctx context.Context, req *pb.GetXattrRequest)
 
 func (s *MetaProxyServer) SetXattr(ctx context.Context, req *pb.SetXattrRequest) (*pb.SetXattrResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
-	errno := s.meta.SetXattr(mctx, meta.Ino(req.Inode), req.Name, req.Value, uint32(req.Flags))
+	errno := s.meta.SetXattr(mctx, Ino(req.Inode), req.Name, req.Value, uint32(req.Flags))
 	return &pb.SetXattrResponse{Errno: uint32(errno)}, nil
 }
 
 func (s *MetaProxyServer) RemoveXattr(ctx context.Context, req *pb.RemoveXattrRequest) (*pb.RemoveXattrResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
-	errno := s.meta.RemoveXattr(mctx, meta.Ino(req.Inode), req.Name)
+	errno := s.meta.RemoveXattr(mctx, Ino(req.Inode), req.Name)
 	return &pb.RemoveXattrResponse{Errno: uint32(errno)}, nil
 }
 
 func (s *MetaProxyServer) ListXattr(ctx context.Context, req *pb.ListXattrRequest) (*pb.ListXattrResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var names []byte
-	errno := s.meta.ListXattr(mctx, meta.Ino(req.Inode), &names)
+	errno := s.meta.ListXattr(mctx, Ino(req.Inode), &names)
 	return &pb.ListXattrResponse{
 		Errno: uint32(errno),
 		Names: names,
