@@ -18,6 +18,7 @@ package meta
 
 import (
 	"context"
+	"strings"
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
@@ -25,19 +26,37 @@ import (
 
 func (s *MetaProxyServer) Init(ctx context.Context, req *pb.InitRequest) (*pb.InitResponse, error) {
 	format := ProtoToFormat(req.Format)
+	logger.Debugf("Init called with format: name=%s, uuid=%s", format.Name, format.UUID)
 	err := s.meta.Init(format, req.Force)
 	var errno uint32
 	if err != nil {
-		errno = uint32(syscall.EIO)
+		logger.Errorf("Init failed: %v", err)
+		if e, ok := err.(syscall.Errno); ok {
+			errno = uint32(e)
+		} else {
+			errno = uint32(syscall.EIO)
+		}
 	}
 	return &pb.InitResponse{Errno: errno}, nil
 }
 
 func (s *MetaProxyServer) Load(ctx context.Context, req *pb.LoadRequest) (*pb.LoadResponse, error) {
+	logger.Debugf("Load called with checkVersion=%v", req.CheckVersion)
 	format, err := s.meta.Load(req.CheckVersion)
 	if err != nil {
+		logger.Debugf("Load failed: %v (type: %T)", err, err)
+		if e, ok := err.(syscall.Errno); ok {
+			logger.Debugf("Load error is syscall.Errno: %d", e)
+			return &pb.LoadResponse{Errno: uint32(e)}, nil
+		}
+		if strings.HasPrefix(err.Error(), "database is not formatted") {
+			logger.Debugf("Load error: database is not formatted, returning ENOENT")
+			return &pb.LoadResponse{Errno: uint32(syscall.ENOENT)}, nil
+		}
+		logger.Debugf("Load error is not syscall.Errno, returning EIO")
 		return &pb.LoadResponse{Errno: uint32(syscall.EIO)}, nil
 	}
+	logger.Debugf("Load succeeded")
 	return &pb.LoadResponse{
 		Errno:  0,
 		Format: FormatToProto(*format),

@@ -48,6 +48,23 @@ func (c *GRPCClient) GetParents(ctx Context, ino Ino) map[Ino]int {
 }
 
 // GetDirStat gets directory statistics
-func (c *GRPCClient) GetDirStat(ctx Context, ino Ino) (stat interface{}, st syscall.Errno) {
-	return nil, syscall.ENOSYS
+func (c *GRPCClient) GetDirStat(ctx Context, ino Ino) (stat *dirStat, st syscall.Errno) {
+	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
+	defer cancel()
+
+	resp, err := c.client.GetDirStat(grpcCtx, &pb.GetDirStatRequest{
+		Ctx:   toProtoContext(ctx),
+		Inode: uint64(ino),
+	})
+	if err != nil || resp == nil {
+		return nil, syscall.ENOSYS
+	}
+	if resp.GetErrno() != 0 {
+		return nil, syscall.Errno(resp.GetErrno())
+	}
+	return &dirStat{
+		length: int64(resp.GetLength()),
+		space:  int64(resp.GetSpace()),
+		inodes: int64(resp.GetInodes()),
+	}, 0
 }

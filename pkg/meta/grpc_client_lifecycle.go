@@ -38,7 +38,10 @@ func (c *GRPCClient) Init(format *Format, force bool) error {
 	if err != nil {
 		return err
 	}
-	return syscall.Errno(resp.GetErrno())
+	if resp.GetErrno() != 0 {
+		return syscall.Errno(resp.GetErrno())
+	}
+	return nil
 }
 
 // Load loads the volume
@@ -69,7 +72,10 @@ func (c *GRPCClient) NewSession(record bool) error {
 	if err != nil {
 		return err
 	}
-	return syscall.Errno(resp.GetErrno())
+	if resp.GetErrno() != 0 {
+		return syscall.Errno(resp.GetErrno())
+	}
+	return nil
 }
 
 // CloseSession closes a session
@@ -81,7 +87,10 @@ func (c *GRPCClient) CloseSession() error {
 	if err != nil {
 		return err
 	}
-	return syscall.Errno(resp.GetErrno())
+	if resp.GetErrno() != 0 {
+		return syscall.Errno(resp.GetErrno())
+	}
+	return nil
 }
 
 // FlushSession flushes session data
@@ -104,7 +113,10 @@ func (c *GRPCClient) Shutdown() error {
 	if err != nil {
 		return err
 	}
-	return syscall.Errno(resp.GetErrno())
+	if resp.GetErrno() != 0 {
+		return syscall.Errno(resp.GetErrno())
+	}
+	return nil
 }
 
 // Reset resets the volume
@@ -116,7 +128,10 @@ func (c *GRPCClient) Reset() error {
 	if err != nil {
 		return err
 	}
-	return syscall.Errno(resp.GetErrno())
+	if resp.GetErrno() != 0 {
+		return syscall.Errno(resp.GetErrno())
+	}
+	return nil
 }
 
 // GetSession gets session info

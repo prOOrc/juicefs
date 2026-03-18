@@ -26,7 +26,7 @@ import (
 // --- Token operations ---
 
 // StoreToken stores a token
-func (c *GRPCClient) StoreToken(ctx Context, token []byte, id *uint32) syscall.Errno {
+func (c *GRPCClient) StoreToken(ctx Context, token []byte) (uint32, syscall.Errno) {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -35,15 +35,12 @@ func (c *GRPCClient) StoreToken(ctx Context, token []byte, id *uint32) syscall.E
 		Token: token,
 	})
 	if err != nil {
-		return syscall.EIO
+		return 0, syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return 0, syscall.Errno(resp.GetErrno())
 	}
-	if id != nil {
-		*id = resp.GetId()
-	}
-	return 0
+	return resp.GetId(), 0
 }
 
 // UpdateToken updates a token
@@ -63,7 +60,7 @@ func (c *GRPCClient) UpdateToken(ctx Context, id uint32, token []byte) syscall.E
 }
 
 // LoadToken loads a token
-func (c *GRPCClient) LoadToken(ctx Context, id uint32, token *[]byte) syscall.Errno {
+func (c *GRPCClient) LoadToken(ctx Context, id uint32) ([]byte, syscall.Errno) {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -72,15 +69,12 @@ func (c *GRPCClient) LoadToken(ctx Context, id uint32, token *[]byte) syscall.Er
 		Id:  id,
 	})
 	if err != nil {
-		return syscall.EIO
+		return nil, syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return nil, syscall.Errno(resp.GetErrno())
 	}
-	if token != nil {
-		*token = resp.GetToken()
-	}
-	return 0
+	return resp.GetToken(), 0
 }
 
 // DeleteTokens deletes tokens
@@ -99,7 +93,7 @@ func (c *GRPCClient) DeleteTokens(ctx Context, ids []uint32) syscall.Errno {
 }
 
 // ListTokens lists tokens
-func (c *GRPCClient) ListTokens(ctx Context, tokens *map[uint32][]byte) syscall.Errno {
+func (c *GRPCClient) ListTokens(ctx Context) (map[uint32][]byte, syscall.Errno) {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
@@ -107,17 +101,14 @@ func (c *GRPCClient) ListTokens(ctx Context, tokens *map[uint32][]byte) syscall.
 		Ctx: toProtoContext(ctx),
 	})
 	if err != nil {
-		return syscall.EIO
+		return nil, syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return nil, syscall.Errno(resp.GetErrno())
 	}
 	result := make(map[uint32][]byte, len(resp.GetTokens()))
 	for k, v := range resp.GetTokens() {
 		result[k] = v
 	}
-	if tokens != nil {
-		*tokens = result
-	}
-	return 0
+	return result, 0
 }

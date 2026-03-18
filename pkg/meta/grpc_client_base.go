@@ -17,8 +17,6 @@
 package meta
 
 import (
-	"context"
-	"syscall"
 	"time"
 
 	"google.golang.org/grpc"
@@ -29,6 +27,7 @@ import (
 
 // GRPCClient implements meta.Meta interface using gRPC
 type GRPCClient struct {
+	*baseMeta
 	client pb.MetaServiceClient
 	conn   *grpc.ClientConn
 	addr   string
@@ -50,28 +49,32 @@ func DefaultGRPCOptions() *GRPCOptions {
 }
 
 // NewGRPCClient creates a new gRPC client
-func NewGRPCClient(addr string, opts *GRPCOptions) (*GRPCClient, error) {
+func NewGRPCClient(addr string, conf *Config, opts *GRPCOptions) (*GRPCClient, error) {
 	if opts == nil {
 		opts = DefaultGRPCOptions()
 	}
 
-	dialOpts := opts.DialOptions
-	if len(dialOpts) == 0 {
-		dialOpts = []grpc.DialOption{
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		}
-	}
-
-	conn, err := grpc.Dial(addr, dialOpts...)
-	if err != nil {
-		return nil, err
-	}
-
 	c := &GRPCClient{
-		client: pb.NewMetaServiceClient(conn),
-		conn:   conn,
-		addr:   addr,
-		opts:   opts,
+		baseMeta: newBaseMeta(addr, conf),
+		addr:     addr,
+		opts:     opts,
+	}
+
+	if addr != "" {
+		dialOpts := opts.DialOptions
+		if len(dialOpts) == 0 {
+			dialOpts = []grpc.DialOption{
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+			}
+		}
+
+		conn, err := grpc.Dial(addr, dialOpts...)
+		if err != nil {
+			return nil, err
+		}
+
+		c.conn = conn
+		c.client = pb.NewMetaServiceClient(conn)
 	}
 
 	return c, nil
@@ -88,43 +91,4 @@ func (c *GRPCClient) CloseConn() error {
 // Name returns the name of the meta backend
 func (c *GRPCClient) Name() string {
 	return "grpc"
-}
-
-// getBase returns nil - this client implements Meta directly without baseMeta
-func (c *GRPCClient) getBase() interface{} {
-	return nil
-}
-
-// chroot changes the root directory
-func (c *GRPCClient) chroot(ino Ino) error {
-	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	_, err := c.client.Chroot(ctx, &pb.ChrootRequest{
-		Ctx:    toProtoContext(nil),
-		Subdir: "",
-	})
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// ListLocks lists locks
-func (c *GRPCClient) ListLocks(ctx context.Context, ino Ino) ([]PLockItem, []FLockItem, error) {
-	grpcCtx, cancel := context.WithTimeout(ctx, c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.ListLocks(grpcCtx, &pb.ListLocksRequest{
-		Ctx:   toProtoContext(nil),
-		Inode: uint64(ino),
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	if resp.GetErrno() != 0 {
-		return nil, nil, syscall.Errno(resp.GetErrno())
-	}
-	// Simplified - return empty slices since plockRecord is unexported
-	return nil, nil, nil
 }

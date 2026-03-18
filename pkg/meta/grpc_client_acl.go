@@ -27,14 +27,14 @@ import (
 // --- ACL operations ---
 
 // SetFacl sets ACL
-func (c *GRPCClient) SetFacl(ctx Context, ino Ino, aclType uint32, rule *aclAPI.Rule) syscall.Errno {
+func (c *GRPCClient) SetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
 	resp, err := c.client.SetFacl(grpcCtx, &pb.SetFaclRequest{
 		Ctx:     toProtoContext(ctx),
 		Ino:     uint64(ino),
-		AclType: aclType,
+		AclType: uint32(aclType),
 		Rule:    toProtoACLRule(rule),
 	})
 	if err != nil {
@@ -44,14 +44,14 @@ func (c *GRPCClient) SetFacl(ctx Context, ino Ino, aclType uint32, rule *aclAPI.
 }
 
 // GetFacl gets ACL
-func (c *GRPCClient) GetFacl(ctx Context, ino Ino, aclType uint32, rule *aclAPI.Rule) syscall.Errno {
+func (c *GRPCClient) GetFacl(ctx Context, ino Ino, aclType uint8, rule *aclAPI.Rule) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
 	resp, err := c.client.GetFacl(grpcCtx, &pb.GetFaclRequest{
 		Ctx:     toProtoContext(ctx),
 		Ino:     uint64(ino),
-		AclType: aclType,
+		AclType: uint32(aclType),
 	})
 	if err != nil {
 		return syscall.EIO

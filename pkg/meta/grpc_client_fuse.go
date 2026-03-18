@@ -617,15 +617,15 @@ func (c *GRPCClient) InvalidateChunkCache(ctx Context, ino Ino, indx uint32) sys
 }
 
 // CopyFileRange copies file range
-func (c *GRPCClient) CopyFileRange(ctx Context, fin, offIn, fout, offOut, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {
+func (c *GRPCClient) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
 	defer cancel()
 
 	resp, err := c.client.CopyFileRange(grpcCtx, &pb.CopyFileRangeRequest{
 		Ctx:    toProtoContext(ctx),
-		Fin:    fin,
+		Fin:    uint64(fin),
 		OffIn:  offIn,
-		Fout:   fout,
+		Fout:   uint64(fout),
 		OffOut: offOut,
 		Size:   size,
 		Flags:  flags,

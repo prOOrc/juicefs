@@ -26,45 +26,38 @@ import (
 )
 
 // DumpMeta dumps metadata
-func (c *GRPCClient) DumpMeta(root Ino, threads int32, keepSecret, fast, skipTrash bool) (io.ReadCloser, error) {
-	pr, pw := io.Pipe()
-	go func() {
-		grpcCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
+func (c *GRPCClient) DumpMeta(w io.Writer, root Ino, threads int, keepSecret, fast, skipTrash bool) error {
+	grpcCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 
-		stream, err := c.client.DumpMeta(grpcCtx, &pb.DumpMetaRequest{
-			Root:       uint64(root),
-			Threads:    threads,
-			KeepSecret: keepSecret,
-			Fast:       fast,
-			SkipTrash:  skipTrash,
-		})
+	stream, err := c.client.DumpMeta(grpcCtx, &pb.DumpMetaRequest{
+		Root:       uint64(root),
+		Threads:    int32(threads),
+		KeepSecret: keepSecret,
+		Fast:       fast,
+		SkipTrash:  skipTrash,
+	})
+	if err != nil {
+		return err
+	}
+
+	for {
+		chunk, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
 		if err != nil {
-			pw.CloseWithError(err)
-			return
+			return err
 		}
-
-		for {
-			chunk, err := stream.Recv()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				pw.CloseWithError(err)
-				return
-			}
-			if _, err := pw.Write(chunk.GetData()); err != nil {
-				pw.CloseWithError(err)
-				return
-			}
+		if _, err := w.Write(chunk.GetData()); err != nil {
+			return err
 		}
-		pw.Close()
-	}()
-	return pr, nil
+	}
+	return nil
 }
 
 // LoadMeta loads metadata
-func (c *GRPCClient) LoadMeta(rc io.ReadCloser) error {
+func (c *GRPCClient) LoadMeta(r io.Reader) error {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
@@ -75,7 +68,7 @@ func (c *GRPCClient) LoadMeta(rc io.ReadCloser) error {
 
 	buf := make([]byte, 64*1024)
 	for {
-		n, err := rc.Read(buf)
+		n, err := r.Read(buf)
 		if n > 0 {
 			if err := stream.Send(&pb.LoadMetaChunk{Data: buf[:n]}); err != nil {
 				return err
@@ -97,43 +90,36 @@ func (c *GRPCClient) LoadMeta(rc io.ReadCloser) error {
 }
 
 // DumpMetaV2 dumps metadata v2
-func (c *GRPCClient) DumpMetaV2(ctx Context, keepSecret bool, threads int32) (io.ReadCloser, error) {
-	pr, pw := io.Pipe()
-	go func() {
-		grpcCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
+func (c *GRPCClient) DumpMetaV2(ctx Context, w io.Writer, opt *DumpOption) error {
+	grpcCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 
-		stream, err := c.client.DumpMetaV2(grpcCtx, &pb.DumpMetaV2Request{
-			Ctx:        toProtoContext(ctx),
-			KeepSecret: keepSecret,
-			Threads:    threads,
-		})
+	stream, err := c.client.DumpMetaV2(grpcCtx, &pb.DumpMetaV2Request{
+		Ctx:        toProtoContext(ctx),
+		KeepSecret: opt.KeepSecret,
+		Threads:    int32(opt.Threads),
+	})
+	if err != nil {
+		return err
+	}
+
+	for {
+		chunk, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
 		if err != nil {
-			pw.CloseWithError(err)
-			return
+			return err
 		}
-
-		for {
-			chunk, err := stream.Recv()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				pw.CloseWithError(err)
-				return
-			}
-			if _, err := pw.Write(chunk.GetData()); err != nil {
-				pw.CloseWithError(err)
-				return
-			}
+		if _, err := w.Write(chunk.GetData()); err != nil {
+			return err
 		}
-		pw.Close()
-	}()
-	return pr, nil
+	}
+	return nil
 }
 
 // LoadMetaV2 loads metadata v2
-func (c *GRPCClient) LoadMetaV2(ctx Context, rc io.ReadCloser) error {
+func (c *GRPCClient) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
@@ -144,7 +130,7 @@ func (c *GRPCClient) LoadMetaV2(ctx Context, rc io.ReadCloser) error {
 
 	buf := make([]byte, 64*1024)
 	for {
-		n, err := rc.Read(buf)
+		n, err := r.Read(buf)
 		if n > 0 {
 			if err := stream.Send(&pb.LoadMetaV2Chunk{Data: buf[:n]}); err != nil {
 				return err
