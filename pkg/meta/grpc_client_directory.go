@@ -56,8 +56,8 @@ func (c *GRPCClient) GetDirStat(ctx Context, ino Ino) (stat *dirStat, st syscall
 		Ctx:   toProtoContext(ctx),
 		Inode: uint64(ino),
 	})
-	if err != nil || resp == nil {
-		return nil, syscall.ENOSYS
+	if err != nil {
+		return nil, syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return nil, syscall.Errno(resp.GetErrno())

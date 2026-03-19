@@ -102,3 +102,6 @@ func (c *GRPCClient) getBase() *baseMeta {
 func (c *GRPCClient) chroot(inode Ino) {
 	c.baseMeta.chroot(inode)
 }
+
+// Compile-time check that GRPCClient implements Meta interface
+var _ Meta = (*GRPCClient)(nil)
