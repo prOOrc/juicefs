@@ -92,3 +92,13 @@ func (c *GRPCClient) CloseConn() error {
 func (c *GRPCClient) Name() string {
 	return "grpc"
 }
+
+// getBase returns the baseMeta (required by Meta interface)
+func (c *GRPCClient) getBase() *baseMeta {
+	return c.baseMeta
+}
+
+// chroot sets the root inode (required by Meta interface)
+func (c *GRPCClient) chroot(inode Ino) {
+	c.baseMeta.chroot(inode)
+}

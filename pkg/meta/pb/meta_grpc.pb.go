@@ -17,7 +17,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v6.30.2
-// source: pb/meta.proto
+// source: meta.proto
 
 package pb
 
@@ -103,6 +103,7 @@ const (
 	MetaService_Chroot_FullMethodName                     = "/pb.MetaService/Chroot"
 	MetaService_CleanupTrashBefore_FullMethodName         = "/pb.MetaService/CleanupTrashBefore"
 	MetaService_CleanupDetachedNodesBefore_FullMethodName = "/pb.MetaService/CleanupDetachedNodesBefore"
+	MetaService_ScanDeletedObject_FullMethodName          = "/pb.MetaService/ScanDeletedObject"
 	MetaService_NewDirHandler_FullMethodName              = "/pb.MetaService/NewDirHandler"
 	MetaService_DirHandlerList_FullMethodName             = "/pb.MetaService/DirHandlerList"
 	MetaService_DirHandlerInsert_FullMethodName           = "/pb.MetaService/DirHandlerInsert"
@@ -196,6 +197,7 @@ type MetaServiceClient interface {
 	Chroot(ctx context.Context, in *ChrootRequest, opts ...grpc.CallOption) (*ChrootResponse, error)
 	CleanupTrashBefore(ctx context.Context, in *CleanupTrashBeforeRequest, opts ...grpc.CallOption) (*CleanupTrashBeforeResponse, error)
 	CleanupDetachedNodesBefore(ctx context.Context, in *CleanupDetachedNodesBeforeRequest, opts ...grpc.CallOption) (*CleanupDetachedNodesBeforeResponse, error)
+	ScanDeletedObject(ctx context.Context, in *ScanDeletedObjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ScanDeletedObjectResponse], error)
 	// --- DirHandler (stateful) ---
 	NewDirHandler(ctx context.Context, in *NewDirHandlerRequest, opts ...grpc.CallOption) (*NewDirHandlerResponse, error)
 	DirHandlerList(ctx context.Context, in *DirHandlerListRequest, opts ...grpc.CallOption) (*DirHandlerListResponse, error)
@@ -907,6 +909,25 @@ func (c *metaServiceClient) CleanupDetachedNodesBefore(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *metaServiceClient) ScanDeletedObject(ctx context.Context, in *ScanDeletedObjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ScanDeletedObjectResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[0], MetaService_ScanDeletedObject_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ScanDeletedObjectRequest, ScanDeletedObjectResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MetaService_ScanDeletedObjectClient = grpc.ServerStreamingClient[ScanDeletedObjectResponse]
+
 func (c *metaServiceClient) NewDirHandler(ctx context.Context, in *NewDirHandlerRequest, opts ...grpc.CallOption) (*NewDirHandlerResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(NewDirHandlerResponse)
@@ -959,7 +980,7 @@ func (c *metaServiceClient) DirHandlerClose(ctx context.Context, in *DirHandlerC
 
 func (c *metaServiceClient) DumpMeta(ctx context.Context, in *DumpMetaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DumpMetaChunk], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[0], MetaService_DumpMeta_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[1], MetaService_DumpMeta_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -978,7 +999,7 @@ type MetaService_DumpMetaClient = grpc.ServerStreamingClient[DumpMetaChunk]
 
 func (c *metaServiceClient) LoadMeta(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[LoadMetaChunk, LoadMetaResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[1], MetaService_LoadMeta_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[2], MetaService_LoadMeta_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -991,7 +1012,7 @@ type MetaService_LoadMetaClient = grpc.ClientStreamingClient[LoadMetaChunk, Load
 
 func (c *metaServiceClient) DumpMetaV2(ctx context.Context, in *DumpMetaV2Request, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DumpMetaV2Chunk], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[2], MetaService_DumpMetaV2_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[3], MetaService_DumpMetaV2_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1010,7 +1031,7 @@ type MetaService_DumpMetaV2Client = grpc.ServerStreamingClient[DumpMetaV2Chunk]
 
 func (c *metaServiceClient) LoadMetaV2(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[LoadMetaV2Chunk, LoadMetaV2Response], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[3], MetaService_LoadMetaV2_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[4], MetaService_LoadMetaV2_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1103,6 +1124,7 @@ type MetaServiceServer interface {
 	Chroot(context.Context, *ChrootRequest) (*ChrootResponse, error)
 	CleanupTrashBefore(context.Context, *CleanupTrashBeforeRequest) (*CleanupTrashBeforeResponse, error)
 	CleanupDetachedNodesBefore(context.Context, *CleanupDetachedNodesBeforeRequest) (*CleanupDetachedNodesBeforeResponse, error)
+	ScanDeletedObject(*ScanDeletedObjectRequest, grpc.ServerStreamingServer[ScanDeletedObjectResponse]) error
 	// --- DirHandler (stateful) ---
 	NewDirHandler(context.Context, *NewDirHandlerRequest) (*NewDirHandlerResponse, error)
 	DirHandlerList(context.Context, *DirHandlerListRequest) (*DirHandlerListResponse, error)
@@ -1330,6 +1352,9 @@ func (UnimplementedMetaServiceServer) CleanupTrashBefore(context.Context, *Clean
 }
 func (UnimplementedMetaServiceServer) CleanupDetachedNodesBefore(context.Context, *CleanupDetachedNodesBeforeRequest) (*CleanupDetachedNodesBeforeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CleanupDetachedNodesBefore not implemented")
+}
+func (UnimplementedMetaServiceServer) ScanDeletedObject(*ScanDeletedObjectRequest, grpc.ServerStreamingServer[ScanDeletedObjectResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method ScanDeletedObject not implemented")
 }
 func (UnimplementedMetaServiceServer) NewDirHandler(context.Context, *NewDirHandlerRequest) (*NewDirHandlerResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method NewDirHandler not implemented")
@@ -2621,6 +2646,17 @@ func _MetaService_CleanupDetachedNodesBefore_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MetaService_ScanDeletedObject_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ScanDeletedObjectRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(MetaServiceServer).ScanDeletedObject(m, &grpc.GenericServerStream[ScanDeletedObjectRequest, ScanDeletedObjectResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MetaService_ScanDeletedObjectServer = grpc.ServerStreamingServer[ScanDeletedObjectResponse]
+
 func _MetaService_NewDirHandler_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(NewDirHandlerRequest)
 	if err := dec(in); err != nil {
@@ -3053,6 +3089,11 @@ var MetaService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Streams: []grpc.StreamDesc{
 		{
+			StreamName:    "ScanDeletedObject",
+			Handler:       _MetaService_ScanDeletedObject_Handler,
+			ServerStreams: true,
+		},
+		{
 			StreamName:    "DumpMeta",
 			Handler:       _MetaService_DumpMeta_Handler,
 			ServerStreams: true,
@@ -3073,5 +3114,5 @@ var MetaService_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: "pb/meta.proto",
+	Metadata: "meta.proto",
 }

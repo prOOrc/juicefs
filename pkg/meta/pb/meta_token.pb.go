@@ -17,7 +17,7 @@
 // versions:
 // 	protoc-gen-go v1.36.9
 // 	protoc        v6.30.2
-// source: pb/meta_token.proto
+// source: meta_token.proto
 
 package pb
 
@@ -46,7 +46,7 @@ type StoreTokenRequest struct {
 
 func (x *StoreTokenRequest) Reset() {
 	*x = StoreTokenRequest{}
-	mi := &file_pb_meta_token_proto_msgTypes[0]
+	mi := &file_meta_token_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58,7 +58,7 @@ func (x *StoreTokenRequest) String() string {
 func (*StoreTokenRequest) ProtoMessage() {}
 
 func (x *StoreTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_token_proto_msgTypes[0]
+	mi := &file_meta_token_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71,7 +71,7 @@ func (x *StoreTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StoreTokenRequest.ProtoReflect.Descriptor instead.
 func (*StoreTokenRequest) Descriptor() ([]byte, []int) {
-	return file_pb_meta_token_proto_rawDescGZIP(), []int{0}
+	return file_meta_token_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *StoreTokenRequest) GetCtx() *MetaContext {
@@ -98,7 +98,7 @@ type StoreTokenResponse struct {
 
 func (x *StoreTokenResponse) Reset() {
 	*x = StoreTokenResponse{}
-	mi := &file_pb_meta_token_proto_msgTypes[1]
+	mi := &file_meta_token_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -110,7 +110,7 @@ func (x *StoreTokenResponse) String() string {
 func (*StoreTokenResponse) ProtoMessage() {}
 
 func (x *StoreTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_token_proto_msgTypes[1]
+	mi := &file_meta_token_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -123,7 +123,7 @@ func (x *StoreTokenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StoreTokenResponse.ProtoReflect.Descriptor instead.
 func (*StoreTokenResponse) Descriptor() ([]byte, []int) {
-	return file_pb_meta_token_proto_rawDescGZIP(), []int{1}
+	return file_meta_token_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *StoreTokenResponse) GetErrno() uint32 {
@@ -151,7 +151,7 @@ type UpdateTokenRequest struct {
 
 func (x *UpdateTokenRequest) Reset() {
 	*x = UpdateTokenRequest{}
-	mi := &file_pb_meta_token_proto_msgTypes[2]
+	mi := &file_meta_token_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -163,7 +163,7 @@ func (x *UpdateTokenRequest) String() string {
 func (*UpdateTokenRequest) ProtoMessage() {}
 
 func (x *UpdateTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_token_proto_msgTypes[2]
+	mi := &file_meta_token_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -176,7 +176,7 @@ func (x *UpdateTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateTokenRequest.ProtoReflect.Descriptor instead.
 func (*UpdateTokenRequest) Descriptor() ([]byte, []int) {
-	return file_pb_meta_token_proto_rawDescGZIP(), []int{2}
+	return file_meta_token_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *UpdateTokenRequest) GetCtx() *MetaContext {
@@ -209,7 +209,7 @@ type UpdateTokenResponse struct {
 
 func (x *UpdateTokenResponse) Reset() {
 	*x = UpdateTokenResponse{}
-	mi := &file_pb_meta_token_proto_msgTypes[3]
+	mi := &file_meta_token_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -221,7 +221,7 @@ func (x *UpdateTokenResponse) String() string {
 func (*UpdateTokenResponse) ProtoMessage() {}
 
 func (x *UpdateTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_token_proto_msgTypes[3]
+	mi := &file_meta_token_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -234,7 +234,7 @@ func (x *UpdateTokenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateTokenResponse.ProtoReflect.Descriptor instead.
 func (*UpdateTokenResponse) Descriptor() ([]byte, []int) {
-	return file_pb_meta_token_proto_rawDescGZIP(), []int{3}
+	return file_meta_token_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *UpdateTokenResponse) GetErrno() uint32 {
@@ -254,7 +254,7 @@ type LoadTokenRequest struct {
 
 func (x *LoadTokenRequest) Reset() {
 	*x = LoadTokenRequest{}
-	mi := &file_pb_meta_token_proto_msgTypes[4]
+	mi := &file_meta_token_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -266,7 +266,7 @@ func (x *LoadTokenRequest) String() string {
 func (*LoadTokenRequest) ProtoMessage() {}
 
 func (x *LoadTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_token_proto_msgTypes[4]
+	mi := &file_meta_token_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -279,7 +279,7 @@ func (x *LoadTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoadTokenRequest.ProtoReflect.Descriptor instead.
 func (*LoadTokenRequest) Descriptor() ([]byte, []int) {
-	return file_pb_meta_token_proto_rawDescGZIP(), []int{4}
+	return file_meta_token_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *LoadTokenRequest) GetCtx() *MetaContext {
@@ -306,7 +306,7 @@ type LoadTokenResponse struct {
 
 func (x *LoadTokenResponse) Reset() {
 	*x = LoadTokenResponse{}
-	mi := &file_pb_meta_token_proto_msgTypes[5]
+	mi := &file_meta_token_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -318,7 +318,7 @@ func (x *LoadTokenResponse) String() string {
 func (*LoadTokenResponse) ProtoMessage() {}
 
 func (x *LoadTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_token_proto_msgTypes[5]
+	mi := &file_meta_token_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -331,7 +331,7 @@ func (x *LoadTokenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoadTokenResponse.ProtoReflect.Descriptor instead.
 func (*LoadTokenResponse) Descriptor() ([]byte, []int) {
-	return file_pb_meta_token_proto_rawDescGZIP(), []int{5}
+	return file_meta_token_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *LoadTokenResponse) GetErrno() uint32 {
@@ -358,7 +358,7 @@ type DeleteTokensRequest struct {
 
 func (x *DeleteTokensRequest) Reset() {
 	*x = DeleteTokensRequest{}
-	mi := &file_pb_meta_token_proto_msgTypes[6]
+	mi := &file_meta_token_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -370,7 +370,7 @@ func (x *DeleteTokensRequest) String() string {
 func (*DeleteTokensRequest) ProtoMessage() {}
 
 func (x *DeleteTokensRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_token_proto_msgTypes[6]
+	mi := &file_meta_token_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -383,7 +383,7 @@ func (x *DeleteTokensRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteTokensRequest.ProtoReflect.Descriptor instead.
 func (*DeleteTokensRequest) Descriptor() ([]byte, []int) {
-	return file_pb_meta_token_proto_rawDescGZIP(), []int{6}
+	return file_meta_token_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *DeleteTokensRequest) GetCtx() *MetaContext {
@@ -409,7 +409,7 @@ type DeleteTokensResponse struct {
 
 func (x *DeleteTokensResponse) Reset() {
 	*x = DeleteTokensResponse{}
-	mi := &file_pb_meta_token_proto_msgTypes[7]
+	mi := &file_meta_token_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -421,7 +421,7 @@ func (x *DeleteTokensResponse) String() string {
 func (*DeleteTokensResponse) ProtoMessage() {}
 
 func (x *DeleteTokensResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_token_proto_msgTypes[7]
+	mi := &file_meta_token_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -434,7 +434,7 @@ func (x *DeleteTokensResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteTokensResponse.ProtoReflect.Descriptor instead.
 func (*DeleteTokensResponse) Descriptor() ([]byte, []int) {
-	return file_pb_meta_token_proto_rawDescGZIP(), []int{7}
+	return file_meta_token_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *DeleteTokensResponse) GetErrno() uint32 {
@@ -453,7 +453,7 @@ type ListTokensRequest struct {
 
 func (x *ListTokensRequest) Reset() {
 	*x = ListTokensRequest{}
-	mi := &file_pb_meta_token_proto_msgTypes[8]
+	mi := &file_meta_token_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -465,7 +465,7 @@ func (x *ListTokensRequest) String() string {
 func (*ListTokensRequest) ProtoMessage() {}
 
 func (x *ListTokensRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_token_proto_msgTypes[8]
+	mi := &file_meta_token_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -478,7 +478,7 @@ func (x *ListTokensRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTokensRequest.ProtoReflect.Descriptor instead.
 func (*ListTokensRequest) Descriptor() ([]byte, []int) {
-	return file_pb_meta_token_proto_rawDescGZIP(), []int{8}
+	return file_meta_token_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ListTokensRequest) GetCtx() *MetaContext {
@@ -498,7 +498,7 @@ type ListTokensResponse struct {
 
 func (x *ListTokensResponse) Reset() {
 	*x = ListTokensResponse{}
-	mi := &file_pb_meta_token_proto_msgTypes[9]
+	mi := &file_meta_token_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -510,7 +510,7 @@ func (x *ListTokensResponse) String() string {
 func (*ListTokensResponse) ProtoMessage() {}
 
 func (x *ListTokensResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_token_proto_msgTypes[9]
+	mi := &file_meta_token_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -523,7 +523,7 @@ func (x *ListTokensResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTokensResponse.ProtoReflect.Descriptor instead.
 func (*ListTokensResponse) Descriptor() ([]byte, []int) {
-	return file_pb_meta_token_proto_rawDescGZIP(), []int{9}
+	return file_meta_token_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListTokensResponse) GetErrno() uint32 {
@@ -540,11 +540,11 @@ func (x *ListTokensResponse) GetTokens() map[uint32][]byte {
 	return nil
 }
 
-var File_pb_meta_token_proto protoreflect.FileDescriptor
+var File_meta_token_proto protoreflect.FileDescriptor
 
-const file_pb_meta_token_proto_rawDesc = "" +
+const file_meta_token_proto_rawDesc = "" +
 	"\n" +
-	"\x13pb/meta_token.proto\x12\x02pb\x1a\x14pb/meta_common.proto\"L\n" +
+	"\x10meta_token.proto\x12\x02pb\x1a\x11meta_common.proto\"L\n" +
 	"\x11StoreTokenRequest\x12!\n" +
 	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05token\x18\x02 \x01(\fR\x05token\":\n" +
@@ -578,19 +578,19 @@ const file_pb_meta_token_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\fR\x05value:\x028\x01B\x06Z\x04./pbb\x06proto3"
 
 var (
-	file_pb_meta_token_proto_rawDescOnce sync.Once
-	file_pb_meta_token_proto_rawDescData []byte
+	file_meta_token_proto_rawDescOnce sync.Once
+	file_meta_token_proto_rawDescData []byte
 )
 
-func file_pb_meta_token_proto_rawDescGZIP() []byte {
-	file_pb_meta_token_proto_rawDescOnce.Do(func() {
-		file_pb_meta_token_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pb_meta_token_proto_rawDesc), len(file_pb_meta_token_proto_rawDesc)))
+func file_meta_token_proto_rawDescGZIP() []byte {
+	file_meta_token_proto_rawDescOnce.Do(func() {
+		file_meta_token_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_meta_token_proto_rawDesc), len(file_meta_token_proto_rawDesc)))
 	})
-	return file_pb_meta_token_proto_rawDescData
+	return file_meta_token_proto_rawDescData
 }
 
-var file_pb_meta_token_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
-var file_pb_meta_token_proto_goTypes = []any{
+var file_meta_token_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_meta_token_proto_goTypes = []any{
 	(*StoreTokenRequest)(nil),    // 0: pb.StoreTokenRequest
 	(*StoreTokenResponse)(nil),   // 1: pb.StoreTokenResponse
 	(*UpdateTokenRequest)(nil),   // 2: pb.UpdateTokenRequest
@@ -604,7 +604,7 @@ var file_pb_meta_token_proto_goTypes = []any{
 	nil,                          // 10: pb.ListTokensResponse.TokensEntry
 	(*MetaContext)(nil),          // 11: pb.MetaContext
 }
-var file_pb_meta_token_proto_depIdxs = []int32{
+var file_meta_token_proto_depIdxs = []int32{
 	11, // 0: pb.StoreTokenRequest.ctx:type_name -> pb.MetaContext
 	11, // 1: pb.UpdateTokenRequest.ctx:type_name -> pb.MetaContext
 	11, // 2: pb.LoadTokenRequest.ctx:type_name -> pb.MetaContext
@@ -618,27 +618,27 @@ var file_pb_meta_token_proto_depIdxs = []int32{
 	0,  // [0:6] is the sub-list for field type_name
 }
 
-func init() { file_pb_meta_token_proto_init() }
-func file_pb_meta_token_proto_init() {
-	if File_pb_meta_token_proto != nil {
+func init() { file_meta_token_proto_init() }
+func file_meta_token_proto_init() {
+	if File_meta_token_proto != nil {
 		return
 	}
-	file_pb_meta_common_proto_init()
+	file_meta_common_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_meta_token_proto_rawDesc), len(file_pb_meta_token_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meta_token_proto_rawDesc), len(file_meta_token_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_pb_meta_token_proto_goTypes,
-		DependencyIndexes: file_pb_meta_token_proto_depIdxs,
-		MessageInfos:      file_pb_meta_token_proto_msgTypes,
+		GoTypes:           file_meta_token_proto_goTypes,
+		DependencyIndexes: file_meta_token_proto_depIdxs,
+		MessageInfos:      file_meta_token_proto_msgTypes,
 	}.Build()
-	File_pb_meta_token_proto = out.File
-	file_pb_meta_token_proto_goTypes = nil
-	file_pb_meta_token_proto_depIdxs = nil
+	File_meta_token_proto = out.File
+	file_meta_token_proto_goTypes = nil
+	file_meta_token_proto_depIdxs = nil
 }

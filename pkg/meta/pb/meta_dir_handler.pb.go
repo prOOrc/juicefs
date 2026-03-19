@@ -17,7 +17,7 @@
 // versions:
 // 	protoc-gen-go v1.36.9
 // 	protoc        v6.30.2
-// source: pb/meta_dir_handler.proto
+// source: meta_dir_handler.proto
 
 package pb
 
@@ -48,7 +48,7 @@ type NewDirHandlerRequest struct {
 
 func (x *NewDirHandlerRequest) Reset() {
 	*x = NewDirHandlerRequest{}
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[0]
+	mi := &file_meta_dir_handler_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -60,7 +60,7 @@ func (x *NewDirHandlerRequest) String() string {
 func (*NewDirHandlerRequest) ProtoMessage() {}
 
 func (x *NewDirHandlerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[0]
+	mi := &file_meta_dir_handler_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -73,7 +73,7 @@ func (x *NewDirHandlerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NewDirHandlerRequest.ProtoReflect.Descriptor instead.
 func (*NewDirHandlerRequest) Descriptor() ([]byte, []int) {
-	return file_pb_meta_dir_handler_proto_rawDescGZIP(), []int{0}
+	return file_meta_dir_handler_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *NewDirHandlerRequest) GetCtx() *MetaContext {
@@ -114,7 +114,7 @@ type NewDirHandlerResponse struct {
 
 func (x *NewDirHandlerResponse) Reset() {
 	*x = NewDirHandlerResponse{}
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[1]
+	mi := &file_meta_dir_handler_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -126,7 +126,7 @@ func (x *NewDirHandlerResponse) String() string {
 func (*NewDirHandlerResponse) ProtoMessage() {}
 
 func (x *NewDirHandlerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[1]
+	mi := &file_meta_dir_handler_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -139,7 +139,7 @@ func (x *NewDirHandlerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NewDirHandlerResponse.ProtoReflect.Descriptor instead.
 func (*NewDirHandlerResponse) Descriptor() ([]byte, []int) {
-	return file_pb_meta_dir_handler_proto_rawDescGZIP(), []int{1}
+	return file_meta_dir_handler_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *NewDirHandlerResponse) GetErrno() uint32 {
@@ -166,7 +166,7 @@ type DirHandlerListRequest struct {
 
 func (x *DirHandlerListRequest) Reset() {
 	*x = DirHandlerListRequest{}
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[2]
+	mi := &file_meta_dir_handler_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -178,7 +178,7 @@ func (x *DirHandlerListRequest) String() string {
 func (*DirHandlerListRequest) ProtoMessage() {}
 
 func (x *DirHandlerListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[2]
+	mi := &file_meta_dir_handler_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -191,7 +191,7 @@ func (x *DirHandlerListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DirHandlerListRequest.ProtoReflect.Descriptor instead.
 func (*DirHandlerListRequest) Descriptor() ([]byte, []int) {
-	return file_pb_meta_dir_handler_proto_rawDescGZIP(), []int{2}
+	return file_meta_dir_handler_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *DirHandlerListRequest) GetHandle() *DirHandlerHandle {
@@ -218,7 +218,7 @@ type DirHandlerListResponse struct {
 
 func (x *DirHandlerListResponse) Reset() {
 	*x = DirHandlerListResponse{}
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[3]
+	mi := &file_meta_dir_handler_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -230,7 +230,7 @@ func (x *DirHandlerListResponse) String() string {
 func (*DirHandlerListResponse) ProtoMessage() {}
 
 func (x *DirHandlerListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[3]
+	mi := &file_meta_dir_handler_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -243,7 +243,7 @@ func (x *DirHandlerListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DirHandlerListResponse.ProtoReflect.Descriptor instead.
 func (*DirHandlerListResponse) Descriptor() ([]byte, []int) {
-	return file_pb_meta_dir_handler_proto_rawDescGZIP(), []int{3}
+	return file_meta_dir_handler_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *DirHandlerListResponse) GetErrno() uint32 {
@@ -272,7 +272,7 @@ type DirHandlerInsertRequest struct {
 
 func (x *DirHandlerInsertRequest) Reset() {
 	*x = DirHandlerInsertRequest{}
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[4]
+	mi := &file_meta_dir_handler_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -284,7 +284,7 @@ func (x *DirHandlerInsertRequest) String() string {
 func (*DirHandlerInsertRequest) ProtoMessage() {}
 
 func (x *DirHandlerInsertRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[4]
+	mi := &file_meta_dir_handler_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -297,7 +297,7 @@ func (x *DirHandlerInsertRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DirHandlerInsertRequest.ProtoReflect.Descriptor instead.
 func (*DirHandlerInsertRequest) Descriptor() ([]byte, []int) {
-	return file_pb_meta_dir_handler_proto_rawDescGZIP(), []int{4}
+	return file_meta_dir_handler_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *DirHandlerInsertRequest) GetHandle() *DirHandlerHandle {
@@ -337,7 +337,7 @@ type DirHandlerInsertResponse struct {
 
 func (x *DirHandlerInsertResponse) Reset() {
 	*x = DirHandlerInsertResponse{}
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[5]
+	mi := &file_meta_dir_handler_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -349,7 +349,7 @@ func (x *DirHandlerInsertResponse) String() string {
 func (*DirHandlerInsertResponse) ProtoMessage() {}
 
 func (x *DirHandlerInsertResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[5]
+	mi := &file_meta_dir_handler_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -362,7 +362,7 @@ func (x *DirHandlerInsertResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DirHandlerInsertResponse.ProtoReflect.Descriptor instead.
 func (*DirHandlerInsertResponse) Descriptor() ([]byte, []int) {
-	return file_pb_meta_dir_handler_proto_rawDescGZIP(), []int{5}
+	return file_meta_dir_handler_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *DirHandlerInsertResponse) GetErrno() uint32 {
@@ -382,7 +382,7 @@ type DirHandlerDeleteRequest struct {
 
 func (x *DirHandlerDeleteRequest) Reset() {
 	*x = DirHandlerDeleteRequest{}
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[6]
+	mi := &file_meta_dir_handler_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -394,7 +394,7 @@ func (x *DirHandlerDeleteRequest) String() string {
 func (*DirHandlerDeleteRequest) ProtoMessage() {}
 
 func (x *DirHandlerDeleteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[6]
+	mi := &file_meta_dir_handler_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -407,7 +407,7 @@ func (x *DirHandlerDeleteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DirHandlerDeleteRequest.ProtoReflect.Descriptor instead.
 func (*DirHandlerDeleteRequest) Descriptor() ([]byte, []int) {
-	return file_pb_meta_dir_handler_proto_rawDescGZIP(), []int{6}
+	return file_meta_dir_handler_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *DirHandlerDeleteRequest) GetHandle() *DirHandlerHandle {
@@ -433,7 +433,7 @@ type DirHandlerDeleteResponse struct {
 
 func (x *DirHandlerDeleteResponse) Reset() {
 	*x = DirHandlerDeleteResponse{}
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[7]
+	mi := &file_meta_dir_handler_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -445,7 +445,7 @@ func (x *DirHandlerDeleteResponse) String() string {
 func (*DirHandlerDeleteResponse) ProtoMessage() {}
 
 func (x *DirHandlerDeleteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[7]
+	mi := &file_meta_dir_handler_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -458,7 +458,7 @@ func (x *DirHandlerDeleteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DirHandlerDeleteResponse.ProtoReflect.Descriptor instead.
 func (*DirHandlerDeleteResponse) Descriptor() ([]byte, []int) {
-	return file_pb_meta_dir_handler_proto_rawDescGZIP(), []int{7}
+	return file_meta_dir_handler_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *DirHandlerDeleteResponse) GetErrno() uint32 {
@@ -477,7 +477,7 @@ type DirHandlerCloseRequest struct {
 
 func (x *DirHandlerCloseRequest) Reset() {
 	*x = DirHandlerCloseRequest{}
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[8]
+	mi := &file_meta_dir_handler_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -489,7 +489,7 @@ func (x *DirHandlerCloseRequest) String() string {
 func (*DirHandlerCloseRequest) ProtoMessage() {}
 
 func (x *DirHandlerCloseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[8]
+	mi := &file_meta_dir_handler_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -502,7 +502,7 @@ func (x *DirHandlerCloseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DirHandlerCloseRequest.ProtoReflect.Descriptor instead.
 func (*DirHandlerCloseRequest) Descriptor() ([]byte, []int) {
-	return file_pb_meta_dir_handler_proto_rawDescGZIP(), []int{8}
+	return file_meta_dir_handler_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *DirHandlerCloseRequest) GetHandle() *DirHandlerHandle {
@@ -521,7 +521,7 @@ type DirHandlerCloseResponse struct {
 
 func (x *DirHandlerCloseResponse) Reset() {
 	*x = DirHandlerCloseResponse{}
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[9]
+	mi := &file_meta_dir_handler_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -533,7 +533,7 @@ func (x *DirHandlerCloseResponse) String() string {
 func (*DirHandlerCloseResponse) ProtoMessage() {}
 
 func (x *DirHandlerCloseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_meta_dir_handler_proto_msgTypes[9]
+	mi := &file_meta_dir_handler_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -546,7 +546,7 @@ func (x *DirHandlerCloseResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DirHandlerCloseResponse.ProtoReflect.Descriptor instead.
 func (*DirHandlerCloseResponse) Descriptor() ([]byte, []int) {
-	return file_pb_meta_dir_handler_proto_rawDescGZIP(), []int{9}
+	return file_meta_dir_handler_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *DirHandlerCloseResponse) GetErrno() uint32 {
@@ -556,11 +556,11 @@ func (x *DirHandlerCloseResponse) GetErrno() uint32 {
 	return 0
 }
 
-var File_pb_meta_dir_handler_proto protoreflect.FileDescriptor
+var File_meta_dir_handler_proto protoreflect.FileDescriptor
 
-const file_pb_meta_dir_handler_proto_rawDesc = "" +
+const file_meta_dir_handler_proto_rawDesc = "" +
 	"\n" +
-	"\x19pb/meta_dir_handler.proto\x12\x02pb\x1a\x14pb/meta_common.proto\"\x96\x01\n" +
+	"\x16meta_dir_handler.proto\x12\x02pb\x1a\x11meta_common.proto\"\x96\x01\n" +
 	"\x14NewDirHandlerRequest\x12!\n" +
 	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x12\n" +
@@ -593,19 +593,19 @@ const file_pb_meta_dir_handler_proto_rawDesc = "" +
 	"\x05errno\x18\x01 \x01(\rR\x05errnoB\x06Z\x04./pbb\x06proto3"
 
 var (
-	file_pb_meta_dir_handler_proto_rawDescOnce sync.Once
-	file_pb_meta_dir_handler_proto_rawDescData []byte
+	file_meta_dir_handler_proto_rawDescOnce sync.Once
+	file_meta_dir_handler_proto_rawDescData []byte
 )
 
-func file_pb_meta_dir_handler_proto_rawDescGZIP() []byte {
-	file_pb_meta_dir_handler_proto_rawDescOnce.Do(func() {
-		file_pb_meta_dir_handler_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pb_meta_dir_handler_proto_rawDesc), len(file_pb_meta_dir_handler_proto_rawDesc)))
+func file_meta_dir_handler_proto_rawDescGZIP() []byte {
+	file_meta_dir_handler_proto_rawDescOnce.Do(func() {
+		file_meta_dir_handler_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_meta_dir_handler_proto_rawDesc), len(file_meta_dir_handler_proto_rawDesc)))
 	})
-	return file_pb_meta_dir_handler_proto_rawDescData
+	return file_meta_dir_handler_proto_rawDescData
 }
 
-var file_pb_meta_dir_handler_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
-var file_pb_meta_dir_handler_proto_goTypes = []any{
+var file_meta_dir_handler_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_meta_dir_handler_proto_goTypes = []any{
 	(*NewDirHandlerRequest)(nil),     // 0: pb.NewDirHandlerRequest
 	(*NewDirHandlerResponse)(nil),    // 1: pb.NewDirHandlerResponse
 	(*DirHandlerListRequest)(nil),    // 2: pb.DirHandlerListRequest
@@ -621,7 +621,7 @@ var file_pb_meta_dir_handler_proto_goTypes = []any{
 	(*DirHandlerHandle)(nil),         // 12: pb.DirHandlerHandle
 	(*ProtoAttr)(nil),                // 13: pb.ProtoAttr
 }
-var file_pb_meta_dir_handler_proto_depIdxs = []int32{
+var file_meta_dir_handler_proto_depIdxs = []int32{
 	10, // 0: pb.NewDirHandlerRequest.ctx:type_name -> pb.MetaContext
 	11, // 1: pb.NewDirHandlerRequest.init_entries:type_name -> pb.ProtoEntry
 	12, // 2: pb.NewDirHandlerResponse.handle:type_name -> pb.DirHandlerHandle
@@ -638,27 +638,27 @@ var file_pb_meta_dir_handler_proto_depIdxs = []int32{
 	0,  // [0:9] is the sub-list for field type_name
 }
 
-func init() { file_pb_meta_dir_handler_proto_init() }
-func file_pb_meta_dir_handler_proto_init() {
-	if File_pb_meta_dir_handler_proto != nil {
+func init() { file_meta_dir_handler_proto_init() }
+func file_meta_dir_handler_proto_init() {
+	if File_meta_dir_handler_proto != nil {
 		return
 	}
-	file_pb_meta_common_proto_init()
+	file_meta_common_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_meta_dir_handler_proto_rawDesc), len(file_pb_meta_dir_handler_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meta_dir_handler_proto_rawDesc), len(file_meta_dir_handler_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_pb_meta_dir_handler_proto_goTypes,
-		DependencyIndexes: file_pb_meta_dir_handler_proto_depIdxs,
-		MessageInfos:      file_pb_meta_dir_handler_proto_msgTypes,
+		GoTypes:           file_meta_dir_handler_proto_goTypes,
+		DependencyIndexes: file_meta_dir_handler_proto_depIdxs,
+		MessageInfos:      file_meta_dir_handler_proto_msgTypes,
 	}.Build()
-	File_pb_meta_dir_handler_proto = out.File
-	file_pb_meta_dir_handler_proto_goTypes = nil
-	file_pb_meta_dir_handler_proto_depIdxs = nil
+	File_meta_dir_handler_proto = out.File
+	file_meta_dir_handler_proto_goTypes = nil
+	file_meta_dir_handler_proto_depIdxs = nil
 }

@@ -18,7 +18,7 @@ syntax = "proto3";
 package pb;
 option go_package = "./pb";
 
-import "pb/meta_common.proto";
+import "meta_common.proto";
 
 // =====================================================
 // Tokens Request/Response Messages

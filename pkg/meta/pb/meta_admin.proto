@@ -18,7 +18,7 @@ syntax = "proto3";
 package pb;
 option go_package = "./pb";
 
-import "pb/meta_common.proto";
+import "meta_common.proto";
 
 // =====================================================
 // Admin Request/Response Messages
@@ -171,3 +171,45 @@ message CleanupDetachedNodesBeforeRequest {
   int64 edge = 2;
 }
 message CleanupDetachedNodesBeforeResponse { uint32 errno = 1; }
+
+// ScanDeletedObject streaming messages
+message ScanDeletedObjectRequest {
+  MetaContext ctx = 1;
+  bool scan_trash_slices = 2;
+  bool scan_pending_slices = 3;
+  bool scan_trash_files = 4;
+  bool scan_pending_files = 5;
+}
+
+message ScanDeletedObjectResponse {
+  uint32 errno = 1;
+  uint32 type = 2;
+  oneof data {
+    TrashSlicesData trash_slices = 3;
+    PendingSliceData pending_slice = 4;
+    TrashFileData trash_file = 5;
+    PendingFileData pending_file = 6;
+  }
+}
+
+message TrashSlicesData {
+  repeated ProtoSlice slices = 1;
+  int64 timestamp = 2;
+}
+
+message PendingSliceData {
+  uint64 id = 1;
+  uint32 size = 2;
+}
+
+message TrashFileData {
+  uint64 inode = 1;
+  uint64 size = 2;
+  int64 timestamp = 3;
+}
+
+message PendingFileData {
+  uint64 inode = 1;
+  uint64 size = 2;
+  int64 timestamp = 3;
+}

@@ -179,3 +179,115 @@ func (s *MetaProxyServer) CleanupDetachedNodesBefore(ctx context.Context, req *p
 	s.meta.CleanupDetachedNodesBefore(mctx, time.Unix(req.Edge, 0), func() {})
 	return &pb.CleanupDetachedNodesBeforeResponse{Errno: 0}, nil
 }
+
+func (s *MetaProxyServer) ScanDeletedObject(req *pb.ScanDeletedObjectRequest, stream pb.MetaService_ScanDeletedObjectServer) error {
+	ctx := stream.Context()
+	mctx := s.metaCtx(ctx, req.Ctx)
+
+	sendErrno := func(errno syscall.Errno) error {
+		return stream.Send(&pb.ScanDeletedObjectResponse{Errno: uint32(errno)})
+	}
+
+	if req.ScanTrashSlices {
+		err := s.meta.ScanDeletedObject(mctx,
+			func(ss []Slice, ts int64) (bool, error) {
+				protoSlices := make([]*pb.ProtoSlice, 0, len(ss))
+				for _, sl := range ss {
+					protoSlices = append(protoSlices, &pb.ProtoSlice{
+						Id:   sl.Id,
+						Size: sl.Size,
+						Off:  sl.Off,
+						Len:  sl.Len,
+					})
+				}
+				return true, stream.Send(&pb.ScanDeletedObjectResponse{
+					Type: 1,
+					Data: &pb.ScanDeletedObjectResponse_TrashSlices{
+						TrashSlices: &pb.TrashSlicesData{
+							Slices:    protoSlices,
+							Timestamp: ts,
+						},
+					},
+				})
+			},
+			nil, nil, nil)
+		if err != nil {
+			if errno, ok := err.(syscall.Errno); ok {
+				return sendErrno(errno)
+			}
+			return err
+		}
+	}
+
+	if req.ScanPendingSlices {
+		err := s.meta.ScanDeletedObject(mctx,
+			nil,
+			func(id uint64, size uint32) (bool, error) {
+				return true, stream.Send(&pb.ScanDeletedObjectResponse{
+					Type: 2,
+					Data: &pb.ScanDeletedObjectResponse_PendingSlice{
+						PendingSlice: &pb.PendingSliceData{
+							Id:   id,
+							Size: size,
+						},
+					},
+				})
+			},
+			nil, nil)
+		if err != nil {
+			if errno, ok := err.(syscall.Errno); ok {
+				return sendErrno(errno)
+			}
+			return err
+		}
+	}
+
+	if req.ScanTrashFiles {
+		err := s.meta.ScanDeletedObject(mctx,
+			nil, nil,
+			func(inode Ino, size uint64, ts time.Time) (bool, error) {
+				return true, stream.Send(&pb.ScanDeletedObjectResponse{
+					Type: 3,
+					Data: &pb.ScanDeletedObjectResponse_TrashFile{
+						TrashFile: &pb.TrashFileData{
+							Inode:     uint64(inode),
+							Size:      size,
+							Timestamp: ts.Unix(),
+						},
+					},
+				})
+			},
+			nil)
+		if err != nil {
+			if errno, ok := err.(syscall.Errno); ok {
+				return sendErrno(errno)
+			}
+			return err
+		}
+	}
+
+	if req.ScanPendingFiles {
+		err := s.meta.ScanDeletedObject(mctx,
+			nil, nil, nil,
+			func(ino Ino, size uint64, ts int64) (bool, error) {
+				return true, stream.Send(&pb.ScanDeletedObjectResponse{
+					Type: 4,
+					Data: &pb.ScanDeletedObjectResponse_PendingFile{
+						PendingFile: &pb.PendingFileData{
+							Inode:     uint64(ino),
+							Size:      size,
+							Timestamp: ts,
+						},
+					},
+				})
+			})
+		if err != nil {
+			if errno, ok := err.(syscall.Errno); ok {
+				return sendErrno(errno)
+			}
+			return err
+		}
+	}
+
+	return nil
+}

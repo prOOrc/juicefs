@@ -18,6 +18,7 @@ package meta
 
 import (
 	"context"
+	"io"
 	"syscall"
 	"time"
 
@@ -382,6 +383,63 @@ func (c *GRPCClient) CleanupDetachedNodesBefore(ctx Context, edge time.Time, inc
 
 // ScanDeletedObject scans deleted objects
 func (c *GRPCClient) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendingSliceScan, tfs trashFileScan, pfs pendingFileScan) error {
-	// Not implemented - returns ENOSYS
-	return syscall.ENOSYS
+	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
+	defer cancel()
+
+	stream, err := c.client.ScanDeletedObject(grpcCtx, &pb.ScanDeletedObjectRequest{
+		Ctx:               toProtoContext(ctx),
+		ScanTrashSlices:   tss != nil,
+		ScanPendingSlices: pss != nil,
+		ScanTrashFiles:    tfs != nil,
+		ScanPendingFiles:  pfs != nil,
+	})
+	if err != nil {
+		return err
+	}
+
+	for {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if resp.GetErrno() != 0 {
+			return syscall.Errno(resp.GetErrno())
+		}
+
+		switch resp.GetType() {
+		case 1:
+			if tss != nil && resp.GetTrashSlices() != nil {
+				slices := fromProtoSlices(resp.GetTrashSlices().GetSlices())
+				_, err = tss(slices, resp.GetTrashSlices().GetTimestamp())
+				if err != nil {
+					return err
+				}
+			}
+		case 2:
+			if pss != nil && resp.GetPendingSlice() != nil {
+				_, err = pss(resp.GetPendingSlice().GetId(), resp.GetPendingSlice().GetSize())
+				if err != nil {
+					return err
+				}
+			}
+		case 3:
+			if tfs != nil && resp.GetTrashFile() != nil {
+				ts := time.Unix(resp.GetTrashFile().GetTimestamp(), 0)
+				_, err = tfs(Ino(resp.GetTrashFile().GetInode()), resp.GetTrashFile().GetSize(), ts)
+				if err != nil {
+					return err
+				}
+			}
+		case 4:
+			if pfs != nil && resp.GetPendingFile() != nil {
+				_, err = pfs(Ino(resp.GetPendingFile().GetInode()), resp.GetPendingFile().GetSize(), resp.GetPendingFile().GetTimestamp())
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
 }

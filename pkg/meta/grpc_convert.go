@@ -487,6 +487,17 @@ func fromProtoSlice(p *pb.ProtoSlice) *Slice {
 	}
 }
 
+func fromProtoSlices(ps []*pb.ProtoSlice) []Slice {
+	if ps == nil {
+		return nil
+	}
+	slices := make([]Slice, 0, len(ps))
+	for _, p := range ps {
+		slices = append(slices, *fromProtoSlice(p))
+	}
+	return slices
+}
+
 func toProtoEntry(e *Entry) *pb.ProtoEntry {
 	return EntryToProto(e)
 }
