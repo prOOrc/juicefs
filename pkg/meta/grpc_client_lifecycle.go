@@ -106,32 +106,12 @@ func (c *GRPCClient) FlushSession() {
 
 // Shutdown shuts down the volume
 func (c *GRPCClient) Shutdown() error {
-	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.Shutdown(ctx, &pb.ShutdownRequest{})
-	if err != nil {
-		return err
-	}
-	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
-	}
-	return nil
+	return c.CloseConn()
 }
 
 // Reset resets the volume
 func (c *GRPCClient) Reset() error {
-	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.Reset(ctx, &pb.ResetRequest{})
-	if err != nil {
-		return err
-	}
-	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
-	}
-	return nil
+	return syscall.ENOSYS
 }
 
 // GetSession gets session info

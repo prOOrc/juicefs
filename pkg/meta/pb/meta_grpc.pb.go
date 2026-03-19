@@ -39,8 +39,6 @@ const (
 	MetaService_NewSession_FullMethodName                 = "/pb.MetaService/NewSession"
 	MetaService_CloseSession_FullMethodName               = "/pb.MetaService/CloseSession"
 	MetaService_FlushSession_FullMethodName               = "/pb.MetaService/FlushSession"
-	MetaService_Shutdown_FullMethodName                   = "/pb.MetaService/Shutdown"
-	MetaService_Reset_FullMethodName                      = "/pb.MetaService/Reset"
 	MetaService_GetSession_FullMethodName                 = "/pb.MetaService/GetSession"
 	MetaService_ListSessions_FullMethodName               = "/pb.MetaService/ListSessions"
 	MetaService_CleanStaleSessions_FullMethodName         = "/pb.MetaService/CleanStaleSessions"
@@ -125,8 +123,6 @@ type MetaServiceClient interface {
 	NewSession(ctx context.Context, in *NewSessionRequest, opts ...grpc.CallOption) (*NewSessionResponse, error)
 	CloseSession(ctx context.Context, in *CloseSessionRequest, opts ...grpc.CallOption) (*CloseSessionResponse, error)
 	FlushSession(ctx context.Context, in *FlushSessionRequest, opts ...grpc.CallOption) (*FlushSessionResponse, error)
-	Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error)
-	Reset(ctx context.Context, in *ResetRequest, opts ...grpc.CallOption) (*ResetResponse, error)
 	GetSession(ctx context.Context, in *GetSessionRequest, opts ...grpc.CallOption) (*GetSessionResponse, error)
 	ListSessions(ctx context.Context, in *ListSessionsRequest, opts ...grpc.CallOption) (*ListSessionsResponse, error)
 	CleanStaleSessions(ctx context.Context, in *CleanStaleSessionsRequest, opts ...grpc.CallOption) (*CleanStaleSessionsResponse, error)
@@ -263,26 +259,6 @@ func (c *metaServiceClient) FlushSession(ctx context.Context, in *FlushSessionRe
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(FlushSessionResponse)
 	err := c.cc.Invoke(ctx, MetaService_FlushSession_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *metaServiceClient) Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ShutdownResponse)
-	err := c.cc.Invoke(ctx, MetaService_Shutdown_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *metaServiceClient) Reset(ctx context.Context, in *ResetRequest, opts ...grpc.CallOption) (*ResetResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ResetResponse)
-	err := c.cc.Invoke(ctx, MetaService_Reset_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1052,8 +1028,6 @@ type MetaServiceServer interface {
 	NewSession(context.Context, *NewSessionRequest) (*NewSessionResponse, error)
 	CloseSession(context.Context, *CloseSessionRequest) (*CloseSessionResponse, error)
 	FlushSession(context.Context, *FlushSessionRequest) (*FlushSessionResponse, error)
-	Shutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error)
-	Reset(context.Context, *ResetRequest) (*ResetResponse, error)
 	GetSession(context.Context, *GetSessionRequest) (*GetSessionResponse, error)
 	ListSessions(context.Context, *ListSessionsRequest) (*ListSessionsResponse, error)
 	CleanStaleSessions(context.Context, *CleanStaleSessionsRequest) (*CleanStaleSessionsResponse, error)
@@ -1160,12 +1134,6 @@ func (UnimplementedMetaServiceServer) CloseSession(context.Context, *CloseSessio
 }
 func (UnimplementedMetaServiceServer) FlushSession(context.Context, *FlushSessionRequest) (*FlushSessionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FlushSession not implemented")
-}
-func (UnimplementedMetaServiceServer) Shutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Shutdown not implemented")
-}
-func (UnimplementedMetaServiceServer) Reset(context.Context, *ResetRequest) (*ResetResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Reset not implemented")
 }
 func (UnimplementedMetaServiceServer) GetSession(context.Context, *GetSessionRequest) (*GetSessionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSession not implemented")
@@ -1490,42 +1458,6 @@ func _MetaService_FlushSession_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MetaServiceServer).FlushSession(ctx, req.(*FlushSessionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _MetaService_Shutdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ShutdownRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MetaServiceServer).Shutdown(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: MetaService_Shutdown_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MetaServiceServer).Shutdown(ctx, req.(*ShutdownRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _MetaService_Reset_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ResetRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MetaServiceServer).Reset(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: MetaService_Reset_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MetaServiceServer).Reset(ctx, req.(*ResetRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2809,14 +2741,6 @@ var MetaService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FlushSession",
 			Handler:    _MetaService_FlushSession_Handler,
-		},
-		{
-			MethodName: "Shutdown",
-			Handler:    _MetaService_Shutdown_Handler,
-		},
-		{
-			MethodName: "Reset",
-			Handler:    _MetaService_Reset_Handler,
 		},
 		{
 			MethodName: "GetSession",

@@ -86,24 +86,6 @@ func (s *MetaProxyServer) FlushSession(ctx context.Context, req *pb.FlushSession
 	return &pb.FlushSessionResponse{Errno: 0}, nil
 }
 
-func (s *MetaProxyServer) Shutdown(ctx context.Context, req *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
-	err := s.meta.Shutdown()
-	var errno uint32
-	if err != nil {
-		errno = uint32(syscall.EIO)
-	}
-	return &pb.ShutdownResponse{Errno: errno}, nil
-}
-
-func (s *MetaProxyServer) Reset(ctx context.Context, req *pb.ResetRequest) (*pb.ResetResponse, error) {
-	err := s.meta.Reset()
-	var errno uint32
-	if err != nil {
-		errno = uint32(syscall.EIO)
-	}
-	return &pb.ResetResponse{Errno: errno}, nil
-}
-
 func (s *MetaProxyServer) GetSession(ctx context.Context, req *pb.GetSessionRequest) (*pb.GetSessionResponse, error) {
 	session, err := s.meta.GetSession(req.Sid, req.Detail)
 	if err != nil {

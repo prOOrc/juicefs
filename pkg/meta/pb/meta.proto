@@ -40,8 +40,6 @@ service MetaService {
   rpc NewSession(NewSessionRequest) returns (NewSessionResponse);
   rpc CloseSession(CloseSessionRequest) returns (CloseSessionResponse);
   rpc FlushSession(FlushSessionRequest) returns (FlushSessionResponse);
-  rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
-  rpc Reset(ResetRequest) returns (ResetResponse);
   rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
   rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
   rpc CleanStaleSessions(CleanStaleSessionsRequest) returns (CleanStaleSessionsResponse);
