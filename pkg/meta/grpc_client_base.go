@@ -54,7 +54,7 @@ func NewGRPCClient(addr string, conf *Config, opts *GRPCOptions) (*GRPCClient, e
 		opts = DefaultGRPCOptions()
 	}
 
-	c := &GRPCClient{
+	m := &GRPCClient{
 		baseMeta: newBaseMeta(addr, conf),
 		addr:     addr,
 		opts:     opts,
@@ -73,11 +73,13 @@ func NewGRPCClient(addr string, conf *Config, opts *GRPCOptions) (*GRPCClient, e
 			return nil, err
 		}
 
-		c.conn = conn
-		c.client = pb.NewMetaServiceClient(conn)
+		m.conn = conn
+		m.client = pb.NewMetaServiceClient(conn)
 	}
 
-	return c, nil
+	m.impl = m
+
+	return m, nil
 }
 
 // CloseConn closes the gRPC connection

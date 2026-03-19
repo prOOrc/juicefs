@@ -351,6 +351,8 @@ type baseMeta struct {
 	bgjobDuration *prometheus.HistogramVec
 
 	en engine
+
+	impl Meta
 }
 
 func newBaseMeta(addr string, conf *Config) *baseMeta {
@@ -570,7 +572,7 @@ func (m *baseMeta) InitSharedMetrics(reg prometheus.Registerer) {
 				return
 			}
 			var totalSpace, availSpace, iused, iavail uint64
-			err := m.StatFS(Background(), m.root, &totalSpace, &availSpace, &iused, &iavail)
+			err := m.impl.StatFS(Background(), m.root, &totalSpace, &availSpace, &iused, &iavail)
 			if err == 0 {
 				m.usedSpaceG.Set(float64(totalSpace - availSpace))
 				m.usedInodesG.Set(float64(iused))
@@ -869,7 +871,7 @@ func (m *baseMeta) refresh(ctx Context) {
 		m.sesMu.Unlock()
 
 		old := m.getFormat()
-		if format, err := m.Load(false); err != nil {
+		if format, err := m.impl.Load(false); err != nil {
 			if strings.HasPrefix(err.Error(), "database is not formatted") {
 				logger.Errorf("reload setting: %s", err)
 				os.Exit(UmountCode)
@@ -908,7 +910,7 @@ func (m *baseMeta) refresh(ctx Context) {
 		if ok, err := m.en.setIfSmall("lastCleanupSessions", time.Now().Unix(), int64((m.conf.Heartbeat * 9 / 10).Seconds())); err != nil {
 			logger.Warnf("checking counter lastCleanupSessions: %s", err)
 		} else if ok {
-			go m.CleanStaleSessions(ctx)
+			go m.impl.CleanStaleSessions(ctx)
 		}
 	}
 }
@@ -933,7 +935,7 @@ func (m *baseMeta) CleanStaleSessions(ctx Context) {
 }
 
 func (m *baseMeta) CloseSession() error {
-	m.FlushSession()
+	m.impl.FlushSession()
 	m.sesMu.Lock()
 	m.umounting = true
 	m.sesMu.Unlock()
@@ -1162,7 +1164,7 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 	defer m.timeit("Lookup", time.Now())
 	parent = m.checkRoot(parent)
 	if checkPerm {
-		if st := m.Access(ctx, parent, MODE_MASK_X, nil); st != 0 {
+		if st := m.impl.Access(ctx, parent, MODE_MASK_X, nil); st != 0 {
 			return st
 		}
 	}
@@ -1170,25 +1172,25 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 		if parent == m.root {
 			name = "."
 		} else {
-			if st := m.GetAttr(ctx, parent, attr); st != 0 {
+			if st := m.impl.GetAttr(ctx, parent, attr); st != 0 {
 				return st
 			}
 			if attr.Typ != TypeDirectory {
 				return syscall.ENOTDIR
 			}
 			*inode = attr.Parent
-			return m.GetAttr(ctx, *inode, attr)
+			return m.impl.GetAttr(ctx, *inode, attr)
 		}
 	}
 	if name == "." {
-		if st := m.GetAttr(ctx, parent, attr); st != 0 {
+		if st := m.impl.GetAttr(ctx, parent, attr); st != 0 {
 			return st
 		}
 		*inode = parent
 		return 0
 	}
 	if parent == RootInode && name == TrashName {
-		if st := m.GetAttr(ctx, TrashInode, attr); st != 0 {
+		if st := m.impl.GetAttr(ctx, TrashInode, attr); st != 0 {
 			return st
 		}
 		*inode = TrashInode
@@ -1198,7 +1200,7 @@ func (m *baseMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 	if st == syscall.ENOENT && m.conf.CaseInsensi {
 		if e := m.resolveCase(ctx, parent, name); e != nil {
 			*inode = e.Inode
-			if st = m.GetAttr(ctx, *inode, attr); st == syscall.ENOENT {
+			if st = m.impl.GetAttr(ctx, *inode, attr); st == syscall.ENOENT {
 				logger.Warnf("no attribute for inode %d (%d, %s)", e.Inode, parent, e.Name)
 				*attr = *e.Attr
 				st = 0
@@ -1298,7 +1300,7 @@ func (m *baseMeta) Access(ctx Context, inode Ino, mmask uint8, attr *Attr) sysca
 		if attr == nil {
 			attr = &Attr{}
 		}
-		err := m.GetAttr(ctx, inode, attr)
+		err := m.impl.GetAttr(ctx, inode, attr)
 		if err != 0 {
 			return err
 		}
@@ -1525,7 +1527,7 @@ func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 	if attr == nil {
 		attr = &Attr{}
 	}
-	eno := m.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, "", inode, attr)
+	eno := m.impl.Mknod(ctx, parent, name, TypeFile, mode, cumask, 0, "", inode, attr)
 	if eno == syscall.EEXIST && (flags&syscall.O_EXCL) == 0 && attr.Typ == TypeFile {
 		eno = 0
 	}
@@ -1536,7 +1538,7 @@ func (m *baseMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 }
 
 func (m *baseMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
-	st := m.Mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
+	st := m.impl.Mknod(ctx, parent, name, TypeDirectory, mode, cumask, 0, "", inode, attr)
 	if st == 0 {
 		m.parentMu.Lock()
 		m.dirParents[*inode] = parent
@@ -1555,7 +1557,7 @@ func (m *baseMeta) Symlink(ctx Context, parent Ino, name string, path string, in
 		}
 	}
 	// mode of symlink is ignored in POSIX
-	return m.Mknod(ctx, parent, name, TypeSymlink, 0777, 0, 0, path, inode, attr)
+	return m.impl.Mknod(ctx, parent, name, TypeSymlink, 0777, 0, 0, path, inode, attr)
 }
 
 func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr) syscall.Errno {
@@ -1580,7 +1582,7 @@ func (m *baseMeta) Link(ctx Context, inode, parent Ino, name string, attr *Attr)
 		attr = &Attr{}
 	}
 	parent = m.checkRoot(parent)
-	if st := m.GetAttr(ctx, inode, attr); st != 0 {
+	if st := m.impl.GetAttr(ctx, inode, attr); st != 0 {
 		return st
 	}
 	if attr.Typ == TypeDirectory {
@@ -1631,7 +1633,7 @@ func (m *baseMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 	}
 	if len(target) == 0 {
 		var attr Attr
-		if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+		if st := m.impl.GetAttr(ctx, inode, &attr); st != 0 {
 			return st
 		}
 		if attr.Typ != TypeSymlink {
@@ -1799,7 +1801,7 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 	}
 	var space, inodes int64
 	if quotaSrc != quotaDst {
-		if st := m.Lookup(ctx, parentSrc, nameSrc, inode, attr, false); st != 0 {
+		if st := m.impl.Lookup(ctx, parentSrc, nameSrc, inode, attr, false); st != 0 {
 			return st
 		}
 		if attr.Typ == TypeDirectory {
@@ -1811,7 +1813,7 @@ func (m *baseMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 			} else {
 				var sum Summary
 				logger.Debugf("Start to get summary of inode %d", *inode)
-				if st := m.GetSummary(ctx, *inode, &sum, true, false); st != 0 {
+				if st := m.impl.GetSummary(ctx, *inode, &sum, true, false); st != 0 {
 					logger.Warnf("Get summary of inode %d: %s", *inode, st)
 					return st
 				}
@@ -1910,7 +1912,7 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (st sy
 	}
 	// attr may be valid, see fs.Open()
 	if attr != nil && !attr.Full {
-		if st = m.GetAttr(ctx, inode, attr); st != 0 {
+		if st = m.impl.GetAttr(ctx, inode, attr); st != 0 {
 			return
 		}
 	}
@@ -1927,7 +1929,7 @@ func (m *baseMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) (st sy
 	case syscall.O_RDWR:
 		mmask = MODE_MASK_R | MODE_MASK_W
 	}
-	if st = m.Access(ctx, inode, mmask, attr); st != 0 {
+	if st = m.impl.Access(ctx, inode, mmask, attr); st != 0 {
 		return
 	}
 
@@ -2125,7 +2127,7 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 		}
 	}()
 	inode = m.checkRoot(inode)
-	if err := m.GetAttr(ctx, inode, &attr); err != 0 {
+	if err := m.impl.GetAttr(ctx, inode, &attr); err != 0 {
 		return err
 	}
 	defer m.timeit("Readdir", time.Now())
@@ -2133,7 +2135,7 @@ func (m *baseMeta) Readdir(ctx Context, inode Ino, plus uint8, entries *[]*Entry
 	if plus != 0 {
 		mmask |= MODE_MASK_X
 	}
-	if st := m.Access(ctx, inode, mmask, &attr); st != 0 {
+	if st := m.impl.Access(ctx, inode, mmask, &attr); st != 0 {
 		return st
 	}
 	if inode == m.root {
@@ -2192,7 +2194,7 @@ func (m *baseMeta) GetParents(ctx Context, inode Ino) map[Ino]int {
 		return map[Ino]int{1: 1}
 	}
 	var attr Attr
-	if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+	if st := m.impl.GetAttr(ctx, inode, &attr); st != 0 {
 		logger.Warnf("GetAttr inode %d: %s", inode, st)
 		return nil
 	}
@@ -2256,7 +2258,7 @@ func (m *baseMeta) GetPaths(ctx Context, inode Ino) []string {
 
 	var paths []string
 	// inode != RootInode, parent is the real parent inode
-	for parent, count := range m.GetParents(ctx, inode) {
+	for parent, count := range m.impl.GetParents(ctx, inode) {
 		if count <= 0 {
 			continue
 		}
@@ -2334,7 +2336,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 	var parent = RootInode
 	attr.Typ = TypeDirectory
 	if fpath == "/" {
-		if st := m.GetAttr(ctx, inode, &attr); st != 0 && st != syscall.ENOENT {
+		if st := m.impl.GetAttr(ctx, inode, &attr); st != 0 && st != syscall.ENOENT {
 			logger.Errorf("GetAttr inode %d: %s", inode, st)
 			return st
 		}
@@ -2344,7 +2346,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 		})
 		for i, name := range ps {
 			parent = inode
-			if st := m.Lookup(ctx, parent, name, &inode, &attr, false); st != 0 {
+			if st := m.impl.Lookup(ctx, parent, name, &inode, &attr, false); st != 0 {
 				logger.Errorf("Lookup parent %d name %s: %s", parent, name, st)
 				return st
 			}
@@ -2392,7 +2394,7 @@ func (m *baseMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 		nodeBar.SetTotal(count)
 	}()
 
-	format, err := m.Load(false)
+	format, err := m.impl.Load(false)
 	if err != nil {
 		return errors.Wrap(err, "load meta format")
 	}
@@ -2557,9 +2559,9 @@ func (m *baseMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 		if ps[0] != "" {
 			var attr Attr
 			var inode Ino
-			r := m.Lookup(ctx, m.root, ps[0], &inode, &attr, true)
+			r := m.impl.Lookup(ctx, m.root, ps[0], &inode, &attr, true)
 			if r == syscall.ENOENT {
-				r = m.Mkdir(ctx, m.root, ps[0], 0777, 0, 0, &inode, &attr)
+				r = m.impl.Mkdir(ctx, m.root, ps[0], 0777, 0, 0, &inode, &attr)
 			}
 			if r != 0 {
 				return r
@@ -2590,7 +2592,7 @@ func (m *baseMeta) resolve(ctx Context, dpath string, inode *Ino, create bool) s
 		if ps[0] != "" {
 			r := m.en.doLookup(ctx, *inode, ps[0], inode, &attr)
 			if errors.Is(r, syscall.ENOENT) && create {
-				r = m.Mkdir(ctx, *inode, ps[0], 0777, uint16(umask), 0, inode, &attr)
+				r = m.impl.Mkdir(ctx, *inode, ps[0], 0777, uint16(umask), 0, inode, &attr)
 			}
 			if r != 0 {
 				return r
@@ -2699,7 +2701,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 	}
 
 	var id uint64
-	if st = m.NewSlice(Background(), &id); st != 0 {
+	if st = m.impl.NewSlice(Background(), &id); st != 0 {
 		return
 	}
 	logger.Debugf("compact %d:%d: skipped %d slices (%d bytes) %d slices (%d bytes)", inode, indx, skipped, pos, len(compacted), size)
@@ -2745,7 +2747,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool) {
 
 func (m *baseMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, postFunc func()) syscall.Errno {
 	var attr Attr
-	if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+	if st := m.impl.GetAttr(ctx, inode, &attr); st != 0 {
 		logger.Errorf("get attr error [inode %v]: %v", inode, st)
 		return st
 	}
@@ -3103,7 +3105,7 @@ func (m *baseMeta) doCleanupTrash(ctx Context, days int, force bool, stats *Clea
 	if force {
 		edge = time.Now()
 	}
-	return m.CleanupTrashBefore(ctx, edge, nil, stats)
+	return m.impl.CleanupTrashBefore(ctx, edge, nil, stats)
 }
 
 func (m *baseMeta) cleanupDelayedSlices(ctx Context, days int, count *uint64) error {
@@ -3204,10 +3206,10 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	if eno = m.en.doGetAttr(ctx, srcIno, &attr); eno != 0 {
 		return eno
 	}
-	if eno = m.Access(ctx, srcIno, MODE_MASK_R, &attr); eno != 0 {
+	if eno = m.impl.Access(ctx, srcIno, MODE_MASK_R, &attr); eno != 0 {
 		return eno
 	}
-	if eno = m.Access(ctx, parent, MODE_MASK_X|MODE_MASK_W, nil); eno != 0 {
+	if eno = m.impl.Access(ctx, parent, MODE_MASK_X|MODE_MASK_W, nil); eno != 0 {
 		return eno
 	}
 	var dstIno Ino
@@ -3218,7 +3220,7 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 		return eno
 	}
 	var sum Summary
-	eno = m.GetSummary(ctx, srcIno, &sum, true, false)
+	eno = m.impl.GetSummary(ctx, srcIno, &sum, true, false)
 	if eno != 0 {
 		return eno
 	}
@@ -3269,11 +3271,11 @@ func (m *baseMeta) cloneEntry(ctx Context, srcIno Ino, parent Ino, name string, 
 	if attr.Typ != TypeDirectory {
 		return 0
 	}
-	if eno = m.Access(ctx, srcIno, MODE_MASK_R|MODE_MASK_X, &attr); eno != 0 {
+	if eno = m.impl.Access(ctx, srcIno, MODE_MASK_R|MODE_MASK_X, &attr); eno != 0 {
 		return eno
 	}
 	// Use DirHandler for batch processing to avoid loading all entries at once
-	handler, eno := m.NewDirHandler(ctx, srcIno, true, nil)
+	handler, eno := m.impl.NewDirHandler(ctx, srcIno, true, nil)
 	if eno == syscall.ENOENT {
 		eno = 0 // empty dir
 	}
@@ -3459,7 +3461,7 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 		}
 	}
 	if set&SetAttrAtimeNow != 0 || (set&SetAttrAtime) != 0 && attr.Atime < 0 {
-		if st := m.Access(ctx, inode, MODE_MASK_W, cur); ctx.Uid() != cur.Uid && st != 0 {
+		if st := m.impl.Access(ctx, inode, MODE_MASK_W, cur); ctx.Uid() != cur.Uid && st != 0 {
 			return nil, syscall.EACCES
 		}
 		dirtyAttr.Atime = now.Unix()
@@ -3469,7 +3471,7 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 		if cur.Uid == 0 && ctx.Uid() != 0 {
 			return nil, syscall.EPERM
 		}
-		if st := m.Access(ctx, inode, MODE_MASK_W, cur); ctx.Uid() != cur.Uid && st != 0 {
+		if st := m.impl.Access(ctx, inode, MODE_MASK_W, cur); ctx.Uid() != cur.Uid && st != 0 {
 			return nil, syscall.EACCES
 		}
 		dirtyAttr.Atime = attr.Atime
@@ -3477,7 +3479,7 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 		changed = true
 	}
 	if set&SetAttrMtimeNow != 0 || (set&SetAttrMtime) != 0 && attr.Mtime < 0 {
-		if st := m.Access(ctx, inode, MODE_MASK_W, cur); ctx.Uid() != cur.Uid && st != 0 {
+		if st := m.impl.Access(ctx, inode, MODE_MASK_W, cur); ctx.Uid() != cur.Uid && st != 0 {
 			return nil, syscall.EACCES
 		}
 		dirtyAttr.Mtime = now.Unix()
@@ -3487,7 +3489,7 @@ func (m *baseMeta) mergeAttr(ctx Context, inode Ino, set uint16, cur, attr *Attr
 		if cur.Uid == 0 && ctx.Uid() != 0 {
 			return nil, syscall.EPERM
 		}
-		if st := m.Access(ctx, inode, MODE_MASK_W, cur); ctx.Uid() != cur.Uid && st != 0 {
+		if st := m.impl.Access(ctx, inode, MODE_MASK_W, cur); ctx.Uid() != cur.Uid && st != 0 {
 			return nil, syscall.EACCES
 		}
 		dirtyAttr.Mtime = attr.Mtime
@@ -3663,7 +3665,7 @@ func (m *baseMeta) NewDirHandler(ctx Context, inode Ino, plus bool, initEntries 
 	}()
 
 	inode = m.checkRoot(inode)
-	if st = m.GetAttr(ctx, inode, &attr); st != 0 {
+	if st = m.impl.GetAttr(ctx, inode, &attr); st != 0 {
 		return nil, st
 	}
 	defer m.timeit("NewDirHandler", time.Now())
@@ -3672,7 +3674,7 @@ func (m *baseMeta) NewDirHandler(ctx Context, inode Ino, plus bool, initEntries 
 		mmask |= MODE_MASK_X
 	}
 
-	if st = m.Access(ctx, inode, mmask, &attr); st != 0 {
+	if st = m.impl.Access(ctx, inode, mmask, &attr); st != 0 {
 		return nil, st
 	}
 	if inode == m.root {
@@ -3694,7 +3696,7 @@ func (m *baseMeta) NewDirHandler(ctx Context, inode Ino, plus bool, initEntries 
 		if attr.Parent == inode {
 			parent.Attr = &attr
 		} else {
-			if st := m.GetAttr(ctx, attr.Parent, parent.Attr); st != 0 {
+			if st := m.impl.GetAttr(ctx, attr.Parent, parent.Attr); st != 0 {
 				return nil, st
 			}
 		}

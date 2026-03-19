@@ -381,6 +381,21 @@ func (c *GRPCClient) CleanupDetachedNodesBefore(ctx Context, edge time.Time, inc
 	}
 }
 
+// GetFormat gets the format of the volume
+func (c *GRPCClient) GetFormat() Format {
+	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
+	defer cancel()
+
+	resp, err := c.client.GetFormat(grpcCtx, &pb.GetFormatRequest{})
+	if err != nil {
+		return Format{}
+	}
+	if resp.GetErrno() != 0 {
+		return Format{}
+	}
+	return *fromProtoFormat(resp.GetFormat())
+}
+
 // ScanDeletedObject scans deleted objects
 func (c *GRPCClient) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendingSliceScan, tfs trashFileScan, pfs pendingFileScan) error {
 	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
