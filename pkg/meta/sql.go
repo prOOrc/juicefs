@@ -552,7 +552,6 @@ func newSQLMeta(driver, addr string, conf *Config) (Meta, error) {
 		},
 	}
 	m.en = m
-	m.impl = m
 	return m, nil
 }
 

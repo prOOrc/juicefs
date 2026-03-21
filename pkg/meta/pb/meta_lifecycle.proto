@@ -37,7 +37,10 @@ message LoadResponse {
 }
 
 message NewSessionRequest { bool record = 1; }
-message NewSessionResponse { uint32 errno = 1; }
+message NewSessionResponse { 
+  uint32 errno = 1;
+  uint64 sid = 2;
+}
 
 message CloseSessionRequest { }
 message CloseSessionResponse { uint32 errno = 1; }

@@ -275,6 +275,7 @@ func (x *NewSessionRequest) GetRecord() bool {
 type NewSessionResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
+	Sid           uint64                 `protobuf:"varint,2,opt,name=sid,proto3" json:"sid,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -312,6 +313,13 @@ func (*NewSessionResponse) Descriptor() ([]byte, []int) {
 func (x *NewSessionResponse) GetErrno() uint32 {
 	if x != nil {
 		return x.Errno
+	}
+	return 0
+}
+
+func (x *NewSessionResponse) GetSid() uint64 {
+	if x != nil {
+		return x.Sid
 	}
 	return 0
 }
@@ -932,9 +940,10 @@ const file_meta_lifecycle_proto_rawDesc = "" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12'\n" +
 	"\x06format\x18\x02 \x01(\v2\x0f.pb.ProtoFormatR\x06format\"+\n" +
 	"\x11NewSessionRequest\x12\x16\n" +
-	"\x06record\x18\x01 \x01(\bR\x06record\"*\n" +
+	"\x06record\x18\x01 \x01(\bR\x06record\"<\n" +
 	"\x12NewSessionResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x15\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x10\n" +
+	"\x03sid\x18\x02 \x01(\x04R\x03sid\"\x15\n" +
 	"\x13CloseSessionRequest\",\n" +
 	"\x14CloseSessionResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x15\n" +

@@ -18,23 +18,23 @@ package meta
 
 import (
 	"context"
+	"sync/atomic"
 	"syscall"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
-// --- Lifecycle operations ---
+// --- Lifecycle operations for grpcMeta ---
 
-// Init initializes the volume
-func (c *GRPCClient) Init(format *Format, force bool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
+// Init initializes the filesystem
+func (m *grpcMeta) Init(format *Format, force bool) error {
+	ctx := context.Background()
 	req := &pb.InitRequest{
-		Format: toProtoFormat(format),
+		Format: FormatToProto(*format),
 		Force:  force,
 	}
-	resp, err := c.client.Init(ctx, req)
+	resp, err := m.client.Init(ctx, req)
 	if err != nil {
 		return err
 	}
@@ -44,122 +44,151 @@ func (c *GRPCClient) Init(format *Format, force bool) error {
 	return nil
 }
 
-// Load loads the volume
-func (c *GRPCClient) Load(checkVersion bool) (*Format, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.Load(ctx, &pb.LoadRequest{
-		CheckVersion: checkVersion,
-	})
+// Load loads the existing format
+func (m *grpcMeta) Load(checkVersion bool) (*Format, error) {
+	ctx := context.Background()
+	req := &pb.LoadRequest{CheckVersion: checkVersion}
+	resp, err := m.client.Load(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 	if resp.GetErrno() != 0 {
 		return nil, syscall.Errno(resp.GetErrno())
 	}
-	return fromProtoFormat(resp.GetFormat()), nil
+	m.mu.Lock()
+	m.format = ProtoToFormat(resp.Format)
+	m.mu.Unlock()
+	// Create session after loading format
+	if err := m.NewSession(false); err != nil {
+		return nil, err
+	}
+	return m.format, nil
 }
 
-// NewSession creates a new session
-func (c *GRPCClient) NewSession(record bool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.NewSession(ctx, &pb.NewSessionRequest{
-		Record: record,
-	})
+// NewSession creates a new session and starts heartbeat
+func (m *grpcMeta) NewSession(record bool) error {
+	ctx := context.Background()
+	req := &pb.NewSessionRequest{Record: record}
+	resp, err := m.client.NewSession(ctx, req)
 	if err != nil {
+		logger.Errorf("NewSession gRPC error: %v", err)
 		return err
 	}
 	if resp.GetErrno() != 0 {
+		logger.Errorf("NewSession errno: %d", resp.GetErrno())
 		return syscall.Errno(resp.GetErrno())
+	}
+	m.sid = resp.GetSid()
+	logger.Infof("NewSession succeeded, sid=%d", m.sid)
+	m.startHeartbeat()
+	return nil
+}
+
+// CloseSession closes the current session
+func (m *grpcMeta) CloseSession() error {
+	if !atomic.CompareAndSwapInt32(&m.closed, 0, 1) {
+		return nil
+	}
+
+	// Stop heartbeat first with timeout
+	if m.heartbeatCancel != nil {
+		m.heartbeatCancel()
+		done := make(chan struct{})
+		go func() {
+			m.heartbeatWg.Wait()
+			close(done)
+		}()
+		select {
+		case <-done:
+			logger.Debugf("Heartbeat stopped")
+		case <-time.After(3 * time.Second):
+			logger.Warnf("Heartbeat stop timeout after 3s")
+		}
+	}
+
+	// Close gRPC connection
+	if m.conn != nil {
+		m.conn.Close()
+	}
+
+	// Notify server session is closed
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req := &pb.CloseSessionRequest{}
+	resp, err := m.client.CloseSession(ctx, req)
+	if err != nil {
+		logger.Debugf("CloseSession gRPC error (may be expected): %v", err)
+		return nil
+	}
+	if resp.GetErrno() != 0 {
+		logger.Debugf("CloseSession errno: %d", resp.GetErrno())
 	}
 	return nil
 }
 
-// CloseSession closes a session
-func (c *GRPCClient) CloseSession() error {
-	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.CloseSession(ctx, &pb.CloseSessionRequest{})
+// FlushSession flushes session state
+func (m *grpcMeta) FlushSession() {
+	ctx := context.Background()
+	req := &pb.FlushSessionRequest{}
+	resp, err := m.client.FlushSession(ctx, req)
 	if err != nil {
-		return err
+		return
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
 	}
-	return nil
-}
-
-// FlushSession flushes session data
-func (c *GRPCClient) FlushSession() {
-	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.FlushSession(ctx, &pb.FlushSessionRequest{})
-	if err == nil && resp != nil {
-		_ = resp.GetErrno()
-	}
-}
-
-// Shutdown shuts down the volume
-func (c *GRPCClient) Shutdown() error {
-	return c.CloseConn()
-}
-
-// Reset resets the volume
-func (c *GRPCClient) Reset() error {
-	return syscall.ENOSYS
 }
 
 // GetSession gets session info
-func (c *GRPCClient) GetSession(sid uint64, detail bool) (*Session, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.GetSession(ctx, &pb.GetSessionRequest{
-		Sid:    sid,
-		Detail: detail,
-	})
+func (m *grpcMeta) GetSession(sid uint64, detail bool) (*Session, error) {
+	ctx := context.Background()
+	req := &pb.GetSessionRequest{Sid: sid, Detail: detail}
+	resp, err := m.client.GetSession(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 	if resp.GetErrno() != 0 {
 		return nil, syscall.Errno(resp.GetErrno())
 	}
-	return fromProtoSession(resp.GetSession()), nil
+	return ProtoToSession(resp.Session), nil
 }
 
 // ListSessions lists all sessions
-func (c *GRPCClient) ListSessions() ([]*Session, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.ListSessions(ctx, &pb.ListSessionsRequest{})
+func (m *grpcMeta) ListSessions() ([]*Session, error) {
+	ctx := context.Background()
+	req := &pb.ListSessionsRequest{}
+	resp, err := m.client.ListSessions(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 	if resp.GetErrno() != 0 {
 		return nil, syscall.Errno(resp.GetErrno())
 	}
-	sessions := make([]*Session, 0, len(resp.GetSessions()))
-	for _, s := range resp.GetSessions() {
-		sessions = append(sessions, fromProtoSession(s))
+	sessions := make([]*Session, len(resp.Sessions))
+	for i, s := range resp.Sessions {
+		sessions[i] = ProtoToSession(s)
 	}
 	return sessions, nil
 }
 
-// CleanStaleSessions cleans stale sessions
-func (c *GRPCClient) CleanStaleSessions(ctx Context) {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
+// CleanStaleSessions cleans stale sessions (not implemented on client)
+func (m *grpcMeta) CleanStaleSessions(ctx Context) {
+}
 
-	resp, err := c.client.CleanStaleSessions(grpcCtx, &pb.CleanStaleSessionsRequest{
-		Ctx: toProtoContext(ctx),
-	})
-	if err == nil && resp != nil {
-		_ = resp.GetErrno()
-	}
+// ScanDeletedObject is not supported by gRPC client
+func (m *grpcMeta) ScanDeletedObject(ctx Context, trashSliceScan trashSliceScan, pendingSliceScan pendingSliceScan, trashFileScan trashFileScan, pendingFileScan pendingFileScan) error {
+	return syscall.ENOTSUP
+}
+
+// ListLocks returns all locks of a inode
+func (m *grpcMeta) ListLocks(ctx context.Context, inode Ino) ([]PLockItem, []FLockItem, error) {
+	return nil, nil, nil
+}
+
+// CleanupTrashBefore is not supported by gRPC client
+func (m *grpcMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress func(int), stats *CleanupTrashStats) syscall.Errno {
+	return syscall.ENOTSUP
+}
+
+// CleanupDetachedNodesBefore is not supported by gRPC client
+func (m *grpcMeta) CleanupDetachedNodesBefore(ctx Context, edge time.Time, increProgress func()) {
 }

@@ -17,24 +17,21 @@
 package meta
 
 import (
-	"context"
 	"syscall"
-	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
-// --- Core FUSE operations ---
+// --- Core FUSE operations for grpcMeta ---
 
-// StatFS gets filesystem stats
-func (c *GRPCClient) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.StatFS(grpcCtx, &pb.StatFSRequest{
-		Ctx: toProtoContext(ctx),
+// StatFS returns summary statistics of a volume
+func (m *grpcMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, iavail *uint64) syscall.Errno {
+	c := m.grpcContext(ctx)
+	req := &pb.StatFSRequest{
+		Ctx: c,
 		Ino: uint64(ino),
-	})
+	}
+	resp, err := m.client.StatFS(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
@@ -56,17 +53,37 @@ func (c *GRPCClient) StatFS(ctx Context, ino Ino, totalspace, availspace, iused,
 	return 0
 }
 
-// Lookup looks up a directory entry
-func (c *GRPCClient) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr, checkPerm bool) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
+// Access checks the access permission on given inode
+func (m *grpcMeta) Access(ctx Context, inode Ino, modemask uint8, attr *Attr) syscall.Errno {
+	c := m.grpcContext(ctx)
+	req := &pb.AccessRequest{
+		Ctx:      c,
+		Inode:    uint64(inode),
+		Modemask: uint32(modemask),
+	}
+	resp, err := m.client.Access(m.withSessionID(ctx), req)
+	if err != nil {
+		return syscall.EIO
+	}
+	if resp.GetErrno() != 0 {
+		return syscall.Errno(resp.GetErrno())
+	}
+	if attr != nil && resp.Attr != nil {
+		*attr = *ProtoToAttr(resp.Attr)
+	}
+	return 0
+}
 
-	resp, err := c.client.Lookup(grpcCtx, &pb.LookupRequest{
-		Ctx:             toProtoContext(ctx),
+// Lookup returns the inode and attributes for the given entry in a directory
+func (m *grpcMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr *Attr, checkPerm bool) syscall.Errno {
+	c := m.grpcContext(ctx)
+	req := &pb.LookupRequest{
+		Ctx:             c,
 		Parent:          uint64(parent),
 		Name:            name,
 		CheckPermission: checkPerm,
-	})
+	}
+	resp, err := m.client.Lookup(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
@@ -76,22 +93,22 @@ func (c *GRPCClient) Lookup(ctx Context, parent Ino, name string, inode *Ino, at
 	if inode != nil {
 		*inode = Ino(resp.GetInode())
 	}
-	if attr != nil {
-		*attr = *fromProtoAttr(resp.GetAttr())
+	if attr != nil && resp.Attr != nil {
+		*attr = *ProtoToAttr(resp.Attr)
+		m.putAttrInCache(resp.GetInode(), attr)
 	}
 	return 0
 }
 
-// Resolve resolves a path
-func (c *GRPCClient) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.Resolve(grpcCtx, &pb.ResolveRequest{
-		Ctx:    toProtoContext(ctx),
+// Resolve fetches the inode and attributes for an entry identified by the given path
+func (m *grpcMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno {
+	c := m.grpcContext(ctx)
+	req := &pb.ResolveRequest{
+		Ctx:    c,
 		Parent: uint64(parent),
 		Path:   path,
-	})
+	}
+	resp, err := m.client.Resolve(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
@@ -101,106 +118,98 @@ func (c *GRPCClient) Resolve(ctx Context, parent Ino, path string, inode *Ino, a
 	if inode != nil {
 		*inode = Ino(resp.GetInode())
 	}
-	if attr != nil {
-		*attr = *fromProtoAttr(resp.GetAttr())
+	if attr != nil && resp.Attr != nil {
+		*attr = *ProtoToAttr(resp.Attr)
+		m.putAttrInCache(resp.GetInode(), attr)
 	}
 	return 0
 }
 
-// Access checks access permissions
-func (c *GRPCClient) Access(ctx Context, ino Ino, mode uint8, attr *Attr) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
+// GetAttr returns the attributes for given node (with caching)
+func (m *grpcMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
+	// Check cache first
+	if cachedAttr, found := m.getAttrFromCache(uint64(inode)); found {
+		if attr != nil {
+			*attr = *cachedAttr
+		}
+		return 0
+	}
 
-	resp, err := c.client.Access(grpcCtx, &pb.AccessRequest{
-		Ctx:      toProtoContext(ctx),
-		Inode:    uint64(ino),
-		Modemask: uint32(mode),
-	})
+	c := m.grpcContext(ctx)
+	req := &pb.GetAttrRequest{
+		Ctx:   c,
+		Inode: uint64(inode),
+	}
+	resp, err := m.client.GetAttr(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
 	}
-	if attr != nil {
-		*attr = *fromProtoAttr(resp.GetAttr())
+	if attr != nil && resp.Attr != nil {
+		*attr = *ProtoToAttr(resp.Attr)
+		m.putAttrInCache(uint64(inode), attr)
 	}
 	return 0
 }
 
-// GetAttr gets file attributes
-func (c *GRPCClient) GetAttr(ctx Context, ino Ino, attr *Attr) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.GetAttr(grpcCtx, &pb.GetAttrRequest{
-		Ctx:   toProtoContext(ctx),
-		Inode: uint64(ino),
-	})
-	if err != nil {
-		return syscall.EIO
-	}
-	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
-	}
-	if attr != nil {
-		*attr = *fromProtoAttr(resp.GetAttr())
-	}
-	return 0
-}
-
-// SetAttr sets file attributes
-func (c *GRPCClient) SetAttr(ctx Context, ino Ino, set uint16, sggidclearmode uint8, attr *Attr) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
+// SetAttr updates the attributes for given node
+func (m *grpcMeta) SetAttr(ctx Context, inode Ino, set uint16, sggidclearmode uint8, attr *Attr) syscall.Errno {
+	c := m.grpcContext(ctx)
 	req := &pb.SetAttrRequest{
-		Ctx:            toProtoContext(ctx),
-		Inode:          uint64(ino),
+		Ctx:            c,
+		Inode:          uint64(inode),
 		Set:            uint32(set),
 		Sggidclearmode: uint32(sggidclearmode),
-		Attr:           toProtoAttr(attr),
 	}
-	resp, err := c.client.SetAttr(grpcCtx, req)
+	if attr != nil {
+		req.Attr = AttrToProto(attr)
+	}
+	resp, err := m.client.SetAttr(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
-	return syscall.Errno(resp.GetErrno())
+	if resp.GetErrno() != 0 {
+		return syscall.Errno(resp.GetErrno())
+	}
+	// Invalidate cache on mutation
+	m.invalidateAttrCache(uint64(inode))
+	return 0
 }
 
-// CheckSetAttr checks if attributes can be set
-func (c *GRPCClient) CheckSetAttr(ctx Context, ino Ino, set uint16, attr Attr) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.CheckSetAttr(grpcCtx, &pb.CheckSetAttrRequest{
-		Ctx:   toProtoContext(ctx),
-		Inode: uint64(ino),
+// CheckSetAttr checks if setting attr is allowed
+func (m *grpcMeta) CheckSetAttr(ctx Context, inode Ino, set uint16, attr Attr) syscall.Errno {
+	c := m.grpcContext(ctx)
+	req := &pb.CheckSetAttrRequest{
+		Ctx:   c,
+		Inode: uint64(inode),
 		Set:   uint32(set),
-		Attr:  toProtoAttr(&attr),
-	})
+		Attr:  AttrToProto(&attr),
+	}
+	resp, err := m.client.CheckSetAttr(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
-	return syscall.Errno(resp.GetErrno())
+	if resp.GetErrno() != 0 {
+		return syscall.Errno(resp.GetErrno())
+	}
+	return 0
 }
 
-// Mknod creates a special file
-func (c *GRPCClient) Mknod(ctx Context, parent Ino, name string, typ uint8, mode, cumask uint16, rdev uint32, fpath string, inode *Ino, attr *Attr) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.Mknod(grpcCtx, &pb.MknodRequest{
-		Ctx:    toProtoContext(ctx),
+// Mknod creates a node in a directory
+func (m *grpcMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode uint16, cumask uint16, rdev uint32, linkpath string, inode *Ino, attr *Attr) syscall.Errno {
+	c := m.grpcContext(ctx)
+	req := &pb.MknodRequest{
+		Ctx:    c,
 		Parent: uint64(parent),
 		Name:   name,
-		Type:   uint32(typ),
+		Type:   uint32(_type),
 		Mode:   uint32(mode),
 		Cumask: uint32(cumask),
 		Rdev:   rdev,
-		Path:   fpath,
-	})
+	}
+	resp, err := m.client.Mknod(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
@@ -210,25 +219,26 @@ func (c *GRPCClient) Mknod(ctx Context, parent Ino, name string, typ uint8, mode
 	if inode != nil {
 		*inode = Ino(resp.GetInode())
 	}
-	if attr != nil {
-		*attr = *fromProtoAttr(resp.GetAttr())
+	if attr != nil && resp.Attr != nil {
+		*attr = *ProtoToAttr(resp.Attr)
+		m.putAttrInCache(resp.GetInode(), attr)
 	}
+	m.invalidateDirCache(uint64(parent))
 	return 0
 }
 
-// Mkdir creates a directory
-func (c *GRPCClient) Mkdir(ctx Context, parent Ino, name string, mode, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.Mkdir(grpcCtx, &pb.MkdirRequest{
-		Ctx:      toProtoContext(ctx),
+// Mkdir creates a sub-directory
+func (m *grpcMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *Ino, attr *Attr) syscall.Errno {
+	c := m.grpcContext(ctx)
+	req := &pb.MkdirRequest{
+		Ctx:      c,
 		Parent:   uint64(parent),
 		Name:     name,
 		Mode:     uint32(mode),
 		Cumask:   uint32(cumask),
 		Copysgid: uint32(copysgid),
-	})
+	}
+	resp, err := m.client.Mkdir(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
@@ -238,25 +248,26 @@ func (c *GRPCClient) Mkdir(ctx Context, parent Ino, name string, mode, cumask ui
 	if inode != nil {
 		*inode = Ino(resp.GetInode())
 	}
-	if attr != nil {
-		*attr = *fromProtoAttr(resp.GetAttr())
+	if attr != nil && resp.Attr != nil {
+		*attr = *ProtoToAttr(resp.Attr)
+		m.putAttrInCache(resp.GetInode(), attr)
 	}
+	m.invalidateDirCache(uint64(parent))
 	return 0
 }
 
-// Create creates a file
-func (c *GRPCClient) Create(ctx Context, parent Ino, name string, mode, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.Create(grpcCtx, &pb.CreateRequest{
-		Ctx:    toProtoContext(ctx),
+// Create creates a file in a directory
+func (m *grpcMeta) Create(ctx Context, parent Ino, name string, mode uint16, cumask uint16, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	c := m.grpcContext(ctx)
+	req := &pb.CreateRequest{
+		Ctx:    c,
 		Parent: uint64(parent),
 		Name:   name,
 		Mode:   uint32(mode),
 		Cumask: uint32(cumask),
 		Flags:  flags,
-	})
+	}
+	resp, err := m.client.Create(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
@@ -266,106 +277,103 @@ func (c *GRPCClient) Create(ctx Context, parent Ino, name string, mode, cumask u
 	if inode != nil {
 		*inode = Ino(resp.GetInode())
 	}
-	if attr != nil {
-		*attr = *fromProtoAttr(resp.GetAttr())
+	if attr != nil && resp.Attr != nil {
+		*attr = *ProtoToAttr(resp.Attr)
+		m.putAttrInCache(resp.GetInode(), attr)
 	}
+	m.invalidateDirCache(uint64(parent))
 	return 0
 }
 
-// Open opens a file
-func (c *GRPCClient) Open(ctx Context, ino Ino, flags uint32, attr *Attr) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.Open(grpcCtx, &pb.OpenRequest{
-		Ctx:   toProtoContext(ctx),
-		Inode: uint64(ino),
+// Open checks permission on a node and track it as open
+func (m *grpcMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
+	c := m.grpcContext(ctx)
+	req := &pb.OpenRequest{
+		Ctx:   c,
+		Inode: uint64(inode),
 		Flags: flags,
-	})
+	}
+	resp, err := m.client.Open(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
 	}
-	if attr != nil {
-		*attr = *fromProtoAttr(resp.GetAttr())
+	if attr != nil && resp.Attr != nil {
+		*attr = *ProtoToAttr(resp.Attr)
+		m.putAttrInCache(uint64(inode), attr)
 	}
 	return 0
 }
 
-// Close closes a file
-func (c *GRPCClient) Close(ctx Context, ino Ino) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.Close(grpcCtx, &pb.CloseRequest{
-		Ctx:   toProtoContext(ctx),
-		Inode: uint64(ino),
-	})
+// Close a file
+func (m *grpcMeta) Close(ctx Context, inode Ino) syscall.Errno {
+	c := m.grpcContext(ctx)
+	req := &pb.CloseRequest{
+		Ctx:   c,
+		Inode: uint64(inode),
+	}
+	resp, err := m.client.Close(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
-	return syscall.Errno(resp.GetErrno())
+	if resp.GetErrno() != 0 {
+		return syscall.Errno(resp.GetErrno())
+	}
+	return 0
 }
 
-// Unlink removes a file
-func (c *GRPCClient) Unlink(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	skip := false
-	if len(skipCheckTrash) > 0 {
-		skip = skipCheckTrash[0]
+// Unlink removes a file entry from a directory
+func (m *grpcMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno {
+	c := m.grpcContext(ctx)
+	req := &pb.UnlinkRequest{
+		Ctx:    c,
+		Parent: uint64(parent),
+		Name:   name,
 	}
-
-	resp, err := c.client.Unlink(grpcCtx, &pb.UnlinkRequest{
-		Ctx:            toProtoContext(ctx),
-		Parent:         uint64(parent),
-		Name:           name,
-		SkipCheckTrash: skip,
-	})
+	resp, err := m.client.Unlink(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
-	return syscall.Errno(resp.GetErrno())
+	if resp.GetErrno() != 0 {
+		return syscall.Errno(resp.GetErrno())
+	}
+	m.invalidateDirCache(uint64(parent))
+	return 0
 }
 
-// Rmdir removes a directory
-func (c *GRPCClient) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	skip := false
-	if len(skipCheckTrash) > 0 {
-		skip = skipCheckTrash[0]
+// Rmdir removes an empty sub-directory
+func (m *grpcMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ...bool) syscall.Errno {
+	c := m.grpcContext(ctx)
+	req := &pb.RmdirRequest{
+		Ctx:    c,
+		Parent: uint64(parent),
+		Name:   name,
 	}
-
-	resp, err := c.client.Rmdir(grpcCtx, &pb.RmdirRequest{
-		Ctx:            toProtoContext(ctx),
-		Parent:         uint64(parent),
-		Name:           name,
-		SkipCheckTrash: skip,
-	})
+	resp, err := m.client.Rmdir(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
-	return syscall.Errno(resp.GetErrno())
+	if resp.GetErrno() != 0 {
+		return syscall.Errno(resp.GetErrno())
+	}
+	m.invalidateDirCache(uint64(parent))
+	return 0
 }
 
-// Rename renames a file/directory
-func (c *GRPCClient) Rename(ctx Context, srcParent Ino, srcName string, dstParent Ino, dstName string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.Rename(grpcCtx, &pb.RenameRequest{
-		Ctx:       toProtoContext(ctx),
-		ParentSrc: uint64(srcParent),
-		NameSrc:   srcName,
-		ParentDst: uint64(dstParent),
-		NameDst:   dstName,
+// Rename moves an entry from a source directory to another
+func (m *grpcMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst Ino, nameDst string, flags uint32, inode *Ino, attr *Attr) syscall.Errno {
+	c := m.grpcContext(ctx)
+	req := &pb.RenameRequest{
+		Ctx:       c,
+		ParentSrc: uint64(parentSrc),
+		NameSrc:   nameSrc,
+		ParentDst: uint64(parentDst),
+		NameDst:   nameDst,
 		Flags:     flags,
-	})
+	}
+	resp, err := m.client.Rename(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
@@ -375,46 +383,49 @@ func (c *GRPCClient) Rename(ctx Context, srcParent Ino, srcName string, dstParen
 	if inode != nil {
 		*inode = Ino(resp.GetInode())
 	}
-	if attr != nil {
-		*attr = *fromProtoAttr(resp.GetAttr())
+	if attr != nil && resp.Attr != nil {
+		*attr = *ProtoToAttr(resp.Attr)
+		m.putAttrInCache(resp.GetInode(), attr)
 	}
+	m.invalidateDirCache(uint64(parentSrc))
+	m.invalidateDirCache(uint64(parentDst))
 	return 0
 }
 
-// Link creates a hard link
-func (c *GRPCClient) Link(ctx Context, srcIno, parent Ino, name string, attr *Attr) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.Link(grpcCtx, &pb.LinkRequest{
-		Ctx:      toProtoContext(ctx),
-		InodeSrc: uint64(srcIno),
+// Link creates an entry for node
+func (m *grpcMeta) Link(ctx Context, inodeSrc, parent Ino, name string, attr *Attr) syscall.Errno {
+	c := m.grpcContext(ctx)
+	req := &pb.LinkRequest{
+		Ctx:      c,
+		InodeSrc: uint64(inodeSrc),
 		Parent:   uint64(parent),
 		Name:     name,
-	})
+	}
+	resp, err := m.client.Link(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
 	}
-	if attr != nil {
-		*attr = *fromProtoAttr(resp.GetAttr())
+	if attr != nil && resp.Attr != nil {
+		*attr = *ProtoToAttr(resp.Attr)
+		m.putAttrInCache(uint64(inodeSrc), attr)
 	}
+	m.invalidateDirCache(uint64(parent))
 	return 0
 }
 
-// Symlink creates a symbolic link
-func (c *GRPCClient) Symlink(ctx Context, parent Ino, name, path string, inode *Ino, attr *Attr) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.Symlink(grpcCtx, &pb.SymlinkRequest{
-		Ctx:    toProtoContext(ctx),
+// Symlink creates a symlink in a directory
+func (m *grpcMeta) Symlink(ctx Context, parent Ino, name string, path string, inode *Ino, attr *Attr) syscall.Errno {
+	c := m.grpcContext(ctx)
+	req := &pb.SymlinkRequest{
+		Ctx:    c,
 		Parent: uint64(parent),
 		Name:   name,
 		Path:   path,
-	})
+	}
+	resp, err := m.client.Symlink(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
@@ -424,21 +435,22 @@ func (c *GRPCClient) Symlink(ctx Context, parent Ino, name, path string, inode *
 	if inode != nil {
 		*inode = Ino(resp.GetInode())
 	}
-	if attr != nil {
-		*attr = *fromProtoAttr(resp.GetAttr())
+	if attr != nil && resp.Attr != nil {
+		*attr = *ProtoToAttr(resp.Attr)
+		m.putAttrInCache(resp.GetInode(), attr)
 	}
+	m.invalidateDirCache(uint64(parent))
 	return 0
 }
 
-// ReadLink reads a symbolic link
-func (c *GRPCClient) ReadLink(ctx Context, ino Ino, path *[]byte) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.ReadLink(grpcCtx, &pb.ReadLinkRequest{
-		Ctx:   toProtoContext(ctx),
-		Inode: uint64(ino),
-	})
+// ReadLink returns the target of a symlink
+func (m *grpcMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno {
+	c := m.grpcContext(ctx)
+	req := &pb.ReadLinkRequest{
+		Ctx:   c,
+		Inode: uint64(inode),
+	}
+	resp, err := m.client.ReadLink(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
@@ -446,47 +458,47 @@ func (c *GRPCClient) ReadLink(ctx Context, ino Ino, path *[]byte) syscall.Errno 
 		return syscall.Errno(resp.GetErrno())
 	}
 	if path != nil {
-		*path = resp.GetPath()
+		*path = resp.Path
 	}
 	return 0
 }
 
-// Truncate truncates a file
-func (c *GRPCClient) Truncate(ctx Context, ino Ino, flags uint8, length uint64, attr *Attr, skipPermCheck bool) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.Truncate(grpcCtx, &pb.TruncateRequest{
-		Ctx:           toProtoContext(ctx),
-		Inode:         uint64(ino),
+// Truncate changes the length for given file
+func (m *grpcMeta) Truncate(ctx Context, inode Ino, flags uint8, attrlength uint64, attr *Attr, skipPermCheck bool) syscall.Errno {
+	c := m.grpcContext(ctx)
+	req := &pb.TruncateRequest{
+		Ctx:           c,
+		Inode:         uint64(inode),
 		Flags:         uint32(flags),
-		Length:        length,
+		Length:        attrlength,
 		SkipPermCheck: skipPermCheck,
-	})
+	}
+	resp, err := m.client.Truncate(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
 	}
-	if attr != nil {
-		*attr = *fromProtoAttr(resp.GetAttr())
+	m.invalidateAttrCache(uint64(inode))
+	if attr != nil && resp.Attr != nil {
+		*attr = *ProtoToAttr(resp.Attr)
+		m.putAttrInCache(uint64(inode), attr)
 	}
 	return 0
 }
 
-// Fallocate allocates file space
-func (c *GRPCClient) Fallocate(ctx Context, ino Ino, mode uint8, off, size uint64, length *uint64) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.Fallocate(grpcCtx, &pb.FallocateRequest{
-		Ctx:   toProtoContext(ctx),
-		Inode: uint64(ino),
+// Fallocate preallocate given space for given file
+func (m *grpcMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, length *uint64) syscall.Errno {
+	c := m.grpcContext(ctx)
+	req := &pb.FallocateRequest{
+		Ctx:   c,
+		Inode: uint64(inode),
 		Mode:  uint32(mode),
 		Off:   off,
 		Size:  size,
-	})
+	}
+	resp, err := m.client.Fallocate(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
@@ -499,148 +511,40 @@ func (c *GRPCClient) Fallocate(ctx Context, ino Ino, mode uint8, off, size uint6
 	return 0
 }
 
-// Readdir reads directory entries
-func (c *GRPCClient) Readdir(ctx Context, ino Ino, wantAttr uint8, entries *[]*Entry) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
+// Readdir returns all entries for given directory (with caching)
+func (m *grpcMeta) Readdir(ctx Context, inode Ino, wantattr uint8, entries *[]*Entry) syscall.Errno {
+	// Check cache first (only if we want attributes)
+	if wantattr != 0 {
+		if cachedEntries, found := m.getDirFromCache(uint64(inode)); found {
+			if entries != nil {
+				*entries = cachedEntries
+			}
+			return 0
+		}
+	}
 
-	resp, err := c.client.Readdir(grpcCtx, &pb.ReaddirRequest{
-		Ctx:      toProtoContext(ctx),
-		Inode:    uint64(ino),
-		Wantattr: uint32(wantAttr),
-	})
+	c := m.grpcContext(ctx)
+	req := &pb.ReaddirRequest{
+		Ctx:      c,
+		Inode:    uint64(inode),
+		Wantattr: uint32(wantattr),
+	}
+	logger.Debugf("Readdir called for inode=%d, sid=%d", inode, m.sid)
+	resp, err := m.client.Readdir(m.withSessionID(ctx), req)
 	if err != nil {
+		logger.Errorf("Readdir gRPC error: %v", err)
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
+		logger.Errorf("Readdir errno: %d", resp.GetErrno())
 		return syscall.Errno(resp.GetErrno())
-	}
-	result := make([]*Entry, 0, len(resp.GetEntries()))
-	for _, e := range resp.GetEntries() {
-		result = append(result, fromProtoEntry(e))
 	}
 	if entries != nil {
-		*entries = result
+		*entries = ProtoToEntries(resp.Entries)
+		if wantattr != 0 {
+			m.putDirInCache(uint64(inode), *entries)
+		}
 	}
-	return 0
-}
-
-// Read reads file slices
-func (c *GRPCClient) Read(ctx Context, ino Ino, indx uint32, slices *[]Slice) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.Read(grpcCtx, &pb.ReadRequest{
-		Ctx:   toProtoContext(ctx),
-		Inode: uint64(ino),
-		Indx:  indx,
-	})
-	if err != nil {
-		return syscall.EIO
-	}
-	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
-	}
-	result := make([]Slice, 0, len(resp.GetSlices()))
-	for _, s := range resp.GetSlices() {
-		result = append(result, Slice{
-			Id:   s.Id,
-			Size: s.Size,
-			Off:  s.Off,
-			Len:  s.Len,
-		})
-	}
-	if slices != nil {
-		*slices = result
-	}
-	return 0
-}
-
-// Write writes file slices
-func (c *GRPCClient) Write(ctx Context, ino Ino, indx, off uint32, slice Slice, mtime time.Time) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.Write(grpcCtx, &pb.WriteRequest{
-		Ctx:   toProtoContext(ctx),
-		Inode: uint64(ino),
-		Indx:  indx,
-		Off:   off,
-		Slice: &pb.ProtoSlice{
-			Id:   slice.Id,
-			Size: slice.Size,
-			Off:  slice.Off,
-			Len:  slice.Len,
-		},
-		Mtime: mtime.Unix(),
-	})
-	if err != nil {
-		return syscall.EIO
-	}
-	return syscall.Errno(resp.GetErrno())
-}
-
-// NewSlice creates a new slice
-func (c *GRPCClient) NewSlice(ctx Context, id *uint64) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.NewSlice(grpcCtx, &pb.NewSliceRequest{
-		Ctx: toProtoContext(ctx),
-	})
-	if err != nil {
-		return syscall.EIO
-	}
-	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
-	}
-	if id != nil {
-		*id = resp.GetId()
-	}
-	return 0
-}
-
-// InvalidateChunkCache invalidates chunk cache
-func (c *GRPCClient) InvalidateChunkCache(ctx Context, ino Ino, indx uint32) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.InvalidateChunkCache(grpcCtx, &pb.InvalidateChunkCacheRequest{
-		Ctx:   toProtoContext(ctx),
-		Inode: uint64(ino),
-		Indx:  indx,
-	})
-	if err != nil {
-		return syscall.EIO
-	}
-	return syscall.Errno(resp.GetErrno())
-}
-
-// CopyFileRange copies file range
-func (c *GRPCClient) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	resp, err := c.client.CopyFileRange(grpcCtx, &pb.CopyFileRangeRequest{
-		Ctx:    toProtoContext(ctx),
-		Fin:    uint64(fin),
-		OffIn:  offIn,
-		Fout:   uint64(fout),
-		OffOut: offOut,
-		Size:   size,
-		Flags:  flags,
-	})
-	if err != nil {
-		return syscall.EIO
-	}
-	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
-	}
-	if copied != nil {
-		*copied = resp.GetCopied()
-	}
-	if outLength != nil {
-		*outLength = resp.GetOutLength()
-	}
+	logger.Debugf("Readdir succeeded, entries=%d", len(resp.Entries))
 	return 0
 }

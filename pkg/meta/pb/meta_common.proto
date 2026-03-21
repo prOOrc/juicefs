@@ -25,6 +25,7 @@ message MetaContext {
   repeated uint32 gids = 3;
   uint32 pid = 4;
   bool check_permission = 5;
+  uint64 session_id = 6;
 }
 
 // Attr represents file/directory attributes

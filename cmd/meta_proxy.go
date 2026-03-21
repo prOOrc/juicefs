@@ -131,15 +131,34 @@ func cmdMetaProxy() *cli.Command {
 
 			go func() {
 				<-ctx.Done()
-				grpcServer.GracefulStop()
-				_ = m.Shutdown()
+				loggerProxy.Info("Stopping gRPC server...")
+				// Use GracefulStop with timeout
+				stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer stopCancel()
+				done := make(chan struct{})
+				go func() {
+					grpcServer.GracefulStop()
+					close(done)
+				}()
+				select {
+				case <-done:
+					loggerProxy.Info("gRPC server stopped gracefully")
+				case <-stopCtx.Done():
+					loggerProxy.Warn("GracefulStop timeout, forcing stop")
+					grpcServer.Stop()
+				}
+				loggerProxy.Info("Shutting down metadata client...")
+				if err := m.Shutdown(); err != nil {
+					loggerProxy.Errorf("Error shutting down metadata client: %v", err)
+				}
+				loggerProxy.Info("Metadata client shutdown complete")
 			}()
 
 			if err := grpcServer.Serve(lis); err != nil {
 				loggerProxy.Fatalf("Failed to serve: %v", err)
 			}
 
-			loggerProxy.Info("gRPC server stopped")
+			loggerProxy.Info("Meta proxy shutdown complete")
 			return nil
 		},
 	}

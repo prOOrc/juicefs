@@ -290,7 +290,6 @@ func newRedisMeta(driver, addr string, conf *Config) (Meta, error) {
 		}
 	}
 	m.en = m
-	m.impl = m
 	m.checkServerConfig()
 	return m, nil
 }

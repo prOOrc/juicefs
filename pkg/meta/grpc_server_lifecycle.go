@@ -64,12 +64,22 @@ func (s *MetaProxyServer) Load(ctx context.Context, req *pb.LoadRequest) (*pb.Lo
 }
 
 func (s *MetaProxyServer) NewSession(ctx context.Context, req *pb.NewSessionRequest) (*pb.NewSessionResponse, error) {
+	logger.Debugf("NewSession called with record=%v", req.Record)
 	err := s.meta.NewSession(req.Record)
 	var errno uint32
+	var sid uint64
 	if err != nil {
+		logger.Errorf("NewSession failed: %v", err)
 		errno = uint32(syscall.EIO)
+	} else {
+		if rm, ok := s.meta.(*redisMeta); ok {
+			sid = rm.sid
+			logger.Debugf("NewSession succeeded, sid=%d (from redisMeta)", sid)
+		} else {
+			logger.Errorf("NewSession: meta is not redisMeta, type=%T, sid=0", s.meta)
+		}
 	}
-	return &pb.NewSessionResponse{Errno: errno}, nil
+	return &pb.NewSessionResponse{Errno: errno, Sid: sid}, nil
 }
 
 func (s *MetaProxyServer) CloseSession(ctx context.Context, req *pb.CloseSessionRequest) (*pb.CloseSessionResponse, error) {

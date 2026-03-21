@@ -18,122 +18,84 @@ package meta
 
 import (
 	"context"
-	"sync"
 	"syscall"
-	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
-// grpcDirHandler implements DirHandler interface
+// grpcDirHandler implements DirHandler interface for gRPC client
 type grpcDirHandler struct {
-	handleID uint64
-	client   pb.MetaServiceClient
-	mu       sync.Mutex
+	client pb.MetaServiceClient
+	handle *pb.DirHandlerHandle
 }
 
-// NewDirHandler creates a new directory handler
-func (c *GRPCClient) NewDirHandler(ctx Context, ino Ino, plus bool, initEntries []*Entry) (DirHandler, syscall.Errno) {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), c.opts.Timeout)
-	defer cancel()
-
-	protoEntries := make([]*pb.ProtoEntry, 0, len(initEntries))
-	for _, e := range initEntries {
-		protoEntries = append(protoEntries, toProtoEntry(e))
-	}
-
-	resp, err := c.client.NewDirHandler(grpcCtx, &pb.NewDirHandlerRequest{
-		Ctx:         toProtoContext(ctx),
-		Inode:       uint64(ino),
-		Plus:        plus,
-		InitEntries: protoEntries,
-	})
-	if err != nil {
-		return nil, syscall.EIO
-	}
-	if resp.GetErrno() != 0 {
-		return nil, syscall.Errno(resp.GetErrno())
-	}
-
-	return &grpcDirHandler{
-		handleID: resp.GetHandle().GetHandleId(),
-		client:   c.client,
-	}, 0
-}
-
-// List lists directory entries
+// List returns directory entries starting from offset
 func (h *grpcDirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno) {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	resp, err := h.client.DirHandlerList(grpcCtx, &pb.DirHandlerListRequest{
-		Handle: &pb.DirHandlerHandle{HandleId: h.handleID},
+	req := &pb.DirHandlerListRequest{
+		Handle: h.handle,
 		Offset: int32(offset),
-	})
+	}
+	resp, err := h.client.DirHandlerList(ctx, req)
 	if err != nil {
+		logger.Errorf("DirHandlerList error: %v", err)
 		return nil, syscall.EIO
 	}
-	if resp.GetErrno() != 0 {
-		return nil, syscall.Errno(resp.GetErrno())
+	if resp.Errno != 0 {
+		return nil, syscall.Errno(resp.Errno)
 	}
-
-	entries := make([]*Entry, 0, len(resp.GetEntries()))
-	for _, e := range resp.GetEntries() {
-		entries = append(entries, fromProtoEntry(e))
-	}
-	return entries, 0
+	return ProtoToEntries(resp.Entries), 0
 }
 
-// Insert inserts a directory entry
-func (h *grpcDirHandler) Insert(ino Ino, name string, attr *Attr) {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	_, err := h.client.DirHandlerInsert(grpcCtx, &pb.DirHandlerInsertRequest{
-		Handle: &pb.DirHandlerHandle{HandleId: h.handleID},
-		Inode:  uint64(ino),
+// Insert adds an entry to the directory handler
+func (h *grpcDirHandler) Insert(inode Ino, name string, attr *Attr) {
+	req := &pb.DirHandlerInsertRequest{
+		Handle: h.handle,
+		Inode:  uint64(inode),
 		Name:   name,
-		Attr:   toProtoAttr(attr),
-	})
-	_ = err // Ignore errors for now
+		Attr:   AttrToProto(attr),
+	}
+	resp, err := h.client.DirHandlerInsert(context.Background(), req)
+	if err != nil {
+		logger.Errorf("DirHandlerInsert error: %v", err)
+		return
+	}
+	if resp.Errno != 0 {
+		logger.Errorf("DirHandlerInsert errno: %d", resp.Errno)
+	}
 }
 
-// Delete deletes a directory entry
+// Delete removes an entry from the directory handler
 func (h *grpcDirHandler) Delete(name string) {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	_, err := h.client.DirHandlerDelete(grpcCtx, &pb.DirHandlerDeleteRequest{
-		Handle: &pb.DirHandlerHandle{HandleId: h.handleID},
+	req := &pb.DirHandlerDeleteRequest{
+		Handle: h.handle,
 		Name:   name,
-	})
-	_ = err // Ignore errors for now
+	}
+	resp, err := h.client.DirHandlerDelete(context.Background(), req)
+	if err != nil {
+		logger.Errorf("DirHandlerDelete error: %v", err)
+		return
+	}
+	if resp.Errno != 0 {
+		logger.Errorf("DirHandlerDelete errno: %d", resp.Errno)
+	}
+}
+
+// Read is not implemented for gRPC DirHandler
+func (h *grpcDirHandler) Read(offset int) {
+	// Not supported by gRPC client
 }
 
 // Close closes the directory handler
 func (h *grpcDirHandler) Close() {
-	grpcCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	_, err := h.client.DirHandlerClose(grpcCtx, &pb.DirHandlerCloseRequest{
-		Handle: &pb.DirHandlerHandle{HandleId: h.handleID},
-	})
-	_ = err // Ignore errors for now
-}
-
-// Read reads directory entries (not implemented)
-func (h *grpcDirHandler) Read(offset int) {
-	// Not implemented
+	req := &pb.DirHandlerCloseRequest{
+		Handle: h.handle,
+	}
+	resp, err := h.client.DirHandlerClose(context.Background(), req)
+	if err != nil {
+		logger.Errorf("DirHandlerClose error: %v", err)
+		return
+	}
+	if resp.Errno != 0 {
+		logger.Errorf("DirHandlerClose errno: %d", resp.Errno)
+	}
 }

@@ -44,6 +44,7 @@ type MetaContext struct {
 	Gids            []uint32               `protobuf:"varint,3,rep,packed,name=gids,proto3" json:"gids,omitempty"`
 	Pid             uint32                 `protobuf:"varint,4,opt,name=pid,proto3" json:"pid,omitempty"`
 	CheckPermission bool                   `protobuf:"varint,5,opt,name=check_permission,json=checkPermission,proto3" json:"check_permission,omitempty"`
+	SessionId       uint64                 `protobuf:"varint,6,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -111,6 +112,13 @@ func (x *MetaContext) GetCheckPermission() bool {
 		return x.CheckPermission
 	}
 	return false
+}
+
+func (x *MetaContext) GetSessionId() uint64 {
+	if x != nil {
+		return x.SessionId
+	}
+	return 0
 }
 
 // Attr represents file/directory attributes
@@ -1464,13 +1472,15 @@ var File_meta_common_proto protoreflect.FileDescriptor
 
 const file_meta_common_proto_rawDesc = "" +
 	"\n" +
-	"\x11meta_common.proto\x12\x02pb\"\x82\x01\n" +
+	"\x11meta_common.proto\x12\x02pb\"\xa1\x01\n" +
 	"\vMetaContext\x12\x10\n" +
 	"\x03uid\x18\x01 \x01(\rR\x03uid\x12\x10\n" +
 	"\x03gid\x18\x02 \x01(\rR\x03gid\x12\x12\n" +
 	"\x04gids\x18\x03 \x03(\rR\x04gids\x12\x10\n" +
 	"\x03pid\x18\x04 \x01(\rR\x03pid\x12)\n" +
-	"\x10check_permission\x18\x05 \x01(\bR\x0fcheckPermission\"\xd4\x03\n" +
+	"\x10check_permission\x18\x05 \x01(\bR\x0fcheckPermission\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x06 \x01(\x04R\tsessionId\"\xd4\x03\n" +
 	"\tProtoAttr\x12\x14\n" +
 	"\x05flags\x18\x01 \x01(\rR\x05flags\x12\x10\n" +
 	"\x03typ\x18\x02 \x01(\rR\x03typ\x12\x12\n" +
