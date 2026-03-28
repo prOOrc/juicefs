@@ -1,0 +1,215 @@
+/*
+ * JuiceFS, Copyright 2021 Juicedata, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+syntax = "proto3";
+package pb;
+option go_package = "./pb";
+
+import "meta_common.proto";
+
+// =====================================================
+// Admin Request/Response Messages
+// =====================================================
+
+message GetFormatRequest { }
+message GetFormatResponse {
+  uint32 errno = 1;
+  ProtoFormat format = 2;
+}
+
+message RemoveRequest {
+  MetaContext ctx = 1;
+  uint64 parent = 2;
+  string name = 3;
+  bool skip_trash = 4;
+  int32 num_threads = 5;
+}
+message RemoveResponse {
+  uint32 errno = 1;
+  uint64 count = 2;
+}
+
+message BatchUnlinkRequest {
+  MetaContext ctx = 1;
+  uint64 parent = 2;
+  repeated ProtoEntry entries = 3;
+  bool skip_check_trash = 4;
+}
+message BatchUnlinkResponse {
+  uint32 errno = 1;
+  uint64 count = 2;
+}
+
+message GetSummaryRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  bool recursive = 3;
+  bool strict = 4;
+}
+message GetSummaryResponse {
+  uint32 errno = 1;
+  ProtoSummary summary = 2;
+}
+
+message GetTreeSummaryRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  uint32 depth = 3;
+  uint32 top_n = 4;
+  bool strict = 5;
+}
+message GetTreeSummaryResponse {
+  uint32 errno = 1;
+  ProtoTreeSummary tree = 2;
+}
+
+message CloneRequest {
+  MetaContext ctx = 1;
+  uint64 src_parent_ino = 2;
+  uint64 src_ino = 3;
+  uint64 dst_parent_ino = 4;
+  string dst_name = 5;
+  uint32 cmode = 6;
+  uint32 cumask = 7;
+  uint32 concurrency = 8;
+}
+message CloneResponse {
+  uint32 errno = 1;
+  uint64 count = 2;
+  uint64 total = 3;
+}
+
+message GetPathsRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+}
+message GetPathsResponse {
+  uint32 errno = 1;
+  repeated string paths = 2;
+}
+
+message CheckRequest {
+  MetaContext ctx = 1;
+  string fpath = 2;
+  bool repair = 3;
+  bool recursive = 4;
+  bool sync_dir_stat = 5;
+  uint32 repair_dir_mode = 6;
+}
+message CheckResponse { uint32 errno = 1; }
+
+message CompactAllRequest {
+  MetaContext ctx = 1;
+  int32 threads = 2;
+}
+message CompactAllResponse { uint32 errno = 1; }
+
+message CompactRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  int32 concurrency = 3;
+}
+message CompactResponse { uint32 errno = 1; }
+
+message ListSlicesRequest {
+  MetaContext ctx = 1;
+  repeated SliceMapEntry slices = 2;
+  bool scan_pending = 3;
+  bool delete = 4;
+}
+message ListSlicesResponse {
+  uint32 errno = 1;
+  repeated SliceMapEntry slices = 2;
+}
+
+message HandleQuotaRequest {
+  MetaContext ctx = 1;
+  uint32 cmd = 2;
+  string dpath = 3;
+  uint32 uid = 4;
+  uint32 gid = 5;
+  map<string, ProtoQuota> quotas = 6;
+  bool strict = 7;
+  bool repair = 8;
+  bool create = 9;
+}
+message HandleQuotaResponse { uint32 errno = 1; }
+
+message ScanUserGroupUsageRequest { MetaContext ctx = 1; }
+message ScanUserGroupUsageResponse { uint32 errno = 1; }
+
+message ChrootRequest {
+  MetaContext ctx = 1;
+  string subdir = 2;
+}
+message ChrootResponse { uint32 errno = 1; }
+
+message CleanupTrashBeforeRequest {
+  MetaContext ctx = 1;
+  int64 edge = 2;
+}
+message CleanupTrashBeforeResponse {
+  uint32 errno = 1;
+  int64 deleted_files = 2;
+}
+
+message CleanupDetachedNodesBeforeRequest {
+  MetaContext ctx = 1;
+  int64 edge = 2;
+}
+message CleanupDetachedNodesBeforeResponse { uint32 errno = 1; }
+
+// ScanDeletedObject streaming messages
+message ScanDeletedObjectRequest {
+  MetaContext ctx = 1;
+  bool scan_trash_slices = 2;
+  bool scan_pending_slices = 3;
+  bool scan_trash_files = 4;
+  bool scan_pending_files = 5;
+}
+
+message ScanDeletedObjectResponse {
+  uint32 errno = 1;
+  uint32 type = 2;
+  oneof data {
+    TrashSlicesData trash_slices = 3;
+    PendingSliceData pending_slice = 4;
+    TrashFileData trash_file = 5;
+    PendingFileData pending_file = 6;
+  }
+}
+
+message TrashSlicesData {
+  repeated ProtoSlice slices = 1;
+  int64 timestamp = 2;
+}
+
+message PendingSliceData {
+  uint64 id = 1;
+  uint32 size = 2;
+}
+
+message TrashFileData {
+  uint64 inode = 1;
+  uint64 size = 2;
+  int64 timestamp = 3;
+}
+
+message PendingFileData {
+  uint64 inode = 1;
+  uint64 size = 2;
+  int64 timestamp = 3;
+}

@@ -27,9 +27,13 @@ __pycache__
 
 # temp
 pkg/meta/badger
+pkg/meta/test_badger
 pkg/meta/testdata
+pkg/meta/jfs-load-dump
+pkg/meta/*.db
 *.dump
 *.out
+cover/
 
 # gen
 /juicefs

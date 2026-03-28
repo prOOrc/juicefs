@@ -869,7 +869,15 @@ func installHandler(m meta.Meta, mp string, v *vfs.VFS, blob object.ObjectStorag
 				logger.Errorf("exit after receiving signal %s, but umount does not finish in 30 seconds, force exit", sig)
 				os.Exit(meta.UmountCode)
 			}()
-			go func() { _ = doUmount(mp, true) }()
+			go func() {
+				_ = doUmount(mp, true)
+				// Shutdown metadata client to stop heartbeat and close connections
+				logger.Debugf("Shutting down metadata client...")
+				if err := m.Shutdown(); err != nil {
+					logger.Errorf("Error shutting down metadata client: %v", err)
+				}
+				logger.Debugf("Metadata client shutdown complete")
+			}()
 		}
 	}()
 }
@@ -1066,4 +1074,3 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 		logger.Fatalf("fuse: %s", err)
 	}
 }
-
