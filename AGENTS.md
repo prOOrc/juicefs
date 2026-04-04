@@ -172,13 +172,41 @@ Use build tags for optional features:
 - `nogateway`, `nowebdav`, etc. for excluding features
 - Platform-specific: `_linux.go`, `_windows.go`, `_darwin.go`
 
-## Key Packages
-- `pkg/meta`: Metadata engine implementations (Redis, SQL, KV stores)
-- `pkg/fs`: FUSE filesystem implementation
-- `pkg/chunk`: Data chunk management
-- `pkg/object`: Object storage backends
-- `pkg/utils`: Utilities (logging, errors, helpers)
-- `cmd/`: CLI commands
+## Architecture
+
+JuiceFS is a distributed filesystem with three primary layers:
+
+**1. Access Layer** (`cmd/`, `pkg/fuse/`, `pkg/vfs/`, `pkg/gateway/`)
+- CLI entry: `main.go` → `cmd.Main()` using `urfave/cli/v2`
+- 26 CLI commands including `mount`, `gateway`, `webdav`, `sync`, `gc`, `fsck`, `dump`, `load`
+- FUSE mount via `hanwen/go-fuse/v2`; S3-compatible gateway via MinIO; WebDAV server
+
+**2. Metadata Layer** (`pkg/meta/`)
+- `interface.go` defines the `Meta` interface — all filesystem operations go through it
+- Pluggable backends: Redis, MySQL, PostgreSQL, SQLite, TiKV, BadgerDB, FoundationDB, Etcd
+- `base.go` provides shared logic; each backend (e.g. `redis.go`, `sql.go`, `badger.go`) implements the `Meta` interface
+- `base_test.go` contains the core test suite used across all backends
+
+**3. Data Layer** (`pkg/chunk/`, `pkg/object/`, `pkg/compress/`)
+- Files split into Chunks (64 MiB default) → Slices → Blocks (4 MiB default)
+- Blocks stored in object storage; metadata stored in a metadata engine
+- `pkg/object/interface.go` abstracts over S3, Azure, GCS, Alibaba OSS, Ceph, MinIO, and many more
+- `pkg/compress/` provides LZ4 and Zstandard compression
+
+**Key packages:**
+
+| Package | Role |
+|---|---|
+| `pkg/meta` | Metadata interface + all backend implementations |
+| `pkg/fs` | Core FS logic bridging VFS and chunk/meta layers |
+| `pkg/vfs` | Virtual filesystem abstraction |
+| `pkg/fuse` | FUSE mount integration |
+| `pkg/chunk` | Chunk management, caching, read/write pipeline |
+| `pkg/object` | Object storage abstraction layer |
+| `pkg/gateway` | S3-compatible HTTP gateway |
+| `pkg/sync` | Cross-filesystem synchronization |
+| `pkg/acl` | Access control lists |
+| `pkg/metric` | Prometheus metrics |
 
 ## Common Patterns
 
@@ -203,6 +231,10 @@ const (
     maxSymCacheNum = int32(10000)
 )
 ```
+
+## CI/CD
+
+Tests run in GitHub Actions (`unittests.yml`) on `ubuntu-22.04` with external services (Redis, MySQL, PostgreSQL, TiKV, Etcd, MinIO, SFTP, CIFS, NFS, Gluster, HDFS). Coverage is tracked to S3-compatible storage. Integration tests for S3 gateway and WebDAV are in `integration/Makefile`.
 
 ## Contributing
 - Search existing issues before starting work
