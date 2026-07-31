@@ -1,0 +1,73 @@
+/*
+ * JuiceFS, Copyright 2021 Juicedata, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+syntax = "proto3";
+package pb;
+option go_package = "./pb";
+
+import "meta_common.proto";
+
+// =====================================================
+// Lifecycle Request/Response Messages
+// =====================================================
+
+message InitRequest {
+  ProtoFormat format = 1;
+  bool force = 2;
+}
+message InitResponse { uint32 errno = 1; }
+
+message LoadRequest { bool check_version = 1; }
+message LoadResponse {
+  uint32 errno = 1;
+  ProtoFormat format = 2;
+}
+
+message NewSessionRequest { bool record = 1; }
+message NewSessionResponse { 
+  uint32 errno = 1;
+  uint64 sid = 2;
+}
+
+message CloseSessionRequest { }
+message CloseSessionResponse { uint32 errno = 1; }
+
+message FlushSessionRequest { }
+message FlushSessionResponse { uint32 errno = 1; }
+
+message ShutdownRequest { }
+message ShutdownResponse { uint32 errno = 1; }
+
+message ResetRequest { }
+message ResetResponse { uint32 errno = 1; }
+
+message GetSessionRequest {
+  uint64 sid = 1;
+  bool detail = 2;
+}
+message GetSessionResponse {
+  uint32 errno = 1;
+  ProtoSession session = 2;
+}
+
+message ListSessionsRequest { }
+message ListSessionsResponse {
+  uint32 errno = 1;
+  repeated ProtoSession sessions = 2;
+}
+
+message CleanStaleSessionsRequest { MetaContext ctx = 1; }
+message CleanStaleSessionsResponse { uint32 errno = 1; }

@@ -1,0 +1,68 @@
+services:
+  kafka:
+    image: redpandadata/redpanda:v22.2.7
+    network_mode: host
+    command:
+      - redpanda
+      - start
+      - --smp
+      - '1'
+      - --reserve-memory
+      - 0M
+      - --overprovisioned
+      - --node-id
+      - '0'
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://localhost:29092,OUTSIDE://localhost:9092
+      - --pandaproxy-addr
+      - PLAINTEXT://0.0.0.0:28082,OUTSIDE://0.0.0.0:8082
+      - --advertise-pandaproxy-addr
+      - PLAINTEXT://localhost:28082,OUTSIDE://localhost:8082
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:master
+    network_mode: host
+    restart: always
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=localhost:29092
+    depends_on:
+      - "kafka"
+
+  redis:
+    image: redis
+    network_mode: host
+    restart: always
+
+  pd:
+    image: pingcap/pd:latest
+    network_mode: host
+    command:
+      - --name=pd
+      - --data-dir=/data
+      - --client-urls=http://0.0.0.0:2379
+      - --peer-urls=http://0.0.0.0:2380
+      - --advertise-client-urls=http://127.0.0.1:2379
+      - --advertise-peer-urls=http://127.0.0.1:2380
+      - --initial-cluster=pd=http://127.0.0.1:2380
+
+  tikv:
+    image: pingcap/tikv:latest
+    network_mode: host
+    command:
+      - --addr=0.0.0.0:20160
+      - --advertise-addr=127.0.0.1:20160
+      - --pd=127.0.0.1:2379
+      - --data-dir=/data
+    depends_on:
+      - pd
+
+  mysql:
+    image: mysql:8
+    network_mode: host
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_DATABASE: dev
+    command: --bind-address=0.0.0.0
