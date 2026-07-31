@@ -34,6 +34,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -490,7 +491,7 @@ func format(c *cli.Context) error {
 				format.KerbConf = readKerbConf(c.String(flag))
 			}
 		}
-	} else if strings.HasPrefix(err.Error(), "database is not formatted") {
+	} else if strings.HasPrefix(err.Error(), "database is not formatted") || err == syscall.ENOENT {
 		create = true
 		format = &meta.Format{
 			Name:             name,
