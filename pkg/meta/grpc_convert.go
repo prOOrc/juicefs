@@ -21,6 +21,7 @@ import (
 
 	aclAPI "github.com/juicedata/juicefs/pkg/acl"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
+	"github.com/juicedata/juicefs/pkg/object"
 )
 
 // Attr conversion
@@ -276,7 +277,23 @@ func FormatToProtoPtr(f *Format) *pb.ProtoFormat {
 		RangerRestUrl:    f.RangerRestUrl,
 		RangerService:    f.RangerService,
 		KerbConf:         f.KerbConf,
+		Tiers:            tiersToProto(f.Tiers),
 	}
+}
+
+func tiersToProto(tiers map[uint8]object.Tier) []*pb.ProtoTier {
+	if tiers == nil {
+		return nil
+	}
+	result := make([]*pb.ProtoTier, 0, len(tiers))
+	for id, tier := range tiers {
+		result = append(result, &pb.ProtoTier{
+			Id:  uint32(id),
+			Sc:  tier.Sc,
+			Tag: tier.Tag,
+		})
+	}
+	return result
 }
 
 func ProtoToFormat(p *pb.ProtoFormat) *Format {
@@ -313,7 +330,20 @@ func ProtoToFormat(p *pb.ProtoFormat) *Format {
 		RangerRestUrl:    p.RangerRestUrl,
 		RangerService:    p.RangerService,
 		KerbConf:         p.KerbConf,
+		Tiers:            tiersFromProto(p.Tiers),
 	}
+}
+
+func tiersFromProto(tiers []*pb.ProtoTier) map[uint8]object.Tier {
+	result := make(map[uint8]object.Tier, len(tiers))
+	for _, t := range tiers {
+		result[uint8(t.Id)] = object.Tier{
+			ID:  uint8(t.Id),
+			Sc:  t.Sc,
+			Tag: t.Tag,
+		}
+	}
+	return result
 }
 
 // Quota conversion
