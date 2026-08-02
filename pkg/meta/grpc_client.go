@@ -161,6 +161,9 @@ func (m *grpcMeta) Shutdown() error {
 
 // withSessionID adds session ID to gRPC metadata
 func (m *grpcMeta) withSessionID(ctx context.Context) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if m.sid == 0 {
 		return ctx
 	}

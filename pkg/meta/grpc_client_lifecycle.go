@@ -192,3 +192,29 @@ func (m *grpcMeta) CleanupTrashBefore(ctx Context, edge time.Time, increProgress
 // CleanupDetachedNodesBefore is not supported by gRPC client
 func (m *grpcMeta) CleanupDetachedNodesBefore(ctx Context, edge time.Time, increProgress func()) {
 }
+
+// ScanChangelog scans changelog entries starting from the given version
+func (m *grpcMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64, entry string) error) error {
+	c := m.grpcContext(ctx)
+	stream, err := m.client.ScanChangelog(m.withSessionID(ctx), &pb.ScanChangelogRequest{
+		Ctx:  c,
+		Last: last,
+	})
+	if err != nil {
+		return err
+	}
+	for {
+		resp, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if resp.GetErrno() != 0 {
+			return syscall.Errno(resp.GetErrno())
+		}
+		for _, entry := range resp.Entries {
+			if err := handler(entry.Ver, entry.Data); err != nil {
+				return err
+			}
+		}
+	}
+}
