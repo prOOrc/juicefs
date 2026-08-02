@@ -139,6 +139,14 @@ message ProtoFormat {
   string ranger_rest_url = 27;
   string ranger_service = 28;
   string kerb_conf = 29;
+  repeated ProtoTier tiers = 30;
+}
+
+// ProtoTier represents a storage tier
+message ProtoTier {
+  uint32 id = 1;
+  string sc = 2;
+  string tag = 3;
 }
 
 // SliceMapEntry for map of inodes to slices
