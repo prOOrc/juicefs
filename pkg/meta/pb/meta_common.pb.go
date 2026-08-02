@@ -833,6 +833,7 @@ type ProtoFormat struct {
 	RangerRestUrl    string                 `protobuf:"bytes,27,opt,name=ranger_rest_url,json=rangerRestUrl,proto3" json:"ranger_rest_url,omitempty"`
 	RangerService    string                 `protobuf:"bytes,28,opt,name=ranger_service,json=rangerService,proto3" json:"ranger_service,omitempty"`
 	KerbConf         string                 `protobuf:"bytes,29,opt,name=kerb_conf,json=kerbConf,proto3" json:"kerb_conf,omitempty"`
+	Tiers            []*ProtoTier           `protobuf:"bytes,30,rep,name=tiers,proto3" json:"tiers,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -1070,6 +1071,74 @@ func (x *ProtoFormat) GetKerbConf() string {
 	return ""
 }
 
+func (x *ProtoFormat) GetTiers() []*ProtoTier {
+	if x != nil {
+		return x.Tiers
+	}
+	return nil
+}
+
+// ProtoTier represents a storage tier
+type ProtoTier struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Sc            string                 `protobuf:"bytes,2,opt,name=sc,proto3" json:"sc,omitempty"`
+	Tag           string                 `protobuf:"bytes,3,opt,name=tag,proto3" json:"tag,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProtoTier) Reset() {
+	*x = ProtoTier{}
+	mi := &file_meta_common_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProtoTier) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProtoTier) ProtoMessage() {}
+
+func (x *ProtoTier) ProtoReflect() protoreflect.Message {
+	mi := &file_meta_common_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProtoTier.ProtoReflect.Descriptor instead.
+func (*ProtoTier) Descriptor() ([]byte, []int) {
+	return file_meta_common_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ProtoTier) GetId() uint32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *ProtoTier) GetSc() string {
+	if x != nil {
+		return x.Sc
+	}
+	return ""
+}
+
+func (x *ProtoTier) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
 // SliceMapEntry for map of inodes to slices
 type SliceMapEntry struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1081,7 +1150,7 @@ type SliceMapEntry struct {
 
 func (x *SliceMapEntry) Reset() {
 	*x = SliceMapEntry{}
-	mi := &file_meta_common_proto_msgTypes[10]
+	mi := &file_meta_common_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1093,7 +1162,7 @@ func (x *SliceMapEntry) String() string {
 func (*SliceMapEntry) ProtoMessage() {}
 
 func (x *SliceMapEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_common_proto_msgTypes[10]
+	mi := &file_meta_common_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1106,7 +1175,7 @@ func (x *SliceMapEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SliceMapEntry.ProtoReflect.Descriptor instead.
 func (*SliceMapEntry) Descriptor() ([]byte, []int) {
-	return file_meta_common_proto_rawDescGZIP(), []int{10}
+	return file_meta_common_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *SliceMapEntry) GetInode() uint64 {
@@ -1136,7 +1205,7 @@ type ProtoSummary struct {
 
 func (x *ProtoSummary) Reset() {
 	*x = ProtoSummary{}
-	mi := &file_meta_common_proto_msgTypes[11]
+	mi := &file_meta_common_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1148,7 +1217,7 @@ func (x *ProtoSummary) String() string {
 func (*ProtoSummary) ProtoMessage() {}
 
 func (x *ProtoSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_common_proto_msgTypes[11]
+	mi := &file_meta_common_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1161,7 +1230,7 @@ func (x *ProtoSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProtoSummary.ProtoReflect.Descriptor instead.
 func (*ProtoSummary) Descriptor() ([]byte, []int) {
-	return file_meta_common_proto_rawDescGZIP(), []int{11}
+	return file_meta_common_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ProtoSummary) GetLength() uint64 {
@@ -1208,7 +1277,7 @@ type ProtoTreeSummary struct {
 
 func (x *ProtoTreeSummary) Reset() {
 	*x = ProtoTreeSummary{}
-	mi := &file_meta_common_proto_msgTypes[12]
+	mi := &file_meta_common_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1220,7 +1289,7 @@ func (x *ProtoTreeSummary) String() string {
 func (*ProtoTreeSummary) ProtoMessage() {}
 
 func (x *ProtoTreeSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_common_proto_msgTypes[12]
+	mi := &file_meta_common_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1233,7 +1302,7 @@ func (x *ProtoTreeSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProtoTreeSummary.ProtoReflect.Descriptor instead.
 func (*ProtoTreeSummary) Descriptor() ([]byte, []int) {
-	return file_meta_common_proto_rawDescGZIP(), []int{12}
+	return file_meta_common_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ProtoTreeSummary) GetInode() uint64 {
@@ -1298,7 +1367,7 @@ type ProtoQuota struct {
 
 func (x *ProtoQuota) Reset() {
 	*x = ProtoQuota{}
-	mi := &file_meta_common_proto_msgTypes[13]
+	mi := &file_meta_common_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1310,7 +1379,7 @@ func (x *ProtoQuota) String() string {
 func (*ProtoQuota) ProtoMessage() {}
 
 func (x *ProtoQuota) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_common_proto_msgTypes[13]
+	mi := &file_meta_common_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1323,7 +1392,7 @@ func (x *ProtoQuota) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProtoQuota.ProtoReflect.Descriptor instead.
 func (*ProtoQuota) Descriptor() ([]byte, []int) {
-	return file_meta_common_proto_rawDescGZIP(), []int{13}
+	return file_meta_common_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ProtoQuota) GetMaxSpace() int64 {
@@ -1364,7 +1433,7 @@ type DirHandlerHandle struct {
 
 func (x *DirHandlerHandle) Reset() {
 	*x = DirHandlerHandle{}
-	mi := &file_meta_common_proto_msgTypes[14]
+	mi := &file_meta_common_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1376,7 +1445,7 @@ func (x *DirHandlerHandle) String() string {
 func (*DirHandlerHandle) ProtoMessage() {}
 
 func (x *DirHandlerHandle) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_common_proto_msgTypes[14]
+	mi := &file_meta_common_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1389,7 +1458,7 @@ func (x *DirHandlerHandle) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DirHandlerHandle.ProtoReflect.Descriptor instead.
 func (*DirHandlerHandle) Descriptor() ([]byte, []int) {
-	return file_meta_common_proto_rawDescGZIP(), []int{14}
+	return file_meta_common_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *DirHandlerHandle) GetHandleId() uint64 {
@@ -1412,7 +1481,7 @@ type ProtoACLRule struct {
 
 func (x *ProtoACLRule) Reset() {
 	*x = ProtoACLRule{}
-	mi := &file_meta_common_proto_msgTypes[15]
+	mi := &file_meta_common_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1424,7 +1493,7 @@ func (x *ProtoACLRule) String() string {
 func (*ProtoACLRule) ProtoMessage() {}
 
 func (x *ProtoACLRule) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_common_proto_msgTypes[15]
+	mi := &file_meta_common_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1437,7 +1506,7 @@ func (x *ProtoACLRule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProtoACLRule.ProtoReflect.Descriptor instead.
 func (*ProtoACLRule) Descriptor() ([]byte, []int) {
-	return file_meta_common_proto_rawDescGZIP(), []int{15}
+	return file_meta_common_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ProtoACLRule) GetId() uint32 {
@@ -1547,7 +1616,7 @@ const file_meta_common_proto_rawDesc = "" +
 	"\x04info\x18\x03 \x01(\v2\x14.pb.ProtoSessionInfoR\x04info\x12\x1c\n" +
 	"\tsustained\x18\x04 \x03(\x04R\tsustained\x12&\n" +
 	"\x06flocks\x18\x05 \x03(\v2\x0e.pb.ProtoFlockR\x06flocks\x12&\n" +
-	"\x06plocks\x18\x06 \x03(\v2\x0e.pb.ProtoPlockR\x06plocks\"\xc0\a\n" +
+	"\x06plocks\x18\x06 \x03(\v2\x0e.pb.ProtoPlockR\x06plocks\"\xe5\a\n" +
 	"\vProtoFormat\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04uuid\x18\x02 \x01(\tR\x04uuid\x12\x18\n" +
@@ -1585,7 +1654,12 @@ const file_meta_common_proto_rawDesc = "" +
 	"enable_acl\x18\x1a \x01(\bR\tenableAcl\x12&\n" +
 	"\x0franger_rest_url\x18\x1b \x01(\tR\rrangerRestUrl\x12%\n" +
 	"\x0eranger_service\x18\x1c \x01(\tR\rrangerService\x12\x1b\n" +
-	"\tkerb_conf\x18\x1d \x01(\tR\bkerbConf\"M\n" +
+	"\tkerb_conf\x18\x1d \x01(\tR\bkerbConf\x12#\n" +
+	"\x05tiers\x18\x1e \x03(\v2\r.pb.ProtoTierR\x05tiers\"=\n" +
+	"\tProtoTier\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\x12\x0e\n" +
+	"\x02sc\x18\x02 \x01(\tR\x02sc\x12\x10\n" +
+	"\x03tag\x18\x03 \x01(\tR\x03tag\"M\n" +
 	"\rSliceMapEntry\x12\x14\n" +
 	"\x05inode\x18\x01 \x01(\x04R\x05inode\x12&\n" +
 	"\x06slices\x18\x02 \x03(\v2\x0e.pb.ProtoSliceR\x06slices\"d\n" +
@@ -1631,7 +1705,7 @@ func file_meta_common_proto_rawDescGZIP() []byte {
 	return file_meta_common_proto_rawDescData
 }
 
-var file_meta_common_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_meta_common_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_meta_common_proto_goTypes = []any{
 	(*MetaContext)(nil),      // 0: pb.MetaContext
 	(*ProtoAttr)(nil),        // 1: pb.ProtoAttr
@@ -1643,12 +1717,13 @@ var file_meta_common_proto_goTypes = []any{
 	(*ProtoPlock)(nil),       // 7: pb.ProtoPlock
 	(*ProtoSession)(nil),     // 8: pb.ProtoSession
 	(*ProtoFormat)(nil),      // 9: pb.ProtoFormat
-	(*SliceMapEntry)(nil),    // 10: pb.SliceMapEntry
-	(*ProtoSummary)(nil),     // 11: pb.ProtoSummary
-	(*ProtoTreeSummary)(nil), // 12: pb.ProtoTreeSummary
-	(*ProtoQuota)(nil),       // 13: pb.ProtoQuota
-	(*DirHandlerHandle)(nil), // 14: pb.DirHandlerHandle
-	(*ProtoACLRule)(nil),     // 15: pb.ProtoACLRule
+	(*ProtoTier)(nil),        // 10: pb.ProtoTier
+	(*SliceMapEntry)(nil),    // 11: pb.SliceMapEntry
+	(*ProtoSummary)(nil),     // 12: pb.ProtoSummary
+	(*ProtoTreeSummary)(nil), // 13: pb.ProtoTreeSummary
+	(*ProtoQuota)(nil),       // 14: pb.ProtoQuota
+	(*DirHandlerHandle)(nil), // 15: pb.DirHandlerHandle
+	(*ProtoACLRule)(nil),     // 16: pb.ProtoACLRule
 }
 var file_meta_common_proto_depIdxs = []int32{
 	1,  // 0: pb.ProtoEntry.attr:type_name -> pb.ProtoAttr
@@ -1656,13 +1731,14 @@ var file_meta_common_proto_depIdxs = []int32{
 	4,  // 2: pb.ProtoSession.info:type_name -> pb.ProtoSessionInfo
 	5,  // 3: pb.ProtoSession.flocks:type_name -> pb.ProtoFlock
 	7,  // 4: pb.ProtoSession.plocks:type_name -> pb.ProtoPlock
-	2,  // 5: pb.SliceMapEntry.slices:type_name -> pb.ProtoSlice
-	12, // 6: pb.ProtoTreeSummary.children:type_name -> pb.ProtoTreeSummary
-	7,  // [7:7] is the sub-list for method output_type
-	7,  // [7:7] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	10, // 5: pb.ProtoFormat.tiers:type_name -> pb.ProtoTier
+	2,  // 6: pb.SliceMapEntry.slices:type_name -> pb.ProtoSlice
+	13, // 7: pb.ProtoTreeSummary.children:type_name -> pb.ProtoTreeSummary
+	8,  // [8:8] is the sub-list for method output_type
+	8,  // [8:8] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_meta_common_proto_init() }
@@ -1676,7 +1752,7 @@ func file_meta_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meta_common_proto_rawDesc), len(file_meta_common_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
