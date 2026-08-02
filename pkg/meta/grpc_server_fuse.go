@@ -52,7 +52,7 @@ func (s *MetaProxyServer) Resolve(ctx context.Context, req *pb.ResolveRequest) (
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var inode Ino
 	var attr Attr
-	errno := s.meta.Resolve(mctx, Ino(req.Parent), req.Path, &inode, &attr)
+	errno := s.meta.Resolve(mctx, Ino(req.Parent), req.Path, &inode, &attr, req.Force)
 	return &pb.ResolveResponse{
 		Errno: uint32(errno),
 		Inode: uint64(inode),

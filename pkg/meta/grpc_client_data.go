@@ -632,7 +632,7 @@ func (m *grpcMeta) Unlk(ctx Context, inode Ino, owner uint64, ltype uint32, star
 }
 
 // HandleQuota handles quota operations
-func (m *grpcMeta) HandleQuota(ctx Context, cmd uint8, dpath string, uid, gid uint32, quotas map[string]*Quota, strict, repair, create bool) error {
+func (m *grpcMeta) HandleQuota(ctx Context, cmd uint8, qkey string, qtype uint32, quotas map[string]*Quota, strict, repair, create bool) error {
 	c := m.grpcContext(ctx)
 	protoQuotas := make(map[string]*pb.ProtoQuota, len(quotas))
 	for k, v := range quotas {
@@ -641,9 +641,8 @@ func (m *grpcMeta) HandleQuota(ctx Context, cmd uint8, dpath string, uid, gid ui
 	req := &pb.HandleQuotaRequest{
 		Ctx:    c,
 		Cmd:    uint32(cmd),
-		Dpath:  dpath,
-		Uid:    uid,
-		Gid:    gid,
+		Qkey:   qkey,
+		Qtype:  uint32(qtype),
 		Quotas: protoQuotas,
 		Strict: strict,
 		Repair: repair,

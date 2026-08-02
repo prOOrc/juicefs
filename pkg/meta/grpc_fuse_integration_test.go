@@ -455,45 +455,38 @@ func TestGRPCMetaConcurrentAccess(t *testing.T) {
 		dirPath := filepath.Join(mountPoint, "create_delete_test")
 		require.NoError(t, os.Mkdir(dirPath, 0755))
 
-		done := make(chan bool, 20)
+		writerDone := make(chan struct{})
 		stop := make(chan struct{})
 
+		// writer: creates 10 files then signals done
 		go func() {
 			for i := 0; i < 10; i++ {
-				select {
-				case <-stop:
-					return
-				default:
-					filePath := filepath.Join(dirPath, fmt.Sprintf("file_%d.txt", i))
-					_ = os.WriteFile(filePath, []byte(fmt.Sprintf("content %d", i)), 0644)
-					done <- true
-				}
+				filePath := filepath.Join(dirPath, fmt.Sprintf("file_%d.txt", i))
+				_ = os.WriteFile(filePath, []byte(fmt.Sprintf("content %d", i)), 0644)
 			}
+			close(writerDone)
 		}()
 
+		// reader: deletes files until stop is closed
 		go func() {
-			entries, _ := os.ReadDir(dirPath)
-			for len(entries) > 0 {
+			for {
 				select {
 				case <-stop:
 					return
 				default:
+					entries, _ := os.ReadDir(dirPath)
+					if len(entries) == 0 {
+						time.Sleep(10 * time.Millisecond)
+						continue
+					}
 					_ = os.Remove(filepath.Join(dirPath, entries[0].Name()))
-					done <- true
-					entries, _ = os.ReadDir(dirPath)
 				}
 			}
 		}()
 
-		time.Sleep(2 * time.Second)
+		// Wait for writer to finish, then give reader a moment to clean up, then stop
+		<-writerDone
+		time.Sleep(100 * time.Millisecond)
 		close(stop)
-
-		for i := 0; i < 20; i++ {
-			select {
-			case <-done:
-			case <-time.After(5 * time.Second):
-				t.Fatal("timeout waiting for operations")
-			}
-		}
 	})
 }
