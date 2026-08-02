@@ -139,7 +139,7 @@ func (s *MetaProxyServer) HandleQuota(ctx context.Context, req *pb.HandleQuotaRe
 	for k, v := range req.Quotas {
 		quotas[k] = ProtoToQuota(v)
 	}
-	err := s.meta.HandleQuota(mctx, uint8(req.Cmd), req.Dpath, req.Uid, req.Gid, quotas,
+	err := s.meta.HandleQuota(mctx, uint8(req.Cmd), req.Qkey, uint32(req.Qtype), quotas,
 		req.Strict, req.Repair, req.Create)
 	var errno syscall.Errno
 	if err != nil {
@@ -245,7 +245,7 @@ func (s *MetaProxyServer) ScanDeletedObject(req *pb.ScanDeletedObjectRequest, st
 	if req.ScanTrashFiles {
 		err := s.meta.ScanDeletedObject(mctx,
 			nil, nil,
-			func(inode Ino, size uint64, ts time.Time) (bool, error) {
+			func(inode Ino, size uint64, ts time.Time, count int64) (bool, error) {
 				return true, stream.Send(&pb.ScanDeletedObjectResponse{
 					Type: 3,
 					Data: &pb.ScanDeletedObjectResponse_TrashFile{
@@ -253,6 +253,7 @@ func (s *MetaProxyServer) ScanDeletedObject(req *pb.ScanDeletedObjectRequest, st
 							Inode:     uint64(inode),
 							Size:      size,
 							Timestamp: ts.Unix(),
+							Count:     count,
 						},
 					},
 				})
@@ -290,4 +291,14 @@ func (s *MetaProxyServer) ScanDeletedObject(req *pb.ScanDeletedObjectRequest, st
 	}
 
 	return nil
+}
+
+func (s *MetaProxyServer) ScanChangelog(req *pb.ScanChangelogRequest, stream pb.MetaService_ScanChangelogServer) error {
+	ctx := stream.Context()
+	mctx := s.metaCtx(ctx, req.Ctx)
+	return s.meta.ScanChangelog(mctx, req.Last, func(ver int64, entry string) error {
+		return stream.Send(&pb.ScanChangelogResponse{
+			Entries: []*pb.ChangelogEntry{{Ver: ver, Data: entry}},
+		})
+	})
 }

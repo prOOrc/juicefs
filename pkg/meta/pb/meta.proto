@@ -119,6 +119,7 @@ service MetaService {
   rpc CleanupTrashBefore(CleanupTrashBeforeRequest) returns (CleanupTrashBeforeResponse);
   rpc CleanupDetachedNodesBefore(CleanupDetachedNodesBeforeRequest) returns (CleanupDetachedNodesBeforeResponse);
   rpc ScanDeletedObject(ScanDeletedObjectRequest) returns (stream ScanDeletedObjectResponse);
+  rpc ScanChangelog(ScanChangelogRequest) returns (stream ScanChangelogResponse);
 
   // --- DirHandler (stateful) ---
   rpc NewDirHandler(NewDirHandlerRequest) returns (NewDirHandlerResponse);
@@ -132,6 +133,22 @@ service MetaService {
   rpc LoadMeta(stream LoadMetaChunk) returns (LoadMetaResponse);
   rpc DumpMetaV2(DumpMetaV2Request) returns (stream DumpMetaV2Chunk);
   rpc LoadMetaV2(stream LoadMetaV2Chunk) returns (LoadMetaV2Response);
+}
+
+// ScanChangelog messages
+message ScanChangelogRequest {
+  MetaContext ctx = 1;
+  int64 last = 2;
+}
+
+message ChangelogEntry {
+  int64 ver = 1;
+  string data = 2;
+}
+
+message ScanChangelogResponse {
+  uint32 errno = 1;
+  repeated ChangelogEntry entries = 2;
 }
 
 // =====================================================
@@ -166,6 +183,7 @@ message ResolveRequest {
   MetaContext ctx = 1;
   uint64 parent = 2;
   string path = 3;
+  bool force = 4;
 }
 message ResolveResponse {
   uint32 errno = 1;

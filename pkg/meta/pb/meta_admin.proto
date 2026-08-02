@@ -138,13 +138,12 @@ message ListSlicesResponse {
 message HandleQuotaRequest {
   MetaContext ctx = 1;
   uint32 cmd = 2;
-  string dpath = 3;
-  uint32 uid = 4;
-  uint32 gid = 5;
-  map<string, ProtoQuota> quotas = 6;
-  bool strict = 7;
-  bool repair = 8;
-  bool create = 9;
+  string qkey = 3;
+  uint32 qtype = 4;
+  map<string, ProtoQuota> quotas = 5;
+  bool strict = 6;
+  bool repair = 7;
+  bool create = 8;
 }
 message HandleQuotaResponse { uint32 errno = 1; }
 
@@ -206,6 +205,7 @@ message TrashFileData {
   uint64 inode = 1;
   uint64 size = 2;
   int64 timestamp = 3;
+  int64 count = 4;
 }
 
 message PendingFileData {

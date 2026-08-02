@@ -101,12 +101,13 @@ func (m *grpcMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 }
 
 // Resolve fetches the inode and attributes for an entry identified by the given path
-func (m *grpcMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr) syscall.Errno {
+func (m *grpcMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, attr *Attr, force bool) syscall.Errno {
 	c := m.grpcContext(ctx)
 	req := &pb.ResolveRequest{
 		Ctx:    c,
 		Parent: uint64(parent),
 		Path:   path,
+		Force:  force,
 	}
 	resp, err := m.client.Resolve(m.withSessionID(ctx), req)
 	if err != nil {

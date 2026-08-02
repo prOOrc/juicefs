@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -49,7 +50,7 @@ func TestGRPCMetaIntegrationFullCycle(t *testing.T) {
 	defer rdb.Close()
 
 	// Clean up Redis
-	_ = rdb.FlushDB(nil)
+	_ = rdb.FlushDB(context.Background())
 
 	// Create temp directory for object storage
 	testDir := t.TempDir()
@@ -133,7 +134,7 @@ func TestGRPCMetaSessionManagement(t *testing.T) {
 		DB:   15,
 	})
 	defer rdb.Close()
-	_ = rdb.FlushDB(nil)
+	_ = rdb.FlushDB(context.Background())
 
 	testDir := t.TempDir()
 
@@ -189,7 +190,7 @@ func TestGRPCMetaConcurrentOperations(t *testing.T) {
 		DB:   16,
 	})
 	defer rdb.Close()
-	_ = rdb.FlushDB(nil)
+	_ = rdb.FlushDB(context.Background())
 
 	testDir := t.TempDir()
 
@@ -267,7 +268,7 @@ func TestGRPCMetaCacheInvalidation(t *testing.T) {
 		DB:   17,
 	})
 	defer rdb.Close()
-	_ = rdb.FlushDB(nil)
+	_ = rdb.FlushDB(context.Background())
 
 	testDir := t.TempDir()
 
@@ -336,7 +337,7 @@ func TestGRPCMetaGracefulShutdown(t *testing.T) {
 		DB:   18,
 	})
 	defer rdb.Close()
-	_ = rdb.FlushDB(nil)
+	_ = rdb.FlushDB(context.Background())
 
 	testDir := t.TempDir()
 
@@ -414,7 +415,7 @@ func TestGRPCMetaDirHandlerIntegration(t *testing.T) {
 		DB:   19,
 	})
 	defer rdb.Close()
-	_ = rdb.FlushDB(nil)
+	_ = rdb.FlushDB(context.Background())
 
 	testDir := t.TempDir()
 
