@@ -39,9 +39,7 @@ func TestGRPCMetaIntegrationFullCycle(t *testing.T) {
 	}
 
 	// Start Redis for metadata
-	redisPort := 16379
-	redisURL := "redis://127.0.0.1:" + string(rune('0'+redisPort%10)) + string(rune('0'+(redisPort%100)/10)) + string(rune('0'+(redisPort%1000)/100)) + "/14"
-	redisURL = "redis://127.0.0.1:6379/14"
+	redisURL := "redis://127.0.0.1:6379/14"
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr: "127.0.0.1:6379",
@@ -101,11 +99,14 @@ func TestGRPCMetaIntegrationFullCycle(t *testing.T) {
 	assert.NoError(t, err, "Failed to read file")
 	assert.Equal(t, testContent, readContent, "File content mismatch")
 
-	// List directory
+	// List directory - JuiceFS creates internal files (.trash, .config, etc.)
 	entries, err := os.ReadDir(mountPoint)
 	assert.NoError(t, err, "Failed to list directory")
-	assert.Len(t, entries, 1, "Should have one file")
-	assert.Equal(t, "test_file.txt", entries[0].Name())
+	names := make([]string, len(entries))
+	for i, e := range entries {
+		names[i] = e.Name()
+	}
+	assert.Contains(t, names, "test_file.txt", "Should contain test_file.txt")
 
 	// Create directory
 	testDirPath := filepath.Join(mountPoint, "test_dir")
@@ -171,7 +172,7 @@ func TestGRPCMetaSessionManagement(t *testing.T) {
 	var rootAttr Attr
 	errno := meta.GetAttr(nil, 1, &rootAttr)
 	assert.Equal(t, syscall.Errno(0), errno, "GetAttr should succeed")
-	assert.True(t, rootAttr.Mode&syscall.S_IFDIR != 0, "Root should be a directory")
+	assert.Equal(t, uint8(TypeDirectory), rootAttr.Typ, "Root should be a directory (Typ)")
 
 	// Close session
 	err = meta.CloseSession()
@@ -184,10 +185,10 @@ func TestGRPCMetaConcurrentOperations(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	redisURL := "redis://127.0.0.1:6379/16"
+	redisURL := "redis://127.0.0.1:6379/8"
 	rdb := redis.NewClient(&redis.Options{
 		Addr: "127.0.0.1:6379",
-		DB:   16,
+		DB:   8,
 	})
 	defer rdb.Close()
 	_ = rdb.FlushDB(context.Background())
@@ -219,7 +220,7 @@ func TestGRPCMetaConcurrentOperations(t *testing.T) {
 	// Concurrent writes
 	numFiles := 10
 	numWrites := 5
-	errors := make(chan error, numFiles*numWrites)
+	errors := make(chan error, numFiles)
 
 	for i := 0; i < numFiles; i++ {
 		go func(fileIdx int) {
@@ -236,9 +237,9 @@ func TestGRPCMetaConcurrentOperations(t *testing.T) {
 		}(i)
 	}
 
-	// Wait for all writes
+	// Wait for all writers (each sends exactly 1 result)
 	closeErrors := make([]error, 0)
-	for i := 0; i < numFiles*numWrites; i++ {
+	for i := 0; i < numFiles; i++ {
 		if err := <-errors; err != nil {
 			closeErrors = append(closeErrors, err)
 		}
@@ -262,10 +263,10 @@ func TestGRPCMetaCacheInvalidation(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	redisURL := "redis://127.0.0.1:6379/17"
+	redisURL := "redis://127.0.0.1:6379/9"
 	rdb := redis.NewClient(&redis.Options{
 		Addr: "127.0.0.1:6379",
-		DB:   17,
+		DB:   9,
 	})
 	defer rdb.Close()
 	_ = rdb.FlushDB(context.Background())
@@ -331,10 +332,10 @@ func TestGRPCMetaGracefulShutdown(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	redisURL := "redis://127.0.0.1:6379/18"
+	redisURL := "redis://127.0.0.1:6379/10"
 	rdb := redis.NewClient(&redis.Options{
 		Addr: "127.0.0.1:6379",
-		DB:   18,
+		DB:   10,
 	})
 	defer rdb.Close()
 	_ = rdb.FlushDB(context.Background())
@@ -409,10 +410,10 @@ func TestGRPCMetaDirHandlerIntegration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	redisURL := "redis://127.0.0.1:6379/19"
+	redisURL := "redis://127.0.0.1:6379/11"
 	rdb := redis.NewClient(&redis.Options{
 		Addr: "127.0.0.1:6379",
-		DB:   19,
+		DB:   11,
 	})
 	defer rdb.Close()
 	_ = rdb.FlushDB(context.Background())
