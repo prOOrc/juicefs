@@ -25,8 +25,17 @@ import (
 
 // grpcDirHandler implements DirHandler interface for gRPC client
 type grpcDirHandler struct {
+	meta   *grpcMeta
 	client pb.MetaServiceClient
 	handle *pb.DirHandlerHandle
+}
+
+// authCtx returns the context with auth headers, or the original if meta is nil.
+func (h *grpcDirHandler) authCtx(ctx context.Context) context.Context {
+	if h.meta != nil {
+		return h.meta.withAuth(ctx)
+	}
+	return ctx
 }
 
 // List returns directory entries starting from offset
@@ -35,10 +44,15 @@ func (h *grpcDirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno)
 		Handle: h.handle,
 		Offset: int32(offset),
 	}
-	resp, err := h.client.DirHandlerList(ctx, req)
+	resp, err := h.client.DirHandlerList(h.authCtx(ctx), req)
 	if err != nil {
-		logger.Errorf("DirHandlerList error: %v", err)
-		return nil, syscall.EIO
+		if h.meta != nil && isUnauthenticated(err) && h.meta.tryReauthenticate(context.Background()) {
+			resp, err = h.client.DirHandlerList(h.authCtx(ctx), req)
+		}
+		if err != nil {
+			logger.Errorf("DirHandlerList error: %v", err)
+			return nil, syscall.EIO
+		}
 	}
 	if resp.Errno != 0 {
 		return nil, syscall.Errno(resp.Errno)
@@ -54,7 +68,7 @@ func (h *grpcDirHandler) Insert(inode Ino, name string, attr *Attr) {
 		Name:   name,
 		Attr:   AttrToProto(attr),
 	}
-	resp, err := h.client.DirHandlerInsert(context.Background(), req)
+	resp, err := h.client.DirHandlerInsert(h.authCtx(context.Background()), req)
 	if err != nil {
 		logger.Errorf("DirHandlerInsert error: %v", err)
 		return
@@ -70,7 +84,7 @@ func (h *grpcDirHandler) Delete(name string) {
 		Handle: h.handle,
 		Name:   name,
 	}
-	resp, err := h.client.DirHandlerDelete(context.Background(), req)
+	resp, err := h.client.DirHandlerDelete(h.authCtx(context.Background()), req)
 	if err != nil {
 		logger.Errorf("DirHandlerDelete error: %v", err)
 		return
@@ -90,7 +104,7 @@ func (h *grpcDirHandler) Close() {
 	req := &pb.DirHandlerCloseRequest{
 		Handle: h.handle,
 	}
-	resp, err := h.client.DirHandlerClose(context.Background(), req)
+	resp, err := h.client.DirHandlerClose(h.authCtx(context.Background()), req)
 	if err != nil {
 		logger.Errorf("DirHandlerClose error: %v", err)
 		return
