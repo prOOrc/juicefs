@@ -84,7 +84,10 @@ func (s *MetaProxyServer) SetAttr(ctx context.Context, req *pb.SetAttrRequest) (
 	mctx := s.metaCtx(ctx, req.Ctx)
 	attr := ProtoToAttr(req.Attr)
 	errno := s.meta.SetAttr(mctx, Ino(req.Inode), uint16(req.Set), uint8(req.Sggidclearmode), attr)
-	return &pb.SetAttrResponse{Errno: uint32(errno)}, nil
+	return &pb.SetAttrResponse{
+		Errno: uint32(errno),
+		Attr:  AttrToProto(attr),
+	}, nil
 }
 
 func (s *MetaProxyServer) CheckSetAttr(ctx context.Context, req *pb.CheckSetAttrRequest) (*pb.CheckSetAttrResponse, error) {

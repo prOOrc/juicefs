@@ -217,7 +217,10 @@ message SetAttrRequest {
   uint32 sggidclearmode = 4;
   ProtoAttr attr = 5;
 }
-message SetAttrResponse { uint32 errno = 1; }
+message SetAttrResponse {
+  uint32 errno = 1;
+  ProtoAttr attr = 2;
+}
 
 message CheckSetAttrRequest {
   MetaContext ctx = 1;

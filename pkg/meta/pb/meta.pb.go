@@ -872,6 +872,7 @@ func (x *SetAttrRequest) GetAttr() *ProtoAttr {
 type SetAttrResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
+	Attr          *ProtoAttr             `protobuf:"bytes,2,opt,name=attr,proto3" json:"attr,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -911,6 +912,13 @@ func (x *SetAttrResponse) GetErrno() uint32 {
 		return x.Errno
 	}
 	return 0
+}
+
+func (x *SetAttrResponse) GetAttr() *ProtoAttr {
+	if x != nil {
+		return x.Attr
+	}
+	return nil
 }
 
 type CheckSetAttrRequest struct {
@@ -3423,9 +3431,10 @@ const file_meta_proto_rawDesc = "" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x10\n" +
 	"\x03set\x18\x03 \x01(\rR\x03set\x12&\n" +
 	"\x0esggidclearmode\x18\x04 \x01(\rR\x0esggidclearmode\x12!\n" +
-	"\x04attr\x18\x05 \x01(\v2\r.pb.ProtoAttrR\x04attr\"'\n" +
+	"\x04attr\x18\x05 \x01(\v2\r.pb.ProtoAttrR\x04attr\"J\n" +
 	"\x0fSetAttrResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x83\x01\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\x12!\n" +
+	"\x04attr\x18\x02 \x01(\v2\r.pb.ProtoAttrR\x04attr\"\x83\x01\n" +
 	"\x13CheckSetAttrRequest\x12!\n" +
 	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x10\n" +
@@ -3876,199 +3885,200 @@ var file_meta_proto_depIdxs = []int32{
 	56,  // 10: pb.GetAttrResponse.attr:type_name -> pb.ProtoAttr
 	55,  // 11: pb.SetAttrRequest.ctx:type_name -> pb.MetaContext
 	56,  // 12: pb.SetAttrRequest.attr:type_name -> pb.ProtoAttr
-	55,  // 13: pb.CheckSetAttrRequest.ctx:type_name -> pb.MetaContext
-	56,  // 14: pb.CheckSetAttrRequest.attr:type_name -> pb.ProtoAttr
-	55,  // 15: pb.MknodRequest.ctx:type_name -> pb.MetaContext
-	56,  // 16: pb.MknodResponse.attr:type_name -> pb.ProtoAttr
-	55,  // 17: pb.MkdirRequest.ctx:type_name -> pb.MetaContext
-	56,  // 18: pb.MkdirResponse.attr:type_name -> pb.ProtoAttr
-	55,  // 19: pb.CreateRequest.ctx:type_name -> pb.MetaContext
-	56,  // 20: pb.CreateResponse.attr:type_name -> pb.ProtoAttr
-	55,  // 21: pb.OpenRequest.ctx:type_name -> pb.MetaContext
-	56,  // 22: pb.OpenResponse.attr:type_name -> pb.ProtoAttr
-	55,  // 23: pb.CloseRequest.ctx:type_name -> pb.MetaContext
-	55,  // 24: pb.UnlinkRequest.ctx:type_name -> pb.MetaContext
-	55,  // 25: pb.RmdirRequest.ctx:type_name -> pb.MetaContext
-	55,  // 26: pb.RenameRequest.ctx:type_name -> pb.MetaContext
-	56,  // 27: pb.RenameResponse.attr:type_name -> pb.ProtoAttr
-	55,  // 28: pb.LinkRequest.ctx:type_name -> pb.MetaContext
-	56,  // 29: pb.LinkResponse.attr:type_name -> pb.ProtoAttr
-	55,  // 30: pb.SymlinkRequest.ctx:type_name -> pb.MetaContext
-	56,  // 31: pb.SymlinkResponse.attr:type_name -> pb.ProtoAttr
-	55,  // 32: pb.ReadLinkRequest.ctx:type_name -> pb.MetaContext
-	55,  // 33: pb.TruncateRequest.ctx:type_name -> pb.MetaContext
-	56,  // 34: pb.TruncateResponse.attr:type_name -> pb.ProtoAttr
-	55,  // 35: pb.FallocateRequest.ctx:type_name -> pb.MetaContext
-	55,  // 36: pb.ReaddirRequest.ctx:type_name -> pb.MetaContext
-	57,  // 37: pb.ReaddirResponse.entries:type_name -> pb.ProtoEntry
-	55,  // 38: pb.ReadRequest.ctx:type_name -> pb.MetaContext
-	58,  // 39: pb.ReadResponse.slices:type_name -> pb.ProtoSlice
-	55,  // 40: pb.WriteRequest.ctx:type_name -> pb.MetaContext
-	58,  // 41: pb.WriteRequest.slice:type_name -> pb.ProtoSlice
-	55,  // 42: pb.NewSliceRequest.ctx:type_name -> pb.MetaContext
-	55,  // 43: pb.InvalidateChunkCacheRequest.ctx:type_name -> pb.MetaContext
-	55,  // 44: pb.CopyFileRangeRequest.ctx:type_name -> pb.MetaContext
-	59,  // 45: pb.MetaService.Init:input_type -> pb.InitRequest
-	60,  // 46: pb.MetaService.Load:input_type -> pb.LoadRequest
-	61,  // 47: pb.MetaService.NewSession:input_type -> pb.NewSessionRequest
-	62,  // 48: pb.MetaService.CloseSession:input_type -> pb.CloseSessionRequest
-	63,  // 49: pb.MetaService.FlushSession:input_type -> pb.FlushSessionRequest
-	64,  // 50: pb.MetaService.GetSession:input_type -> pb.GetSessionRequest
-	65,  // 51: pb.MetaService.ListSessions:input_type -> pb.ListSessionsRequest
-	66,  // 52: pb.MetaService.CleanStaleSessions:input_type -> pb.CleanStaleSessionsRequest
-	3,   // 53: pb.MetaService.StatFS:input_type -> pb.StatFSRequest
-	5,   // 54: pb.MetaService.Lookup:input_type -> pb.LookupRequest
-	7,   // 55: pb.MetaService.Resolve:input_type -> pb.ResolveRequest
-	9,   // 56: pb.MetaService.Access:input_type -> pb.AccessRequest
-	11,  // 57: pb.MetaService.GetAttr:input_type -> pb.GetAttrRequest
-	13,  // 58: pb.MetaService.SetAttr:input_type -> pb.SetAttrRequest
-	15,  // 59: pb.MetaService.CheckSetAttr:input_type -> pb.CheckSetAttrRequest
-	17,  // 60: pb.MetaService.Mknod:input_type -> pb.MknodRequest
-	19,  // 61: pb.MetaService.Mkdir:input_type -> pb.MkdirRequest
-	21,  // 62: pb.MetaService.Create:input_type -> pb.CreateRequest
-	23,  // 63: pb.MetaService.Open:input_type -> pb.OpenRequest
-	25,  // 64: pb.MetaService.Close:input_type -> pb.CloseRequest
-	27,  // 65: pb.MetaService.Unlink:input_type -> pb.UnlinkRequest
-	29,  // 66: pb.MetaService.Rmdir:input_type -> pb.RmdirRequest
-	31,  // 67: pb.MetaService.Rename:input_type -> pb.RenameRequest
-	33,  // 68: pb.MetaService.Link:input_type -> pb.LinkRequest
-	35,  // 69: pb.MetaService.Symlink:input_type -> pb.SymlinkRequest
-	37,  // 70: pb.MetaService.ReadLink:input_type -> pb.ReadLinkRequest
-	39,  // 71: pb.MetaService.Truncate:input_type -> pb.TruncateRequest
-	41,  // 72: pb.MetaService.Fallocate:input_type -> pb.FallocateRequest
-	43,  // 73: pb.MetaService.Readdir:input_type -> pb.ReaddirRequest
-	45,  // 74: pb.MetaService.Read:input_type -> pb.ReadRequest
-	47,  // 75: pb.MetaService.Write:input_type -> pb.WriteRequest
-	49,  // 76: pb.MetaService.NewSlice:input_type -> pb.NewSliceRequest
-	51,  // 77: pb.MetaService.InvalidateChunkCache:input_type -> pb.InvalidateChunkCacheRequest
-	53,  // 78: pb.MetaService.CopyFileRange:input_type -> pb.CopyFileRangeRequest
-	67,  // 79: pb.MetaService.Flock:input_type -> pb.FlockRequest
-	68,  // 80: pb.MetaService.Getlk:input_type -> pb.GetlkRequest
-	69,  // 81: pb.MetaService.Setlk:input_type -> pb.SetlkRequest
-	70,  // 82: pb.MetaService.ListLocks:input_type -> pb.ListLocksRequest
-	71,  // 83: pb.MetaService.GetXattr:input_type -> pb.GetXattrRequest
-	72,  // 84: pb.MetaService.SetXattr:input_type -> pb.SetXattrRequest
-	73,  // 85: pb.MetaService.RemoveXattr:input_type -> pb.RemoveXattrRequest
-	74,  // 86: pb.MetaService.ListXattr:input_type -> pb.ListXattrRequest
-	75,  // 87: pb.MetaService.GetParents:input_type -> pb.GetParentsRequest
-	76,  // 88: pb.MetaService.GetDirStat:input_type -> pb.GetDirStatRequest
-	77,  // 89: pb.MetaService.SetFacl:input_type -> pb.SetFaclRequest
-	78,  // 90: pb.MetaService.GetFacl:input_type -> pb.GetFaclRequest
-	79,  // 91: pb.MetaService.StoreToken:input_type -> pb.StoreTokenRequest
-	80,  // 92: pb.MetaService.UpdateToken:input_type -> pb.UpdateTokenRequest
-	81,  // 93: pb.MetaService.LoadToken:input_type -> pb.LoadTokenRequest
-	82,  // 94: pb.MetaService.DeleteTokens:input_type -> pb.DeleteTokensRequest
-	83,  // 95: pb.MetaService.ListTokens:input_type -> pb.ListTokensRequest
-	84,  // 96: pb.MetaService.GetFormat:input_type -> pb.GetFormatRequest
-	85,  // 97: pb.MetaService.Remove:input_type -> pb.RemoveRequest
-	86,  // 98: pb.MetaService.BatchUnlink:input_type -> pb.BatchUnlinkRequest
-	87,  // 99: pb.MetaService.GetSummary:input_type -> pb.GetSummaryRequest
-	88,  // 100: pb.MetaService.GetTreeSummary:input_type -> pb.GetTreeSummaryRequest
-	89,  // 101: pb.MetaService.Clone:input_type -> pb.CloneRequest
-	90,  // 102: pb.MetaService.GetPaths:input_type -> pb.GetPathsRequest
-	91,  // 103: pb.MetaService.Check:input_type -> pb.CheckRequest
-	92,  // 104: pb.MetaService.CompactAll:input_type -> pb.CompactAllRequest
-	93,  // 105: pb.MetaService.Compact:input_type -> pb.CompactRequest
-	94,  // 106: pb.MetaService.ListSlices:input_type -> pb.ListSlicesRequest
-	95,  // 107: pb.MetaService.HandleQuota:input_type -> pb.HandleQuotaRequest
-	96,  // 108: pb.MetaService.ScanUserGroupUsage:input_type -> pb.ScanUserGroupUsageRequest
-	97,  // 109: pb.MetaService.Chroot:input_type -> pb.ChrootRequest
-	98,  // 110: pb.MetaService.CleanupTrashBefore:input_type -> pb.CleanupTrashBeforeRequest
-	99,  // 111: pb.MetaService.CleanupDetachedNodesBefore:input_type -> pb.CleanupDetachedNodesBeforeRequest
-	100, // 112: pb.MetaService.ScanDeletedObject:input_type -> pb.ScanDeletedObjectRequest
-	0,   // 113: pb.MetaService.ScanChangelog:input_type -> pb.ScanChangelogRequest
-	101, // 114: pb.MetaService.NewDirHandler:input_type -> pb.NewDirHandlerRequest
-	102, // 115: pb.MetaService.DirHandlerList:input_type -> pb.DirHandlerListRequest
-	103, // 116: pb.MetaService.DirHandlerInsert:input_type -> pb.DirHandlerInsertRequest
-	104, // 117: pb.MetaService.DirHandlerDelete:input_type -> pb.DirHandlerDeleteRequest
-	105, // 118: pb.MetaService.DirHandlerClose:input_type -> pb.DirHandlerCloseRequest
-	106, // 119: pb.MetaService.DumpMeta:input_type -> pb.DumpMetaRequest
-	107, // 120: pb.MetaService.LoadMeta:input_type -> pb.LoadMetaChunk
-	108, // 121: pb.MetaService.DumpMetaV2:input_type -> pb.DumpMetaV2Request
-	109, // 122: pb.MetaService.LoadMetaV2:input_type -> pb.LoadMetaV2Chunk
-	110, // 123: pb.MetaService.Init:output_type -> pb.InitResponse
-	111, // 124: pb.MetaService.Load:output_type -> pb.LoadResponse
-	112, // 125: pb.MetaService.NewSession:output_type -> pb.NewSessionResponse
-	113, // 126: pb.MetaService.CloseSession:output_type -> pb.CloseSessionResponse
-	114, // 127: pb.MetaService.FlushSession:output_type -> pb.FlushSessionResponse
-	115, // 128: pb.MetaService.GetSession:output_type -> pb.GetSessionResponse
-	116, // 129: pb.MetaService.ListSessions:output_type -> pb.ListSessionsResponse
-	117, // 130: pb.MetaService.CleanStaleSessions:output_type -> pb.CleanStaleSessionsResponse
-	4,   // 131: pb.MetaService.StatFS:output_type -> pb.StatFSResponse
-	6,   // 132: pb.MetaService.Lookup:output_type -> pb.LookupResponse
-	8,   // 133: pb.MetaService.Resolve:output_type -> pb.ResolveResponse
-	10,  // 134: pb.MetaService.Access:output_type -> pb.AccessResponse
-	12,  // 135: pb.MetaService.GetAttr:output_type -> pb.GetAttrResponse
-	14,  // 136: pb.MetaService.SetAttr:output_type -> pb.SetAttrResponse
-	16,  // 137: pb.MetaService.CheckSetAttr:output_type -> pb.CheckSetAttrResponse
-	18,  // 138: pb.MetaService.Mknod:output_type -> pb.MknodResponse
-	20,  // 139: pb.MetaService.Mkdir:output_type -> pb.MkdirResponse
-	22,  // 140: pb.MetaService.Create:output_type -> pb.CreateResponse
-	24,  // 141: pb.MetaService.Open:output_type -> pb.OpenResponse
-	26,  // 142: pb.MetaService.Close:output_type -> pb.CloseResponse
-	28,  // 143: pb.MetaService.Unlink:output_type -> pb.UnlinkResponse
-	30,  // 144: pb.MetaService.Rmdir:output_type -> pb.RmdirResponse
-	32,  // 145: pb.MetaService.Rename:output_type -> pb.RenameResponse
-	34,  // 146: pb.MetaService.Link:output_type -> pb.LinkResponse
-	36,  // 147: pb.MetaService.Symlink:output_type -> pb.SymlinkResponse
-	38,  // 148: pb.MetaService.ReadLink:output_type -> pb.ReadLinkResponse
-	40,  // 149: pb.MetaService.Truncate:output_type -> pb.TruncateResponse
-	42,  // 150: pb.MetaService.Fallocate:output_type -> pb.FallocateResponse
-	44,  // 151: pb.MetaService.Readdir:output_type -> pb.ReaddirResponse
-	46,  // 152: pb.MetaService.Read:output_type -> pb.ReadResponse
-	48,  // 153: pb.MetaService.Write:output_type -> pb.WriteResponse
-	50,  // 154: pb.MetaService.NewSlice:output_type -> pb.NewSliceResponse
-	52,  // 155: pb.MetaService.InvalidateChunkCache:output_type -> pb.InvalidateChunkCacheResponse
-	54,  // 156: pb.MetaService.CopyFileRange:output_type -> pb.CopyFileRangeResponse
-	118, // 157: pb.MetaService.Flock:output_type -> pb.FlockResponse
-	119, // 158: pb.MetaService.Getlk:output_type -> pb.GetlkResponse
-	120, // 159: pb.MetaService.Setlk:output_type -> pb.SetlkResponse
-	121, // 160: pb.MetaService.ListLocks:output_type -> pb.ListLocksResponse
-	122, // 161: pb.MetaService.GetXattr:output_type -> pb.GetXattrResponse
-	123, // 162: pb.MetaService.SetXattr:output_type -> pb.SetXattrResponse
-	124, // 163: pb.MetaService.RemoveXattr:output_type -> pb.RemoveXattrResponse
-	125, // 164: pb.MetaService.ListXattr:output_type -> pb.ListXattrResponse
-	126, // 165: pb.MetaService.GetParents:output_type -> pb.GetParentsResponse
-	127, // 166: pb.MetaService.GetDirStat:output_type -> pb.GetDirStatResponse
-	128, // 167: pb.MetaService.SetFacl:output_type -> pb.SetFaclResponse
-	129, // 168: pb.MetaService.GetFacl:output_type -> pb.GetFaclResponse
-	130, // 169: pb.MetaService.StoreToken:output_type -> pb.StoreTokenResponse
-	131, // 170: pb.MetaService.UpdateToken:output_type -> pb.UpdateTokenResponse
-	132, // 171: pb.MetaService.LoadToken:output_type -> pb.LoadTokenResponse
-	133, // 172: pb.MetaService.DeleteTokens:output_type -> pb.DeleteTokensResponse
-	134, // 173: pb.MetaService.ListTokens:output_type -> pb.ListTokensResponse
-	135, // 174: pb.MetaService.GetFormat:output_type -> pb.GetFormatResponse
-	136, // 175: pb.MetaService.Remove:output_type -> pb.RemoveResponse
-	137, // 176: pb.MetaService.BatchUnlink:output_type -> pb.BatchUnlinkResponse
-	138, // 177: pb.MetaService.GetSummary:output_type -> pb.GetSummaryResponse
-	139, // 178: pb.MetaService.GetTreeSummary:output_type -> pb.GetTreeSummaryResponse
-	140, // 179: pb.MetaService.Clone:output_type -> pb.CloneResponse
-	141, // 180: pb.MetaService.GetPaths:output_type -> pb.GetPathsResponse
-	142, // 181: pb.MetaService.Check:output_type -> pb.CheckResponse
-	143, // 182: pb.MetaService.CompactAll:output_type -> pb.CompactAllResponse
-	144, // 183: pb.MetaService.Compact:output_type -> pb.CompactResponse
-	145, // 184: pb.MetaService.ListSlices:output_type -> pb.ListSlicesResponse
-	146, // 185: pb.MetaService.HandleQuota:output_type -> pb.HandleQuotaResponse
-	147, // 186: pb.MetaService.ScanUserGroupUsage:output_type -> pb.ScanUserGroupUsageResponse
-	148, // 187: pb.MetaService.Chroot:output_type -> pb.ChrootResponse
-	149, // 188: pb.MetaService.CleanupTrashBefore:output_type -> pb.CleanupTrashBeforeResponse
-	150, // 189: pb.MetaService.CleanupDetachedNodesBefore:output_type -> pb.CleanupDetachedNodesBeforeResponse
-	151, // 190: pb.MetaService.ScanDeletedObject:output_type -> pb.ScanDeletedObjectResponse
-	2,   // 191: pb.MetaService.ScanChangelog:output_type -> pb.ScanChangelogResponse
-	152, // 192: pb.MetaService.NewDirHandler:output_type -> pb.NewDirHandlerResponse
-	153, // 193: pb.MetaService.DirHandlerList:output_type -> pb.DirHandlerListResponse
-	154, // 194: pb.MetaService.DirHandlerInsert:output_type -> pb.DirHandlerInsertResponse
-	155, // 195: pb.MetaService.DirHandlerDelete:output_type -> pb.DirHandlerDeleteResponse
-	156, // 196: pb.MetaService.DirHandlerClose:output_type -> pb.DirHandlerCloseResponse
-	157, // 197: pb.MetaService.DumpMeta:output_type -> pb.DumpMetaChunk
-	158, // 198: pb.MetaService.LoadMeta:output_type -> pb.LoadMetaResponse
-	159, // 199: pb.MetaService.DumpMetaV2:output_type -> pb.DumpMetaV2Chunk
-	160, // 200: pb.MetaService.LoadMetaV2:output_type -> pb.LoadMetaV2Response
-	123, // [123:201] is the sub-list for method output_type
-	45,  // [45:123] is the sub-list for method input_type
-	45,  // [45:45] is the sub-list for extension type_name
-	45,  // [45:45] is the sub-list for extension extendee
-	0,   // [0:45] is the sub-list for field type_name
+	56,  // 13: pb.SetAttrResponse.attr:type_name -> pb.ProtoAttr
+	55,  // 14: pb.CheckSetAttrRequest.ctx:type_name -> pb.MetaContext
+	56,  // 15: pb.CheckSetAttrRequest.attr:type_name -> pb.ProtoAttr
+	55,  // 16: pb.MknodRequest.ctx:type_name -> pb.MetaContext
+	56,  // 17: pb.MknodResponse.attr:type_name -> pb.ProtoAttr
+	55,  // 18: pb.MkdirRequest.ctx:type_name -> pb.MetaContext
+	56,  // 19: pb.MkdirResponse.attr:type_name -> pb.ProtoAttr
+	55,  // 20: pb.CreateRequest.ctx:type_name -> pb.MetaContext
+	56,  // 21: pb.CreateResponse.attr:type_name -> pb.ProtoAttr
+	55,  // 22: pb.OpenRequest.ctx:type_name -> pb.MetaContext
+	56,  // 23: pb.OpenResponse.attr:type_name -> pb.ProtoAttr
+	55,  // 24: pb.CloseRequest.ctx:type_name -> pb.MetaContext
+	55,  // 25: pb.UnlinkRequest.ctx:type_name -> pb.MetaContext
+	55,  // 26: pb.RmdirRequest.ctx:type_name -> pb.MetaContext
+	55,  // 27: pb.RenameRequest.ctx:type_name -> pb.MetaContext
+	56,  // 28: pb.RenameResponse.attr:type_name -> pb.ProtoAttr
+	55,  // 29: pb.LinkRequest.ctx:type_name -> pb.MetaContext
+	56,  // 30: pb.LinkResponse.attr:type_name -> pb.ProtoAttr
+	55,  // 31: pb.SymlinkRequest.ctx:type_name -> pb.MetaContext
+	56,  // 32: pb.SymlinkResponse.attr:type_name -> pb.ProtoAttr
+	55,  // 33: pb.ReadLinkRequest.ctx:type_name -> pb.MetaContext
+	55,  // 34: pb.TruncateRequest.ctx:type_name -> pb.MetaContext
+	56,  // 35: pb.TruncateResponse.attr:type_name -> pb.ProtoAttr
+	55,  // 36: pb.FallocateRequest.ctx:type_name -> pb.MetaContext
+	55,  // 37: pb.ReaddirRequest.ctx:type_name -> pb.MetaContext
+	57,  // 38: pb.ReaddirResponse.entries:type_name -> pb.ProtoEntry
+	55,  // 39: pb.ReadRequest.ctx:type_name -> pb.MetaContext
+	58,  // 40: pb.ReadResponse.slices:type_name -> pb.ProtoSlice
+	55,  // 41: pb.WriteRequest.ctx:type_name -> pb.MetaContext
+	58,  // 42: pb.WriteRequest.slice:type_name -> pb.ProtoSlice
+	55,  // 43: pb.NewSliceRequest.ctx:type_name -> pb.MetaContext
+	55,  // 44: pb.InvalidateChunkCacheRequest.ctx:type_name -> pb.MetaContext
+	55,  // 45: pb.CopyFileRangeRequest.ctx:type_name -> pb.MetaContext
+	59,  // 46: pb.MetaService.Init:input_type -> pb.InitRequest
+	60,  // 47: pb.MetaService.Load:input_type -> pb.LoadRequest
+	61,  // 48: pb.MetaService.NewSession:input_type -> pb.NewSessionRequest
+	62,  // 49: pb.MetaService.CloseSession:input_type -> pb.CloseSessionRequest
+	63,  // 50: pb.MetaService.FlushSession:input_type -> pb.FlushSessionRequest
+	64,  // 51: pb.MetaService.GetSession:input_type -> pb.GetSessionRequest
+	65,  // 52: pb.MetaService.ListSessions:input_type -> pb.ListSessionsRequest
+	66,  // 53: pb.MetaService.CleanStaleSessions:input_type -> pb.CleanStaleSessionsRequest
+	3,   // 54: pb.MetaService.StatFS:input_type -> pb.StatFSRequest
+	5,   // 55: pb.MetaService.Lookup:input_type -> pb.LookupRequest
+	7,   // 56: pb.MetaService.Resolve:input_type -> pb.ResolveRequest
+	9,   // 57: pb.MetaService.Access:input_type -> pb.AccessRequest
+	11,  // 58: pb.MetaService.GetAttr:input_type -> pb.GetAttrRequest
+	13,  // 59: pb.MetaService.SetAttr:input_type -> pb.SetAttrRequest
+	15,  // 60: pb.MetaService.CheckSetAttr:input_type -> pb.CheckSetAttrRequest
+	17,  // 61: pb.MetaService.Mknod:input_type -> pb.MknodRequest
+	19,  // 62: pb.MetaService.Mkdir:input_type -> pb.MkdirRequest
+	21,  // 63: pb.MetaService.Create:input_type -> pb.CreateRequest
+	23,  // 64: pb.MetaService.Open:input_type -> pb.OpenRequest
+	25,  // 65: pb.MetaService.Close:input_type -> pb.CloseRequest
+	27,  // 66: pb.MetaService.Unlink:input_type -> pb.UnlinkRequest
+	29,  // 67: pb.MetaService.Rmdir:input_type -> pb.RmdirRequest
+	31,  // 68: pb.MetaService.Rename:input_type -> pb.RenameRequest
+	33,  // 69: pb.MetaService.Link:input_type -> pb.LinkRequest
+	35,  // 70: pb.MetaService.Symlink:input_type -> pb.SymlinkRequest
+	37,  // 71: pb.MetaService.ReadLink:input_type -> pb.ReadLinkRequest
+	39,  // 72: pb.MetaService.Truncate:input_type -> pb.TruncateRequest
+	41,  // 73: pb.MetaService.Fallocate:input_type -> pb.FallocateRequest
+	43,  // 74: pb.MetaService.Readdir:input_type -> pb.ReaddirRequest
+	45,  // 75: pb.MetaService.Read:input_type -> pb.ReadRequest
+	47,  // 76: pb.MetaService.Write:input_type -> pb.WriteRequest
+	49,  // 77: pb.MetaService.NewSlice:input_type -> pb.NewSliceRequest
+	51,  // 78: pb.MetaService.InvalidateChunkCache:input_type -> pb.InvalidateChunkCacheRequest
+	53,  // 79: pb.MetaService.CopyFileRange:input_type -> pb.CopyFileRangeRequest
+	67,  // 80: pb.MetaService.Flock:input_type -> pb.FlockRequest
+	68,  // 81: pb.MetaService.Getlk:input_type -> pb.GetlkRequest
+	69,  // 82: pb.MetaService.Setlk:input_type -> pb.SetlkRequest
+	70,  // 83: pb.MetaService.ListLocks:input_type -> pb.ListLocksRequest
+	71,  // 84: pb.MetaService.GetXattr:input_type -> pb.GetXattrRequest
+	72,  // 85: pb.MetaService.SetXattr:input_type -> pb.SetXattrRequest
+	73,  // 86: pb.MetaService.RemoveXattr:input_type -> pb.RemoveXattrRequest
+	74,  // 87: pb.MetaService.ListXattr:input_type -> pb.ListXattrRequest
+	75,  // 88: pb.MetaService.GetParents:input_type -> pb.GetParentsRequest
+	76,  // 89: pb.MetaService.GetDirStat:input_type -> pb.GetDirStatRequest
+	77,  // 90: pb.MetaService.SetFacl:input_type -> pb.SetFaclRequest
+	78,  // 91: pb.MetaService.GetFacl:input_type -> pb.GetFaclRequest
+	79,  // 92: pb.MetaService.StoreToken:input_type -> pb.StoreTokenRequest
+	80,  // 93: pb.MetaService.UpdateToken:input_type -> pb.UpdateTokenRequest
+	81,  // 94: pb.MetaService.LoadToken:input_type -> pb.LoadTokenRequest
+	82,  // 95: pb.MetaService.DeleteTokens:input_type -> pb.DeleteTokensRequest
+	83,  // 96: pb.MetaService.ListTokens:input_type -> pb.ListTokensRequest
+	84,  // 97: pb.MetaService.GetFormat:input_type -> pb.GetFormatRequest
+	85,  // 98: pb.MetaService.Remove:input_type -> pb.RemoveRequest
+	86,  // 99: pb.MetaService.BatchUnlink:input_type -> pb.BatchUnlinkRequest
+	87,  // 100: pb.MetaService.GetSummary:input_type -> pb.GetSummaryRequest
+	88,  // 101: pb.MetaService.GetTreeSummary:input_type -> pb.GetTreeSummaryRequest
+	89,  // 102: pb.MetaService.Clone:input_type -> pb.CloneRequest
+	90,  // 103: pb.MetaService.GetPaths:input_type -> pb.GetPathsRequest
+	91,  // 104: pb.MetaService.Check:input_type -> pb.CheckRequest
+	92,  // 105: pb.MetaService.CompactAll:input_type -> pb.CompactAllRequest
+	93,  // 106: pb.MetaService.Compact:input_type -> pb.CompactRequest
+	94,  // 107: pb.MetaService.ListSlices:input_type -> pb.ListSlicesRequest
+	95,  // 108: pb.MetaService.HandleQuota:input_type -> pb.HandleQuotaRequest
+	96,  // 109: pb.MetaService.ScanUserGroupUsage:input_type -> pb.ScanUserGroupUsageRequest
+	97,  // 110: pb.MetaService.Chroot:input_type -> pb.ChrootRequest
+	98,  // 111: pb.MetaService.CleanupTrashBefore:input_type -> pb.CleanupTrashBeforeRequest
+	99,  // 112: pb.MetaService.CleanupDetachedNodesBefore:input_type -> pb.CleanupDetachedNodesBeforeRequest
+	100, // 113: pb.MetaService.ScanDeletedObject:input_type -> pb.ScanDeletedObjectRequest
+	0,   // 114: pb.MetaService.ScanChangelog:input_type -> pb.ScanChangelogRequest
+	101, // 115: pb.MetaService.NewDirHandler:input_type -> pb.NewDirHandlerRequest
+	102, // 116: pb.MetaService.DirHandlerList:input_type -> pb.DirHandlerListRequest
+	103, // 117: pb.MetaService.DirHandlerInsert:input_type -> pb.DirHandlerInsertRequest
+	104, // 118: pb.MetaService.DirHandlerDelete:input_type -> pb.DirHandlerDeleteRequest
+	105, // 119: pb.MetaService.DirHandlerClose:input_type -> pb.DirHandlerCloseRequest
+	106, // 120: pb.MetaService.DumpMeta:input_type -> pb.DumpMetaRequest
+	107, // 121: pb.MetaService.LoadMeta:input_type -> pb.LoadMetaChunk
+	108, // 122: pb.MetaService.DumpMetaV2:input_type -> pb.DumpMetaV2Request
+	109, // 123: pb.MetaService.LoadMetaV2:input_type -> pb.LoadMetaV2Chunk
+	110, // 124: pb.MetaService.Init:output_type -> pb.InitResponse
+	111, // 125: pb.MetaService.Load:output_type -> pb.LoadResponse
+	112, // 126: pb.MetaService.NewSession:output_type -> pb.NewSessionResponse
+	113, // 127: pb.MetaService.CloseSession:output_type -> pb.CloseSessionResponse
+	114, // 128: pb.MetaService.FlushSession:output_type -> pb.FlushSessionResponse
+	115, // 129: pb.MetaService.GetSession:output_type -> pb.GetSessionResponse
+	116, // 130: pb.MetaService.ListSessions:output_type -> pb.ListSessionsResponse
+	117, // 131: pb.MetaService.CleanStaleSessions:output_type -> pb.CleanStaleSessionsResponse
+	4,   // 132: pb.MetaService.StatFS:output_type -> pb.StatFSResponse
+	6,   // 133: pb.MetaService.Lookup:output_type -> pb.LookupResponse
+	8,   // 134: pb.MetaService.Resolve:output_type -> pb.ResolveResponse
+	10,  // 135: pb.MetaService.Access:output_type -> pb.AccessResponse
+	12,  // 136: pb.MetaService.GetAttr:output_type -> pb.GetAttrResponse
+	14,  // 137: pb.MetaService.SetAttr:output_type -> pb.SetAttrResponse
+	16,  // 138: pb.MetaService.CheckSetAttr:output_type -> pb.CheckSetAttrResponse
+	18,  // 139: pb.MetaService.Mknod:output_type -> pb.MknodResponse
+	20,  // 140: pb.MetaService.Mkdir:output_type -> pb.MkdirResponse
+	22,  // 141: pb.MetaService.Create:output_type -> pb.CreateResponse
+	24,  // 142: pb.MetaService.Open:output_type -> pb.OpenResponse
+	26,  // 143: pb.MetaService.Close:output_type -> pb.CloseResponse
+	28,  // 144: pb.MetaService.Unlink:output_type -> pb.UnlinkResponse
+	30,  // 145: pb.MetaService.Rmdir:output_type -> pb.RmdirResponse
+	32,  // 146: pb.MetaService.Rename:output_type -> pb.RenameResponse
+	34,  // 147: pb.MetaService.Link:output_type -> pb.LinkResponse
+	36,  // 148: pb.MetaService.Symlink:output_type -> pb.SymlinkResponse
+	38,  // 149: pb.MetaService.ReadLink:output_type -> pb.ReadLinkResponse
+	40,  // 150: pb.MetaService.Truncate:output_type -> pb.TruncateResponse
+	42,  // 151: pb.MetaService.Fallocate:output_type -> pb.FallocateResponse
+	44,  // 152: pb.MetaService.Readdir:output_type -> pb.ReaddirResponse
+	46,  // 153: pb.MetaService.Read:output_type -> pb.ReadResponse
+	48,  // 154: pb.MetaService.Write:output_type -> pb.WriteResponse
+	50,  // 155: pb.MetaService.NewSlice:output_type -> pb.NewSliceResponse
+	52,  // 156: pb.MetaService.InvalidateChunkCache:output_type -> pb.InvalidateChunkCacheResponse
+	54,  // 157: pb.MetaService.CopyFileRange:output_type -> pb.CopyFileRangeResponse
+	118, // 158: pb.MetaService.Flock:output_type -> pb.FlockResponse
+	119, // 159: pb.MetaService.Getlk:output_type -> pb.GetlkResponse
+	120, // 160: pb.MetaService.Setlk:output_type -> pb.SetlkResponse
+	121, // 161: pb.MetaService.ListLocks:output_type -> pb.ListLocksResponse
+	122, // 162: pb.MetaService.GetXattr:output_type -> pb.GetXattrResponse
+	123, // 163: pb.MetaService.SetXattr:output_type -> pb.SetXattrResponse
+	124, // 164: pb.MetaService.RemoveXattr:output_type -> pb.RemoveXattrResponse
+	125, // 165: pb.MetaService.ListXattr:output_type -> pb.ListXattrResponse
+	126, // 166: pb.MetaService.GetParents:output_type -> pb.GetParentsResponse
+	127, // 167: pb.MetaService.GetDirStat:output_type -> pb.GetDirStatResponse
+	128, // 168: pb.MetaService.SetFacl:output_type -> pb.SetFaclResponse
+	129, // 169: pb.MetaService.GetFacl:output_type -> pb.GetFaclResponse
+	130, // 170: pb.MetaService.StoreToken:output_type -> pb.StoreTokenResponse
+	131, // 171: pb.MetaService.UpdateToken:output_type -> pb.UpdateTokenResponse
+	132, // 172: pb.MetaService.LoadToken:output_type -> pb.LoadTokenResponse
+	133, // 173: pb.MetaService.DeleteTokens:output_type -> pb.DeleteTokensResponse
+	134, // 174: pb.MetaService.ListTokens:output_type -> pb.ListTokensResponse
+	135, // 175: pb.MetaService.GetFormat:output_type -> pb.GetFormatResponse
+	136, // 176: pb.MetaService.Remove:output_type -> pb.RemoveResponse
+	137, // 177: pb.MetaService.BatchUnlink:output_type -> pb.BatchUnlinkResponse
+	138, // 178: pb.MetaService.GetSummary:output_type -> pb.GetSummaryResponse
+	139, // 179: pb.MetaService.GetTreeSummary:output_type -> pb.GetTreeSummaryResponse
+	140, // 180: pb.MetaService.Clone:output_type -> pb.CloneResponse
+	141, // 181: pb.MetaService.GetPaths:output_type -> pb.GetPathsResponse
+	142, // 182: pb.MetaService.Check:output_type -> pb.CheckResponse
+	143, // 183: pb.MetaService.CompactAll:output_type -> pb.CompactAllResponse
+	144, // 184: pb.MetaService.Compact:output_type -> pb.CompactResponse
+	145, // 185: pb.MetaService.ListSlices:output_type -> pb.ListSlicesResponse
+	146, // 186: pb.MetaService.HandleQuota:output_type -> pb.HandleQuotaResponse
+	147, // 187: pb.MetaService.ScanUserGroupUsage:output_type -> pb.ScanUserGroupUsageResponse
+	148, // 188: pb.MetaService.Chroot:output_type -> pb.ChrootResponse
+	149, // 189: pb.MetaService.CleanupTrashBefore:output_type -> pb.CleanupTrashBeforeResponse
+	150, // 190: pb.MetaService.CleanupDetachedNodesBefore:output_type -> pb.CleanupDetachedNodesBeforeResponse
+	151, // 191: pb.MetaService.ScanDeletedObject:output_type -> pb.ScanDeletedObjectResponse
+	2,   // 192: pb.MetaService.ScanChangelog:output_type -> pb.ScanChangelogResponse
+	152, // 193: pb.MetaService.NewDirHandler:output_type -> pb.NewDirHandlerResponse
+	153, // 194: pb.MetaService.DirHandlerList:output_type -> pb.DirHandlerListResponse
+	154, // 195: pb.MetaService.DirHandlerInsert:output_type -> pb.DirHandlerInsertResponse
+	155, // 196: pb.MetaService.DirHandlerDelete:output_type -> pb.DirHandlerDeleteResponse
+	156, // 197: pb.MetaService.DirHandlerClose:output_type -> pb.DirHandlerCloseResponse
+	157, // 198: pb.MetaService.DumpMeta:output_type -> pb.DumpMetaChunk
+	158, // 199: pb.MetaService.LoadMeta:output_type -> pb.LoadMetaResponse
+	159, // 200: pb.MetaService.DumpMetaV2:output_type -> pb.DumpMetaV2Chunk
+	160, // 201: pb.MetaService.LoadMetaV2:output_type -> pb.LoadMetaV2Response
+	124, // [124:202] is the sub-list for method output_type
+	46,  // [46:124] is the sub-list for method input_type
+	46,  // [46:46] is the sub-list for extension type_name
+	46,  // [46:46] is the sub-list for extension extendee
+	0,   // [0:46] is the sub-list for field type_name
 }
 
 func init() { file_meta_proto_init() }
