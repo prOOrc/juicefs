@@ -29,7 +29,7 @@ import (
 
 // Init initializes the filesystem
 func (m *grpcMeta) Init(format *Format, force bool) error {
-	ctx := context.Background()
+	ctx := m.withAuth(context.Background())
 	req := &pb.InitRequest{
 		Format: FormatToProto(*format),
 		Force:  force,
@@ -46,11 +46,17 @@ func (m *grpcMeta) Init(format *Format, force bool) error {
 
 // Load loads the existing format
 func (m *grpcMeta) Load(checkVersion bool) (*Format, error) {
-	ctx := context.Background()
+	ctx := m.withAuth(context.Background())
 	req := &pb.LoadRequest{CheckVersion: checkVersion}
 	resp, err := m.client.Load(ctx, req)
 	if err != nil {
-		return nil, err
+		if m.tryReauthenticate(context.Background()) {
+			ctx = m.withAuth(context.Background())
+			resp, err = m.client.Load(ctx, req)
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 	if resp.GetErrno() != 0 {
 		return nil, syscall.Errno(resp.GetErrno())
@@ -60,6 +66,9 @@ func (m *grpcMeta) Load(checkVersion bool) (*Format, error) {
 	m.mu.Unlock()
 	// Create session after loading format
 	if err := m.NewSession(false); err != nil {
+		if m.tryReauthenticate(context.Background()) {
+			return nil, m.NewSession(false)
+		}
 		return nil, err
 	}
 	return m.format, nil
@@ -67,12 +76,18 @@ func (m *grpcMeta) Load(checkVersion bool) (*Format, error) {
 
 // NewSession creates a new session and starts heartbeat
 func (m *grpcMeta) NewSession(record bool) error {
-	ctx := context.Background()
+	ctx := m.withAuth(context.Background())
 	req := &pb.NewSessionRequest{Record: record}
 	resp, err := m.client.NewSession(ctx, req)
 	if err != nil {
-		logger.Errorf("NewSession gRPC error: %v", err)
-		return err
+		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
+			ctx = m.withAuth(context.Background())
+			resp, err = m.client.NewSession(ctx, req)
+		}
+		if err != nil {
+			logger.Errorf("NewSession gRPC error: %v", err)
+			return err
+		}
 	}
 	if resp.GetErrno() != 0 {
 		logger.Errorf("NewSession errno: %d", resp.GetErrno())
@@ -112,7 +127,8 @@ func (m *grpcMeta) CloseSession() error {
 	}
 
 	// Notify server session is closed
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx := m.withAuth(context.Background())
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	req := &pb.CloseSessionRequest{}
 	resp, err := m.client.CloseSession(ctx, req)
@@ -128,7 +144,7 @@ func (m *grpcMeta) CloseSession() error {
 
 // FlushSession flushes session state
 func (m *grpcMeta) FlushSession() {
-	ctx := context.Background()
+	ctx := m.withAuth(context.Background())
 	req := &pb.FlushSessionRequest{}
 	resp, err := m.client.FlushSession(ctx, req)
 	if err != nil {
@@ -140,7 +156,7 @@ func (m *grpcMeta) FlushSession() {
 
 // GetSession gets session info
 func (m *grpcMeta) GetSession(sid uint64, detail bool) (*Session, error) {
-	ctx := context.Background()
+	ctx := m.withAuth(context.Background())
 	req := &pb.GetSessionRequest{Sid: sid, Detail: detail}
 	resp, err := m.client.GetSession(ctx, req)
 	if err != nil {
@@ -154,7 +170,7 @@ func (m *grpcMeta) GetSession(sid uint64, detail bool) (*Session, error) {
 
 // ListSessions lists all sessions
 func (m *grpcMeta) ListSessions() ([]*Session, error) {
-	ctx := context.Background()
+	ctx := m.withAuth(context.Background())
 	req := &pb.ListSessionsRequest{}
 	resp, err := m.client.ListSessions(ctx, req)
 	if err != nil {
