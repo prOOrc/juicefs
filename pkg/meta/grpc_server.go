@@ -45,7 +45,7 @@ func NewMetaProxyServer(m Meta) *MetaProxyServer {
 
 // helper to convert Context from proto
 func (s *MetaProxyServer) metaCtx(ctx context.Context, ctx2 *pb.MetaContext) Context {
-	if ctx2 == nil {
+	if ctx2 == nil || (ctx2.Uid == 0 && ctx2.Gid == 0 && len(ctx2.Gids) == 0 && ctx2.Pid == 0) {
 		return Background()
 	}
 	gids := ctx2.Gids
