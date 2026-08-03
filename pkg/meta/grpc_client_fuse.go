@@ -174,6 +174,10 @@ func (m *grpcMeta) SetAttr(ctx Context, inode Ino, set uint16, sggidclearmode ui
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
 	}
+	// Update attr from server response (contains full attrs including Typ)
+	if attr != nil && resp.Attr != nil {
+		*attr = *ProtoToAttr(resp.Attr)
+	}
 	// Invalidate cache on mutation
 	m.invalidateAttrCache(uint64(inode))
 	return 0
