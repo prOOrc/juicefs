@@ -28,8 +28,17 @@ import (
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
+	"github.com/juicedata/juicefs/pkg/oidc"
+	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+)
+
+const (
+	// reauthCooldown is the minimum interval between re-auth attempts.
+	reauthCooldown = 30 * time.Second
 )
 
 const (
@@ -64,6 +73,12 @@ type grpcMeta struct {
 	heartbeatInterval time.Duration
 	heartbeatCancel   context.CancelFunc
 	heartbeatWg       sync.WaitGroup
+
+	// OIDC (nil if not configured)
+	oidcConfig     *oidc.Config
+	tokenManager   *oidc.TokenManager
+	reauthGroup    singleflight.Group // coalesces concurrent re-auth requests
+	lastReauthFail time.Time          // last time re-auth failed (cooldown)
 }
 
 var _ Meta = (*grpcMeta)(nil)
@@ -85,6 +100,32 @@ func newGRPCMeta(driver, addr string, conf *Config) (Meta, error) {
 	dirCacheTTL := query.duration("dir-cache-ttl", "dir_cache_ttl", defaultDirCacheTTL)
 	heartbeatInterval := query.duration("heartbeat-interval", "heartbeat_interval", defaultHeartbeatInterval)
 
+	// OIDC configuration (optional)
+	var oidcCfg *oidc.Config
+	if issuer := query.get("oidc-issuer", "oidc_issuer"); issuer != "" {
+		clientID := query.get("oidc-client-id", "oidc_client_id")
+		if clientID == "" {
+			return nil, fmt.Errorf("oidc_issuer requires oidc_client_id")
+		}
+		clientSecret := query.get("oidc-client-secret", "oidc_client_secret")
+		redirectURL := query.get("oidc-redirect-url", "oidc_redirect_url")
+		scopesStr := query.get("oidc-scopes", "oidc_scopes")
+		var scopes []string
+		if scopesStr != "" {
+			scopes = strings.Split(scopesStr, ",")
+		}
+		cacheDir := query.get("oidc-cache-dir", "oidc_cache_dir")
+
+		oidcCfg = &oidc.Config{
+			IssuerURL:    issuer,
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
+			RedirectURL:  redirectURL,
+			Scopes:       scopes,
+			CacheDir:     cacheDir,
+		}
+	}
+
 	u.RawQuery = values.Encode()
 	addr = u.Host
 
@@ -100,6 +141,16 @@ func newGRPCMeta(driver, addr string, conf *Config) (Meta, error) {
 	attrCache := expirable.NewLRU[uint64, *Attr](attrCacheSize, nil, attrCacheTTL)
 	dirCache := expirable.NewLRU[uint64, []*Entry](dirCacheSize, nil, dirCacheTTL)
 
+	// OIDC token manager (optional)
+	var tm *oidc.TokenManager
+	if oidcCfg != nil {
+		var err error
+		tm, err = oidc.NewTokenManager(*oidcCfg)
+		if err != nil {
+			return nil, fmt.Errorf("oidc token manager: %w", err)
+		}
+	}
+
 	m := &grpcMeta{
 		addr:              strings.TrimPrefix(addr, "://"),
 		conf:              conf,
@@ -110,6 +161,8 @@ func newGRPCMeta(driver, addr string, conf *Config) (Meta, error) {
 		attrCacheTTL:      attrCacheTTL,
 		dirCacheTTL:       dirCacheTTL,
 		heartbeatInterval: heartbeatInterval,
+		oidcConfig:        oidcCfg,
+		tokenManager:      tm,
 	}
 
 	return m, nil
@@ -144,6 +197,11 @@ func (m *grpcMeta) Shutdown() error {
 		}
 	}
 
+	// Stop OIDC token refresher
+	if m.tokenManager != nil {
+		m.tokenManager.Stop()
+	}
+
 	// Close session
 	_ = m.CloseSession()
 
@@ -159,16 +217,84 @@ func (m *grpcMeta) Shutdown() error {
 	return nil
 }
 
-// withSessionID adds session ID to gRPC metadata
-func (m *grpcMeta) withSessionID(ctx context.Context) context.Context {
+// withAuth adds session ID and OIDC bearer token (if configured) to gRPC metadata.
+// Non-blocking: uses cached token if available, skips auth header otherwise.
+func (m *grpcMeta) withAuth(ctx context.Context) context.Context {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if m.sid == 0 {
-		return ctx
+
+	md := make(metadata.MD, 2)
+
+	if m.sid != 0 {
+		md["x-session-id"] = []string{fmt.Sprintf("%d", m.sid)}
 	}
-	md := metadata.Pairs("x-session-id", fmt.Sprintf("%d", m.sid))
-	return metadata.NewOutgoingContext(ctx, md)
+
+	// Add OIDC bearer token if configured (non-blocking)
+	if m.tokenManager != nil {
+		token, err := m.tokenManager.GetToken(ctx)
+		if err != nil {
+			logger.Warnf("OIDC: failed to get token: %v", err)
+		} else if token != nil && token.IDToken != "" {
+			md["authorization"] = []string{"Bearer " + token.IDToken}
+		}
+	}
+
+	if len(md) > 0 {
+		ctx = metadata.NewOutgoingContext(ctx, md)
+	}
+
+	return ctx
+}
+
+// isUnauthenticated returns true if a gRPC error is codes.Unauthenticated.
+func isUnauthenticated(err error) bool {
+	if err == nil {
+		return false
+	}
+	st, ok := status.FromError(err)
+	return ok && st.Code() == codes.Unauthenticated
+}
+
+// tryReauthenticate triggers interactive OIDC re-authentication when the server
+// rejects a request with codes.Unauthenticated. Concurrent callers are coalesced
+// into a single browser auth flow via singleflight.
+// Returns true if re-auth succeeded and the caller should retry the original request.
+func (m *grpcMeta) tryReauthenticate(ctx context.Context) bool {
+	if m.tokenManager == nil {
+		return false
+	}
+
+	// Cooldown: don't spam browser auth if it recently failed
+	if time.Since(m.lastReauthFail) < reauthCooldown {
+		return false
+	}
+
+	_, err, _ := m.reauthGroup.Do("reauth", func() (interface{}, error) {
+		// Double-check cooldown inside the singleflight group
+		if time.Since(m.lastReauthFail) < reauthCooldown {
+			return nil, nil
+		}
+
+		logger.Infof("OIDC: server rejected token, starting interactive re-authentication...")
+		_, err := m.tokenManager.GetOrCreateToken(ctx)
+		if err != nil {
+			logger.Warnf("OIDC: re-authentication failed: %v", err)
+			m.lastReauthFail = time.Now()
+			return nil, err
+		}
+
+		logger.Infof("OIDC: re-authentication successful")
+		return nil, nil
+	})
+
+	return err == nil
+}
+
+// withSessionID is deprecated; use withAuth instead.
+// Kept for backward compatibility during migration.
+func (m *grpcMeta) withSessionID(ctx context.Context) context.Context {
+	return m.withAuth(ctx)
 }
 
 // grpcContext converts Context to pb.MetaContext
@@ -260,7 +386,8 @@ func (m *grpcMeta) startHeartbeat() {
 
 // doHeartbeat sends a heartbeat to the server
 func (m *grpcMeta) doHeartbeat() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx := m.withAuth(context.Background())
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	req := &pb.FlushSessionRequest{}
 	resp, err := m.client.FlushSession(ctx, req)

@@ -29,6 +29,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
+	"github.com/juicedata/juicefs/pkg/oidc"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
 )
@@ -74,6 +75,22 @@ func cmdMetaProxy() *cli.Command {
 				Usage: "gRPC keepalive timeout",
 				Value: time.Second * 20,
 			},
+			// OIDC flags
+			&cli.StringFlag{
+				Name:   "oidc-issuer",
+				Usage:  "OIDC issuer URL (enables OIDC authentication when set, e.g., https://platform.agio.services/.ory/hydra/public)",
+				Hidden: false,
+			},
+			&cli.StringFlag{
+				Name:   "oidc-client-id",
+				Usage:  "Expected client_id (aud claim) in OIDC token. If set, only tokens issued to this client are accepted. If omitted, any valid token is accepted.",
+				Hidden: false,
+			},
+			&cli.StringFlag{
+				Name:   "oidc-audience",
+				Usage:  "Expected audience claim in OIDC token (optional)",
+				Hidden: false,
+			},
 		},
 		Action: func(c *cli.Context) error {
 			if c.Bool("debug") {
@@ -106,6 +123,25 @@ func cmdMetaProxy() *cli.Command {
 					MinTime:             time.Second * 5,
 					PermitWithoutStream: false,
 				}),
+			}
+
+			// OIDC authentication (strict — requires valid token when enabled)
+			oidcIssuer := c.String("oidc-issuer")
+			oidcClientID := c.String("oidc-client-id")
+			if oidcIssuer != "" {
+				if oidcClientID != "" {
+					loggerProxy.Infof("OIDC authentication enabled (issuer: %s, client_id: %s, strict mode)", oidcIssuer, oidcClientID)
+				} else {
+					loggerProxy.Infof("OIDC authentication enabled (issuer: %s, any client accepted, strict mode)", oidcIssuer)
+				}
+				validator, err := oidc.NewValidator(context.Background(), oidcIssuer, oidcClientID)
+				if err != nil {
+					loggerProxy.Fatalf("Failed to create OIDC validator: %v", err)
+				}
+				opts = append(opts,
+					gRPC.UnaryInterceptor(oidc.StrictUnaryInterceptorWithValidator(validator)),
+					gRPC.StreamInterceptor(oidc.StrictStreamInterceptorWithValidator(validator)),
+				)
 			}
 
 			grpcServer := gRPC.NewServer(opts...)

@@ -135,6 +135,16 @@ func (qm *queryMap) pop(key string) string {
 	return qm.Get(key)
 }
 
+// get returns the value for the given key, or the value for originalKey if the first is empty.
+// Unlike pop, it does not delete the key from the values.
+func (qm *queryMap) get(key, originalKey string) string {
+	val := qm.Get(key)
+	if val == "" {
+		return qm.Get(originalKey)
+	}
+	return val
+}
+
 func errno(err error) syscall.Errno {
 	if err == nil {
 		return 0
