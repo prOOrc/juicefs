@@ -72,18 +72,30 @@ func (m *TokenManager) ensureManager(ctx context.Context) (*sdk.Manager, error) 
 	return mgr, nil
 }
 
-// GetToken returns a cached token. The library handles caching and refresh.
-// Returns nil if no cached token exists (does NOT block on browser auth).
+// GetToken returns a valid token. The library handles caching, refresh, and
+// interactive authentication automatically. Blocks on browser auth if no cached
+// token exists or refresh fails.
 func (m *TokenManager) GetToken(ctx context.Context) (*sdk.TokenSet, error) {
 	mgr, err := m.ensureManager(ctx)
 	if err != nil {
 		tmLogger.Warnf("OIDC: discovery failed: %v", err)
 		return nil, nil
 	}
-	return mgr.GetCachedToken(ctx)
+	return mgr.GetToken(ctx)
+}
+
+// BearerToken returns the ID token as a "Bearer ..." string, or empty if unavailable.
+// Blocks on browser auth if no cached token exists.
+func (m *TokenManager) BearerToken(ctx context.Context) string {
+	tok, _ := m.GetToken(ctx)
+	if tok != nil && tok.IDToken != "" {
+		return "Bearer " + tok.IDToken
+	}
+	return ""
 }
 
 // Authenticate runs the full OIDC authentication flow (interactive, blocking).
+// Same as GetToken but always triggers browser auth even if a valid cached token exists.
 func (m *TokenManager) Authenticate(ctx context.Context) (*sdk.TokenSet, error) {
 	mgr, err := m.ensureManager(ctx)
 	if err != nil {
