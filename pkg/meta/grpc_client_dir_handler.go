@@ -46,13 +46,8 @@ func (h *grpcDirHandler) List(ctx Context, offset int) ([]*Entry, syscall.Errno)
 	}
 	resp, err := h.client.DirHandlerList(h.authCtx(ctx), req)
 	if err != nil {
-		if h.meta != nil && isUnauthenticated(err) && h.meta.tryReauthenticate(context.Background()) {
-			resp, err = h.client.DirHandlerList(h.authCtx(ctx), req)
-		}
-		if err != nil {
-			logger.Errorf("DirHandlerList error: %v", err)
-			return nil, syscall.EIO
-		}
+		logger.Errorf("DirHandlerList error: %v", err)
+		return nil, syscall.EIO
 	}
 	if resp.Errno != 0 {
 		return nil, syscall.Errno(resp.Errno)
