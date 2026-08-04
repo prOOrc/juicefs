@@ -66,7 +66,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.13.10
 	github.com/pkg/xattr v0.4.9
-	github.com/prOOrc/oidc-login v0.0.0-20260803192118-c87cd0442408
+	github.com/prOOrc/oidc-login v0.0.0-20260804072428-dd6d8e9d3c41
 	github.com/prometheus/client_golang v1.21.1
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.62.0
@@ -226,6 +226,7 @@ require (
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/hashicorp/golang-lru v0.6.0 // indirect
 	github.com/hashicorp/serf v0.10.1 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/int128/listener v1.3.0 // indirect
 	github.com/int128/oauth2cli v1.18.0 // indirect
 	github.com/int128/oauth2dev v1.1.0 // indirect
@@ -293,6 +294,7 @@ require (
 	github.com/smartystreets/assertions v1.2.0 // indirect
 	github.com/spacemonkeygo/monkit/v3 v3.0.25-0.20251022131615-eb24eb109368 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
+	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
 	github.com/syndtr/goleveldb v1.0.0 // indirect
