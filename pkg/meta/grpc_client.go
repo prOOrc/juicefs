@@ -69,9 +69,18 @@ type grpcMeta struct {
 
 	// OIDC (nil if not configured)
 	oidcConfig   *oidc.Config
-	tokenManager *oidc.TokenManager
+	tokenManager tokenProvider // interface for testability
 	authGroup    singleflight.Group // coalesces concurrent token requests
 }
+
+// tokenProvider is the minimal interface needed by withAuth and Shutdown.
+// Implemented by *oidc.TokenManager.
+type tokenProvider interface {
+	BearerToken(ctx context.Context) string
+	Stop()
+}
+
+var _ tokenProvider = (*oidc.TokenManager)(nil)
 
 var _ Meta = (*grpcMeta)(nil)
 
