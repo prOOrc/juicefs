@@ -141,6 +141,8 @@ var errorConverters []errorConverter
 // registerErrorConverter must only be called during init.
 func registerErrorConverter(convert errorConverter) {
 	errorConverters = append(errorConverters, convert)
+}
+
 // get returns the value for the given key, or the value for originalKey if the first is empty.
 // Unlike pop, it does not delete the key from the values.
 func (qm *queryMap) get(key, originalKey string) string {
