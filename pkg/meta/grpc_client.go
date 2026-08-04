@@ -31,14 +31,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/oidc"
 	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
-)
-
-const (
-	// reauthCooldown is the minimum interval between re-auth attempts.
-	reauthCooldown = 30 * time.Second
 )
 
 const (
@@ -75,10 +68,9 @@ type grpcMeta struct {
 	heartbeatWg       sync.WaitGroup
 
 	// OIDC (nil if not configured)
-	oidcConfig     *oidc.Config
-	tokenManager   *oidc.TokenManager
-	reauthGroup    singleflight.Group // coalesces concurrent re-auth requests
-	lastReauthFail time.Time          // last time re-auth failed (cooldown)
+	oidcConfig   *oidc.Config
+	tokenManager *oidc.TokenManager
+	authGroup    singleflight.Group // coalesces concurrent token requests
 }
 
 var _ Meta = (*grpcMeta)(nil)
@@ -218,7 +210,7 @@ func (m *grpcMeta) Shutdown() error {
 }
 
 // withAuth adds session ID and OIDC bearer token (if configured) to gRPC metadata.
-// Non-blocking: uses cached token if available, skips auth header otherwise.
+// Uses singleflight to coalesce concurrent token requests into one auth flow.
 func (m *grpcMeta) withAuth(ctx context.Context) context.Context {
 	if ctx == nil {
 		ctx = context.Background()
@@ -230,13 +222,14 @@ func (m *grpcMeta) withAuth(ctx context.Context) context.Context {
 		md["x-session-id"] = []string{fmt.Sprintf("%d", m.sid)}
 	}
 
-	// Add OIDC bearer token if configured (non-blocking)
+	// Add OIDC bearer token if configured.
+	// singleflight coalesces concurrent calls so only one triggers browser auth.
 	if m.tokenManager != nil {
-		token, err := m.tokenManager.GetToken(ctx)
-		if err != nil {
-			logger.Warnf("OIDC: failed to get token: %v", err)
-		} else if token != nil && token.IDToken != "" {
-			md["authorization"] = []string{"Bearer " + token.IDToken}
+		bearer, _, _ := m.authGroup.Do("token", func() (interface{}, error) {
+			return m.tokenManager.BearerToken(ctx), nil
+		})
+		if token, ok := bearer.(string); ok && token != "" {
+			md["authorization"] = []string{token}
 		}
 	}
 
@@ -245,50 +238,6 @@ func (m *grpcMeta) withAuth(ctx context.Context) context.Context {
 	}
 
 	return ctx
-}
-
-// isUnauthenticated returns true if a gRPC error is codes.Unauthenticated.
-func isUnauthenticated(err error) bool {
-	if err == nil {
-		return false
-	}
-	st, ok := status.FromError(err)
-	return ok && st.Code() == codes.Unauthenticated
-}
-
-// tryReauthenticate triggers interactive OIDC re-authentication when the server
-// rejects a request with codes.Unauthenticated. Concurrent callers are coalesced
-// into a single browser auth flow via singleflight.
-// Returns true if re-auth succeeded and the caller should retry the original request.
-func (m *grpcMeta) tryReauthenticate(ctx context.Context) bool {
-	if m.tokenManager == nil {
-		return false
-	}
-
-	// Cooldown: don't spam browser auth if it recently failed
-	if time.Since(m.lastReauthFail) < reauthCooldown {
-		return false
-	}
-
-	_, err, _ := m.reauthGroup.Do("reauth", func() (interface{}, error) {
-		// Double-check cooldown inside the singleflight group
-		if time.Since(m.lastReauthFail) < reauthCooldown {
-			return nil, nil
-		}
-
-		logger.Infof("OIDC: server rejected token, starting interactive re-authentication...")
-		_, err := m.tokenManager.GetOrCreateToken(ctx)
-		if err != nil {
-			logger.Warnf("OIDC: re-authentication failed: %v", err)
-			m.lastReauthFail = time.Now()
-			return nil, err
-		}
-
-		logger.Infof("OIDC: re-authentication successful")
-		return nil, nil
-	})
-
-	return err == nil
 }
 
 // withSessionID is deprecated; use withAuth instead.

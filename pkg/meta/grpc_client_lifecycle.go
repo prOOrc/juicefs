@@ -50,13 +50,7 @@ func (m *grpcMeta) Load(checkVersion bool) (*Format, error) {
 	req := &pb.LoadRequest{CheckVersion: checkVersion}
 	resp, err := m.client.Load(ctx, req)
 	if err != nil {
-		if m.tryReauthenticate(context.Background()) {
-			ctx = m.withAuth(context.Background())
-			resp, err = m.client.Load(ctx, req)
-		}
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 	if resp.GetErrno() != 0 {
 		return nil, syscall.Errno(resp.GetErrno())
@@ -66,9 +60,6 @@ func (m *grpcMeta) Load(checkVersion bool) (*Format, error) {
 	m.mu.Unlock()
 	// Create session after loading format
 	if err := m.NewSession(false); err != nil {
-		if m.tryReauthenticate(context.Background()) {
-			return nil, m.NewSession(false)
-		}
 		return nil, err
 	}
 	return m.format, nil
@@ -80,14 +71,8 @@ func (m *grpcMeta) NewSession(record bool) error {
 	req := &pb.NewSessionRequest{Record: record}
 	resp, err := m.client.NewSession(ctx, req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			ctx = m.withAuth(context.Background())
-			resp, err = m.client.NewSession(ctx, req)
-		}
-		if err != nil {
-			logger.Errorf("NewSession gRPC error: %v", err)
-			return err
-		}
+		logger.Errorf("NewSession gRPC error: %v", err)
+		return err
 	}
 	if resp.GetErrno() != 0 {
 		logger.Errorf("NewSession errno: %d", resp.GetErrno())

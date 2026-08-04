@@ -17,7 +17,6 @@
 package meta
 
 import (
-	"context"
 	"io"
 	"syscall"
 	"time"
@@ -40,12 +39,7 @@ func (m *grpcMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) sy
 	}
 	resp, err := m.client.Read(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.Read(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
@@ -64,12 +58,7 @@ func (m *grpcMeta) NewSlice(ctx Context, id *uint64) syscall.Errno {
 	}
 	resp, err := m.client.NewSlice(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.NewSlice(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
@@ -93,12 +82,7 @@ func (m *grpcMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice 
 	}
 	resp, err := m.client.Write(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.Write(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
@@ -117,12 +101,7 @@ func (m *grpcMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) sys
 	}
 	resp, err := m.client.InvalidateChunkCache(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.InvalidateChunkCache(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
@@ -144,12 +123,7 @@ func (m *grpcMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, o
 	}
 	resp, err := m.client.CopyFileRange(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.CopyFileRange(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
@@ -174,12 +148,7 @@ func (m *grpcMeta) GetParents(ctx Context, inode Ino) map[Ino]int {
 	}
 	resp, err := m.client.GetParents(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.GetParents(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return nil
-		}
+		return nil
 	}
 	if resp.GetErrno() != 0 {
 		return nil
@@ -200,12 +169,7 @@ func (m *grpcMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall
 	}
 	resp, err := m.client.GetDirStat(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.GetDirStat(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return nil, syscall.EIO
-		}
+		return nil, syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return nil, syscall.Errno(resp.GetErrno())
@@ -232,12 +196,7 @@ func (m *grpcMeta) Clone(ctx Context, srcParentIno, srcIno, dstParentIno Ino, ds
 	}
 	resp, err := m.client.Clone(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.Clone(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
@@ -267,12 +226,7 @@ func (m *grpcMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, pos
 	}
 	resp, err := m.client.Compact(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.Compact(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	return syscall.Errno(resp.GetErrno())
 }
@@ -286,12 +240,7 @@ func (m *grpcMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 	}
 	resp, err := m.client.CompactAll(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.CompactAll(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	return syscall.Errno(resp.GetErrno())
 }
@@ -305,12 +254,7 @@ func (m *grpcMeta) DeleteTokens(ctx Context, ids []uint32) syscall.Errno {
 	}
 	resp, err := m.client.DeleteTokens(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.DeleteTokens(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	return syscall.Errno(resp.GetErrno())
 }
@@ -342,12 +286,7 @@ func (m *grpcMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, blo
 	}
 	resp, err := m.client.Flock(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.Flock(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	return syscall.Errno(resp.GetErrno())
 }
@@ -363,12 +302,7 @@ func (m *grpcMeta) SetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) 
 	}
 	resp, err := m.client.SetFacl(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.SetFacl(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	return syscall.Errno(resp.GetErrno())
 }
@@ -383,12 +317,7 @@ func (m *grpcMeta) GetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) 
 	}
 	resp, err := m.client.GetFacl(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.GetFacl(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
@@ -408,12 +337,7 @@ func (m *grpcMeta) StoreToken(ctx Context, token []byte) (id uint32, st syscall.
 	}
 	resp, err := m.client.StoreToken(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.StoreToken(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return 0, syscall.EIO
-		}
+		return 0, syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return 0, syscall.Errno(resp.GetErrno())
@@ -431,12 +355,7 @@ func (m *grpcMeta) UpdateToken(ctx Context, id uint32, token []byte) syscall.Err
 	}
 	resp, err := m.client.UpdateToken(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.UpdateToken(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	return syscall.Errno(resp.GetErrno())
 }
@@ -450,12 +369,7 @@ func (m *grpcMeta) LoadToken(ctx Context, id uint32) (token []byte, st syscall.E
 	}
 	resp, err := m.client.LoadToken(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.LoadToken(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return nil, syscall.EIO
-		}
+		return nil, syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return nil, syscall.Errno(resp.GetErrno())
@@ -471,12 +385,7 @@ func (m *grpcMeta) ListTokens(ctx Context) (tokens map[uint32][]byte, st syscall
 	}
 	resp, err := m.client.ListTokens(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.ListTokens(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return nil, syscall.EIO
-		}
+		return nil, syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return nil, syscall.Errno(resp.GetErrno())
@@ -506,12 +415,7 @@ func (m *grpcMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursiv
 	}
 	resp, err := m.client.GetSummary(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.GetSummary(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
@@ -533,12 +437,7 @@ func (m *grpcMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 	}
 	resp, err := m.client.GetTreeSummary(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.GetTreeSummary(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
@@ -561,12 +460,7 @@ func (m *grpcMeta) Remove(ctx Context, parent Ino, name string, skipTrash bool, 
 	}
 	resp, err := m.client.Remove(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.Remove(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
@@ -592,12 +486,7 @@ func (m *grpcMeta) BatchUnlink(ctx Context, parent Ino, entries []*Entry, count 
 	}
 	resp, err := m.client.BatchUnlink(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.BatchUnlink(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
@@ -618,12 +507,7 @@ func (m *grpcMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) 
 	}
 	resp, err := m.client.GetXattr(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.GetXattr(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
@@ -646,12 +530,7 @@ func (m *grpcMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, f
 	}
 	resp, err := m.client.SetXattr(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.SetXattr(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	return syscall.Errno(resp.GetErrno())
 }
@@ -666,12 +545,7 @@ func (m *grpcMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	}
 	resp, err := m.client.RemoveXattr(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.RemoveXattr(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	return syscall.Errno(resp.GetErrno())
 }
@@ -685,12 +559,7 @@ func (m *grpcMeta) ListXattr(ctx Context, inode Ino, dbuff *[]byte) syscall.Errn
 	}
 	resp, err := m.client.ListXattr(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.ListXattr(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
@@ -723,12 +592,7 @@ func (m *grpcMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, st
 	}
 	resp, err := m.client.Getlk(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.Getlk(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
@@ -757,12 +621,7 @@ func (m *grpcMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype
 	}
 	resp, err := m.client.Setlk(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.Setlk(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	return syscall.Errno(resp.GetErrno())
 }
@@ -791,12 +650,7 @@ func (m *grpcMeta) HandleQuota(ctx Context, cmd uint8, qkey string, qtype uint32
 	}
 	resp, err := m.client.HandleQuota(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.HandleQuota(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	return syscall.Errno(resp.GetErrno())
 }
@@ -809,12 +663,7 @@ func (m *grpcMeta) ScanUserGroupUsage(ctx Context) error {
 	}
 	resp, err := m.client.ScanUserGroupUsage(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.ScanUserGroupUsage(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return err
-		}
+		return err
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
@@ -859,12 +708,7 @@ func (m *grpcMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, 
 	}
 	resp, err := m.client.ListSlices(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.ListSlices(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			return syscall.EIO
-		}
+		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
@@ -891,13 +735,8 @@ func (m *grpcMeta) NewDirHandler(ctx Context, inode Ino, plus bool, initEntries 
 	}
 	resp, err := m.client.NewDirHandler(m.withSessionID(ctx), req)
 	if err != nil {
-		if isUnauthenticated(err) && m.tryReauthenticate(context.Background()) {
-			resp, err = m.client.NewDirHandler(m.withSessionID(ctx), req)
-		}
-		if err != nil {
-			logger.Errorf("NewDirHandler error: %v", err)
-			return nil, syscall.EIO
-		}
+		logger.Errorf("NewDirHandler error: %v", err)
+		return nil, syscall.EIO
 	}
 	if resp.Errno != 0 {
 		return nil, syscall.Errno(resp.Errno)
