@@ -94,16 +94,6 @@ func (m *TokenManager) BearerToken(ctx context.Context) string {
 	return ""
 }
 
-// Authenticate runs the full OIDC authentication flow (interactive, blocking).
-// Same as GetToken but always triggers browser auth even if a valid cached token exists.
-func (m *TokenManager) Authenticate(ctx context.Context) (*sdk.TokenSet, error) {
-	mgr, err := m.ensureManager(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("oidc: discovery: %w", err)
-	}
-	return mgr.Authenticate(ctx)
-}
-
 // Stop is a no-op — the library manages its own lifecycle.
 func (m *TokenManager) Stop() {}
 
