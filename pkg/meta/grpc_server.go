@@ -33,14 +33,42 @@ type MetaProxyServer struct {
 	mu         sync.Mutex
 	nextHandle uint64
 	handlers   map[uint64]DirHandler
+
+	// Authorization (optional)
+	authzInterceptor *AuthzInterceptor
+	inodePathCache   *InodePathCache
 }
 
-// NewMetaProxyServer creates a new MetaProxyServer
-func NewMetaProxyServer(m Meta) *MetaProxyServer {
+// NewMetaProxyServer creates a new MetaProxyServer.
+// cacheMaxSize sets the maximum inode→path mappings (0 = unlimited).
+func NewMetaProxyServer(m Meta, cacheMaxSize int) *MetaProxyServer {
 	return &MetaProxyServer{
-		meta:     m,
-		handlers: make(map[uint64]DirHandler),
+		meta:           m,
+		handlers:       make(map[uint64]DirHandler),
+		inodePathCache: NewInodePathCache(cacheMaxSize),
 	}
+}
+
+// SetAuthzInterceptor configures the authorization interceptor.
+// Called during server setup in cmd/meta_proxy.go (before gRPC Serve).
+func (s *MetaProxyServer) SetAuthzInterceptor(ai *AuthzInterceptor) {
+	s.authzInterceptor = ai
+}
+
+// InodePathCache returns the inode→path cache (for cmd/meta_proxy.go).
+func (s *MetaProxyServer) InodePathCache() *InodePathCache {
+	return s.inodePathCache
+}
+
+// ResolveHandle returns the inode for a DirHandler handle (for authz interceptor).
+func (s *MetaProxyServer) ResolveHandle(handle uint64) (Ino, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	h, ok := s.handlers[handle]
+	if !ok {
+		return 0, false
+	}
+	return h.(*dirHandler).inode, true
 }
 
 // helper to convert Context from proto
