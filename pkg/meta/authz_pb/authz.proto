@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package agio.renderfarm.authz.v1;
+
+option go_package = "github.com/juicedata/juicefs/pkg/meta/authz_pb";
+
+// Authorization service for JuiceFS Meta Proxy
+service AuthzService {
+	// Check permission for a single path
+	rpc CheckPermission(CheckPermissionRequest) returns (CheckPermissionResponse);
+
+	// Batch check permissions for multiple paths
+	rpc CheckBulkPermissions(CheckBulkPermissionsRequest) returns (CheckBulkPermissionsResponse);
+
+	// Check if a user is an organization admin (via SpiceDB)
+	// Used for JuiceFS admin operations (Init, GetFormat, Compact, Quota, etc.)
+	rpc CheckOrganizationAdmin(CheckOrganizationAdminRequest) returns (CheckOrganizationAdminResponse);
+}
+
+// Permission levels matching auth.Permission
+enum Permission {
+	PERMISSION_NONE = 0;
+	PERMISSION_VIEW = 1; // stat, lookup, readlink
+	PERMISSION_READ = 2; // open for read, read data
+	PERMISSION_EDIT = 3; // create, write, delete, rename
+}
+
+message CheckPermissionRequest {
+	string user_id = 1;       // from OIDC token 'sub' claim
+	string path = 2;          // full filesystem path, e.g. "/company-abc/projects/render/out/frame.exr"
+	Permission permission = 3; // required permission level
+}
+
+message CheckPermissionResponse {
+	bool allowed = 1;
+}
+
+message CheckBulkPermissionsRequest {
+	string user_id = 1;         // from OIDC token 'sub' claim
+	repeated string paths = 2;  // up to 1000 paths per batch
+	Permission permission = 3;  // same permission for all paths
+}
+
+message CheckBulkPermissionsResponse {
+	repeated bool allowed = 1; // same order as request paths
+}
+
+message CheckOrganizationAdminRequest {
+	string user_id = 1; // from OIDC token 'sub' claim
+}
+
+message CheckOrganizationAdminResponse {
+	bool is_admin = 1;
+}

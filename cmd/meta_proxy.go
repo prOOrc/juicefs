@@ -91,6 +91,43 @@ func cmdMetaProxy() *cli.Command {
 				Usage:  "Expected audience claim in OIDC token (optional)",
 				Hidden: false,
 			},
+			// Authorization flags
+			&cli.StringFlag{
+				Name:   "authz-service",
+				Usage:  "Authorization gRPC service address (e.g., localhost:9090). Enables file-level authorization when set.",
+				Hidden: false,
+			},
+			&cli.StringFlag{
+				Name:   "authz-volume-name",
+				Usage:  "JuiceFS volume name for facility mapping in authz service (optional)",
+				Hidden: false,
+			},
+			&cli.StringFlag{
+				Name:   "authz-tls-cert",
+				Usage:  "TLS client certificate for authz service connection (production use)",
+				Hidden: true,
+			},
+			&cli.StringFlag{
+				Name:   "authz-tls-key",
+				Usage:  "TLS client private key for authz service connection (production use)",
+				Hidden: true,
+			},
+			&cli.StringFlag{
+				Name:   "authz-tls-ca",
+				Usage:  "TLS CA certificate for authz service connection (production use)",
+				Hidden: true,
+			},
+			&cli.StringFlag{
+				Name:   "authz-server-name",
+				Usage:  "Server name for TLS certificate validation (default: service hostname)",
+				Hidden: true,
+			},
+			&cli.IntFlag{
+				Name:   "authz-path-cache-size",
+				Usage:  "Maximum number of inode→path mappings in cache (0 = unlimited, default 100000)",
+				Value:  100000,
+				Hidden: false,
+			},
 		},
 		Action: func(c *cli.Context) error {
 			if c.Bool("debug") {
@@ -110,7 +147,8 @@ func cmdMetaProxy() *cli.Command {
 
 			m := meta.NewClient(metaBackendUrl, meta.DefaultConf())
 
-			server := meta.NewMetaProxyServer(m)
+			cacheMaxSize := c.Int("authz-path-cache-size")
+			server := meta.NewMetaProxyServer(m, cacheMaxSize)
 
 			opts := []gRPC.ServerOption{
 				gRPC.MaxRecvMsgSize(maxRecvMsgSize),
@@ -125,6 +163,10 @@ func cmdMetaProxy() *cli.Command {
 				}),
 			}
 
+			// Build interceptor chain: OIDC (authentication) → Authz (authorization)
+			var unaryInterceptors []gRPC.UnaryServerInterceptor
+			var streamInterceptors []gRPC.StreamServerInterceptor
+
 			// OIDC authentication (strict — requires valid token when enabled)
 			oidcIssuer := c.String("oidc-issuer")
 			oidcClientID := c.String("oidc-client-id")
@@ -138,10 +180,39 @@ func cmdMetaProxy() *cli.Command {
 				if err != nil {
 					loggerProxy.Fatalf("Failed to create OIDC validator: %v", err)
 				}
-				opts = append(opts,
-					gRPC.UnaryInterceptor(oidc.StrictUnaryInterceptorWithValidator(validator)),
-					gRPC.StreamInterceptor(oidc.StrictStreamInterceptorWithValidator(validator)),
-				)
+				unaryInterceptors = append(unaryInterceptors, oidc.StrictUnaryInterceptorWithValidator(validator))
+				streamInterceptors = append(streamInterceptors, oidc.StrictStreamInterceptorWithValidator(validator))
+			}
+
+			// Authorization interceptor (optional, after OIDC)
+			authzAddr := c.String("authz-service")
+			if authzAddr != "" {
+				volumeName := c.String("authz-volume-name")
+				tlsCert := c.String("authz-tls-cert")
+				tlsKey := c.String("authz-tls-key")
+				tlsCA := c.String("authz-tls-ca")
+				serverName := c.String("authz-server-name")
+
+				loggerProxy.Infof("File authorization enabled (authz service: %s, volume: %s)", authzAddr, volumeName)
+
+				authzClient, err := meta.NewRenderfarmAuthzClient(authzAddr, volumeName, tlsCert, tlsKey, tlsCA, serverName)
+				if err != nil {
+					loggerProxy.Fatalf("Failed to connect to authz service: %v", err)
+				}
+
+				interceptor := meta.NewAuthzInterceptor(authzClient, server.InodePathCache(), server)
+				server.SetAuthzInterceptor(interceptor)
+				unaryInterceptors = append(unaryInterceptors, interceptor.UnaryInterceptor())
+
+				loggerProxy.Warnf("Streaming DumpMeta/LoadMeta disabled (not covered by authz)")
+			}
+
+			// Apply interceptor chain
+			if len(unaryInterceptors) > 0 {
+				opts = append(opts, gRPC.ChainUnaryInterceptor(unaryInterceptors...))
+			}
+			if len(streamInterceptors) > 0 {
+				opts = append(opts, gRPC.ChainStreamInterceptor(streamInterceptors...))
 			}
 
 			grpcServer := gRPC.NewServer(opts...)

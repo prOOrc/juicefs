@@ -23,6 +23,9 @@ import (
 	oidcPkg "github.com/coreos/go-oidc/v3/oidc"
 )
 
+// IDToken is an alias for the go-oidc IDToken type, exported for use by consumers.
+type IDToken = oidcPkg.IDToken
+
 // Validator verifies OIDC ID tokens using JWKS from the issuer.
 type Validator struct {
 	provider *oidcPkg.Provider

@@ -41,6 +41,14 @@ func (s *MetaProxyServer) Lookup(ctx context.Context, req *pb.LookupRequest) (*p
 	var inode Ino
 	var attr Attr
 	errno := s.meta.Lookup(mctx, Ino(req.Parent), req.Name, &inode, &attr, req.CheckPermission)
+
+	if errno == 0 {
+		childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
+		if childPath != "" {
+			s.inodePathCache.Set(inode, childPath)
+		}
+	}
+
 	return &pb.LookupResponse{
 		Errno: uint32(errno),
 		Inode: uint64(inode),
@@ -103,6 +111,14 @@ func (s *MetaProxyServer) Mknod(ctx context.Context, req *pb.MknodRequest) (*pb.
 	var attr Attr
 	errno := s.meta.Mknod(mctx, Ino(req.Parent), req.Name, uint8(req.Type),
 		uint16(req.Mode), uint16(req.Cumask), req.Rdev, req.Path, &inode, &attr)
+
+	if errno == 0 {
+		childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
+		if childPath != "" {
+			s.inodePathCache.Set(inode, childPath)
+		}
+	}
+
 	return &pb.MknodResponse{
 		Errno: uint32(errno),
 		Inode: uint64(inode),
@@ -116,6 +132,14 @@ func (s *MetaProxyServer) Mkdir(ctx context.Context, req *pb.MkdirRequest) (*pb.
 	var attr Attr
 	errno := s.meta.Mkdir(mctx, Ino(req.Parent), req.Name, uint16(req.Mode),
 		uint16(req.Cumask), uint8(req.Copysgid), &inode, &attr)
+
+	if errno == 0 {
+		childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
+		if childPath != "" {
+			s.inodePathCache.Set(inode, childPath)
+		}
+	}
+
 	return &pb.MkdirResponse{
 		Errno: uint32(errno),
 		Inode: uint64(inode),
@@ -129,6 +153,14 @@ func (s *MetaProxyServer) Create(ctx context.Context, req *pb.CreateRequest) (*p
 	var attr Attr
 	errno := s.meta.Create(mctx, Ino(req.Parent), req.Name, uint16(req.Mode),
 		uint16(req.Cumask), uint32(req.Flags), &inode, &attr)
+
+	if errno == 0 {
+		childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
+		if childPath != "" {
+			s.inodePathCache.Set(inode, childPath)
+		}
+	}
+
 	return &pb.CreateResponse{
 		Errno: uint32(errno),
 		Inode: uint64(inode),
@@ -155,12 +187,28 @@ func (s *MetaProxyServer) Close(ctx context.Context, req *pb.CloseRequest) (*pb.
 func (s *MetaProxyServer) Unlink(ctx context.Context, req *pb.UnlinkRequest) (*pb.UnlinkResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	errno := s.meta.Unlink(mctx, Ino(req.Parent), req.Name, req.SkipCheckTrash)
+
+	if errno == 0 {
+		childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
+		if childPath != "" {
+			s.inodePathCache.UnsetByPath(childPath)
+		}
+	}
+
 	return &pb.UnlinkResponse{Errno: uint32(errno)}, nil
 }
 
 func (s *MetaProxyServer) Rmdir(ctx context.Context, req *pb.RmdirRequest) (*pb.RmdirResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	errno := s.meta.Rmdir(mctx, Ino(req.Parent), req.Name, req.SkipCheckTrash)
+
+	if errno == 0 {
+		dirPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
+		if dirPath != "" {
+			s.inodePathCache.RemoveSubtree(dirPath)
+		}
+	}
+
 	return &pb.RmdirResponse{Errno: uint32(errno)}, nil
 }
 
@@ -170,6 +218,30 @@ func (s *MetaProxyServer) Rename(ctx context.Context, req *pb.RenameRequest) (*p
 	var attr Attr
 	errno := s.meta.Rename(mctx, Ino(req.ParentSrc), req.NameSrc,
 		Ino(req.ParentDst), req.NameDst, uint32(req.Flags), &inode, &attr)
+
+	if errno == 0 && inode > 0 {
+		oldPath := s.inodePathCache.BuildChildPath(Ino(req.ParentSrc), string(req.NameSrc))
+		newPath := s.inodePathCache.BuildChildPath(Ino(req.ParentDst), string(req.NameDst))
+
+		if newPath != "" {
+			// If destination already exists in cache and is a different inode,
+			// remove its mapping first (rename overwrites the destination).
+			if dstInode := s.inodePathCache.GetInodeByPath(newPath); dstInode != 0 && dstInode != inode {
+				s.inodePathCache.RemoveSubtree(newPath)
+			}
+
+			// If old path is known, update subtree (covers both the entry and children).
+			if oldPath != "" {
+				s.inodePathCache.RenameSubtree(oldPath, newPath)
+			}
+
+			// Guarantee that the moved inode has a mapping to the new path.
+			if !s.inodePathCache.Move(inode, newPath) {
+				s.inodePathCache.Set(inode, newPath)
+			}
+		}
+	}
+
 	return &pb.RenameResponse{
 		Errno: uint32(errno),
 		Inode: uint64(inode),
@@ -181,6 +253,11 @@ func (s *MetaProxyServer) Link(ctx context.Context, req *pb.LinkRequest) (*pb.Li
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var attr Attr
 	errno := s.meta.Link(mctx, Ino(req.InodeSrc), Ino(req.Parent), req.Name, &attr)
+
+	// Link creates a new directory entry for an existing inode.
+	// The inode already has a path; the new name is an additional reference.
+	// We don't update the cache because an inode can have multiple paths (hardlinks).
+	// Authz checks use the first-cached path, which is sufficient for company-scoped permissions.
 	return &pb.LinkResponse{
 		Errno: uint32(errno),
 		Attr:  AttrToProto(&attr),
@@ -192,6 +269,14 @@ func (s *MetaProxyServer) Symlink(ctx context.Context, req *pb.SymlinkRequest) (
 	var inode Ino
 	var attr Attr
 	errno := s.meta.Symlink(mctx, Ino(req.Parent), req.Name, req.Path, &inode, &attr)
+
+	if errno == 0 {
+		childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
+		if childPath != "" {
+			s.inodePathCache.Set(inode, childPath)
+		}
+	}
+
 	return &pb.SymlinkResponse{
 		Errno: uint32(errno),
 		Inode: uint64(inode),
@@ -233,10 +318,109 @@ func (s *MetaProxyServer) Readdir(ctx context.Context, req *pb.ReaddirRequest) (
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var entries []*Entry
 	errno := s.meta.Readdir(mctx, Ino(req.Inode), uint8(req.Wantattr), &entries)
-	return &pb.ReaddirResponse{
-		Errno:   uint32(errno),
-		Entries: EntriesToProto(entries),
-	}, nil
+
+	if errno != 0 {
+		return &pb.ReaddirResponse{Errno: uint32(errno)}, nil
+	}
+
+	// Post-filter first: filter entries by authorization (like MinIO's filterWalkResultCh)
+	filtered := s.filterEntriesByAuthz(ctx, Ino(req.Inode), entries)
+
+	// Cache only the filtered (allowed) entries — prevents cache pollution from
+	// unauthorized paths and avoids hardlink first-seen being set from forbidden listings.
+	if len(filtered) > 0 {
+		mappings := make(map[Ino]string)
+		for _, e := range filtered {
+			childPath := s.inodePathCache.BuildChildPath(Ino(req.Inode), string(e.Name))
+			if childPath != "" {
+				mappings[e.Inode] = childPath
+			}
+		}
+		if len(mappings) > 0 {
+			s.inodePathCache.SetMany(mappings)
+		}
+	}
+
+	protoEntries := make([]*pb.ProtoEntry, len(filtered))
+	for i, e := range filtered {
+		protoEntries[i] = EntryToProto(e)
+	}
+	return &pb.ReaddirResponse{Errno: 0, Entries: protoEntries}, nil
+}
+
+// filterEntriesByAuthz filters directory entries by user permissions.
+// Follows MinIO's pattern: get all results from backend, then filter by batch authz check.
+// Entries the user cannot see are simply not returned to the client.
+func (s *MetaProxyServer) filterEntriesByAuthz(ctx context.Context, parentInode Ino, entries []*Entry) []*Entry {
+	if s.authzInterceptor == nil || !s.authzInterceptor.enabled {
+		return entries // no authz configured — return all
+	}
+
+	userID := s.authzInterceptor.extractUserID(ctx)
+	if userID == "" {
+		authzLogger.Warnf("Readdir: empty userID — returning empty list (deny)")
+		return nil // fail-closed: no user = no access
+	}
+
+	// Pre-check: user must have View on the parent directory to list it at all.
+	parentPath := s.inodePathCache.Get(parentInode)
+	if parentPath == "" {
+		authzLogger.Debugf("Readdir: parent inode %d not in cache — returning empty list", parentInode)
+		return nil // can't resolve parent path — deny
+	}
+
+	allowedParent, err := s.authzInterceptor.client.CheckPermission(ctx, userID, parentPath, AuthzPermissionView)
+	if err != nil || !allowedParent {
+		authzLogger.Debugf("Readdir: parent check denied for user=%s path=%s err=%v", userID, parentPath, err)
+		return nil // fail-closed: can't list this directory
+	}
+
+	// Build paths for all entries (already cached by SetMany above)
+	paths := make([]string, 0, len(entries))
+	validIndices := make([]int, 0, len(entries))
+	for i, e := range entries {
+		p := s.inodePathCache.Get(e.Inode)
+		if p == "" {
+			// Fallback: build from the actual parent inode (not RootInode).
+			p = s.inodePathCache.BuildChildPath(parentInode, string(e.Name))
+		}
+		if p == "" {
+			continue // empty path — skip this entry
+		}
+		paths = append(paths, p)
+		validIndices = append(validIndices, i)
+	}
+
+	if len(paths) == 0 {
+		return nil
+	}
+
+	// Batch check permissions (View — can see the entry in directory listing)
+	allowed, err := s.authzInterceptor.client.CheckBulkPermissions(ctx, userID, paths, AuthzPermissionView)
+	if err != nil {
+		authzLogger.Warnf("Readdir batch authz error: %v — returning empty list (fail-closed)", err)
+		return nil // fail-closed on authz error
+	}
+
+	if len(allowed) != len(paths) {
+		authzLogger.Warnf("Readdir authz bulk result length mismatch: %d != %d — returning empty list",
+			len(allowed), len(paths))
+		return nil
+	}
+
+	// Filter: keep only allowed entries
+	filtered := make([]*Entry, 0, len(entries))
+	for i, idx := range validIndices {
+		if allowed[i] {
+			filtered = append(filtered, entries[idx])
+		}
+	}
+
+	if len(filtered) != len(entries) {
+		authzLogger.Debugf("Readdir filtered %d/%d entries for user %s", len(filtered), len(entries), userID)
+	}
+
+	return filtered
 }
 
 func (s *MetaProxyServer) Read(ctx context.Context, req *pb.ReadRequest) (*pb.ReadResponse, error) {
