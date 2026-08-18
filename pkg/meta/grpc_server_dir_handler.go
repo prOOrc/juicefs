@@ -33,7 +33,7 @@ func (s *MetaProxyServer) NewDirHandler(ctx context.Context, req *pb.NewDirHandl
 	s.mu.Lock()
 	handleID := s.nextHandle
 	s.nextHandle++
-	s.handlers[handleID] = handler
+	s.handlers[handleID] = dirHandlerEntry{handler: handler, inode: Ino(req.Inode)}
 	s.mu.Unlock()
 	return &pb.NewDirHandlerResponse{
 		Errno:  0,
@@ -43,47 +43,69 @@ func (s *MetaProxyServer) NewDirHandler(ctx context.Context, req *pb.NewDirHandl
 
 func (s *MetaProxyServer) DirHandlerList(ctx context.Context, req *pb.DirHandlerListRequest) (*pb.DirHandlerListResponse, error) {
 	s.mu.Lock()
-	handler, ok := s.handlers[req.Handle.HandleId]
+	entry, ok := s.handlers[req.Handle.HandleId]
 	s.mu.Unlock()
 	if !ok {
 		return &pb.DirHandlerListResponse{Errno: uint32(syscall.EBADF)}, nil
 	}
-	entries, errno := handler.List(Background(), int(req.Offset))
-	return &pb.DirHandlerListResponse{
-		Errno:   uint32(errno),
-		Entries: EntriesToProto(entries),
-	}, nil
+	entries, errno := entry.handler.List(Background(), int(req.Offset))
+	if errno != 0 {
+		return &pb.DirHandlerListResponse{Errno: uint32(errno)}, nil
+	}
+
+	// Post-filter: same as Readdir — hide entries the user cannot view.
+	filtered := s.filterEntriesByAuthz(ctx, entry.inode, entries)
+
+	// Cache paths for filtered entries (prevents cache pollution from unauthorized paths).
+	if len(filtered) > 0 {
+		mappings := make(map[Ino]string)
+		for _, e := range filtered {
+			childPath := s.inodePathCache.BuildChildPath(entry.inode, string(e.Name))
+			if childPath != "" {
+				mappings[e.Inode] = withDirSlash(childPath, e.Attr)
+			}
+		}
+		if len(mappings) > 0 {
+			s.inodePathCache.SetMany(mappings)
+		}
+	}
+
+	protoEntries := make([]*pb.ProtoEntry, len(filtered))
+	for i, e := range filtered {
+		protoEntries[i] = EntryToProto(e)
+	}
+	return &pb.DirHandlerListResponse{Errno: 0, Entries: protoEntries}, nil
 }
 
 func (s *MetaProxyServer) DirHandlerInsert(ctx context.Context, req *pb.DirHandlerInsertRequest) (*pb.DirHandlerInsertResponse, error) {
 	s.mu.Lock()
-	handler, ok := s.handlers[req.Handle.HandleId]
+	entry, ok := s.handlers[req.Handle.HandleId]
 	s.mu.Unlock()
 	if !ok {
 		return &pb.DirHandlerInsertResponse{Errno: uint32(syscall.EBADF)}, nil
 	}
-	handler.Insert(Ino(req.Inode), req.Name, ProtoToAttr(req.Attr))
+	entry.handler.Insert(Ino(req.Inode), req.Name, ProtoToAttr(req.Attr))
 	return &pb.DirHandlerInsertResponse{Errno: 0}, nil
 }
 
 func (s *MetaProxyServer) DirHandlerDelete(ctx context.Context, req *pb.DirHandlerDeleteRequest) (*pb.DirHandlerDeleteResponse, error) {
 	s.mu.Lock()
-	handler, ok := s.handlers[req.Handle.HandleId]
+	entry, ok := s.handlers[req.Handle.HandleId]
 	s.mu.Unlock()
 	if !ok {
 		return &pb.DirHandlerDeleteResponse{Errno: uint32(syscall.EBADF)}, nil
 	}
-	handler.Delete(req.Name)
+	entry.handler.Delete(req.Name)
 	return &pb.DirHandlerDeleteResponse{Errno: 0}, nil
 }
 
 func (s *MetaProxyServer) DirHandlerClose(ctx context.Context, req *pb.DirHandlerCloseRequest) (*pb.DirHandlerCloseResponse, error) {
 	s.mu.Lock()
-	handler, ok := s.handlers[req.Handle.HandleId]
+	entry, ok := s.handlers[req.Handle.HandleId]
 	delete(s.handlers, req.Handle.HandleId)
 	s.mu.Unlock()
 	if ok {
-		handler.Close()
+		entry.handler.Close()
 	}
 	return &pb.DirHandlerCloseResponse{Errno: 0}, nil
 }

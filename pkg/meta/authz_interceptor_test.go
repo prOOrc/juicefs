@@ -63,6 +63,9 @@ func TestRequiredPermission_Lifecycle(t *testing.T) {
 	assert.Equal(t, AuthzPermissionNone, ai.requiredPermission("/pb.MetaService/Init"))
 	assert.Equal(t, AuthzPermissionNone, ai.requiredPermission("/pb.MetaService/NewSession"))
 	assert.Equal(t, AuthzPermissionNone, ai.requiredPermission("/pb.MetaService/CloseSession"))
+	// Chroot is a per-session restriction (limits user's view), not an escalation.
+	// Called unconditionally during mount init; all subsequent file ops are still checked.
+	assert.Equal(t, AuthzPermissionNone, ai.requiredPermission("/pb.MetaService/Chroot"))
 }
 
 func TestRequiredPermission_View(t *testing.T) {
@@ -237,11 +240,7 @@ func TestInterceptor_DenyOnAuthzError(t *testing.T) {
 func TestInterceptor_AllowsLookupChecksParent(t *testing.T) {
 	mockClient := &mockAuthzClient{}
 	cache := NewInodePathCache(0)
-	// Root is always in cache
-
-	// Lookup(parent=1, name="company-abc") should check View on "/" (parent), not child path
-	mockClient.On("CheckPermission", mock.Anything, "user-123",
-		"/", AuthzPermissionView).Return(true, nil)
+	// Root is always in cache; Lookup on root parent is short-circuited (always allowed)
 
 	ai := newTestInterceptor(mockClient, cache, "user-123")
 	interceptor := ai.UnaryInterceptor()
@@ -256,8 +255,7 @@ func TestInterceptor_AllowsLookupChecksParent(t *testing.T) {
 		&grpc.UnaryServerInfo{FullMethod: "/pb.MetaService/Lookup"}, handler)
 
 	assert.NoError(t, err)
-	assert.True(t, called, "handler should be called for authorized Lookup")
-	mockClient.AssertExpectations(t)
+	assert.True(t, called, "handler should be called for Lookup on root (always allowed)")
 }
 
 func TestInterceptor_SkipsLifecycleMethods(t *testing.T) {
@@ -518,4 +516,69 @@ func TestPermissionFromAccessMask(t *testing.T) {
 	assert.Equal(t, AuthzPermissionWrite, permissionFromAccessMask(2))
 	// X_OK=1 → View
 	assert.Equal(t, AuthzPermissionView, permissionFromAccessMask(1))
+}
+
+func TestAuthzInterceptor_RootPathViewAlwaysAllowed(t *testing.T) {
+	mockClient := &mockAuthzClient{}
+	cache := NewInodePathCache(0)
+	// Root inode (1) is pre-populated with "/"
+
+	ai := newTestInterceptor(mockClient, cache, "user-123")
+	interceptor := ai.UnaryInterceptor()
+
+	called := false
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		called = true
+		return &pb.GetAttrResponse{}, nil
+	}
+
+	_, err := interceptor(context.Background(), &pb.GetAttrRequest{Inode: 1},
+		&grpc.UnaryServerInfo{FullMethod: "/pb.MetaService/GetAttr"}, handler)
+
+	assert.NoError(t, err)
+	assert.True(t, called, "handler should be called for root GetAttr (View always allowed)")
+	// CheckPermission must NOT have been called
+	mockClient.AssertNotCalled(t, "CheckPermission", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestAuthzInterceptor_RootPathWriteStillChecked(t *testing.T) {
+	mockClient := &mockAuthzClient{}
+	cache := NewInodePathCache(0)
+	// Root inode (1) is pre-populated with "/"
+
+	// Write on root should still go through authz service (not always-allowed)
+	mockClient.On("CheckPermission", mock.Anything, "user-123",
+		"/", AuthzPermissionWrite).Return(false, nil)
+
+	ai := newTestInterceptor(mockClient, cache, "user-123")
+	interceptor := ai.UnaryInterceptor()
+
+	called := false
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		called = true
+		return &pb.MkdirResponse{}, nil
+	}
+
+	_, err := interceptor(context.Background(), &pb.MkdirRequest{Parent: 1, Name: "new-company"},
+		&grpc.UnaryServerInfo{FullMethod: "/pb.MetaService/Mkdir"}, handler)
+
+	assert.Error(t, err)
+	st, ok := status.FromError(err)
+	assert.True(t, ok)
+	assert.Equal(t, codes.PermissionDenied, st.Code())
+	assert.False(t, called, "handler should NOT be called for Write on root (not always-allowed)")
+	mockClient.AssertExpectations(t)
+}
+
+func TestIsAlwaysAllowed(t *testing.T) {
+	// Root + View → always allowed
+	assert.True(t, isAlwaysAllowed("/", AuthzPermissionView))
+	// Root + Write → NOT always allowed
+	assert.False(t, isAlwaysAllowed("/", AuthzPermissionWrite))
+	// Root + Read → NOT always allowed
+	assert.False(t, isAlwaysAllowed("/", AuthzPermissionRead))
+	// Non-root + View → NOT always allowed
+	assert.False(t, isAlwaysAllowed("/company-abc", AuthzPermissionView))
+	// Non-root + Write → NOT always allowed
+	assert.False(t, isAlwaysAllowed("/company-abc/file.exr", AuthzPermissionWrite))
 }

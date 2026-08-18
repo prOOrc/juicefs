@@ -45,7 +45,7 @@ func (s *MetaProxyServer) Lookup(ctx context.Context, req *pb.LookupRequest) (*p
 	if errno == 0 {
 		childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
 		if childPath != "" {
-			s.inodePathCache.Set(inode, childPath)
+			s.inodePathCache.Set(inode, withDirSlash(childPath, &attr))
 		}
 	}
 
@@ -115,7 +115,7 @@ func (s *MetaProxyServer) Mknod(ctx context.Context, req *pb.MknodRequest) (*pb.
 	if errno == 0 {
 		childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
 		if childPath != "" {
-			s.inodePathCache.Set(inode, childPath)
+			s.inodePathCache.Set(inode, withDirSlash(childPath, &attr))
 		}
 	}
 
@@ -136,7 +136,7 @@ func (s *MetaProxyServer) Mkdir(ctx context.Context, req *pb.MkdirRequest) (*pb.
 	if errno == 0 {
 		childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
 		if childPath != "" {
-			s.inodePathCache.Set(inode, childPath)
+			s.inodePathCache.Set(inode, withDirSlash(childPath, &attr))
 		}
 	}
 
@@ -157,7 +157,7 @@ func (s *MetaProxyServer) Create(ctx context.Context, req *pb.CreateRequest) (*p
 	if errno == 0 {
 		childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
 		if childPath != "" {
-			s.inodePathCache.Set(inode, childPath)
+			s.inodePathCache.Set(inode, withDirSlash(childPath, &attr))
 		}
 	}
 
@@ -222,6 +222,9 @@ func (s *MetaProxyServer) Rename(ctx context.Context, req *pb.RenameRequest) (*p
 	if errno == 0 && inode > 0 {
 		oldPath := s.inodePathCache.BuildChildPath(Ino(req.ParentSrc), string(req.NameSrc))
 		newPath := s.inodePathCache.BuildChildPath(Ino(req.ParentDst), string(req.NameDst))
+		// Directories are stored with a trailing slash (authz path convention).
+		oldPath = withDirSlash(oldPath, &attr)
+		newPath = withDirSlash(newPath, &attr)
 
 		if newPath != "" {
 			// If destination already exists in cache and is a different inode,
@@ -273,7 +276,7 @@ func (s *MetaProxyServer) Symlink(ctx context.Context, req *pb.SymlinkRequest) (
 	if errno == 0 {
 		childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
 		if childPath != "" {
-			s.inodePathCache.Set(inode, childPath)
+			s.inodePathCache.Set(inode, withDirSlash(childPath, &attr))
 		}
 	}
 
@@ -333,7 +336,7 @@ func (s *MetaProxyServer) Readdir(ctx context.Context, req *pb.ReaddirRequest) (
 		for _, e := range filtered {
 			childPath := s.inodePathCache.BuildChildPath(Ino(req.Inode), string(e.Name))
 			if childPath != "" {
-				mappings[e.Inode] = childPath
+				mappings[e.Inode] = withDirSlash(childPath, e.Attr)
 			}
 		}
 		if len(mappings) > 0 {
@@ -369,10 +372,13 @@ func (s *MetaProxyServer) filterEntriesByAuthz(ctx context.Context, parentInode 
 		return nil // can't resolve parent path — deny
 	}
 
-	allowedParent, err := s.authzInterceptor.client.CheckPermission(ctx, userID, parentPath, AuthzPermissionView)
-	if err != nil || !allowedParent {
-		authzLogger.Debugf("Readdir: parent check denied for user=%s path=%s err=%v", userID, parentPath, err)
-		return nil // fail-closed: can't list this directory
+	// Root is always viewable (same as isAlwaysAllowed in the interceptor).
+	if parentPath != "/" {
+		allowedParent, err := s.authzInterceptor.client.CheckPermission(ctx, userID, parentPath, AuthzPermissionView)
+		if err != nil || !allowedParent {
+			authzLogger.Debugf("Readdir: parent check denied for user=%s path=%s err=%v", userID, parentPath, err)
+			return nil // fail-closed: can't list this directory
+		}
 	}
 
 	// Build paths for all entries (already cached by SetMany above)
@@ -382,10 +388,11 @@ func (s *MetaProxyServer) filterEntriesByAuthz(ctx context.Context, parentInode 
 		p := s.inodePathCache.Get(e.Inode)
 		if p == "" {
 			// Fallback: build from the actual parent inode (not RootInode).
-			p = s.inodePathCache.BuildChildPath(parentInode, string(e.Name))
+			// Directories get a trailing slash (authz path convention).
+			p = withDirSlash(s.inodePathCache.BuildChildPath(parentInode, string(e.Name)), e.Attr)
 		}
-		if p == "" {
-			continue // empty path — skip this entry
+		if p == "" || p == "/" {
+			continue // empty or root path — skip this entry
 		}
 		paths = append(paths, p)
 		validIndices = append(validIndices, i)

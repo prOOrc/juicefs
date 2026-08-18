@@ -27,16 +27,27 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
 
 // renderfarmAuthzClient wraps the generated gRPC client for agio-renderfarm AuthzService.
 type renderfarmAuthzClient struct {
-	client authzpb.AuthzServiceClient
+	client     authzpb.AuthzServiceClient
+	volumeName string
+}
+
+// withVolume returns a context with the JuiceFS volume name attached as gRPC metadata,
+// so the authz server can resolve the facility and companies prefix.
+func (c *renderfarmAuthzClient) withVolume(ctx context.Context) context.Context {
+	if c.volumeName == "" {
+		return ctx
+	}
+	return metadata.AppendToOutgoingContext(ctx, "x-juicefs-volume", c.volumeName)
 }
 
 // CheckPermission calls the authz service to check a single path permission.
 func (c *renderfarmAuthzClient) CheckPermission(ctx context.Context, userID, filePath string, perm AuthzPermission) (bool, error) {
-	resp, err := c.client.CheckPermission(ctx, &authzpb.CheckPermissionRequest{
+	resp, err := c.client.CheckPermission(c.withVolume(ctx), &authzpb.CheckPermissionRequest{
 		UserId:     userID,
 		Path:       filePath,
 		Permission: toPBPermission(perm),
@@ -49,7 +60,7 @@ func (c *renderfarmAuthzClient) CheckPermission(ctx context.Context, userID, fil
 
 // CheckBulkPermissions calls the authz service to batch-check multiple paths.
 func (c *renderfarmAuthzClient) CheckBulkPermissions(ctx context.Context, userID string, paths []string, perm AuthzPermission) ([]bool, error) {
-	resp, err := c.client.CheckBulkPermissions(ctx, &authzpb.CheckBulkPermissionsRequest{
+	resp, err := c.client.CheckBulkPermissions(c.withVolume(ctx), &authzpb.CheckBulkPermissionsRequest{
 		UserId:     userID,
 		Paths:      paths,
 		Permission: toPBPermission(perm),
@@ -62,7 +73,7 @@ func (c *renderfarmAuthzClient) CheckBulkPermissions(ctx context.Context, userID
 
 // CheckOrganizationAdmin calls the authz service to check org admin status.
 func (c *renderfarmAuthzClient) CheckOrganizationAdmin(ctx context.Context, userID string) (bool, error) {
-	resp, err := c.client.CheckOrganizationAdmin(ctx, &authzpb.CheckOrganizationAdminRequest{
+	resp, err := c.client.CheckOrganizationAdmin(c.withVolume(ctx), &authzpb.CheckOrganizationAdminRequest{
 		UserId: userID,
 	})
 	if err != nil {
@@ -127,6 +138,7 @@ func NewRenderfarmAuthzClient(addr, volumeName, tlsCert, tlsKey, tlsCA, serverNa
 	}
 
 	return &renderfarmAuthzClient{
-		client: authzpb.NewAuthzServiceClient(conn),
+		client:     authzpb.NewAuthzServiceClient(conn),
+		volumeName: volumeName,
 	}, nil
 }
