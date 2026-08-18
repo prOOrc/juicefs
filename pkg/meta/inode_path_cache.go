@@ -77,10 +77,15 @@ func (c *InodePathCache) Get(inode Ino) string {
 }
 
 // GetInodeByPath returns the cached inode for a path (reverse lookup).
+// Directories are stored with a trailing slash; both forms are checked,
+// with the exact match taking precedence (a file and a directory may share a name).
 func (c *InodePathCache) GetInodeByPath(p string) Ino {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.inodeByPath[p]
+	if inode, ok := c.inodeByPath[p]; ok {
+		return inode
+	}
+	return c.inodeByPath[p+"/"]
 }
 
 // Set maps an inode to a path. If the inode already has a different path,
@@ -182,16 +187,21 @@ func (c *InodePathCache) Move(inode Ino, newPath string) bool {
 }
 
 // RemoveSubtree removes all paths under a prefix (for Rmdir operations).
+// The prefix may end with "/" or not — directories are stored with a trailing slash.
 // Returns the number of removed entries.
 func (c *InodePathCache) RemoveSubtree(prefix string) int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	prefix = strings.TrimSuffix(prefix, "/")
+	if prefix == "" {
+		return 0 // root — pinned, never removed
+	}
 	withSlash := prefix + "/"
 	removed := 0
 
 	for inode, p := range c.pathByInode {
-		if p == prefix || strings.HasPrefix(p, withSlash) {
+		if p == prefix || p == withSlash || strings.HasPrefix(p, withSlash) {
 			delete(c.inodeByPath, p)
 			delete(c.pathByInode, inode)
 			removed++
@@ -203,8 +213,12 @@ func (c *InodePathCache) RemoveSubtree(prefix string) int {
 
 // RenameSubtree updates all paths under oldPrefix to newPrefix.
 // Called when a directory is renamed.
+// Prefixes may end with "/" or not — directories are stored with a trailing slash.
 // Guards against renaming a directory into itself (e.g., /a → /a/b/a).
 func (c *InodePathCache) RenameSubtree(oldPrefix, newPrefix string) {
+	oldPrefix = strings.TrimSuffix(oldPrefix, "/")
+	newPrefix = strings.TrimSuffix(newPrefix, "/")
+
 	// Guard: don't rename into self or descendant
 	if newPrefix == oldPrefix || strings.HasPrefix(newPrefix, oldPrefix+"/") {
 		return
@@ -228,11 +242,17 @@ func (c *InodePathCache) RenameSubtree(oldPrefix, newPrefix string) {
 		}
 	}
 
-	// Also update the directory itself (oldPrefix → newPrefix)
-	if inode, ok := c.inodeByPath[oldPrefix]; ok {
-		delete(c.inodeByPath, oldPrefix)
-		c.pathByInode[inode] = newPrefix
-		c.inodeByPath[newPrefix] = inode
+	// Also update the directory itself (stored as oldPrefix or oldPrefix+"/")
+	for _, self := range []string{oldPrefix, oldWithSlash} {
+		if inode, ok := c.inodeByPath[self]; ok {
+			delete(c.inodeByPath, self)
+			newSelf := newPrefix
+			if self == oldWithSlash {
+				newSelf = newWithSlash
+			}
+			c.pathByInode[inode] = newSelf
+			c.inodeByPath[newSelf] = inode
+		}
 	}
 }
 
@@ -252,6 +272,16 @@ func (c *InodePathCache) BuildChildPath(parent Ino, name string) string {
 	}
 
 	return path.Join(parentPath, name)
+}
+
+// withDirSlash returns p with a trailing slash if attr describes a directory.
+// Authorization paths follow the S3/DriveAuth convention: folder paths end with
+// "/" (like S3 prefixes), file paths don't.
+func withDirSlash(p string, attr *Attr) string {
+	if p != "" && attr != nil && attr.Typ == TypeDirectory {
+		return p + "/"
+	}
+	return p
 }
 
 // evictOldest removes the oldest entry (must be called with lock held).

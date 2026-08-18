@@ -31,7 +31,9 @@ import (
 	"github.com/juicedata/juicefs/pkg/oidc"
 	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -69,7 +71,7 @@ type grpcMeta struct {
 
 	// OIDC (nil if not configured)
 	oidcConfig   *oidc.Config
-	tokenManager tokenProvider // interface for testability
+	tokenManager tokenProvider      // interface for testability
 	authGroup    singleflight.Group // coalesces concurrent token requests
 }
 
@@ -163,7 +165,11 @@ func newGRPCMeta(driver, addr string, conf *Config) (Meta, error) {
 		dirCacheTTL:       dirCacheTTL,
 		heartbeatInterval: heartbeatInterval,
 		oidcConfig:        oidcCfg,
-		tokenManager:      tm,
+	}
+	// Assign only when non-nil: wrapping a nil *oidc.TokenManager in the
+	// tokenProvider interface makes the interface non-nil and panics in withAuth.
+	if tm != nil {
+		m.tokenManager = tm
 	}
 
 	return m, nil
@@ -388,12 +394,31 @@ func (m *grpcMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 	}
 	resp, err := m.client.Chroot(m.withSessionID(ctx), req)
 	if err != nil {
-		return syscall.EIO
+		return grpcStatusToErrno(err)
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
 	}
 	return 0
+}
+
+// grpcStatusToErrno maps a gRPC status error to an appropriate syscall.Errno.
+func grpcStatusToErrno(err error) syscall.Errno {
+	if s, ok := status.FromError(err); ok {
+		switch s.Code() {
+		case codes.PermissionDenied, codes.Unauthenticated:
+			return syscall.EACCES
+		case codes.NotFound:
+			return syscall.ENOENT
+		case codes.AlreadyExists:
+			return syscall.EEXIST
+		case codes.InvalidArgument:
+			return syscall.EINVAL
+		default:
+			return syscall.EIO
+		}
+	}
+	return syscall.EIO
 }
 
 // GetPaths returns all paths of a given inode

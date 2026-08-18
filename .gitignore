@@ -52,3 +52,5 @@ cover/
 dist/
 juicefs.egg-info/
 pkg/meta/jfs-load-dump/
+
+__debug*

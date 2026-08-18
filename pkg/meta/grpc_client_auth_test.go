@@ -69,6 +69,24 @@ func TestWithAuthWithoutOIDC(t *testing.T) {
 	assert.Empty(t, md["authorization"])
 }
 
+// TestNewGRPCMetaWithoutOIDC_NoNilTokenManager is a regression test: newGRPCMeta
+// used to wrap a nil *oidc.TokenManager in the tokenProvider interface, making
+// the interface non-nil and panicking in withAuth on the first call.
+func TestNewGRPCMetaWithoutOIDC_NoNilTokenManager(t *testing.T) {
+	m, err := newGRPCMeta("grpc", "127.0.0.1:19563", DefaultConf())
+	assert.NoError(t, err)
+	gm, ok := m.(*grpcMeta)
+	assert.True(t, ok)
+
+	// The interface must be truly nil (not a typed nil pointer).
+	assert.True(t, gm.tokenManager == nil, "tokenManager interface must be truly nil")
+
+	// withAuth must not panic and must not add an authorization header.
+	ctx := gm.withAuth(context.Background())
+	md, _ := metadata.FromOutgoingContext(ctx)
+	assert.Empty(t, md["authorization"])
+}
+
 func TestWithAuthWithOIDC(t *testing.T) {
 	mock := &mockTokenProvider{token: "Bearer abc123"}
 	m := &grpcMeta{sid: 7, tokenManager: mock}

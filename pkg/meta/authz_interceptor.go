@@ -151,6 +151,12 @@ func (ai *AuthzInterceptor) UnaryInterceptor() grpc.UnaryServerInterceptor {
 				return nil, status.Error(codes.PermissionDenied, "access denied: path not resolved")
 			}
 
+			if isAlwaysAllowed(chk.Path, chk.Permission) {
+				authzLogger.Tracef("Authz skip (always allowed): method=%s user=%s path=%s perm=%d",
+					info.FullMethod, userID, chk.Path, chk.Permission)
+				continue
+			}
+
 			allowed, err := ai.client.CheckPermission(ctx, userID, chk.Path, chk.Permission)
 			if err != nil || !allowed {
 				authzLogger.Debugf("Authz denied: method=%s user=%s path=%s perm=%d err=%v",
@@ -175,14 +181,16 @@ func (ai *AuthzInterceptor) requiredPermission(method string) AuthzPermission {
 	// --- No check: internal / lifecycle ---
 	case "Init", "Load",
 		"NewSession", "CloseSession", "FlushSession",
-		"GetSession", "ListSessions", "CleanStaleSessions":
+		"GetSession", "ListSessions", "CleanStaleSessions",
+		"Chroot",
+		"DirHandlerList", "DirHandlerInsert", "DirHandlerDelete", "DirHandlerClose":
 		return AuthzPermissionNone
 
 		// --- Admin: require organization admin ---
 	case "GetFormat", "Remove", "BatchUnlink",
 		"GetSummary", "GetTreeSummary", "Clone", "GetPaths",
 		"Check", "CompactAll", "Compact", "ListSlices",
-		"HandleQuota", "ScanUserGroupUsage", "Chroot",
+		"HandleQuota", "ScanUserGroupUsage",
 		"CleanupTrashBefore", "CleanupDetachedNodesBefore",
 		"ScanDeletedObject", "ScanChangelog":
 		return AuthzPermissionAdmin
@@ -248,13 +256,9 @@ func (ai *AuthzInterceptor) requiredPermission(method string) AuthzPermission {
 	case "Close":
 		return AuthzPermissionView
 
-		// --- DirHandler ---
+		// --- DirHandler: NewDirHandler checks View; List/Insert/Delete/Close are lifecycle (handle already authorized) ---
 	case "NewDirHandler":
 		return AuthzPermissionView
-	case "DirHandlerList":
-		return AuthzPermissionDenied // post-filter not implemented — deny to prevent bypassing Readdir filter
-	case "DirHandlerInsert", "DirHandlerDelete", "DirHandlerClose":
-		return AuthzPermissionWrite
 
 	default:
 		authzLogger.Warnf("Unknown gRPC method for authz: %s — denying for all", method)
@@ -385,25 +389,6 @@ func (ai *AuthzInterceptor) resolveChecks(req interface{}, method string) []Auth
 		}
 		return []AuthzCheck{{Path: p, Permission: AuthzPermissionView}}
 
-	case *pb.DirHandlerInsertRequest, *pb.DirHandlerDeleteRequest, *pb.DirHandlerCloseRequest:
-		if ai.handleResolver == nil {
-			return nil // can't resolve — deny
-		}
-		handle := ai.extractHandle(r)
-		if handle == 0 {
-			return nil
-		}
-		inode, ok := ai.handleResolver.ResolveHandle(handle)
-		if !ok {
-			return nil // unknown handle — deny
-		}
-		p := ai.cache.Get(inode)
-		if p == "" {
-			return nil
-		}
-		hPerm := AuthzPermissionWrite
-		return []AuthzCheck{{Path: p, Permission: hPerm}}
-
 	default:
 		// --- Inode-based: look up inode in cache ---
 		inode := ai.extractInode(req)
@@ -516,4 +501,14 @@ func permissionFromAccessMask(mask uint32) AuthzPermission {
 		return AuthzPermissionRead
 	}
 	return AuthzPermissionView // F_OK (existence check) or X_OK
+}
+
+// isAlwaysAllowed returns true for paths that don't require an authz service call.
+// Root "/" with View is always allowed: it's the container for company directories,
+// and access control starts at the /company-code/ level.
+func isAlwaysAllowed(path string, perm AuthzPermission) bool {
+	if path == "/" && perm == AuthzPermissionView {
+		return true
+	}
+	return false
 }

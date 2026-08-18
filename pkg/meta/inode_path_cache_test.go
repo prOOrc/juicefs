@@ -217,3 +217,67 @@ func TestInodePathCache_SetMany_SkipsExisting(t *testing.T) {
 	assert.Equal(t, "/existing", c.Get(100)) // unchanged
 	assert.Equal(t, "/new", c.Get(200))
 }
+
+func TestWithDirSlash(t *testing.T) {
+	dirAttr := &Attr{Typ: TypeDirectory}
+	fileAttr := &Attr{Typ: TypeFile}
+
+	assert.Equal(t, "/a/b/", withDirSlash("/a/b", dirAttr))
+	assert.Equal(t, "/a/b", withDirSlash("/a/b", fileAttr))
+	assert.Equal(t, "", withDirSlash("", dirAttr))
+	assert.Equal(t, "/a/b", withDirSlash("/a/b", nil))
+}
+
+func TestInodePathCache_GetInodeByPath_DirTrailingSlash(t *testing.T) {
+	c := NewInodePathCache(0)
+	c.Set(100, "/dir/") // directory stored with trailing slash
+
+	// Reverse lookup works with and without the trailing slash
+	assert.Equal(t, Ino(100), c.GetInodeByPath("/dir/"))
+	assert.Equal(t, Ino(100), c.GetInodeByPath("/dir"))
+	assert.Equal(t, Ino(0), c.GetInodeByPath("/other"))
+
+	// Exact match takes precedence: file "/same" wins over directory "/same/"
+	c.Set(200, "/same")
+	c.Set(300, "/same/")
+	assert.Equal(t, Ino(200), c.GetInodeByPath("/same"))
+	assert.Equal(t, Ino(300), c.GetInodeByPath("/same/"))
+}
+
+func TestInodePathCache_RemoveSubtree_TrailingSlash(t *testing.T) {
+	c := NewInodePathCache(0)
+	c.Set(100, "/dir/") // directory stored with trailing slash
+	c.Set(200, "/dir/a")
+	c.Set(300, "/dir/a/b")
+	c.Set(400, "/other")
+
+	// Prefix with trailing slash (as built for directories)
+	removed := c.RemoveSubtree("/dir/")
+	assert.Equal(t, 3, removed) // dir/, dir/a, dir/a/b
+	assert.Empty(t, c.Get(100))
+	assert.Empty(t, c.Get(200))
+	assert.Empty(t, c.Get(300))
+	assert.Equal(t, "/other", c.Get(400)) // untouched
+
+	// Root is pinned: RemoveSubtree("/") removes nothing
+	c.Set(500, "/x")
+	assert.Equal(t, 0, c.RemoveSubtree("/"))
+	assert.Equal(t, "/", c.Get(RootInode))
+	assert.Equal(t, "/x", c.Get(500))
+}
+
+func TestInodePathCache_RenameSubtree_TrailingSlash(t *testing.T) {
+	c := NewInodePathCache(0)
+	c.Set(100, "/old/") // directory stored with trailing slash
+	c.Set(200, "/old/a")
+	c.Set(300, "/old/a/b")
+
+	// Prefixes with trailing slashes (as built for directories)
+	c.RenameSubtree("/old/", "/new/")
+
+	assert.Equal(t, "/new/", c.Get(100))
+	assert.Equal(t, "/new/a", c.Get(200))
+	assert.Equal(t, "/new/a/b", c.Get(300))
+	assert.Equal(t, Ino(100), c.GetInodeByPath("/new/"))
+	assert.Equal(t, Ino(0), c.GetInodeByPath("/old/"))
+}

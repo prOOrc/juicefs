@@ -23,6 +23,12 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
+// dirHandlerEntry pairs a DirHandler with its inode for authz resolution.
+type dirHandlerEntry struct {
+	handler DirHandler
+	inode   Ino
+}
+
 // MetaProxyServer implements the MetaService gRPC server
 type MetaProxyServer struct {
 	pb.UnimplementedMetaServiceServer
@@ -32,7 +38,7 @@ type MetaProxyServer struct {
 	// DirHandler state management
 	mu         sync.Mutex
 	nextHandle uint64
-	handlers   map[uint64]DirHandler
+	handlers   map[uint64]dirHandlerEntry
 
 	// Authorization (optional)
 	authzInterceptor *AuthzInterceptor
@@ -44,7 +50,7 @@ type MetaProxyServer struct {
 func NewMetaProxyServer(m Meta, cacheMaxSize int) *MetaProxyServer {
 	return &MetaProxyServer{
 		meta:           m,
-		handlers:       make(map[uint64]DirHandler),
+		handlers:       make(map[uint64]dirHandlerEntry),
 		inodePathCache: NewInodePathCache(cacheMaxSize),
 	}
 }
@@ -64,11 +70,11 @@ func (s *MetaProxyServer) InodePathCache() *InodePathCache {
 func (s *MetaProxyServer) ResolveHandle(handle uint64) (Ino, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	h, ok := s.handlers[handle]
+	entry, ok := s.handlers[handle]
 	if !ok {
 		return 0, false
 	}
-	return h.(*dirHandler).inode, true
+	return entry.inode, true
 }
 
 // helper to convert Context from proto
