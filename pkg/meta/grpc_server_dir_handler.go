@@ -33,7 +33,7 @@ func (s *MetaProxyServer) NewDirHandler(ctx context.Context, req *pb.NewDirHandl
 	s.mu.Lock()
 	handleID := s.nextHandle
 	s.nextHandle++
-	s.handlers[handleID] = dirHandlerEntry{handler: handler, inode: Ino(req.Inode)}
+	s.handlers[handleID] = &dirHandlerEntry{handler: handler, inode: Ino(req.Inode)}
 	s.mu.Unlock()
 	return &pb.NewDirHandlerResponse{
 		Errno:  0,
@@ -48,15 +48,62 @@ func (s *MetaProxyServer) DirHandlerList(ctx context.Context, req *pb.DirHandler
 	if !ok {
 		return &pb.DirHandlerListResponse{Errno: uint32(syscall.EBADF)}, nil
 	}
-	entries, errno := entry.handler.List(Background(), int(req.Offset))
-	if errno != 0 {
-		return &pb.DirHandlerListResponse{Errno: uint32(errno)}, nil
+
+	var filtered []*Entry
+	if s.authzInterceptor != nil && s.authzInterceptor.enabled {
+		// Authz mode: serve from a stable filtered snapshot. The FUSE offset
+		// protocol counts entries the kernel actually received, so the offset
+		// indexes the filtered stream directly — no duplicates, clean EOF.
+		list, errno := s.authzListing(ctx, entry)
+		if errno != 0 {
+			return &pb.DirHandlerListResponse{Errno: uint32(errno)}, nil
+		}
+		off := int(req.Offset)
+		if off < 0 || off >= len(list) {
+			return &pb.DirHandlerListResponse{Errno: 0}, nil
+		}
+		filtered = list[off:]
+	} else {
+		entries, errno := entry.handler.List(Background(), int(req.Offset))
+		if errno != 0 {
+			return &pb.DirHandlerListResponse{Errno: uint32(errno)}, nil
+		}
+		filtered = entries
 	}
 
-	// Post-filter: same as Readdir — hide entries the user cannot view.
+	protoEntries := make([]*pb.ProtoEntry, len(filtered))
+	for i, e := range filtered {
+		protoEntries[i] = EntryToProto(e)
+	}
+	return &pb.DirHandlerListResponse{Errno: 0, Entries: protoEntries}, nil
+}
+
+// authzListing returns the full filtered listing for an authz dir handler,
+// priming the per-handle snapshot on first use. Fetching everything and
+// filtering once (instead of filtering each DirHandler batch) keeps the
+// listing a stable stream: the DirHandler cursor would otherwise advance by
+// unfiltered counts while the kernel advances by filtered counts, re-serving
+// earlier entries as duplicates.
+func (s *MetaProxyServer) authzListing(ctx context.Context, entry *dirHandlerEntry) ([]*Entry, syscall.Errno) {
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+	if entry.authzReady {
+		return entry.authzList, 0
+	}
+
+	var entries []*Entry
+	errno := s.meta.Readdir(Background(), entry.inode, 1, &entries)
+	if errno != 0 {
+		return nil, errno
+	}
+	// baseMeta.Readdir prepends "." and ".."; the FUSE kernel synthesizes those.
+	if len(entries) >= 2 && string(entries[0].Name) == "." && string(entries[1].Name) == ".." {
+		entries = entries[2:]
+	}
+
 	filtered := s.filterEntriesByAuthz(ctx, entry.inode, entries)
 
-	// Cache paths for filtered entries (prevents cache pollution from unauthorized paths).
+	// Cache paths for allowed entries (prevents cache pollution from unauthorized paths).
 	if len(filtered) > 0 {
 		mappings := make(map[Ino]string)
 		for _, e := range filtered {
@@ -70,11 +117,9 @@ func (s *MetaProxyServer) DirHandlerList(ctx context.Context, req *pb.DirHandler
 		}
 	}
 
-	protoEntries := make([]*pb.ProtoEntry, len(filtered))
-	for i, e := range filtered {
-		protoEntries[i] = EntryToProto(e)
-	}
-	return &pb.DirHandlerListResponse{Errno: 0, Entries: protoEntries}, nil
+	entry.authzList = filtered
+	entry.authzReady = true
+	return entry.authzList, 0
 }
 
 func (s *MetaProxyServer) DirHandlerInsert(ctx context.Context, req *pb.DirHandlerInsertRequest) (*pb.DirHandlerInsertResponse, error) {

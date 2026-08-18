@@ -126,6 +126,8 @@ func (ai *AuthzInterceptor) UnaryInterceptor() grpc.UnaryServerInterceptor {
 
 		// Admin operations require organization admin status
 		if permission == AuthzPermissionAdmin {
+			authzLogger.Tracef("Authz check: method=%s user=%s path=- perm=Admin",
+				info.FullMethod, userID)
 			isAdmin, err := ai.client.CheckOrganizationAdmin(ctx, userID)
 			if err != nil || !isAdmin {
 				authzLogger.Warnf("Org admin check failed: user=%s method=%s err=%v",
@@ -157,6 +159,8 @@ func (ai *AuthzInterceptor) UnaryInterceptor() grpc.UnaryServerInterceptor {
 				continue
 			}
 
+			authzLogger.Tracef("Authz check: method=%s user=%s path=%s perm=%d",
+				info.FullMethod, userID, chk.Path, chk.Permission)
 			allowed, err := ai.client.CheckPermission(ctx, userID, chk.Path, chk.Permission)
 			if err != nil || !allowed {
 				authzLogger.Debugf("Authz denied: method=%s user=%s path=%s perm=%d err=%v",
