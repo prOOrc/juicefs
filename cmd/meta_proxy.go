@@ -51,10 +51,6 @@ func cmdMetaProxy() *cli.Command {
 				Usage: "gRPC server address to listen on",
 				Value: ":9561",
 			},
-			&cli.BoolFlag{
-				Name:  "debug",
-				Usage: "Enable debug logging",
-			},
 			&cli.IntFlag{
 				Name:  "grpc-max-send-msg-size",
 				Usage: "Maximum gRPC send message size in MB",
@@ -128,11 +124,15 @@ func cmdMetaProxy() *cli.Command {
 				Value:  100000,
 				Hidden: false,
 			},
+			&cli.DurationFlag{
+				Name:   "authz-cache-ttl",
+				Usage:  "TTL for cached authorization decisions (default 30s). Reduces repeated calls to the authz service.",
+				Value:  30 * time.Second,
+				Hidden: false,
+			},
 		},
 		Action: func(c *cli.Context) error {
-			if c.Bool("debug") {
-				utils.SetLogLevel(0)
-			}
+			setup(c, 0)
 
 			metaBackendUrl := c.String("meta-backend")
 			addr := c.String("addr")
@@ -198,6 +198,14 @@ func cmdMetaProxy() *cli.Command {
 				authzClient, err := meta.NewRenderfarmAuthzClient(authzAddr, volumeName, tlsCert, tlsKey, tlsCA, serverName)
 				if err != nil {
 					loggerProxy.Fatalf("Failed to connect to authz service: %v", err)
+				}
+
+				cacheTTL := c.Duration("authz-cache-ttl")
+				if cacheTTL > 0 {
+					authzClient = meta.NewCachingAuthzClient(authzClient, cacheTTL, 0)
+					loggerProxy.Infof("Authz decision cache enabled (TTL: %s)", cacheTTL)
+				} else {
+					loggerProxy.Infof("Authz decision cache disabled")
 				}
 
 				interceptor := meta.NewAuthzInterceptor(authzClient, server.InodePathCache(), server)

@@ -27,6 +27,15 @@ import (
 type dirHandlerEntry struct {
 	handler DirHandler
 	inode   Ino
+
+	// Authz mode serves listings from a stable filtered snapshot instead of
+	// the DirHandler's offset machinery: filtering after handler.List()
+	// desyncs the FUSE offset protocol (the handler cursor advances by
+	// unfiltered counts while the kernel advances by filtered counts), which
+	// re-serves earlier entries as duplicates.
+	mu         sync.Mutex
+	authzList  []*Entry
+	authzReady bool
 }
 
 // MetaProxyServer implements the MetaService gRPC server
@@ -38,7 +47,7 @@ type MetaProxyServer struct {
 	// DirHandler state management
 	mu         sync.Mutex
 	nextHandle uint64
-	handlers   map[uint64]dirHandlerEntry
+	handlers   map[uint64]*dirHandlerEntry
 
 	// Authorization (optional)
 	authzInterceptor *AuthzInterceptor
@@ -50,7 +59,7 @@ type MetaProxyServer struct {
 func NewMetaProxyServer(m Meta, cacheMaxSize int) *MetaProxyServer {
 	return &MetaProxyServer{
 		meta:           m,
-		handlers:       make(map[uint64]dirHandlerEntry),
+		handlers:       make(map[uint64]*dirHandlerEntry),
 		inodePathCache: NewInodePathCache(cacheMaxSize),
 	}
 }
