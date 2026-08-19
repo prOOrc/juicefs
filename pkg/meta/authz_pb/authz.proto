@@ -26,9 +26,10 @@ enum Permission {
 }
 
 message CheckPermissionRequest {
-	string user_id = 1;       // from OIDC token 'sub' claim
-	string path = 2;          // full filesystem path, e.g. "/company-abc/projects/render/out/frame.exr"
+	string user_id = 1;        // from OIDC token 'sub' claim
+	string path = 2;           // full filesystem path, e.g. "/company-abc/projects/render/out/frame.exr"
 	Permission permission = 3; // required permission level
+	string volume_name = 4;    // JuiceFS volume name, used to resolve the companies prefix
 }
 
 message CheckPermissionResponse {
@@ -39,6 +40,7 @@ message CheckBulkPermissionsRequest {
 	string user_id = 1;         // from OIDC token 'sub' claim
 	repeated string paths = 2;  // up to 1000 paths per batch
 	Permission permission = 3;  // same permission for all paths
+	string volume_name = 4;     // JuiceFS volume name, used to resolve the companies prefix
 }
 
 message CheckBulkPermissionsResponse {
@@ -47,6 +49,8 @@ message CheckBulkPermissionsResponse {
 
 message CheckOrganizationAdminRequest {
 	string user_id = 1; // from OIDC token 'sub' claim
+	// JuiceFS volume name (not used for the check itself, carried for logging)
+	string volume_name = 2;
 }
 
 message CheckOrganizationAdminResponse {

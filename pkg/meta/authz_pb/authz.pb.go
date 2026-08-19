@@ -79,6 +79,7 @@ type CheckPermissionRequest struct {
 	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                                     // from OIDC token 'sub' claim
 	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`                                                       // full filesystem path, e.g. "/company-abc/projects/render/out/frame.exr"
 	Permission    Permission             `protobuf:"varint,3,opt,name=permission,proto3,enum=agio.renderfarm.authz.v1.Permission" json:"permission,omitempty"` // required permission level
+	VolumeName    string                 `protobuf:"bytes,4,opt,name=volume_name,json=volumeName,proto3" json:"volume_name,omitempty"`                         // JuiceFS volume name, used to resolve the companies prefix
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -134,6 +135,13 @@ func (x *CheckPermissionRequest) GetPermission() Permission {
 	return Permission_PERMISSION_NONE
 }
 
+func (x *CheckPermissionRequest) GetVolumeName() string {
+	if x != nil {
+		return x.VolumeName
+	}
+	return ""
+}
+
 type CheckPermissionResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Allowed       bool                   `protobuf:"varint,1,opt,name=allowed,proto3" json:"allowed,omitempty"`
@@ -183,6 +191,7 @@ type CheckBulkPermissionsRequest struct {
 	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                                     // from OIDC token 'sub' claim
 	Paths         []string               `protobuf:"bytes,2,rep,name=paths,proto3" json:"paths,omitempty"`                                                     // up to 1000 paths per batch
 	Permission    Permission             `protobuf:"varint,3,opt,name=permission,proto3,enum=agio.renderfarm.authz.v1.Permission" json:"permission,omitempty"` // same permission for all paths
+	VolumeName    string                 `protobuf:"bytes,4,opt,name=volume_name,json=volumeName,proto3" json:"volume_name,omitempty"`                         // JuiceFS volume name, used to resolve the companies prefix
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -238,6 +247,13 @@ func (x *CheckBulkPermissionsRequest) GetPermission() Permission {
 	return Permission_PERMISSION_NONE
 }
 
+func (x *CheckBulkPermissionsRequest) GetVolumeName() string {
+	if x != nil {
+		return x.VolumeName
+	}
+	return ""
+}
+
 type CheckBulkPermissionsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Allowed       []bool                 `protobuf:"varint,1,rep,packed,name=allowed,proto3" json:"allowed,omitempty"` // same order as request paths
@@ -283,8 +299,10 @@ func (x *CheckBulkPermissionsResponse) GetAllowed() []bool {
 }
 
 type CheckOrganizationAdminRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // from OIDC token 'sub' claim
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	UserId string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // from OIDC token 'sub' claim
+	// JuiceFS volume name (not used for the check itself, carried for logging)
+	VolumeName    string `protobuf:"bytes,2,opt,name=volume_name,json=volumeName,proto3" json:"volume_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -322,6 +340,13 @@ func (*CheckOrganizationAdminRequest) Descriptor() ([]byte, []int) {
 func (x *CheckOrganizationAdminRequest) GetUserId() string {
 	if x != nil {
 		return x.UserId
+	}
+	return ""
+}
+
+func (x *CheckOrganizationAdminRequest) GetVolumeName() string {
+	if x != nil {
+		return x.VolumeName
 	}
 	return ""
 }
@@ -374,25 +399,31 @@ var File_pkg_meta_authz_pb_authz_proto protoreflect.FileDescriptor
 
 const file_pkg_meta_authz_pb_authz_proto_rawDesc = "" +
 	"\n" +
-	"\x1dpkg/meta/authz_pb/authz.proto\x12\x18agio.renderfarm.authz.v1\"\x8b\x01\n" +
+	"\x1dpkg/meta/authz_pb/authz.proto\x12\x18agio.renderfarm.authz.v1\"\xac\x01\n" +
 	"\x16CheckPermissionRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12D\n" +
 	"\n" +
 	"permission\x18\x03 \x01(\x0e2$.agio.renderfarm.authz.v1.PermissionR\n" +
-	"permission\"3\n" +
+	"permission\x12\x1f\n" +
+	"\vvolume_name\x18\x04 \x01(\tR\n" +
+	"volumeName\"3\n" +
 	"\x17CheckPermissionResponse\x12\x18\n" +
-	"\aallowed\x18\x01 \x01(\bR\aallowed\"\x92\x01\n" +
+	"\aallowed\x18\x01 \x01(\bR\aallowed\"\xb3\x01\n" +
 	"\x1bCheckBulkPermissionsRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
 	"\x05paths\x18\x02 \x03(\tR\x05paths\x12D\n" +
 	"\n" +
 	"permission\x18\x03 \x01(\x0e2$.agio.renderfarm.authz.v1.PermissionR\n" +
-	"permission\"8\n" +
+	"permission\x12\x1f\n" +
+	"\vvolume_name\x18\x04 \x01(\tR\n" +
+	"volumeName\"8\n" +
 	"\x1cCheckBulkPermissionsResponse\x12\x18\n" +
-	"\aallowed\x18\x01 \x03(\bR\aallowed\"8\n" +
+	"\aallowed\x18\x01 \x03(\bR\aallowed\"Y\n" +
 	"\x1dCheckOrganizationAdminRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\";\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1f\n" +
+	"\vvolume_name\x18\x02 \x01(\tR\n" +
+	"volumeName\";\n" +
 	"\x1eCheckOrganizationAdminResponse\x12\x19\n" +
 	"\bis_admin\x18\x01 \x01(\bR\aisAdmin*`\n" +
 	"\n" +
