@@ -195,7 +195,7 @@ func cmdMetaProxy() *cli.Command {
 
 				loggerProxy.Infof("File authorization enabled (authz service: %s, volume: %s)", authzAddr, volumeName)
 
-				authzClient, err := meta.NewRenderfarmAuthzClient(authzAddr, volumeName, tlsCert, tlsKey, tlsCA, serverName)
+				authzClient, err := meta.NewPlatformAuthzClient(authzAddr, volumeName, tlsCert, tlsKey, tlsCA, serverName)
 				if err != nil {
 					loggerProxy.Fatalf("Failed to connect to authz service: %v", err)
 				}
