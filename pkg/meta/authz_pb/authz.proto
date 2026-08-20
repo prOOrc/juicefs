@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package agio.renderfarm.authz.v1;
+package agio.platform.authz.v1;
 
 option go_package = "github.com/juicedata/juicefs/pkg/meta/authz_pb";
 

@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v7.35.1
-// source: pkg/meta/authz_pb/authz.proto
+// source: authz.proto
 
 package authz_pb
 
@@ -58,11 +58,11 @@ func (x Permission) String() string {
 }
 
 func (Permission) Descriptor() protoreflect.EnumDescriptor {
-	return file_pkg_meta_authz_pb_authz_proto_enumTypes[0].Descriptor()
+	return file_authz_proto_enumTypes[0].Descriptor()
 }
 
 func (Permission) Type() protoreflect.EnumType {
-	return &file_pkg_meta_authz_pb_authz_proto_enumTypes[0]
+	return &file_authz_proto_enumTypes[0]
 }
 
 func (x Permission) Number() protoreflect.EnumNumber {
@@ -71,22 +71,22 @@ func (x Permission) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Permission.Descriptor instead.
 func (Permission) EnumDescriptor() ([]byte, []int) {
-	return file_pkg_meta_authz_pb_authz_proto_rawDescGZIP(), []int{0}
+	return file_authz_proto_rawDescGZIP(), []int{0}
 }
 
 type CheckPermissionRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                                     // from OIDC token 'sub' claim
-	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`                                                       // full filesystem path, e.g. "/company-abc/projects/render/out/frame.exr"
-	Permission    Permission             `protobuf:"varint,3,opt,name=permission,proto3,enum=agio.renderfarm.authz.v1.Permission" json:"permission,omitempty"` // required permission level
-	VolumeName    string                 `protobuf:"bytes,4,opt,name=volume_name,json=volumeName,proto3" json:"volume_name,omitempty"`                         // JuiceFS volume name, used to resolve the companies prefix
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                                   // from OIDC token 'sub' claim
+	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`                                                     // full filesystem path, e.g. "/company-abc/projects/render/out/frame.exr"
+	Permission    Permission             `protobuf:"varint,3,opt,name=permission,proto3,enum=agio.platform.authz.v1.Permission" json:"permission,omitempty"` // required permission level
+	VolumeName    string                 `protobuf:"bytes,4,opt,name=volume_name,json=volumeName,proto3" json:"volume_name,omitempty"`                       // JuiceFS volume name, used to resolve the companies prefix
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CheckPermissionRequest) Reset() {
 	*x = CheckPermissionRequest{}
-	mi := &file_pkg_meta_authz_pb_authz_proto_msgTypes[0]
+	mi := &file_authz_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -98,7 +98,7 @@ func (x *CheckPermissionRequest) String() string {
 func (*CheckPermissionRequest) ProtoMessage() {}
 
 func (x *CheckPermissionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_authz_pb_authz_proto_msgTypes[0]
+	mi := &file_authz_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -111,7 +111,7 @@ func (x *CheckPermissionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckPermissionRequest.ProtoReflect.Descriptor instead.
 func (*CheckPermissionRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_authz_pb_authz_proto_rawDescGZIP(), []int{0}
+	return file_authz_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *CheckPermissionRequest) GetUserId() string {
@@ -151,7 +151,7 @@ type CheckPermissionResponse struct {
 
 func (x *CheckPermissionResponse) Reset() {
 	*x = CheckPermissionResponse{}
-	mi := &file_pkg_meta_authz_pb_authz_proto_msgTypes[1]
+	mi := &file_authz_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -163,7 +163,7 @@ func (x *CheckPermissionResponse) String() string {
 func (*CheckPermissionResponse) ProtoMessage() {}
 
 func (x *CheckPermissionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_authz_pb_authz_proto_msgTypes[1]
+	mi := &file_authz_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -176,7 +176,7 @@ func (x *CheckPermissionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckPermissionResponse.ProtoReflect.Descriptor instead.
 func (*CheckPermissionResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_authz_pb_authz_proto_rawDescGZIP(), []int{1}
+	return file_authz_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *CheckPermissionResponse) GetAllowed() bool {
@@ -188,17 +188,17 @@ func (x *CheckPermissionResponse) GetAllowed() bool {
 
 type CheckBulkPermissionsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                                     // from OIDC token 'sub' claim
-	Paths         []string               `protobuf:"bytes,2,rep,name=paths,proto3" json:"paths,omitempty"`                                                     // up to 1000 paths per batch
-	Permission    Permission             `protobuf:"varint,3,opt,name=permission,proto3,enum=agio.renderfarm.authz.v1.Permission" json:"permission,omitempty"` // same permission for all paths
-	VolumeName    string                 `protobuf:"bytes,4,opt,name=volume_name,json=volumeName,proto3" json:"volume_name,omitempty"`                         // JuiceFS volume name, used to resolve the companies prefix
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                                   // from OIDC token 'sub' claim
+	Paths         []string               `protobuf:"bytes,2,rep,name=paths,proto3" json:"paths,omitempty"`                                                   // up to 1000 paths per batch
+	Permission    Permission             `protobuf:"varint,3,opt,name=permission,proto3,enum=agio.platform.authz.v1.Permission" json:"permission,omitempty"` // same permission for all paths
+	VolumeName    string                 `protobuf:"bytes,4,opt,name=volume_name,json=volumeName,proto3" json:"volume_name,omitempty"`                       // JuiceFS volume name, used to resolve the companies prefix
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CheckBulkPermissionsRequest) Reset() {
 	*x = CheckBulkPermissionsRequest{}
-	mi := &file_pkg_meta_authz_pb_authz_proto_msgTypes[2]
+	mi := &file_authz_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -210,7 +210,7 @@ func (x *CheckBulkPermissionsRequest) String() string {
 func (*CheckBulkPermissionsRequest) ProtoMessage() {}
 
 func (x *CheckBulkPermissionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_authz_pb_authz_proto_msgTypes[2]
+	mi := &file_authz_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -223,7 +223,7 @@ func (x *CheckBulkPermissionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckBulkPermissionsRequest.ProtoReflect.Descriptor instead.
 func (*CheckBulkPermissionsRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_authz_pb_authz_proto_rawDescGZIP(), []int{2}
+	return file_authz_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *CheckBulkPermissionsRequest) GetUserId() string {
@@ -263,7 +263,7 @@ type CheckBulkPermissionsResponse struct {
 
 func (x *CheckBulkPermissionsResponse) Reset() {
 	*x = CheckBulkPermissionsResponse{}
-	mi := &file_pkg_meta_authz_pb_authz_proto_msgTypes[3]
+	mi := &file_authz_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -275,7 +275,7 @@ func (x *CheckBulkPermissionsResponse) String() string {
 func (*CheckBulkPermissionsResponse) ProtoMessage() {}
 
 func (x *CheckBulkPermissionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_authz_pb_authz_proto_msgTypes[3]
+	mi := &file_authz_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -288,7 +288,7 @@ func (x *CheckBulkPermissionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckBulkPermissionsResponse.ProtoReflect.Descriptor instead.
 func (*CheckBulkPermissionsResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_authz_pb_authz_proto_rawDescGZIP(), []int{3}
+	return file_authz_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *CheckBulkPermissionsResponse) GetAllowed() []bool {
@@ -309,7 +309,7 @@ type CheckOrganizationAdminRequest struct {
 
 func (x *CheckOrganizationAdminRequest) Reset() {
 	*x = CheckOrganizationAdminRequest{}
-	mi := &file_pkg_meta_authz_pb_authz_proto_msgTypes[4]
+	mi := &file_authz_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -321,7 +321,7 @@ func (x *CheckOrganizationAdminRequest) String() string {
 func (*CheckOrganizationAdminRequest) ProtoMessage() {}
 
 func (x *CheckOrganizationAdminRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_authz_pb_authz_proto_msgTypes[4]
+	mi := &file_authz_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -334,7 +334,7 @@ func (x *CheckOrganizationAdminRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckOrganizationAdminRequest.ProtoReflect.Descriptor instead.
 func (*CheckOrganizationAdminRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_authz_pb_authz_proto_rawDescGZIP(), []int{4}
+	return file_authz_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *CheckOrganizationAdminRequest) GetUserId() string {
@@ -360,7 +360,7 @@ type CheckOrganizationAdminResponse struct {
 
 func (x *CheckOrganizationAdminResponse) Reset() {
 	*x = CheckOrganizationAdminResponse{}
-	mi := &file_pkg_meta_authz_pb_authz_proto_msgTypes[5]
+	mi := &file_authz_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -372,7 +372,7 @@ func (x *CheckOrganizationAdminResponse) String() string {
 func (*CheckOrganizationAdminResponse) ProtoMessage() {}
 
 func (x *CheckOrganizationAdminResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_meta_authz_pb_authz_proto_msgTypes[5]
+	mi := &file_authz_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -385,7 +385,7 @@ func (x *CheckOrganizationAdminResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckOrganizationAdminResponse.ProtoReflect.Descriptor instead.
 func (*CheckOrganizationAdminResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_meta_authz_pb_authz_proto_rawDescGZIP(), []int{5}
+	return file_authz_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *CheckOrganizationAdminResponse) GetIsAdmin() bool {
@@ -395,26 +395,26 @@ func (x *CheckOrganizationAdminResponse) GetIsAdmin() bool {
 	return false
 }
 
-var File_pkg_meta_authz_pb_authz_proto protoreflect.FileDescriptor
+var File_authz_proto protoreflect.FileDescriptor
 
-const file_pkg_meta_authz_pb_authz_proto_rawDesc = "" +
+const file_authz_proto_rawDesc = "" +
 	"\n" +
-	"\x1dpkg/meta/authz_pb/authz.proto\x12\x18agio.renderfarm.authz.v1\"\xac\x01\n" +
+	"\vauthz.proto\x12\x16agio.platform.authz.v1\"\xaa\x01\n" +
 	"\x16CheckPermissionRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n" +
-	"\x04path\x18\x02 \x01(\tR\x04path\x12D\n" +
+	"\x04path\x18\x02 \x01(\tR\x04path\x12B\n" +
 	"\n" +
-	"permission\x18\x03 \x01(\x0e2$.agio.renderfarm.authz.v1.PermissionR\n" +
+	"permission\x18\x03 \x01(\x0e2\".agio.platform.authz.v1.PermissionR\n" +
 	"permission\x12\x1f\n" +
 	"\vvolume_name\x18\x04 \x01(\tR\n" +
 	"volumeName\"3\n" +
 	"\x17CheckPermissionResponse\x12\x18\n" +
-	"\aallowed\x18\x01 \x01(\bR\aallowed\"\xb3\x01\n" +
+	"\aallowed\x18\x01 \x01(\bR\aallowed\"\xb1\x01\n" +
 	"\x1bCheckBulkPermissionsRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
-	"\x05paths\x18\x02 \x03(\tR\x05paths\x12D\n" +
+	"\x05paths\x18\x02 \x03(\tR\x05paths\x12B\n" +
 	"\n" +
-	"permission\x18\x03 \x01(\x0e2$.agio.renderfarm.authz.v1.PermissionR\n" +
+	"permission\x18\x03 \x01(\x0e2\".agio.platform.authz.v1.PermissionR\n" +
 	"permission\x12\x1f\n" +
 	"\vvolume_name\x18\x04 \x01(\tR\n" +
 	"volumeName\"8\n" +
@@ -431,44 +431,44 @@ const file_pkg_meta_authz_pb_authz_proto_rawDesc = "" +
 	"\x0fPERMISSION_NONE\x10\x00\x12\x13\n" +
 	"\x0fPERMISSION_VIEW\x10\x01\x12\x13\n" +
 	"\x0fPERMISSION_READ\x10\x02\x12\x13\n" +
-	"\x0fPERMISSION_EDIT\x10\x032\x9c\x03\n" +
-	"\fAuthzService\x12v\n" +
-	"\x0fCheckPermission\x120.agio.renderfarm.authz.v1.CheckPermissionRequest\x1a1.agio.renderfarm.authz.v1.CheckPermissionResponse\x12\x85\x01\n" +
-	"\x14CheckBulkPermissions\x125.agio.renderfarm.authz.v1.CheckBulkPermissionsRequest\x1a6.agio.renderfarm.authz.v1.CheckBulkPermissionsResponse\x12\x8b\x01\n" +
-	"\x16CheckOrganizationAdmin\x127.agio.renderfarm.authz.v1.CheckOrganizationAdminRequest\x1a8.agio.renderfarm.authz.v1.CheckOrganizationAdminResponseB0Z.github.com/juicedata/juicefs/pkg/meta/authz_pbb\x06proto3"
+	"\x0fPERMISSION_EDIT\x10\x032\x90\x03\n" +
+	"\fAuthzService\x12r\n" +
+	"\x0fCheckPermission\x12..agio.platform.authz.v1.CheckPermissionRequest\x1a/.agio.platform.authz.v1.CheckPermissionResponse\x12\x81\x01\n" +
+	"\x14CheckBulkPermissions\x123.agio.platform.authz.v1.CheckBulkPermissionsRequest\x1a4.agio.platform.authz.v1.CheckBulkPermissionsResponse\x12\x87\x01\n" +
+	"\x16CheckOrganizationAdmin\x125.agio.platform.authz.v1.CheckOrganizationAdminRequest\x1a6.agio.platform.authz.v1.CheckOrganizationAdminResponseB0Z.github.com/juicedata/juicefs/pkg/meta/authz_pbb\x06proto3"
 
 var (
-	file_pkg_meta_authz_pb_authz_proto_rawDescOnce sync.Once
-	file_pkg_meta_authz_pb_authz_proto_rawDescData []byte
+	file_authz_proto_rawDescOnce sync.Once
+	file_authz_proto_rawDescData []byte
 )
 
-func file_pkg_meta_authz_pb_authz_proto_rawDescGZIP() []byte {
-	file_pkg_meta_authz_pb_authz_proto_rawDescOnce.Do(func() {
-		file_pkg_meta_authz_pb_authz_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pkg_meta_authz_pb_authz_proto_rawDesc), len(file_pkg_meta_authz_pb_authz_proto_rawDesc)))
+func file_authz_proto_rawDescGZIP() []byte {
+	file_authz_proto_rawDescOnce.Do(func() {
+		file_authz_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_authz_proto_rawDesc), len(file_authz_proto_rawDesc)))
 	})
-	return file_pkg_meta_authz_pb_authz_proto_rawDescData
+	return file_authz_proto_rawDescData
 }
 
-var file_pkg_meta_authz_pb_authz_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_pkg_meta_authz_pb_authz_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
-var file_pkg_meta_authz_pb_authz_proto_goTypes = []any{
-	(Permission)(0),                        // 0: agio.renderfarm.authz.v1.Permission
-	(*CheckPermissionRequest)(nil),         // 1: agio.renderfarm.authz.v1.CheckPermissionRequest
-	(*CheckPermissionResponse)(nil),        // 2: agio.renderfarm.authz.v1.CheckPermissionResponse
-	(*CheckBulkPermissionsRequest)(nil),    // 3: agio.renderfarm.authz.v1.CheckBulkPermissionsRequest
-	(*CheckBulkPermissionsResponse)(nil),   // 4: agio.renderfarm.authz.v1.CheckBulkPermissionsResponse
-	(*CheckOrganizationAdminRequest)(nil),  // 5: agio.renderfarm.authz.v1.CheckOrganizationAdminRequest
-	(*CheckOrganizationAdminResponse)(nil), // 6: agio.renderfarm.authz.v1.CheckOrganizationAdminResponse
+var file_authz_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_authz_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_authz_proto_goTypes = []any{
+	(Permission)(0),                        // 0: agio.platform.authz.v1.Permission
+	(*CheckPermissionRequest)(nil),         // 1: agio.platform.authz.v1.CheckPermissionRequest
+	(*CheckPermissionResponse)(nil),        // 2: agio.platform.authz.v1.CheckPermissionResponse
+	(*CheckBulkPermissionsRequest)(nil),    // 3: agio.platform.authz.v1.CheckBulkPermissionsRequest
+	(*CheckBulkPermissionsResponse)(nil),   // 4: agio.platform.authz.v1.CheckBulkPermissionsResponse
+	(*CheckOrganizationAdminRequest)(nil),  // 5: agio.platform.authz.v1.CheckOrganizationAdminRequest
+	(*CheckOrganizationAdminResponse)(nil), // 6: agio.platform.authz.v1.CheckOrganizationAdminResponse
 }
-var file_pkg_meta_authz_pb_authz_proto_depIdxs = []int32{
-	0, // 0: agio.renderfarm.authz.v1.CheckPermissionRequest.permission:type_name -> agio.renderfarm.authz.v1.Permission
-	0, // 1: agio.renderfarm.authz.v1.CheckBulkPermissionsRequest.permission:type_name -> agio.renderfarm.authz.v1.Permission
-	1, // 2: agio.renderfarm.authz.v1.AuthzService.CheckPermission:input_type -> agio.renderfarm.authz.v1.CheckPermissionRequest
-	3, // 3: agio.renderfarm.authz.v1.AuthzService.CheckBulkPermissions:input_type -> agio.renderfarm.authz.v1.CheckBulkPermissionsRequest
-	5, // 4: agio.renderfarm.authz.v1.AuthzService.CheckOrganizationAdmin:input_type -> agio.renderfarm.authz.v1.CheckOrganizationAdminRequest
-	2, // 5: agio.renderfarm.authz.v1.AuthzService.CheckPermission:output_type -> agio.renderfarm.authz.v1.CheckPermissionResponse
-	4, // 6: agio.renderfarm.authz.v1.AuthzService.CheckBulkPermissions:output_type -> agio.renderfarm.authz.v1.CheckBulkPermissionsResponse
-	6, // 7: agio.renderfarm.authz.v1.AuthzService.CheckOrganizationAdmin:output_type -> agio.renderfarm.authz.v1.CheckOrganizationAdminResponse
+var file_authz_proto_depIdxs = []int32{
+	0, // 0: agio.platform.authz.v1.CheckPermissionRequest.permission:type_name -> agio.platform.authz.v1.Permission
+	0, // 1: agio.platform.authz.v1.CheckBulkPermissionsRequest.permission:type_name -> agio.platform.authz.v1.Permission
+	1, // 2: agio.platform.authz.v1.AuthzService.CheckPermission:input_type -> agio.platform.authz.v1.CheckPermissionRequest
+	3, // 3: agio.platform.authz.v1.AuthzService.CheckBulkPermissions:input_type -> agio.platform.authz.v1.CheckBulkPermissionsRequest
+	5, // 4: agio.platform.authz.v1.AuthzService.CheckOrganizationAdmin:input_type -> agio.platform.authz.v1.CheckOrganizationAdminRequest
+	2, // 5: agio.platform.authz.v1.AuthzService.CheckPermission:output_type -> agio.platform.authz.v1.CheckPermissionResponse
+	4, // 6: agio.platform.authz.v1.AuthzService.CheckBulkPermissions:output_type -> agio.platform.authz.v1.CheckBulkPermissionsResponse
+	6, // 7: agio.platform.authz.v1.AuthzService.CheckOrganizationAdmin:output_type -> agio.platform.authz.v1.CheckOrganizationAdminResponse
 	5, // [5:8] is the sub-list for method output_type
 	2, // [2:5] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
@@ -476,27 +476,27 @@ var file_pkg_meta_authz_pb_authz_proto_depIdxs = []int32{
 	0, // [0:2] is the sub-list for field type_name
 }
 
-func init() { file_pkg_meta_authz_pb_authz_proto_init() }
-func file_pkg_meta_authz_pb_authz_proto_init() {
-	if File_pkg_meta_authz_pb_authz_proto != nil {
+func init() { file_authz_proto_init() }
+func file_authz_proto_init() {
+	if File_authz_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_meta_authz_pb_authz_proto_rawDesc), len(file_pkg_meta_authz_pb_authz_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_authz_proto_rawDesc), len(file_authz_proto_rawDesc)),
 			NumEnums:      1,
 			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_pkg_meta_authz_pb_authz_proto_goTypes,
-		DependencyIndexes: file_pkg_meta_authz_pb_authz_proto_depIdxs,
-		EnumInfos:         file_pkg_meta_authz_pb_authz_proto_enumTypes,
-		MessageInfos:      file_pkg_meta_authz_pb_authz_proto_msgTypes,
+		GoTypes:           file_authz_proto_goTypes,
+		DependencyIndexes: file_authz_proto_depIdxs,
+		EnumInfos:         file_authz_proto_enumTypes,
+		MessageInfos:      file_authz_proto_msgTypes,
 	}.Build()
-	File_pkg_meta_authz_pb_authz_proto = out.File
-	file_pkg_meta_authz_pb_authz_proto_goTypes = nil
-	file_pkg_meta_authz_pb_authz_proto_depIdxs = nil
+	File_authz_proto = out.File
+	file_authz_proto_goTypes = nil
+	file_authz_proto_depIdxs = nil
 }

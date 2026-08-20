@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.2
 // - protoc             v7.35.1
-// source: pkg/meta/authz_pb/authz.proto
+// source: authz.proto
 
 package authz_pb
 
@@ -19,9 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AuthzService_CheckPermission_FullMethodName        = "/agio.renderfarm.authz.v1.AuthzService/CheckPermission"
-	AuthzService_CheckBulkPermissions_FullMethodName   = "/agio.renderfarm.authz.v1.AuthzService/CheckBulkPermissions"
-	AuthzService_CheckOrganizationAdmin_FullMethodName = "/agio.renderfarm.authz.v1.AuthzService/CheckOrganizationAdmin"
+	AuthzService_CheckPermission_FullMethodName        = "/agio.platform.authz.v1.AuthzService/CheckPermission"
+	AuthzService_CheckBulkPermissions_FullMethodName   = "/agio.platform.authz.v1.AuthzService/CheckBulkPermissions"
+	AuthzService_CheckOrganizationAdmin_FullMethodName = "/agio.platform.authz.v1.AuthzService/CheckOrganizationAdmin"
 )
 
 // AuthzServiceClient is the client API for AuthzService service.
@@ -188,7 +188,7 @@ func _AuthzService_CheckOrganizationAdmin_Handler(srv interface{}, ctx context.C
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var AuthzService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "agio.renderfarm.authz.v1.AuthzService",
+	ServiceName: "agio.platform.authz.v1.AuthzService",
 	HandlerType: (*AuthzServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -205,5 +205,5 @@ var AuthzService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "pkg/meta/authz_pb/authz.proto",
+	Metadata: "authz.proto",
 }

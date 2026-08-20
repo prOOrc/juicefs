@@ -29,14 +29,14 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// renderfarmAuthzClient wraps the generated gRPC client for agio-renderfarm AuthzService.
-type renderfarmAuthzClient struct {
+// platformAuthzClient wraps the generated gRPC client for agio-platform AuthzService.
+type platformAuthzClient struct {
 	client     authzpb.AuthzServiceClient
 	volumeName string
 }
 
 // CheckPermission calls the authz service to check a single path permission.
-func (c *renderfarmAuthzClient) CheckPermission(ctx context.Context, userID, filePath string, perm AuthzPermission) (bool, error) {
+func (c *platformAuthzClient) CheckPermission(ctx context.Context, userID, filePath string, perm AuthzPermission) (bool, error) {
 	resp, err := c.client.CheckPermission(ctx, &authzpb.CheckPermissionRequest{
 		UserId:     userID,
 		Path:       filePath,
@@ -50,7 +50,7 @@ func (c *renderfarmAuthzClient) CheckPermission(ctx context.Context, userID, fil
 }
 
 // CheckBulkPermissions calls the authz service to batch-check multiple paths.
-func (c *renderfarmAuthzClient) CheckBulkPermissions(ctx context.Context, userID string, paths []string, perm AuthzPermission) ([]bool, error) {
+func (c *platformAuthzClient) CheckBulkPermissions(ctx context.Context, userID string, paths []string, perm AuthzPermission) ([]bool, error) {
 	resp, err := c.client.CheckBulkPermissions(ctx, &authzpb.CheckBulkPermissionsRequest{
 		UserId:     userID,
 		Paths:      paths,
@@ -64,7 +64,7 @@ func (c *renderfarmAuthzClient) CheckBulkPermissions(ctx context.Context, userID
 }
 
 // CheckOrganizationAdmin calls the authz service to check org admin status.
-func (c *renderfarmAuthzClient) CheckOrganizationAdmin(ctx context.Context, userID string) (bool, error) {
+func (c *platformAuthzClient) CheckOrganizationAdmin(ctx context.Context, userID string) (bool, error) {
 	resp, err := c.client.CheckOrganizationAdmin(ctx, &authzpb.CheckOrganizationAdminRequest{
 		UserId:     userID,
 		VolumeName: c.volumeName,
@@ -76,7 +76,7 @@ func (c *renderfarmAuthzClient) CheckOrganizationAdmin(ctx context.Context, user
 }
 
 // Close closes the underlying gRPC connection.
-func (c *renderfarmAuthzClient) Close() error {
+func (c *platformAuthzClient) Close() error {
 	if closer, ok := c.client.(interface{ Close() error }); ok {
 		return closer.Close()
 	}
@@ -97,9 +97,9 @@ func toPBPermission(p AuthzPermission) authzpb.Permission {
 	}
 }
 
-// NewRenderfarmAuthzClient creates a gRPC client for the authz service.
+// NewPlatformAuthzClient creates a gRPC client for the authz service.
 // For production, use TLS via --authz-tls-cert, --authz-tls-key, and --authz-tls-ca flags.
-func NewRenderfarmAuthzClient(addr, volumeName, tlsCert, tlsKey, tlsCA, serverName string) (AuthzClient, error) {
+func NewPlatformAuthzClient(addr, volumeName, tlsCert, tlsKey, tlsCA, serverName string) (AuthzClient, error) {
 	opts := []grpc.DialOption{}
 
 	if tlsCert != "" && tlsKey != "" && tlsCA != "" {
@@ -130,7 +130,7 @@ func NewRenderfarmAuthzClient(addr, volumeName, tlsCert, tlsKey, tlsCA, serverNa
 		return nil, fmt.Errorf("connect to authz service %s: %w", addr, err)
 	}
 
-	return &renderfarmAuthzClient{
+	return &platformAuthzClient{
 		client:     authzpb.NewAuthzServiceClient(conn),
 		volumeName: volumeName,
 	}, nil
