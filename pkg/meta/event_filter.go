@@ -24,8 +24,8 @@ import "strings"
 //
 // Rules are applied in order — first match is the final decision:
 //  1. SKIP: MinIO internal paths (/.minio.sys/, /.sys/)
-//  2. SKIP: tmp operations except FileMoved (/.sys/tmp/)
-//  3. TRANSFORM: FileMoved from tmp → FileCreated (MinIO S3 PUT pattern)
+//  2. SKIP: tmp operations except move events (/.sys/tmp/)
+//  3. TRANSFORM: move from tmp → Created (MinIO S3 PUT pattern)
 //  4. PASS: everything else
 func FilterEvent(event *JuiceFsEvent) *JuiceFsEvent {
 	// --- Temporary rules (MinIO Gateway) — remove when migrating to Meta Proxy ---
@@ -41,8 +41,12 @@ func FilterEvent(event *JuiceFsEvent) *JuiceFsEvent {
 	// --- Temporary rule (MinIO Gateway) ---
 
 	if isMovedFromTmp(event.OldPath, event.Type) {
+		newType := FileCreated
+		if event.Type == DirMoved {
+			newType = DirCreated
+		}
 		return &JuiceFsEvent{
-			Type:      FileCreated,
+			Type:      newType,
 			Timestamp: event.Timestamp,
 			Volume:    event.Volume,
 			Uid:       event.Uid,
@@ -66,16 +70,16 @@ func isMinioInternal(path string) bool {
 	return strings.HasPrefix(path, "/.minio.sys/") || strings.HasPrefix(path, "/.sys/")
 }
 
-// isTmpOperation returns true for non-FileMoved operations inside MinIO's tmp directory.
+// isTmpOperation returns true for non-move operations inside MinIO's tmp directory.
 // MinIO writes to tmp files then renames; Create/Write/Delete in tmp are intermediate noise.
 // Temporary — remove when migrating away from MinIO Gateway.
 func isTmpOperation(path string, eventType EventType) bool {
-	return strings.HasPrefix(path, "/.sys/tmp/") && eventType != FileMoved
+	return strings.HasPrefix(path, "/.sys/tmp/") && eventType != FileMoved && eventType != DirMoved
 }
 
-// isMovedFromTmp returns true for FileMoved events where the source is MinIO's tmp directory.
+// isMovedFromTmp returns true for move events where the source is MinIO's tmp directory.
 // This represents the actual user S3 PUT — MinIO writes to tmp then renames to final path.
 // Temporary — remove when migrating away from MinIO Gateway.
 func isMovedFromTmp(oldPath string, eventType EventType) bool {
-	return eventType == FileMoved && strings.HasPrefix(oldPath, "/.sys/tmp/")
+	return (eventType == FileMoved || eventType == DirMoved) && strings.HasPrefix(oldPath, "/.sys/tmp/")
 }

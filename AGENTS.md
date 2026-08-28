@@ -247,7 +247,7 @@ JuiceFS is a distributed filesystem with three primary layers:
 | `pkg/sync` | Cross-filesystem synchronization |
 | `pkg/acl` | Access control lists |
 | `pkg/metric` | Prometheus metrics |
-| `pkg/meta/events.go` | `JuiceFsEvent` struct and `EventType` constants (FileCreated, FileDeleted, FileMoved, FileWritten, DirCreated, DirDeleted) |
+| `pkg/meta/events.go` | `JuiceFsEvent` struct and `EventType` constants (FileCreated, FileDeleted, FileMoved, FileWritten, DirCreated, DirDeleted, DirMoved) |
 | `pkg/meta/redis_outbox.go` | Redis Streams outbox — writes events to stream, consumer group, retry logic, dead-letter queue |
 | `pkg/meta/redis_event.go` | Helper functions that publish events from meta operations (doMknod, doRename, doUnlink, doRmdir, doWrite, doFallocate) |
 | `pkg/meta/watermill_kafka.go` | Kafka publisher via Watermill + Sarama; reads from Redis stream, publishes to `juicefs.events` topic |

@@ -111,6 +111,19 @@ func (m *redisMeta) publishFileMovedToPipe(ctx Context, pipe redis.Pipeliner, in
 	})
 }
 
+// publishDirMovedToPipe publishes a DirMoved event to the pipeline
+func (m *redisMeta) publishDirMovedToPipe(ctx Context, pipe redis.Pipeliner, inode Ino, parentDst Ino, nameDst string, parentSrc Ino, nameSrc string) {
+	m.publishEventToPipe(ctx, pipe, &JuiceFsEvent{
+		Type:    DirMoved,
+		Inode:   inode,
+		Parent:  parentDst,
+		Name:    nameDst,
+		Path:    m.reconstructPath(ctx, inode, parentDst, nameDst),
+		OldPath: m.reconstructPath(ctx, inode, parentSrc, nameSrc),
+		Subdir:  m.conf.Subdir,
+	})
+}
+
 // publishFileWrittenToPipe publishes a FileWritten event to the pipeline
 func (m *redisMeta) publishFileWrittenToPipe(ctx Context, pipe redis.Pipeliner, inode Ino, size uint64) {
 	path := m.reconstructPath(ctx, inode, 0, "")

@@ -32,6 +32,7 @@ const (
 	// Directory operations
 	DirCreated EventType = "DirCreated"
 	DirDeleted EventType = "DirDeleted"
+	DirMoved   EventType = "DirMoved"
 )
 
 // JuiceFsEvent represents a filesystem event to be published to the outbox
@@ -50,7 +51,7 @@ type JuiceFsEvent struct {
 	Name   string `json:"name"`
 	Path   string `json:"path,omitempty"`
 	// Operation-specific fields
-	OldPath string `json:"old_path,omitempty"` // For FileMoved (source path)
+	OldPath string `json:"old_path,omitempty"` // For FileMoved/DirMoved (source path)
 	Size    uint64 `json:"size,omitempty"`     // For FileWritten
 	Mode    uint16 `json:"mode,omitempty"`     // For FileCreated/DirCreated
 }
