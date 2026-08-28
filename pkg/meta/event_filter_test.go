@@ -92,6 +92,32 @@ func TestFilterEvent(t *testing.T) {
 			expectedType: FileCreated,
 		},
 		{
+			name: "DirMoved from tmp — transform to DirCreated",
+			input: &JuiceFsEvent{
+				Type:      DirMoved,
+				Path:      "/data/users/alice/photos",
+				OldPath:   "/.sys/tmp/d09/photos",
+				Inode:     5002,
+				Parent:    5000,
+				Name:      "photos",
+				Mode:      493,
+				Uid:       1000,
+				Gid:       1000,
+				Subdir:    "test",
+				Timestamp: ts,
+			},
+			expectNil:    false,
+			expectedType: DirCreated,
+		},
+		{
+			name: "Real DirMoved (rename, not from tmp)",
+			input: &JuiceFsEvent{
+				Type: DirMoved, Path: "/data/users/alice/moved-dir", OldPath: "/data/users/bob/moved-dir", Inode: 600, Parent: 99, Name: "moved-dir", Subdir: "test", Timestamp: ts,
+			},
+			expectNil:    false,
+			expectedType: DirMoved,
+		},
+		{
 			name: "Real DirCreated",
 			input: &JuiceFsEvent{
 				Type: DirCreated, Path: "/data/users/alice/photos/", Inode: 100, Parent: 99, Name: "photos", Mode: 493, Subdir: "test", Timestamp: ts,
