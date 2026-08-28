@@ -27,7 +27,8 @@ Implemented a Redis Streams outbox pattern in JuiceFS to publish filesystem even
 |-----------|-----------|----------|
 | Create (file) | FileCreated | doMknod |
 | Mkdir | DirCreated | doMknod |
-| Rename | FileMoved | doRename |
+| Rename (file) | FileMoved | doRename |
+| Rename (dir) | DirMoved | doRename |
 | Unlink | FileDeleted | doUnlink |
 | Rmdir | DirDeleted | doRmdir |
 | Write | FileWritten | doWrite |
