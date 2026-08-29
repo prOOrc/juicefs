@@ -1,0 +1,46 @@
+schema: spec-driven
+
+context: |
+  Проект: agio Drive — корпоративная файловая система для CG/VFX на основе форка
+  JuiceFS (module github.com/juicedata/juicefs). Глубокий форк: совместимость с
+  upstream не требуется (стратегическое решение S2 в SRS-001).
+
+  Стек: Go; metadata-движки Redis / SQL (MySQL, PostgreSQL, SQLite) / KV (TiKV, etcd,
+  BadgerDB, FoundationDB); object storage (S3 и др.); gRPC Meta Proxy для внешних
+  клиентов; authn — OIDC (Ory Hydra/Kratos); authz — agio-platform AuthzService (gRPC);
+  outbox — Redis Streams → Kafka (Watermill + Sarama).
+
+  Архитектура: pkg/meta (metadata-интерфейс + бэкенды), pkg/vfs, pkg/fuse, pkg/fs,
+  pkg/chunk, pkg/object, pkg/gateway, cmd/. AGIO-специфичный код:
+  pkg/meta/grpc_server.go (Meta Proxy), pkg/meta/redis_outbox.go, pkg/meta/events.go,
+  pkg/meta/redis_event.go, pkg/meta/watermill_kafka.go.
+
+  Активные фичи:
+  - AGIO Drive v2 (ветка agio-drive-v2): Meta Proxy gRPC, OIDC authn, Authz via
+    agio-platform — реализовано; шифрование (SRS-001) — в проработке, per-stage changes.
+  - Outbox (ветка outbox): события файловой системы Redis Streams → Kafka.
+
+  Обязательные документы:
+  - openspec/specs/** — действующие требования по капабилити
+  - specs/brd/, specs/srs/, specs/decisions/ — бизнес-слой (BRD/SRS/ADR), реестр: specs/index.md
+  - AGENTS.md — порядок работы, правила агентов
+
+  Язык артефактов: заголовки разделов, идентификаторы, имена типов и ключевые слова
+  (WHEN/THEN/SHALL/MUST) — английские. Описания, обоснования и текст сценариев — русские.
+
+rules:
+  proposal:
+    - 'Раздел Non-goals обязателен; исполнитель читает его как запрет.'
+    - 'Раздел "Related Requirements" обязателен: ссылки на BRD/SRS по ID из specs/index.md (например, SRS-001#§6.2). Если бизнес-документов нет — явно объясни почему.'
+    - 'Перечисли capability в разделе Capabilities именами существующих спеков из openspec/specs/ — по ним создаются delta-спеки. Если change не меняет поведение, поставь skip_specs true и объясни причину.'
+  specs:
+    - 'Раскладка openspec/specs/ плоская: capability адресуется одним kebab-case сегментом. Upstream JuiceFS НЕ спекается (внешний код); AGIO-специфичные капабилити — с префиксом domain- (domain-meta-proxy, domain-outbox), сквозные — без префикса.'
+    - 'Запрещены оценочные формулировки (корректно, надёжно, по возможности). Требование обязано быть проверяемым тестом или grep-ом.'
+    - 'Если требование покрыто тестом, добавь строку Verified-by в форме файл::тест. Теста нет — строку не ставь.'
+  design:
+    - 'Обязательные разделы: Architectural Context, Component Map, Execution Flow, Invariants, Decisions & Rationale, Integration Points, Open Questions.'
+    - 'Употребляй только имена типов, реально существующие в репозитории. Проверяй grep-ом.'
+    - 'Семантические изменения pkg/meta/ обязаны сохранять parity между движками Redis/SQL/KV (AGENTS.md, "Agent boundaries") и покрываться общими тестами base_test.go.'
+  tasks:
+    - 'Каждая задача содержит список файлов и команду проверки (go build ./..., make test.meta.core, go test ./pkg/meta/...).'
+    - 'Раздел Definition of Done обязателен: go build, go vet, go test по затронутым пакетам, golangci-lint.'
