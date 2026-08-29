@@ -11,6 +11,33 @@ The metadata engine has three implementation families under `pkg/meta/`:
 - **SQL/DB** — `dbMeta` (`sql.go`): MySQL, PostgreSQL, SQLite.
 - **KV (TKV)** — `kvMeta` (`tkv.go`): TiKV, etcd, BadgerDB, FoundationDB.
 
+## Spec-Driven Workflow
+
+Проект использует гибридный spec-driven workflow: два слоя спецификаций (ADR-001).
+
+**Человеческий слой `specs/`** — для людей и стейкхолдеров:
+- `specs/brd/` — бизнес-требования (зачем делаем)
+- `specs/srs/` — системные требования (что система должна делать), стабильные ID `REQ-*`, `NFR-*`, `SEC-*`
+- `specs/decisions/` — ADR (архитектурные решения)
+- `specs/index.md` — реестр всех документов
+
+**Машинный слой `openspec/`** — для AI-агентов:
+- `openspec/specs/` — Source of Truth: как система работает СЕЙЧАС (capability specs, SHALL + WHEN/THEN)
+- `openspec/changes/` — Delta Specs: что МЕНЯЕТСЯ (propose → apply → archive)
+
+Процесс: Идея → BRD → SRS → `/opsx-propose` → `/opsx-apply` → `/opsx-archive`
+
+Правила для всех агентов:
+1. Не реализуй продакшен-код без готового change в `openspec/changes/`.
+2. В proposal.md обязательно ссылайся на BRD/SRS/ADR по ID из `specs/index.md` (раздел "Related Requirements").
+3. Не меняй утверждённые BRD/SRS без обновления документа и реестра.
+4. Не добавляй новую архитектуру, внешние сервисы или модели метаданных без ADR в `specs/decisions/`.
+5. Не спекай upstream JuiceFS — Source of Truth покрывает только AGIO-специфичные капабилити (Meta Proxy, outbox, шифрование).
+6. Не сохраняй в спеках секреты, токены и персональные данные.
+7. Инструкции агента-архитектора: `.qwen/agents/architect.md`. Описание процесса: `specs/README.md`.
+
+Ветки: workflow-файлы (`specs/`, `openspec/`, `.qwen/skills/`, `.qwen/commands/`) живут на `main-agio`; фичевые ветки (`agio-drive-v2`, `outbox`) ребейзятся от неё.
+
 ## Repository map
 
 Entry points: `main.go` (root) and `cmd/main.go` (CLI commands live in `cmd/`).
