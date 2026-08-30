@@ -110,6 +110,8 @@ Key plane:   KMS Master Key → Company KEK (Secret Manager) → wrapped_fek (Re
 5. **Offboarding через `RotateFileKeysByPaths` (proxy RPC)** — PG-проекция не хранит inode, маппинг path→inode только через Redis/proxy; CLI platform принимает пути (решение 7.7 этапа 7).
 6. **CEK per-slice вместо per-chunk** — терминологическое: «чанк» SRS ≙ slice JuiceFS (D3); форматы и AAD адаптированы (slice_id, block_index).
 7. **Старые читатели падают на новых slice-записях** — принято (S2: upstream-совместимость не требуется); rollout-правило этапа 10: включить шифрование только после обновления всех клиентов; mixed-состояние данных допустимо в одну сторону (legacy→encrypted, этап 8).
+8. **mlock-область сужена: FEK + render KEK, CEK — best-effort** — SRS NFR-SEC-5 требует mlock для всех страниц памяти с ключами; решение 6.2 этапа 6 сужает до FEK (LRU entries) и render KEK: CEK короткоживущие и per-slice, mlock на каждый = overhead (обёртка `mlockPage` с metric и log при неудаче).
+9. **Новые MetaService RPC `ResolveFileKey` и `RotateFileKey`** — SRS §15.2 (FR-API-1..3) описывает только расширения полей; stage-планы добавляют proxy-RPC: `ResolveFileKey(inode)` для фоновой компакции (решение 5.3 этапа 5, D8) и `RotateFileKey(inode)` для оркестрации FEK-ротации (решение 7.4 этапа 7). По природе — те же «добавления сверх SRS», что отклонения #1 и #4.
 
 ## Open Questions
 
