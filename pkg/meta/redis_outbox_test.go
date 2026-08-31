@@ -84,13 +84,13 @@ func TestInitConsumerGroupNoStream(t *testing.T) {
 	client.Del(ctx, stream)
 }
 
-func TestCreateRedisOptionsNilConf(t *testing.T) {
-	result, err := createRedisOptions("redis://localhost:6379/0", nil)
+func TestParseRedisClientOptionsDefaults(t *testing.T) {
+	result, err := parseRedisClientOptions("redis://localhost:6379/0")
 	if err != nil {
-		t.Fatalf("createRedisOptions with nil conf returned error: %v", err)
+		t.Fatalf("parseRedisClientOptions returned error: %v", err)
 	}
 	if result.Options.MaxRetries != -1 {
-		t.Fatalf("expected MaxRetries=-1 with nil conf, got %d", result.Options.MaxRetries)
+		t.Fatalf("expected MaxRetries=-1, got %d", result.Options.MaxRetries)
 	}
 }
 
@@ -111,9 +111,8 @@ func TestRouteReadStrippedBeforeParse(t *testing.T) {
 		t.Fatalf("expected route-read=random, got %q", routeRead)
 	}
 
-	// After stripping, createRedisOptions must succeed
-	_, err = createRedisOptions(u.String(), nil)
-	if err != nil {
-		t.Fatalf("createRedisOptions failed after stripping route-read: %v", err)
+	// After stripping, parsing must succeed
+	if _, err = parseRedisClientOptions(u.String()); err != nil {
+		t.Fatalf("parseRedisClientOptions failed after stripping route-read: %v", err)
 	}
 }
