@@ -31,7 +31,7 @@
 KMS Master Key (per-company, Yandex KMS / AWS KMS)
     │ wrap
     ▼
-Company KEK (32B, Secret Manager; один на компанию)
+Company KEK (32B, Lockbox; один на компанию)
     │ wrap → AGFK blob в Redis inode attr
     ▼
 FEK (32B, per file/inode; plaintext — только в RAM клиента/proxy на время запроса)
@@ -52,7 +52,7 @@ CEK (32B, per slice; plaintext — только в RAM на время опер�
 | Authz | Meta Proxy / KeyManager → agio-platform `AuthzService` → PG | authz-gated выдача FEK (Read/Edit), Company Owner bypass |
 | Render | Render Client → Redis + S3 напрямую, без proxy/OIDC/PG | локальный unwrap FEK по Company KEK (из `FetchCompanyKEK` при mount) |
 
-Два репозитория: форк JuiceFS (`/Users/i.obukhov/github/juicefs`, ветка `agio-drive-v2`) — data path, meta-интеграция, render-клиент, миграция; agio-platform (`/Users/i.obukhov/ai/agio/agio-platform`, ветка `feature/drive-v2`) — KeyManager, KMS/Secret Manager/STS-адаптеры, PG-таблицы, аудит. Связь — gRPC `agio.platform.drive.crypto.v1.DriveKeyManagerService` (TLS), тот же сервер, что `AuthzService` (решение D6).
+Два репозитория: форк JuiceFS (`/Users/i.obukhov/github/juicefs`, ветка `agio-drive-v2`) — data path, meta-интеграция, render-клиент, миграция; agio-platform (`/Users/i.obukhov/ai/agio/agio-platform`, ветка `feature/drive-v2`) — KeyManager, KMS/Lockbox/STS-адаптеры, PG-таблицы, аудит. Связь — gRPC `agio.platform.drive.crypto.v1.DriveKeyManagerService` (TLS), тот же сервер, что `AuthzService` (решение D6).
 
 ## Component Map
 
@@ -87,8 +87,8 @@ CEK (32B, per slice; plaintext — только в RAM на время опер�
 
 | Компонент | Файл | Этап |
 |---|---|---|
-| Порты: `KMS`, `SecretManager`, `CompanyKEKService`, `IdentityResolver`, `KeyAccessLogger` | `src/internal/drive/application/ports/crypto.go` (новый) | 1 |
-| Yandex KMS / Secret Manager-адаптеры + fake для тестов | `src/internal/drive/infrastructure/adapters/kms_yandex.go`, `secret_manager_yandex.go`, `crypto_fake.go` (новые) | 1 |
+| Порты: `KMS`, `SecretStore`, `CompanyKEKService`, `IdentityResolver`, `KeyAccessLogger` | `src/internal/drive/application/ports/crypto.go` (новый) | 1 |
+| Yandex KMS / Lockbox-адаптеры + fake для тестов | `src/internal/drive/infrastructure/adapters/kms_yandex.go`, `lockbox_yandex.go`, `crypto_fake.go` (новые) | 1 |
 | `CompanyKEKService` (GetKEK с RAM-LRU TTL 5 мин, ProvisionKEK) | `src/internal/drive/infrastructure/adapters/company_kek.go` (новый) | 1 |
 | PG-миграции `drive_company_crypto_key`, `drive_key_access_log` + SQLBoiler | `src/infrastructure/db/migrations/000203*`, `000204*` (следующие свободные номера; актуальный максимум в platform — 000202) | 1 |
 | Proto `DriveKeyManagerService` + generated code | `src/application/authz/proto/key_manager.proto` (новый) | 1, 7 |
@@ -143,7 +143,7 @@ CEK (32B, per slice; plaintext — только в RAM на время опер�
 | D9 (ред. 7.1) | Revoke-signal через heartbeat `FlushSession`: `permission_generation` из Redis platform (`drivepermgen:{userID}`), proxy опрашивает `GetPermissionGeneration` | Отдельный streaming RPC: новый канал там, где есть готовый heartbeat 12s; counter в Redis форка: proxy не имеет доступа к Redis platform — счётчик живёт в Redis platform (решение 7.1) |
 | D10 | STS: user mode — RPC `GetSTSCredentials` (prefix-scoped политика); render — прямой cloud STS по IAM ноды; swap credentials локально через `ReloadableStorage.SetCredentials` | Запись STS-токенов в Redis `Format`: утечка чужих токенов всем клиентам + лишние writes (решение 7.2) |
 | D11 | Identity: только UUID-валидация формата; DB-запроса на существование пользователя нет | Kratos/email fallback: не нужен при инварианте A6; проверка существования в KeyManager: дублирует authz deny (FR-ID-4) |
-| D12 | KMS/Secret Manager — порты + Yandex-реализации первыми, интерфейс провайдер-независимый | AWS-first: платформа деплоится в YC; hard-coded провайдер: ломает A1 |
+| D12 | KMS/Lockbox — порты + Yandex-реализации первыми, интерфейс провайдер-независимый (порт `SecretStore`; сервиса «Secret Manager» в YC нет) | AWS-first: платформа деплоится в YC; hard-coded провайдер: ломает A1 |
 | 3.1 | `OpenRequest.cached_fek_version`: при совпадении с `attr.FekVersion` proxy не вызывает KeyManager | Вызов KeyManager на каждый Open: NFR-PERF-1 (≤5 мс p99) недостижим; authz interceptor при этом проверяется ВСЕГДА (отзыв прав не обходится) |
 | 3.3 | Rollback Create: ошибка KeyManager/SetFileCrypto после `meta.Create` → `Unlink` + EIO | Файл «без FEK» как unusable-маркер: оставляет мусор в листинге; окно безопасно — данные не пишутся до получения FEK |
 | 5.1 | `RewrapSlices` — один Redis txn на chunk list, последовательно по чанкам | Один глобальный txn на файл: блокировка/размер txn на больших файлах; частичный re-wrap при сбое → target `Unlink` (unusable), source не затрагивается |
@@ -154,18 +154,18 @@ CEK (32B, per slice; plaintext — только в RAM на время опер�
 ## Integration Points
 
 1. **Форк ↔ agio-platform (gRPC, TLS):** сервис `agio.platform.drive.crypto.v1.DriveKeyManagerService`. Форк держит копию proto в `pkg/meta/keymanager_pb/` (паттерн `authz_pb/`); синхронизация контролируется cross-repo known-answer тестами (stage 9) — расхождение форматов AGFK/AGCK/AGDF между репозиториями = критический баг.
-2. **KMS / Secret Manager (Yandex первыми, D12):** `WrapKey/UnwrapKey` по keyID; Company KEK — именованные секреты `drive/kek/{companyID}/v{version}`. Fake-реализации для тестов.
+2. **KMS / Lockbox (Yandex первыми, D12):** `WrapKey/UnwrapKey` по keyID; Company KEK — именованные секреты `drive/kek/{companyID}/v{version}` в Lockbox (folder из флага `lockbox_folder`; YC не имеет сервиса «Secret Manager»). Fake-реализации для тестов.
 3. **STS:** AWS `AssumeRole` с inline session policy на company prefix (паттерн `S3AuthzHandler` platform); YC — проверить возможности IAM (Open Question). TTL ≤ 60 мин.
-4. **Redis (форк):** attr suffix + slice tail (этап 2), `SetFileCrypto`/`RewrapSlices` txn (этапы 3/5), `drivepermgen:{userID}` counter в Redis platform (этап 7). Backups — encrypted (stage 10, FR-REDIS-5).
+4. **Redis (форк):** attr suffix + slice tail (этап 2), `SetFileCrypto`/`RewrapSlices` txn (этапы 3/5), `drivepermgen:{userID}` counter в Redis platform (этап 7). Backups — внутренние бэкапы YC, retention 35 дней (stage 10, FR-REDIS-5; SSE-KMS/S3-экспорт сервисом не поддерживается).
 5. **PG (platform):** `drive_company_crypto_key` (управление KEK), `drive_key_access_log` (аудит, append-only, ≥12 мес); SQLBoiler-регенерация после миграций.
 6. **Known-answer векторы:** идентичный `vectors.json` в обоих репозиториях — единственная защита от дрейфа бинарных форматов.
-7. **YC-инфраструктура (`agio-terraform-yc`, `agio-cloud`):** KMS master keys per-company (`yandex_kms_key`, auto-rotation — см. Open Question 5), Secret Manager (именованные секреты `drive/kek/{companyID}/v{version}`), IAM service accounts / STS-роли (render-ноды, user-сессии), encrypted Redis backups (SSE-KMS экспорт в S3) — Terraform в `agio-terraform-yc` (изменения трекаются в его собственном openspec, spec-driven); k8s values/secrets для новых флагов platform (`kms_key_id`, `secret_manager_folder`, IAM) — `agio-cloud` (chart `platform-api`, `k8s/secrets/{stage,prod}/`).
+7. **YC-инфраструктура (`agio-terraform-yc`, `agio-cloud`):** KMS master keys per-company (`yandex_kms_symmetric_key`, rotation_period — см. Open Question 5), Lockbox (именованные секреты `drive/kek/{companyID}/v{version}`; YC не имеет сервиса «Secret Manager»), IAM service accounts / STS-роли (render-ноды, user-сессии), Redis metadata backups (внутренние бэкапы YC, retention 35 дней; SSE-KMS/S3-экспорт сервисом не поддерживается — OQ1 change `drive-crypto-infra`) — Terraform в `agio-terraform-yc` (изменения трекаются в его собственном openspec, spec-driven); k8s values для новых флагов platform (`kms_key_id`, `lockbox_folder`, IAM) — `agio-cloud` (chart `platform-api`).
 
 ## Risks / Trade-offs
 
 - [Старые читатели падают на slice-записях с AGCK-хвостом] → rollout-правило (stage 10): включить шифрование только после обновления всех клиентов; mixed-состояние данных допустимо только legacy→encrypted.
 - [Горячий путь `store.load`/`upload`: overhead ≤10% (NFR-PERF-3)] → AES-GCM с AES-NI; зашифрованный путь короче legacy (без compressor); нагрузочное сравнение — stage 9 (FR-TEST-24).
-- [Потеря Redis = потеря `wrapped_fek` = потеря данных (R2)] → encrypted backups + AOF + restore-тест (stage 10).
+- [Потеря Redis = потеря `wrapped_fek` = потеря данных (R2)] → внутренние бэкапы YC (retention 35 дней) + AOF + restore-тест (stage 10).
 - [STS не реализован → отзыв доступа к S3 невозможен (R8, критический)] → stage 7 — приоритет; до STS отзыв ограничен authz+FEK-кэшами.
 - [Redis load от сотен render-нод (R9)] → aggressive caching ≥60s, pipelined readdir, 0 доп. round-trips на FEK (unwrap локальный); нагрузочный тест FR-TEST-25.
 - [Дрейф идентичности Kratos↔platform (R12)] → fail-closed (FR-ID-4) + daily reconciliation-мониторинг (stage 10).
@@ -177,7 +177,7 @@ CEK (32B, per slice; plaintext — только в RAM на время опер�
 ## Migration Plan
 
 1. **Per-company rollout** (stage 10): пилотная компания (test) → stage → production по одной компании (`rb-enable-company`).
-2. **Предусловия per company:** все клиенты обновлены до версии с поддержкой slice-формата v2; render-ноды обновлены; STS включён; encrypted Redis backups проверены restore-тестом.
+2. **Предусловия per company:** все клиенты обновлены до версии с поддержкой slice-формата v2; render-ноды обновлены; STS включён; Redis metadata backups проверены restore-тестом.
 3. **Включение:** `ProvisionCompanyKEK` → `juicefs enable-encryption` (идемпотентно, `Format.EncryptionEnabled=true`) → новые файлы шифруются по умолчанию; legacy читаются passthrough.
 4. **Миграция legacy:** `juicejs reencrypt` (rate-limited, возобновляемая) в off-peak.
 5. **Rollback:** отключить создание новых зашифрованных файлов (`EncryptionEnabled=false` для новых файлов) + чтение старых продолжается (новые клиенты читают оба формата). Полное «откатить шифрование» = де-энкрипция — отдельный проект, out of scope.
