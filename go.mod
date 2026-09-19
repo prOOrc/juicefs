@@ -20,7 +20,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.99.0
 	github.com/aws/smithy-go v1.24.2
 	github.com/baidubce/bce-sdk-go v0.9.263
-	github.com/bytedance/mockey v1.2.14
+	github.com/bytedance/mockey v1.4.7
 	github.com/ceph/go-ceph v0.18.0
 	github.com/charlievieth/fastwalk v1.0.14
 	github.com/cloudsoda/go-smb2 v0.0.0-20250228001242-d4c70e6251cc
@@ -332,7 +332,7 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
-	golang.org/x/arch v0.11.0 // indirect
+	golang.org/x/arch v0.23.0 // indirect
 	golang.org/x/exp v0.0.0-20260212183809-81e46e3db34a // indirect
 	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/time v0.8.0 // indirect
