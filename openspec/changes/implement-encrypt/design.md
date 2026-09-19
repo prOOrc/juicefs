@@ -4,10 +4,10 @@
 
 См. proposal.md — Why. Фактическое состояние (точка отсчёта, проверено по ветке `agio-drive-v2`):
 
-- **Реализовано:** gRPC Meta Proxy (`MetaProxyServer` оборачивает неизменённый `redisMeta`; клиент `grpcMeta` реализует `meta.Meta` напрямую), OIDC authn (серверный interceptor + клиентский `withAuth()` с singleflight), authz через внешний gRPC `AuthzService` agio-platform (`authz_interceptor.go`, `InodePathCache`, кэш решений TTL 30s, Company Owner bypass `PermissionOwn`). Данные НЕ проходят через proxy — только slice-метаданные; S3-credentials клиент получает из `Format` через `Load` (`NewReloadableStorage`, cmd/mount.go:462).
+- **Реализовано:** gRPC Meta Proxy (`MetaProxyServer` оборачивает неизменённый `redisMeta`; клиент `grpcMeta` реализует `meta.Meta` напрямую), OIDC authn (серверный interceptor + клиентский `withAuth()` с singleflight), authz через внешний gRPC `AuthzService` agio-platform (`authz_interceptor.go`, `InodePathCache`, кэш решений TTL 30s; Company Owner bypass — на стороне platform: `auth.PermissionOwn` в `src/internal/drive/infrastructure/adapters/auth.go`). Данные НЕ проходят через proxy — только slice-метаданные; S3-credentials клиент получает из `Format` через `Load` (`NewReloadableStorage`, cmd/mount.go:462).
 - **Greenfield:** CEK/FEK/KEK, KeyManager, render-клиент, STS, encrypted local cache, offline-режим, revocation-механика, миграция legacy-данных.
 - **Критические ограничения (не нарушать):** (1) render-ноды — нативный FUSE с прямым Redis+S3, без proxy/OIDC/authz; (2) шифрование только на клиенте (chunk store); (3) Redis = source of truth для метаданных; (4) инвариант идентичности A6/S12: OIDC `sub` ≡ `kratos.identity_id` ≡ `user.id` (UUID), маппинга нет.
-- **Контракт:** целевое поведение зафиксировано в `openspec/specs/domain-encrypt/spec.md`; межэтапные бинарные форматы и решения D1–D12 — в мастер-плане §4 (`.qwen/plans/agio-drive-encrypt-master.md`).
+- **Контракт:** целевое поведение зафиксировано в delta-спеке этого change `specs/domain-encrypt/spec.md` (greenfield-капабилити; при архивации change она становится SoT `openspec/specs/domain-encrypt/`); межэтапные бинарные форматы и решения D1–D12 — в мастер-плане §4 (`.qwen/plans/agio-drive-encrypt-master.md`).
 
 ## Goals / Non-Goals
 
@@ -90,7 +90,7 @@ CEK (32B, per slice; plaintext — только в RAM на время опер�
 | Порты: `KMS`, `SecretManager`, `CompanyKEKService`, `IdentityResolver`, `KeyAccessLogger` | `src/internal/drive/application/ports/crypto.go` (новый) | 1 |
 | Yandex KMS / Secret Manager-адаптеры + fake для тестов | `src/internal/drive/infrastructure/adapters/kms_yandex.go`, `secret_manager_yandex.go`, `crypto_fake.go` (новые) | 1 |
 | `CompanyKEKService` (GetKEK с RAM-LRU TTL 5 мин, ProvisionKEK) | `src/internal/drive/infrastructure/adapters/company_kek.go` (новый) | 1 |
-| PG-миграции `drive_company_crypto_key`, `drive_key_access_log` + SQLBoiler | `src/infrastructure/db/migrations/000190*`, `000191*` | 1 |
+| PG-миграции `drive_company_crypto_key`, `drive_key_access_log` + SQLBoiler | `src/infrastructure/db/migrations/000203*`, `000204*` (следующие свободные номера; актуальный максимум в platform — 000202) | 1 |
 | Proto `DriveKeyManagerService` + generated code | `src/application/authz/proto/key_manager.proto` (новый) | 1, 7 |
 | `KeyManagerService` (CreateFileKey/GetFileFEK/GetBulkFileFEK/FetchCompanyKEK/ProvisionCompanyKEK; singleflight, аудит) + AGFK-хелперы | `src/application/authz/service/key_manager_service.go`, `fek_crypto.go` (новые) | 1 |
 | IAM-interceptor для `FetchCompanyKEK` | `src/api/iam_interceptor.go` (новый) | 1 |
@@ -159,6 +159,7 @@ CEK (32B, per slice; plaintext — только в RAM на время опер�
 4. **Redis (форк):** attr suffix + slice tail (этап 2), `SetFileCrypto`/`RewrapSlices` txn (этапы 3/5), `drivepermgen:{userID}` counter в Redis platform (этап 7). Backups — encrypted (stage 10, FR-REDIS-5).
 5. **PG (platform):** `drive_company_crypto_key` (управление KEK), `drive_key_access_log` (аудит, append-only, ≥12 мес); SQLBoiler-регенерация после миграций.
 6. **Known-answer векторы:** идентичный `vectors.json` в обоих репозиториях — единственная защита от дрейфа бинарных форматов.
+7. **YC-инфраструктура (`agio-terraform-yc`, `agio-cloud`):** KMS master keys per-company (`yandex_kms_key`, auto-rotation — см. Open Question 5), Secret Manager (именованные секреты `drive/kek/{companyID}/v{version}`), IAM service accounts / STS-роли (render-ноды, user-сессии), encrypted Redis backups (SSE-KMS экспорт в S3) — Terraform в `agio-terraform-yc` (изменения трекаются в его собственном openspec, spec-driven); k8s values/secrets для новых флагов platform (`kms_key_id`, `secret_manager_folder`, IAM) — `agio-cloud` (chart `platform-api`, `k8s/secrets/{stage,prod}/`).
 
 ## Risks / Trade-offs
 

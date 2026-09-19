@@ -2,11 +2,11 @@
 
 ## Why
 
-Подсистема шифрования agio Drive (SRS-001 v2.2, Per-File FEK + Per-Chunk CEK) полностью спроектирована и зафиксирована в Source of Truth (`openspec/specs/domain-encrypt`, инвентаризация `inventory-encrypt` от 2026-08-30), но не реализована: данные в S3 хранятся в plaintext, ключей CEK/FEK/KEK нет, render-ноды и user-клиенты не имеют криптографической изоляции. Это блокирует требования аудита (SOC 2, MPAA TPN) и конкурентный паритет с LucidLink (стратегические решения S1/S4). Реализация запускается сейчас: контракт стабилен, межэтапные форматы зафиксированы (мастер-план §4), декомпозиция на 10 этапов готова.
+Подсистема шифрования agio Drive (SRS-001 v2.2, Per-File FEK + Per-Chunk CEK) полностью спроектирована, но не реализована: данные в S3 хранятся в plaintext, ключей CEK/FEK/KEK нет, render-ноды и user-клиенты не имеют криптографической изоляции. Целевой контракт капабилити `domain-encrypt` зафиксирован в delta-спеке этого change (`specs/domain-encrypt/spec.md`, 16 требований; перенесён из отозванной ветки `inventory-encrypt` — greenfield-капабилити не может находиться в SoT до реализации и попадёт в SoT при архивации этого change). Это блокирует требования аудита (SOC 2, MPAA TPN) и конкурентный паритет с LucidLink (стратегические решения S1/S4). Реализация запускается сейчас: контракт стабилен, межэтапные форматы зафиксированы (мастер-план §4), декомпозиция на 10 этапов готова.
 
 ## What Changes
 
-Реализация капабилити `domain-encrypt` по 10 этапам в двух репозиториях — форк JuiceFS (`agio-drive-v2`) и agio-platform (`feature/drive-v2`). Кратко по этапам (детали — tasks.md, код-уровень — stage-планы):
+Реализация капабилити `domain-encrypt` по 10 этапам в двух кодовых репозиториях — форк JuiceFS (`agio-drive-v2`) и agio-platform (`feature/drive-v2`); stage 10 дополнительно затрагивает инфраструктурные репозитории `agio-terraform-yc` (Terraform: KMS/Secret Manager/IAM/Redis-backups) и `agio-cloud` (k8s values/secrets). Кратко по этапам (детали — tasks.md, код-уровень — stage-планы):
 
 - **Stage 1 (platform):** KMS/Secret Manager-порты + Yandex-реализации, `CompanyKEKService`, PG-таблицы `drive_company_crypto_key`/`drive_key_access_log`, `IdentityResolver` (валидация UUID), gRPC-сервис `DriveKeyManagerService` (`CreateFileKey`/`GetFileFEK`/`GetBulkFileFEK`/`FetchCompanyKEK`/`ProvisionCompanyKEK`; ротация — stubs до stage 7), аудит выдачи ключей.
 - **Stage 2 (форк):** крипто-примитивы AGDF/AGCK/AGFK, slice-запись с `wrapped_cek`, crypto-поля `Attr` + transient `Fek`, `Format.EncryptionEnabled/KEKVersion`, `ChunkStore.NewReaderWithKey/NewWriterWithKey`, ciphertext-only local cache, VFS plumbing (FEK в handle, CEK per open file), предусловия версионирования FR-VER-1/4.
@@ -25,11 +25,11 @@
 
 ### New Capabilities
 
-(нет — капабилити уже зафиксирована инвентаризацией `inventory-encrypt`)
+- `domain-encrypt`: greenfield-капабилити — в SoT её нет. Полный целевой контракт (16 требований, включая «Offboarding batch FEK rotation» с RPC `RotateFileKeysByPaths` — решение 7.7 stage-плана) зафиксирован в delta-спеке этого change; при архивации она становится Source of Truth.
 
 ### Modified Capabilities
 
-- `domain-encrypt`: требование «gRPC API surface» дополняется RPC `RotateFileKeysByPaths` (batch FEK rotation по путям для offboarding, решение 7.7 stage-плана) — контракт, который форк реализует в stage 7 и который отсутствует в baseline-спеке. Остальные требования baseline реализуются без изменения формулировок.
+(нет)
 
 ## Non-goals
 
@@ -43,7 +43,7 @@
 ## Related Requirements
 
 - SRS-001 (review, Final draft v2.2): Подсистема шифрования agio Drive — `specs/srs/SRS-001-agio-drive-encryption.md`. Ссылки по разделам (стабильных REQ-* ID у SRS нет до approved): §4 (иерархия ключей и форматы), §5 (хранение в Redis), §6 (user path), §7 (render path), §8 (операции Clone/CopyFileRange/Compaction), §9 (предусловия версионирования), §10 (offline/no-residuality), §11 (revocation), §12 (ротация), §14 (NFR), §15 (gRPC API), §16 (миграция), §17 (модификации), §18 (тестирование), §19 (план внедрения), §22 (Acceptance Criteria).
-- `domain-encrypt` (Source of Truth): `openspec/specs/domain-encrypt/spec.md` — целевой контракт капабилити, созданный инвентаризацией `inventory-encrypt` (archived 2026-08-30); этот change реализует его требования.
+- `domain-encrypt` (целевой контракт): `specs/domain-encrypt/spec.md` (delta этого change) — 16 требований; контент перенесён с ветки `inventory-encrypt` (2026-08-30), отозванной, т.к. greenfield-капабилити не может находиться в SoT до реализации. При архивации этого change delta станет `openspec/specs/domain-encrypt/`.
 - Мастер-план шифрования (рабочий документ): `.qwen/plans/agio-drive-encrypt-master.md` — межэтапные контракты §4.1–4.8 (бинарные форматы, поля метаданных, proto-расширения, параметры кэшей, решения D1–D12), порядок этапов §3, AC→этапы §7, статусная таблица §8.
 - Stage-планы 01–10 (рабочие документы, код-уровневая декомпозиция): `.qwen/plans/stage-01-foundation.md` … `stage-10-production-rollout.md`; запускные промпты — `.qwen/prompts/agio-drive-encrypt-stage-01.md` … `stage-10.md`.
 - ADR-001 (accepted): Гибридный spec-driven workflow — процесс, которому следует этот change.
@@ -52,7 +52,7 @@
 ## Impact
 
 - **Форк JuiceFS (`agio-drive-v2`):** `pkg/meta/` (slice, attr, config, redis_fek, render_meta, keymanager client, proto pb/, grpc_server/client, authz_interceptor), `pkg/chunk/` (cek_encrypt, cached_store, chunk interface), `pkg/vfs/` (handle, reader, writer, compact, write_journal), `pkg/utils/` (memclr), `cmd/` (render_mount, reencrypt, sts_refresher, meta_proxy, mount), `tests/` (load, security, acceptance), Makefile (test.enc.integration).
-- **agio-platform (`feature/drive-v2`):** `src/application/authz/proto/key_manager.proto` + generated code, `src/application/authz/service/key_manager_service.go` + `fek_crypto.go`, `src/internal/drive/infrastructure/adapters/` (kms_yandex, secret_manager_yandex, company_kek, identity_resolver, sts_aws/sts_yc), `src/internal/drive/application/ports/crypto.go`+`sts.go`, PG-миграции 000190/000191 + SQLBoiler, `src/api/iam_interceptor.go`, wire/config, CLI `keymanager`.
-- **Инфраструктура:** KMS master keys (per-company), Secret Manager (Company KEK), STS (замена статических S3-credentials — обязательное условие реального отзыва, R8), encrypted Redis backups, audit storage ≥12 мес.
+- **agio-platform (`feature/drive-v2`):** `src/application/authz/proto/key_manager.proto` + generated code, `src/application/authz/service/key_manager_service.go` + `fek_crypto.go`, `src/internal/drive/infrastructure/adapters/` (kms_yandex, secret_manager_yandex, company_kek, identity_resolver, sts_aws/sts_yc), `src/internal/drive/application/ports/crypto.go`+`sts.go`, PG-миграции 000203/000204 (следующие свободные; актуальный максимум в platform — 000202) + SQLBoiler, `src/api/iam_interceptor.go`, wire/config, CLI `keymanager`.
+- **Инфраструктура (`agio-terraform-yc` + `agio-cloud`):** KMS master keys per-company (`yandex_kms_key` + auto-rotation), Secret Manager (Company KEK), IAM/STS (замена статических S3-credentials — обязательное условие реального отзыва, R8), encrypted Redis backups (SSE-KMS экспорт в S3), audit storage ≥12 мес. Terraform-ресурсы — в `agio-terraform-yc` (изменения трекаются в его собственном openspec); k8s values/secrets для новых флагов platform (`kms_key_id`, `secret_manager_folder`, IAM) — в `agio-cloud` (chart `platform-api`).
 - **API:** расширение `MetaService` proto (форк) и новый сервис `DriveKeyManagerService` (platform); формат slice-записи в Redis получает опциональный хвост (см. BREAKING выше).
 - **Зависимости:** YC SDK (KMS/Secret Manager/IAM), AWS SDK (STS, альтернативный провайдер), `golang.org/x/sys/unix` (mlock) — проверить наличие в vendor/go.mod при реализации.
