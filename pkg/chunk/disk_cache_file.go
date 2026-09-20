@@ -17,6 +17,7 @@
 package chunk
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"hash/crc32"
@@ -160,6 +161,15 @@ func openCacheFile(name string, length int, level string) (*cacheFile, error) {
 	if err != nil {
 		_ = fp.Close()
 		return nil, err
+	}
+	// AGDF ciphertext entries are larger than the plaintext size encoded in
+	// the key by exactly agdfOverhead bytes.
+	if fi.Size()-int64(length) >= int64(agdfOverhead) {
+		hdr := make([]byte, len(chunkMagic)+1)
+		if _, herr := fp.ReadAt(hdr, 0); herr == nil &&
+			bytes.Equal(hdr[:len(chunkMagic)], []byte(chunkMagic)) && hdr[len(chunkMagic)] == chunkVersion {
+			length += agdfOverhead
+		}
 	}
 	checksumLength := int64(((length-1)/csBlock + 1) * 4)
 	extra := fi.Size() - int64(length)
