@@ -2831,6 +2831,13 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 		logger.Errorf("Corrupt value for inode %d chunk indx %d", inode, indx)
 		return
 	}
+	for _, s := range ss {
+		if len(s.wrappedCEK) > 0 {
+			// Encrypted slices cannot be compacted until CEK-aware compaction lands:
+			// the merged slice would lose its wrapped CEK. Skip (fail-closed).
+			return
+		}
+	}
 	if once && len(ss) < maxSlices {
 		return
 	}
@@ -2885,7 +2892,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 	}
 	origin := make([]byte, 0, len(ss)*sliceBytes)
 	for _, s := range ss {
-		origin = append(origin, marshalSlice(s.pos, s.id, s.size, s.off, s.len)...)
+		origin = append(origin, marshalSliceCEK(s.pos, s.id, s.size, s.off, s.len, s.wrappedCEK)...)
 	}
 	st = m.en.doCompactChunk(inode, indx, origin, compacted, skipped, pos, id, size, dsbuf)
 	if st == syscall.EINVAL {

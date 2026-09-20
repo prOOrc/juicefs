@@ -84,6 +84,8 @@ type DumpedSlice struct {
 	Size    uint32 `json:"size"`
 	Off     uint32 `json:"off,omitempty"`
 	Len     uint32 `json:"len"`
+	// WrappedCEK is the AGCK blob (base64 in JSON); absent for legacy slices.
+	WrappedCEK []byte `json:"wrapped_cek,omitempty"`
 }
 
 type DumpedChunk struct {

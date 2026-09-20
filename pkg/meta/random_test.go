@@ -1423,7 +1423,7 @@ func (m *fsMachine) Write(t *rapid.T) {
 	cleng := rapid.Uint32Range(1, ChunkSize).Draw(t, "cleng")
 	off := rapid.Uint32Range(0, cleng-1).Draw(t, "off")
 	len := rapid.Uint32Range(1, cleng-off).Draw(t, "len")
-	st := m.meta.Write(m.ctx, inode, indx, pos, Slice{chunkid, cleng, off, len}, time.Time{})
+	st := m.meta.Write(m.ctx, inode, indx, pos, Slice{Id: chunkid, Size: cleng, Off: off, Len: len}, time.Time{})
 	st2 := m.write(inode, indx, pos, chunkid, cleng, off, len)
 	if st != st2 {
 		t.Fatalf("expect %s but got %s", st2, st)

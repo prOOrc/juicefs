@@ -3153,7 +3153,7 @@ func (m *redisMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, sli
 
 		var rpush *redis.IntCmd
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			rpush = pipe.RPush(ctx, m.chunkKey(inode, indx), marshalSlice(off, slice.Id, slice.Size, slice.Off, slice.Len))
+			rpush = pipe.RPush(ctx, m.chunkKey(inode, indx), marshalSliceCEK(off, slice.Id, slice.Size, slice.Off, slice.Len, slice.WrappedCEK))
 			// most of chunk are used by single inode, so use that as the default (1 == not exists)
 			// pipe.Incr(ctx, r.sliceKey(slice.ID, slice.Size))
 			pipe.Set(ctx, m.inodeKey(inode), m.marshal(attr), 0)
@@ -3269,18 +3269,18 @@ func (m *redisMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, 
 						indx := uint32(doff / ChunkSize)
 						dpos := uint32(doff % ChunkSize)
 						if dpos+s.Len > ChunkSize {
-							pipe.RPush(ctx, m.chunkKey(fout, indx), marshalSlice(dpos, s.Id, s.Size, s.Off, ChunkSize-dpos))
+							pipe.RPush(ctx, m.chunkKey(fout, indx), marshalSliceCEK(dpos, s.Id, s.Size, s.Off, ChunkSize-dpos, s.WrappedCEK))
 							if s.Id > 0 {
 								pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.Id, s.Size), 1)
 							}
 
 							skip := ChunkSize - dpos
-							pipe.RPush(ctx, m.chunkKey(fout, indx+1), marshalSlice(0, s.Id, s.Size, s.Off+skip, s.Len-skip))
+							pipe.RPush(ctx, m.chunkKey(fout, indx+1), marshalSliceCEK(0, s.Id, s.Size, s.Off+skip, s.Len-skip, s.WrappedCEK))
 							if s.Id > 0 {
 								pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.Id, s.Size), 1)
 							}
 						} else {
-							pipe.RPush(ctx, m.chunkKey(fout, indx), marshalSlice(dpos, s.Id, s.Size, s.Off, s.Len))
+							pipe.RPush(ctx, m.chunkKey(fout, indx), marshalSliceCEK(dpos, s.Id, s.Size, s.Off, s.Len, s.WrappedCEK))
 							if s.Id > 0 {
 								pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.Id, s.Size), 1)
 							}
@@ -4725,7 +4725,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 						}
 						slices := make([]*DumpedSlice, 0, len(ss))
 						for _, s := range ss {
-							slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+							slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len, WrappedCEK: s.wrappedCEK})
 						}
 						e.Chunks = append(e.Chunks, &DumpedChunk{0, slices})
 					}
@@ -4787,7 +4787,7 @@ func (m *redisMeta) dumpEntries(es ...*DumpedEntry) error {
 					}
 					slices := make([]*DumpedSlice, 0, len(ss))
 					for _, s := range ss {
-						slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len})
+						slices = append(slices, &DumpedSlice{Id: s.id, Pos: s.pos, Size: s.size, Off: s.off, Len: s.len, WrappedCEK: s.wrappedCEK})
 					}
 					e.Chunks = append(e.Chunks, &DumpedChunk{lcs[i].indx, slices})
 				}
@@ -5079,7 +5079,7 @@ func (m *redisMeta) loadEntry(e *DumpedEntry, p redis.Pipeliner, tryExec func(),
 			}
 			slices := make([]string, 0, len(c.Slices))
 			for _, s := range c.Slices {
-				slices = append(slices, string(marshalSlice(s.Pos, s.Id, s.Size, s.Off, s.Len)))
+				slices = append(slices, string(marshalSliceCEK(s.Pos, s.Id, s.Size, s.Off, s.Len, s.WrappedCEK)))
 				if len(slices) > batch {
 					p.RPush(ctx, m.chunkKey(inode, c.Index), slices)
 					tryExec()

@@ -330,6 +330,10 @@ type Slice struct {
 	Size uint32
 	Off  uint32
 	Len  uint32
+
+	// WrappedCEK is the AGCK blob (CEK wrapped under the file's FEK); nil for
+	// legacy plaintext slices. Persisted as an optional tail of the slice record.
+	WrappedCEK []byte
 }
 
 // Summary represents the total number of files/directories and

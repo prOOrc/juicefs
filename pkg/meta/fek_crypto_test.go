@@ -158,7 +158,7 @@ func TestUnwrapFEK_LayoutPinned(t *testing.T) {
 
 	blob := make([]byte, 0, agfkLen)
 	blob = append(blob, "AGFK"...)
-	blob = append(blob, 1) // version
+	blob = append(blob, 1)                        // version
 	blob = binary.BigEndian.AppendUint32(blob, 7) // kek_version
 	blob = append(blob, nonce...)
 	blob = append(blob, sealed...)

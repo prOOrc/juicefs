@@ -16,7 +16,11 @@
 
 package meta
 
-import "github.com/juicedata/juicefs/pkg/utils"
+import (
+	"encoding/binary"
+
+	"github.com/juicedata/juicefs/pkg/utils"
+)
 
 type slice struct {
 	id    uint64
@@ -26,6 +30,10 @@ type slice struct {
 	pos   uint32
 	left  *slice
 	right *slice
+
+	// wrappedCEK is the AGCK blob (CEK wrapped under the file's FEK); nil for
+	// legacy plaintext slices. It travels with the slice record (D2).
+	wrappedCEK []byte
 }
 
 func newSlice(pos uint32, id uint64, cleng, off, len uint32) *slice {
@@ -50,6 +58,12 @@ func (s *slice) read(buf []byte) {
 	s.size = rb.Get32()
 	s.off = rb.Get32()
 	s.len = rb.Get32()
+	// Optional tail: uint32 blobLen + AGCK blob (wrapped CEK). Absent for legacy.
+	// Callers (readSlices) validate the tail length before calling read.
+	if rb.Left() > 0 {
+		blobLen := rb.Get32()
+		s.wrappedCEK = append([]byte(nil), rb.Get(int(blobLen))...)
+	}
 }
 
 func (s *slice) cut(pos uint32) (left, right *slice) {
@@ -65,6 +79,7 @@ func (s *slice) cut(pos uint32) (left, right *slice) {
 	} else if pos < s.pos+s.len {
 		l := pos - s.pos
 		right = newSlice(pos, s.id, s.size, s.off+l, s.len-l)
+		right.wrappedCEK = s.wrappedCEK // both halves reference the same slice data
 		right.right = s.right
 		s.len = l
 		s.right = nil
@@ -100,13 +115,42 @@ func marshalSlice(pos uint32, id uint64, size, off, len uint32) []byte {
 	return w.Bytes()
 }
 
+// marshalSliceCEK marshals a slice record with an optional wrapped-CEK tail:
+// [24B fixed][uint32 blobLen + AGCK blob]. An empty wrappedCEK produces the
+// legacy 24-byte record (D2).
+func marshalSliceCEK(pos uint32, id uint64, size, off, length uint32, wrappedCEK []byte) []byte {
+	if len(wrappedCEK) == 0 {
+		return marshalSlice(pos, id, size, off, length)
+	}
+	w := utils.NewBuffer(uint32(sliceBytes + 4 + len(wrappedCEK)))
+	w.Put32(pos)
+	w.Put64(id)
+	w.Put32(size)
+	w.Put32(off)
+	w.Put32(length)
+	w.Put32(uint32(len(wrappedCEK)))
+	w.Put(wrappedCEK)
+	return w.Bytes()
+}
+
 func readSlices(vals []string) []*slice {
 	slices := make([]slice, len(vals))
 	ss := make([]*slice, len(vals))
 	for i, val := range vals {
-		if len(val) != sliceBytes {
+		if len(val) < sliceBytes {
 			logger.Errorf("corrupt slice: len=%d, val=%v", len(val), []byte(val))
 			return nil
+		}
+		if tail := len(val) - sliceBytes; tail > 0 {
+			if tail < 4 {
+				logger.Errorf("corrupt slice: tail len=%d, val=%v", tail, []byte(val))
+				return nil
+			}
+			blobLen := binary.BigEndian.Uint32([]byte(val[sliceBytes : sliceBytes+4]))
+			if tail != 4+int(blobLen) {
+				logger.Errorf("corrupt slice: tail len=%d, blobLen=%d", tail, blobLen)
+				return nil
+			}
 		}
 		s := &slices[i]
 		s.read([]byte(val))
@@ -125,7 +169,8 @@ func readSliceBuf(buf []byte) []*slice {
 	ss := make([]*slice, nSlices)
 	for i := 0; i < len(buf); i += sliceBytes {
 		s := &slices[i/sliceBytes]
-		s.read(buf[i:])
+		// Fixed 24-byte records only (sql/tkv backends never store the CEK tail).
+		s.read(buf[i : i+sliceBytes])
 		ss[i/sliceBytes] = s
 	}
 	return ss
@@ -148,7 +193,7 @@ func buildSlice(ss []*slice) []Slice {
 			chunk = append(chunk, Slice{Size: s.pos - pos, Len: s.pos - pos})
 			pos = s.pos
 		}
-		chunk = append(chunk, Slice{Id: s.id, Size: s.size, Off: s.off, Len: s.len})
+		chunk = append(chunk, Slice{Id: s.id, Size: s.size, Off: s.off, Len: s.len, WrappedCEK: s.wrappedCEK})
 		pos += s.len
 	})
 	return chunk
@@ -200,11 +245,17 @@ OUT:
 			break
 		}
 		for _, s := range ss[1:] {
-			if *s == *first {
+			if s.equals(first) {
 				break OUT
 			}
 		}
 		skipped++
 	}
 	return skipped
+}
+
+// equals compares the data fields of two slice records (the struct carries a
+// []byte field and cannot be compared directly).
+func (s *slice) equals(o *slice) bool {
+	return s.pos == o.pos && s.id == o.id && s.size == o.size && s.off == o.off && s.len == o.len
 }

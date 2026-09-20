@@ -2073,7 +2073,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	if st := m.NewSlice(ctx, &sliceId); st != 0 {
 		t.Fatalf("new chunk: %s", st)
 	}
-	if st := m.Write(ctx, inode, 0, 100, Slice{sliceId, 100, 0, 100}, time.Now()); st != 0 {
+	if st := m.Write(ctx, inode, 0, 100, Slice{Id: sliceId, Size: 100, Off: 0, Len: 100}, time.Now()); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
 	if st := m.Truncate(ctx, inode, 0, 200<<20, attr, false); st != 0 {
@@ -2139,16 +2139,16 @@ func testCopyFileRange(t *testing.T, m Meta) {
 		}
 	}
 
-	if st := m.Write(ctx, iin, 0, 100, Slice{sliceIds[0], 200, 0, 100}, time.Now()); st != 0 {
+	if st := m.Write(ctx, iin, 0, 100, Slice{Id: sliceIds[0], Size: 200, Off: 0, Len: 100}, time.Now()); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
-	if st := m.Write(ctx, iin, 1, 100<<10, Slice{sliceIds[1], 40 << 20, 0, 40 << 20}, time.Now()); st != 0 {
+	if st := m.Write(ctx, iin, 1, 100<<10, Slice{Id: sliceIds[1], Size: 40 << 20, Off: 0, Len: 40 << 20}, time.Now()); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
-	if st := m.Write(ctx, iin, 3, 0, Slice{sliceIds[2], 63 << 20, 10 << 20, 30 << 20}, time.Now()); st != 0 {
+	if st := m.Write(ctx, iin, 3, 0, Slice{Id: sliceIds[2], Size: 63 << 20, Off: 10 << 20, Len: 30 << 20}, time.Now()); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
-	if st := m.Write(ctx, iout, 2, 10<<20, Slice{sliceIds[3], 50 << 20, 10 << 20, 30 << 20}, time.Now()); st != 0 {
+	if st := m.Write(ctx, iout, 2, 10<<20, Slice{Id: sliceIds[3], Size: 50 << 20, Off: 10 << 20, Len: 30 << 20}, time.Now()); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
 	var copied uint64
@@ -2160,10 +2160,10 @@ func testCopyFileRange(t *testing.T, m Meta) {
 		t.Fatalf("expect copy %d bytes, but got %d", expected, copied)
 	}
 	var expectedSlices = [][]Slice{
-		{{0, 30 << 20, 0, 30 << 20}, {sliceIds[0], 200, 50, 50}, {0, 0, 200, ChunkSize - 30<<20 - 50}},
-		{{0, 0, 150 + (ChunkSize - 30<<20), 30<<20 - 150}, {0, 0, 0, 100 << 10}, {sliceIds[1], 40 << 20, 0, (34 << 20) + 150 - (100 << 10)}},
-		{{sliceIds[1], 40 << 20, (34 << 20) + 150 - (100 << 10), 6<<20 - 150 + 100<<10}, {0, 0, 40<<20 + 100<<10, ChunkSize - 40<<20 - 100<<10}, {0, 0, 0, 150 + (ChunkSize - 30<<20)}},
-		{{0, 0, 150 + (ChunkSize - 30<<20), 30<<20 - 150}, {sliceIds[2], 63 << 20, 10 << 20, (8 << 20) + 150}},
+		{{Size: 30 << 20, Len: 30 << 20}, {Id: sliceIds[0], Size: 200, Off: 50, Len: 50}, {Off: 200, Len: ChunkSize - 30<<20 - 50}},
+		{{Off: 150 + (ChunkSize - 30<<20), Len: 30<<20 - 150}, {Len: 100 << 10}, {Id: sliceIds[1], Size: 40 << 20, Len: (34 << 20) + 150 - (100 << 10)}},
+		{{Id: sliceIds[1], Size: 40 << 20, Off: (34 << 20) + 150 - (100 << 10), Len: 6<<20 - 150 + 100<<10}, {Off: 40<<20 + 100<<10, Len: ChunkSize - 40<<20 - 100<<10}, {Len: 150 + (ChunkSize - 30<<20)}},
+		{{Off: 150 + (ChunkSize - 30<<20), Len: 30<<20 - 150}, {Id: sliceIds[2], Size: 63 << 20, Off: 10 << 20, Len: (8 << 20) + 150}},
 	}
 	for i := uint32(0); i < 4; i++ {
 		var slices []Slice
@@ -2174,7 +2174,7 @@ func testCopyFileRange(t *testing.T, m Meta) {
 			t.Fatalf("expect chunk %d: %+v, but got %+v", i, expectedSlices[i], slices)
 		}
 		for j, s := range slices {
-			if s != expectedSlices[i][j] {
+			if !reflect.DeepEqual(s, expectedSlices[i][j]) {
 				t.Fatalf("expect slice %d,%d: %+v, but got %+v", i, j, expectedSlices[i][j], s)
 			}
 		}
@@ -3572,7 +3572,7 @@ func testBatchClone(t *testing.T, m Meta) {
 	if st := m.NewSlice(ctx, &sliceId1); st != 0 {
 		t.Fatalf("new slice: %s", st)
 	}
-	if st := m.Write(ctx, file1, 0, 0, Slice{sliceId1, 1024, 0, 1024}, time.Now()); st != 0 {
+	if st := m.Write(ctx, file1, 0, 0, Slice{Id: sliceId1, Size: 1024, Off: 0, Len: 1024}, time.Now()); st != 0 {
 		t.Fatalf("write file1: %s", st)
 	}
 	if st := m.SetXattr(ctx, file1, "user.tag", []byte("hello"), XattrCreateOrReplace); st != 0 {
@@ -3816,7 +3816,7 @@ func testClone(t *testing.T, m Meta) {
 	if st := m.NewSlice(Background(), &sliceId); st != 0 {
 		t.Fatalf("new chunk: %s", st)
 	}
-	if st := m.Write(Background(), file1, 0, 0, Slice{sliceId, 67108864, 0, 67108864}, time.Now()); st != 0 {
+	if st := m.Write(Background(), file1, 0, 0, Slice{Id: sliceId, Size: 67108864, Off: 0, Len: 67108864}, time.Now()); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
 
@@ -3828,7 +3828,7 @@ func testClone(t *testing.T, m Meta) {
 	if st := m.NewSlice(Background(), &sliceId2); st != 0 {
 		t.Fatalf("new chunk: %s", st)
 	}
-	if st := m.Write(Background(), file2, 0, 0, Slice{sliceId2, 67108863, 0, 67108863}, time.Now()); st != 0 {
+	if st := m.Write(Background(), file2, 0, 0, Slice{Id: sliceId2, Size: 67108863, Off: 0, Len: 67108863}, time.Now()); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
 	var file3 Ino
