@@ -2,11 +2,11 @@
 
 ## Why
 
-Подсистема шифрования agio Drive (SRS-001 v2.2, Per-File FEK + Per-Chunk CEK) полностью спроектирована, но не реализована: данные в S3 хранятся в plaintext, ключей CEK/FEK/KEK нет, render-ноды и user-клиенты не имеют криптографической изоляции. Целевой контракт капабилити `domain-encrypt` зафиксирован в delta-спеке этого change (`specs/domain-encrypt/spec.md`, 16 требований; перенесён из отозванной ветки `inventory-encrypt` — greenfield-капабилити не может находиться в SoT до реализации и попадёт в SoT при архивации этого change). Это блокирует требования аудита (SOC 2, MPAA TPN) и конкурентный паритет с LucidLink (стратегические решения S1/S4). Реализация запускается сейчас: контракт стабилен, межэтапные форматы зафиксированы (мастер-план §4), декомпозиция на 10 этапов готова.
+Подсистема шифрования agio Drive (SRS-001 v2.2, Per-File FEK + Per-Chunk CEK) полностью спроектирована, но не реализована: данные в S3 хранятся в plaintext, ключей CEK/FEK/KEK нет, render-ноды и user-клиенты не имеют криптографической изоляции. Целевой контракт капабилити `domain-encrypt` зафиксирован в delta-спеке этого change (`specs/domain-encrypt/spec.md`, 16 требований; перенесён из отозванной ветки `inventory-encrypt` — greenfield-капабилити не может находиться в SoT до реализации и попадёт в SoT при архивации этого change). Это блокирует требования аудита (SOC 2, MPAA TPN) и конкурентный паритет с LucidLink (стратегические решения S1/S4). Реализация запускается сейчас: контракт стабилен, межэтапные форматы зафиксированы в design.md («Межэтапные контракты»), декомпозиция на 10 этапов готова (tasks.md).
 
 ## What Changes
 
-Реализация капабилити `domain-encrypt` по 10 этапам в двух кодовых репозиториях — форк JuiceFS (`agio-drive-v2`) и agio-platform (`feature/drive-v2`); stage 10 дополнительно затрагивает инфраструктурные репозитории `agio-terraform-yc` (Terraform: KMS/Lockbox/IAM/Redis-backups) и `agio-cloud` (k8s values/secrets). Кратко по этапам (детали — tasks.md, код-уровень — stage-планы):
+Реализация капабилити `domain-encrypt` по 10 этапам в двух кодовых репозиториях — форк JuiceFS (`agio-drive-v2`) и agio-platform (`feature/drive-v2`); stage 10 дополнительно затрагивает инфраструктурные репозитории `agio-terraform-yc` (Terraform: KMS/Lockbox/IAM/Redis-backups) и `agio-cloud` (k8s values/secrets). Кратко по этапам (детали и код-уровневая декомпозиция — tasks.md; решения — design.md):
 
 - **Stage 1 (platform):** KMS/Lockbox-порты + Yandex-реализации, `CompanyKEKService`, PG-таблицы `drive_company_crypto_key`/`drive_key_access_log`, `IdentityResolver` (валидация UUID), gRPC-сервис `DriveKeyManagerService` (`CreateFileKey`/`GetFileFEK`/`GetBulkFileFEK`/`FetchCompanyKEK`/`ProvisionCompanyKEK`; ротация — stubs до stage 7), аудит выдачи ключей.
 - **Stage 2 (форк):** крипто-примитивы AGDF/AGCK/AGFK, slice-запись с `wrapped_cek`, crypto-поля `Attr` + transient `Fek`, `Format.EncryptionEnabled/KEKVersion`, `ChunkStore.NewReaderWithKey/NewWriterWithKey`, ciphertext-only local cache, VFS plumbing (FEK в handle, CEK per open file), предусловия версионирования FR-VER-1/4.
@@ -25,7 +25,7 @@
 
 ### New Capabilities
 
-- `domain-encrypt`: greenfield-капабилити — в SoT её нет. Полный целевой контракт (16 требований, включая «Offboarding batch FEK rotation» с RPC `RotateFileKeysByPaths` — решение 7.7 stage-плана) зафиксирован в delta-спеке этого change; при архивации она становится Source of Truth.
+- `domain-encrypt`: greenfield-капабилити — в SoT её нет. Полный целевой контракт (16 требований, включая «Offboarding batch FEK rotation» с RPC `RotateFileKeysByPaths` — решение 7.7, design.md) зафиксирован в delta-спеке этого change; при архивации она становится Source of Truth.
 
 ### Modified Capabilities
 
@@ -44,10 +44,8 @@
 
 - SRS-001 (review, Final draft v2.2): Подсистема шифрования agio Drive — `specs/srs/SRS-001-agio-drive-encryption.md`. Ссылки по разделам (стабильных REQ-* ID у SRS нет до approved): §4 (иерархия ключей и форматы), §5 (хранение в Redis), §6 (user path), §7 (render path), §8 (операции Clone/CopyFileRange/Compaction), §9 (предусловия версионирования), §10 (offline/no-residuality), §11 (revocation), §12 (ротация), §14 (NFR), §15 (gRPC API), §16 (миграция), §17 (модификации), §18 (тестирование), §19 (план внедрения), §22 (Acceptance Criteria).
 - `domain-encrypt` (целевой контракт): `specs/domain-encrypt/spec.md` (delta этого change) — 16 требований; контент перенесён с ветки `inventory-encrypt` (2026-08-30), отозванной, т.к. greenfield-капабилити не может находиться в SoT до реализации. При архивации этого change delta станет `openspec/specs/domain-encrypt/`.
-- Мастер-план шифрования (рабочий документ): `.qwen/plans/agio-drive-encrypt-master.md` — межэтапные контракты §4.1–4.8 (бинарные форматы, поля метаданных, proto-расширения, параметры кэшей, решения D1–D12), порядок этапов §3, AC→этапы §7, статусная таблица §8.
-- Stage-планы 01–10 (рабочие документы, код-уровневая декомпозиция): `.qwen/plans/stage-01-foundation.md` … `stage-10-production-rollout.md`; запускные промпты — `.qwen/prompts/agio-drive-encrypt-stage-01.md` … `stage-10.md`.
 - ADR-001 (accepted): Гибридный spec-driven workflow — процесс, которому следует этот change.
-- BRD для agio Drive отсутствует (см. `specs/index.md`) — бизнес-контекст живёт в архитектурном плане v13 (`.qwen/plans/agio-drive-full-plan-v13.md`); требования берутся из SRS-001 напрямую.
+- BRD для agio Drive отсутствует (см. `specs/index.md`) — требования берутся из SRS-001 напрямую; бизнес-контекст и стратегические решения (S1–S4) зафиксированы в design.md (Context).
 
 ## Impact
 
