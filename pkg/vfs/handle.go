@@ -48,6 +48,11 @@ type handle struct {
 	ops        []Context
 	tierID     uint8
 
+	// encryption — transient, NOT serialized into saveHandle (see dumpAllHandles)
+	fek       []byte
+	fekVer    uint32
+	encrypted bool
+
 	// rwlock
 	writing uint32
 	readers uint32
@@ -235,19 +240,24 @@ func (v *VFS) releaseHandle(inode Ino, fh uint64) {
 	}
 }
 
-func (v *VFS) newFileHandle(inode Ino, length uint64, flags uint32, tierID uint8) uint64 {
+func (v *VFS) newFileHandle(inode Ino, length uint64, flags uint32, tierID uint8, attr *meta.Attr) uint64 {
 	h := v.newHandle(inode, (flags&O_ACCMODE) == syscall.O_RDONLY, tierID)
 	h.Lock()
 	defer h.Unlock()
 	h.flags = flags
+	if attr != nil && attr.Encrypted {
+		h.encrypted = true
+		h.fek = attr.Fek
+		h.fekVer = attr.FekVersion
+	}
 	switch flags & O_ACCMODE {
 	case syscall.O_RDONLY:
-		h.reader = v.reader.Open(inode, length)
+		h.reader = v.reader.Open(inode, length, attr)
 	case syscall.O_WRONLY: // FUSE writeback_cache mode need reader even for WRONLY
 		fallthrough
 	case syscall.O_RDWR:
-		h.reader = v.reader.Open(inode, length)
-		h.writer = v.writer.Open(inode, length, tierID)
+		h.reader = v.reader.Open(inode, length, attr)
+		h.writer = v.writer.Open(inode, length, tierID, attr)
 	}
 	return h.fh
 }
@@ -386,6 +396,12 @@ func (v *VFS) loadAllHandles(path string) error {
 	if err != nil {
 		return err
 	}
+	// The FEK is transient and not persisted in saveHandle; for encrypted
+	// volumes re-resolve it from the metadata so recovered handles can read.
+	encryptionEnabled := false
+	if format := v.Meta.GetFormat(); format.EncryptionEnabled {
+		encryptionEnabled = true
+	}
 	v.hanleM.Lock()
 	defer v.hanleM.Unlock()
 	for fh, s := range vfsState.Handler {
@@ -411,14 +427,26 @@ func (v *VFS) loadAllHandles(path string) error {
 			continue
 		}
 		h.data = data
+		var attr *meta.Attr
+		if encryptionEnabled {
+			a := &meta.Attr{}
+			if st := v.Meta.Open(meta.Background(), h.inode, s.Flags, a); st == 0 && a.Encrypted {
+				attr = a
+				h.encrypted = true
+				h.fek = a.Fek
+				h.fekVer = a.FekVersion
+			} else if st != 0 {
+				logger.Warnf("re-resolve attr of recovered handle %d: %s", h.inode, st)
+			}
+		}
 		switch s.Flags & O_ACCMODE {
 		case syscall.O_RDONLY:
-			h.reader = v.reader.Open(h.inode, s.Length)
+			h.reader = v.reader.Open(h.inode, s.Length, attr)
 		case syscall.O_WRONLY: // FUSE writeback_cache mode need reader even for WRONLY
 			fallthrough
 		case syscall.O_RDWR:
-			h.reader = v.reader.Open(h.inode, s.Length)
-			h.writer = v.writer.Open(h.inode, s.Length, h.tierID)
+			h.reader = v.reader.Open(h.inode, s.Length, attr)
+			h.writer = v.writer.Open(h.inode, s.Length, h.tierID, attr)
 		}
 	}
 	if len(v.handleIno) > 0 {

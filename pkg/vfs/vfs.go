@@ -532,7 +532,7 @@ func (v *VFS) Create(ctx Context, parent Ino, name string, mode uint16, cumask u
 	}
 	if err == 0 {
 		v.UpdateLength(inode, attr)
-		fh = v.newFileHandle(inode, attr.Length, flags, attr.Tier)
+		fh = v.newFileHandle(inode, attr.Length, flags, attr.Tier, attr)
 		entry = &meta.Entry{Inode: inode, Attr: attr}
 		v.invalidateDirHandle(parent, name, inode, attr)
 
@@ -587,7 +587,7 @@ func (v *VFS) Open(ctx Context, ino Ino, flags uint32) (entry *meta.Entry, fh ui
 	err = v.Meta.Open(ctx, ino, flags, attr)
 	if err == 0 {
 		v.UpdateLength(ino, attr)
-		fh = v.newFileHandle(ino, attr.Length, flags, attr.Tier)
+		fh = v.newFileHandle(ino, attr.Length, flags, attr.Tier, attr)
 		entry = &meta.Entry{Inode: ino, Attr: attr}
 	}
 	return
@@ -762,7 +762,12 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 		h.Lock()
 		v.UpdateLength(ino, &attr)
 		h.flags = syscall.O_RDONLY
-		h.reader = v.reader.Open(h.inode, attr.Length)
+		if attr.Encrypted {
+			h.encrypted = true
+			h.fek = attr.Fek
+			h.fekVer = attr.FekVersion
+		}
+		h.reader = v.reader.Open(h.inode, attr.Length, &attr)
 		h.Unlock()
 	}
 

@@ -17,6 +17,7 @@
 package vfs
 
 import (
+	crand "crypto/rand"
 	"math/rand"
 	"runtime"
 	"sync"
@@ -41,7 +42,9 @@ type FileWriter interface {
 }
 
 type DataWriter interface {
-	Open(inode Ino, fleng uint64, tierID uint8) FileWriter
+	// Open returns a FileWriter for the file; attr carries the transient FEK
+	// for encrypted files (nil or non-encrypted → plaintext).
+	Open(inode Ino, fleng uint64, tierID uint8, attr *meta.Attr) FileWriter
 	Flush(ctx meta.Context, inode Ino) syscall.Errno
 	GetLength(inode Ino) uint64
 	Truncate(inode Ino, length uint64)
@@ -57,6 +60,7 @@ type sliceWriter struct {
 	soff    uint32
 	slen    uint32
 	writer  chunk.Writer
+	cek     []byte // per-slice CEK for encrypted files; nil → legacy plaintext
 	freezed bool
 	done    bool
 	err     syscall.Errno
@@ -205,8 +209,19 @@ func (c *chunkWriter) commitThread() {
 
 		if err == 0 {
 			var ss = meta.Slice{Id: s.id, Size: s.length, Off: s.soff, Len: s.slen}
-			err = f.w.m.Write(meta.Background(), f.inode, c.indx, s.off, ss, s.lastMod)
-			f.w.reader.Invalidate(f.inode, uint64(c.indx)*meta.ChunkSize+uint64(s.off), uint64(ss.Len))
+			if len(s.cek) > 0 {
+				wrapped, werr := chunk.WrapCEK(f.fek, s.cek, f.driveFileID, s.id, f.fekVer)
+				if werr != nil {
+					logger.Errorf("wrap CEK for inode:%d slice:%d: %s", f.inode, s.id, werr)
+					err = syscall.EIO
+				} else {
+					ss.WrappedCEK = wrapped
+				}
+			}
+			if err == 0 {
+				err = f.w.m.Write(meta.Background(), f.inode, c.indx, s.off, ss, s.lastMod)
+				f.w.reader.Invalidate(f.inode, uint64(c.indx)*meta.ChunkSize+uint64(s.off), uint64(ss.Len))
+			}
 		}
 
 		f.Lock()
@@ -245,6 +260,11 @@ type fileWriter struct {
 	refs         uint16
 	chunks       map[uint32]*chunkWriter
 
+	// encryption: transient FEK from attr at open time
+	fek         []byte
+	fekVer      uint32
+	driveFileID string
+
 	flushcond  *utils.Cond // wait for chunks==nil (flush)
 	writecond  *utils.Cond // wait for flushwaiting==0 (write)
 	commitcond *utils.Cond // wait for committed==true of dependency slice (commit)
@@ -273,10 +293,19 @@ func (f *fileWriter) writeChunk(ctx meta.Context, indx uint32, off uint32, data 
 	c := f.findChunk(indx)
 	s := c.findWritableSlice(off, uint32(len(data)))
 	if s == nil {
+		var key []byte
+		if len(f.fek) > 0 {
+			key = make([]byte, 32)
+			if _, err := crand.Read(key); err != nil {
+				logger.Errorf("generate CEK for inode %d: %s", f.inode, err)
+				return syscall.EIO
+			}
+		}
 		s = &sliceWriter{
 			chunk:   c,
 			off:     off,
-			writer:  f.w.store.NewWriter(0, f.tierID),
+			writer:  f.w.store.NewWriterWithKey(0, f.tierID, key),
+			cek:     key,
 			notify:  utils.NewCond(&f.Mutex),
 			started: time.Now(),
 		}
@@ -512,7 +541,7 @@ func (w *dataWriter) flushAll() {
 	}
 }
 
-func (w *dataWriter) Open(inode Ino, len uint64, tierID uint8) FileWriter {
+func (w *dataWriter) Open(inode Ino, len uint64, tierID uint8, attr *meta.Attr) FileWriter {
 	w.Lock()
 	defer w.Unlock()
 	f, ok := w.files[inode]
@@ -523,6 +552,11 @@ func (w *dataWriter) Open(inode Ino, len uint64, tierID uint8) FileWriter {
 			length: len,
 			tierID: tierID,
 			chunks: make(map[uint32]*chunkWriter),
+		}
+		if attr != nil && attr.Encrypted {
+			f.fek = attr.Fek
+			f.fekVer = attr.FekVersion
+			f.driveFileID = attr.DriveFileID
 		}
 		f.flushcond = utils.NewCond(f)
 		f.writecond = utils.NewCond(f)

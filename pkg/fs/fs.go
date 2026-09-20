@@ -1358,7 +1358,7 @@ func (f *File) pread(ctx meta.Context, b []byte, offset int64) (n int, err error
 		}
 	}
 	if f.rdata == nil {
-		f.rdata = f.fs.reader.Open(f.inode, uint64(f.info.Size()))
+		f.rdata = f.fs.reader.Open(f.inode, uint64(f.info.Size()), f.info.attr)
 	}
 
 	got, eno := f.rdata.Read(ctx, uint64(offset), b)
@@ -1399,7 +1399,7 @@ func (f *File) Pwrite(ctx meta.Context, b []byte, offset int64) (n int, err sysc
 
 func (f *File) pwrite(ctx meta.Context, b []byte, offset int64) (n int, err syscall.Errno) {
 	if f.wdata == nil {
-		f.wdata = f.fs.writer.Open(f.inode, uint64(f.info.Size()), f.info.attr.Tier)
+		f.wdata = f.fs.writer.Open(f.inode, uint64(f.info.Size()), f.info.attr.Tier, f.info.attr)
 	}
 	err = f.wdata.Write(ctx, uint64(offset), b)
 	if err != 0 {

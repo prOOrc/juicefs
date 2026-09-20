@@ -73,7 +73,9 @@ type FileReader interface {
 }
 
 type DataReader interface {
-	Open(inode Ino, length uint64) FileReader
+	// Open returns a FileReader for the file; attr carries the transient FEK
+	// for encrypted files (nil or non-encrypted → plaintext).
+	Open(inode Ino, length uint64, attr *meta.Attr) FileReader
 	Truncate(inode Ino, length uint64)
 	Invalidate(inode Ino, off, length uint64)
 }
@@ -206,7 +208,7 @@ func (s *sliceReader) run() {
 	var n int
 
 	ctx := context.WithValue(s.ctx, meta.CtxKey("inode"), inode) // Output inode in log for debugging
-	n = f.r.Read(ctx, p, slices, (uint32(s.block.off))%meta.ChunkSize)
+	n = f.r.Read(ctx, p, slices, (uint32(s.block.off))%meta.ChunkSize, f)
 
 	f.Lock()
 	if s.state != BUSY || f.shouldStop() {
@@ -293,6 +295,14 @@ type fileReader struct {
 
 	sync.Mutex
 	closing bool
+
+	// encryption: transient FEK from attr at open time; the CEK cache lives
+	// as long as this open file (D5)
+	fek         []byte
+	fekVer      uint32
+	driveFileID string
+	cekMu       sync.Mutex
+	cekCache    map[uint64][]byte
 
 	// protected by r
 	refs uint16
@@ -748,11 +758,17 @@ func (r *dataReader) checkReadBuffer() {
 	}
 }
 
-func (r *dataReader) Open(inode Ino, length uint64) FileReader {
+func (r *dataReader) Open(inode Ino, length uint64, attr *meta.Attr) FileReader {
 	f := &fileReader{
 		r:      r,
 		inode:  inode,
 		length: length,
+	}
+	if attr != nil && attr.Encrypted {
+		f.fek = attr.Fek
+		f.fekVer = attr.FekVersion
+		f.driveFileID = attr.DriveFileID
+		f.cekCache = make(map[uint64][]byte)
 	}
 	f.last = &(f.slices)
 
@@ -810,7 +826,7 @@ func (r *dataReader) Invalidate(inode Ino, off, length uint64) {
 	})
 }
 
-func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.Page, off int) error {
+func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.Page, off int, f *fileReader) error {
 	buf := page.Data
 	read := 0
 	if s.Id == 0 {
@@ -821,7 +837,27 @@ func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.P
 		return nil
 	}
 
-	reader := r.store.NewReader(s.Id, int(s.Size))
+	var key []byte
+	if len(s.WrappedCEK) > 0 {
+		f.cekMu.Lock()
+		cek, ok := f.cekCache[s.Id]
+		f.cekMu.Unlock()
+		if !ok {
+			if len(f.fek) == 0 {
+				return fmt.Errorf("slice %d is encrypted but no FEK is available", s.Id)
+			}
+			var err error
+			cek, err = chunk.UnwrapCEK(f.fek, s.WrappedCEK, f.driveFileID, s.Id, f.fekVer)
+			if err != nil {
+				return err // fail-closed (NFR-SEC-11)
+			}
+			f.cekMu.Lock()
+			f.cekCache[s.Id] = cek
+			f.cekMu.Unlock()
+		}
+		key = cek
+	}
+	reader := r.store.NewReaderWithKey(s.Id, int(s.Size), key)
 	for read < len(buf) {
 		p := page.Slice(read, len(buf)-read)
 		n, err := reader.ReadAt(ctx, p, off+int(s.Off))
@@ -837,9 +873,9 @@ func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.P
 	return nil
 }
 
-func (r *dataReader) Read(ctx context.Context, page *chunk.Page, slices []meta.Slice, offset uint32) int {
+func (r *dataReader) Read(ctx context.Context, page *chunk.Page, slices []meta.Slice, offset uint32, f *fileReader) int {
 	if len(slices) > 16 {
-		return r.readManySlices(ctx, page, slices, offset)
+		return r.readManySlices(ctx, page, slices, offset, f)
 	}
 	read := 0
 	var pos uint32
@@ -852,7 +888,7 @@ func (r *dataReader) Read(ctx context.Context, page *chunk.Page, slices []meta.S
 			toread := min(size-read, int(pos+slices[i].Len-offset))
 			go func(s *meta.Slice, p *chunk.Page, off, pos uint32) {
 				defer p.Release()
-				errs <- r.readSlice(ctx, s, p, int(off))
+				errs <- r.readSlice(ctx, s, p, int(off), f)
 			}(&slices[i], page.Slice(read, toread), offset-pos, pos)
 			read += toread
 			offset += uint32(toread)
@@ -878,7 +914,7 @@ func (r *dataReader) Read(ctx context.Context, page *chunk.Page, slices []meta.S
 	return read
 }
 
-func (r *dataReader) readManySlices(ctx context.Context, page *chunk.Page, slices []meta.Slice, offset uint32) int {
+func (r *dataReader) readManySlices(ctx context.Context, page *chunk.Page, slices []meta.Slice, offset uint32, f *fileReader) int {
 	read := 0
 	var pos uint32
 	var err error
@@ -907,7 +943,7 @@ SLICES:
 			}
 			go func(s *meta.Slice, p *chunk.Page, off int, pos uint32) {
 				defer p.Release()
-				errs <- r.readSlice(ctx, s, p, off)
+				errs <- r.readSlice(ctx, s, p, off, f)
 				<-concurrency
 			}(&slices[i], page.Slice(read, toread), int(offset-pos), pos)
 
