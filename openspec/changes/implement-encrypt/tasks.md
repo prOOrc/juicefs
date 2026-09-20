@@ -2240,7 +2240,7 @@ go test -run 'TestRevoke|TestFekRotation|TestSTS' ./pkg/meta/
 
 Что делает этап: `ReencryptChunk` (атомарный swap), команда `juicefs reencrypt`, включение шифрования (`enable-encryption`), CEK rotation, rate-limiting. Предусловие: этапы 1–3.
 
-Решения этапа: design.md, «Решения Stage 8» (8.1–8.6).
+Решения этапа: design.md, «Решения Stage 8» (8.1–8.4, 8.6; 8.5 заменено 8.6).
 
 ### Tasks
 

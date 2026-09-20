@@ -324,6 +324,7 @@ FEK → wrapped_cek (slice metadata) → CEK (RAM) → AES-256-GCM чанк в S
 
 | # | Решение | Обоснование |
 |---|---|---|
+| 7.1 | Permission generation: счётчик `drivepermgen:{userID}` в Redis platform; `INCR` при SetRole/DeleteRole/ClearRoles + явная `Invalidate` PermissionCache (production TTL ≤ 30s); RPC `GetPermissionGeneration(user_id)`; proxy кладёт значение в `FlushSessionResponse.permission_generation`; клиент при изменении → WipeKeys + InvalidateAllKeys | Канал — heartbeat (D9, задержка ≤12s); счётчик живёт в Redis platform, т.к. proxy не имеет к нему доступа |
 | 7.2 | STS user mode: RPC `GetSTSCredentials(user_id, volume_name)` в platform → короткие S3-credentials (TTL ≤60 мин) с политикой на company prefix; форк: `sts_refresher` пересоздаёт blob **локально** (без записи credentials в Redis Format) через новый метод ReloadableStorage | FR-REV-3; запись STS-токенов в Format = утечка чужих токенов всем клиентам + лишние writes в Redis |
 | 7.3 | STS render mode: прямой STS по IAM-роли ноды (AWS AssumeRole / YC SA token), без platform RPC | FR-RND-2 паттерн; изоляция per-company политикой роли |
 | 7.4 | FEK rotation оркестрирует **proxy** через новый RPC `RotateFileKey(inode)`: KeyManager генерирует новый FEK (admin-gated) → proxy: GetFileFEK(old) → SetFileCrypto(new version) → RewrapSlices(old→new). Инвалидация клиентских кэшей — автоматически: `cached_fek_version` mismatch на следующем Open (этап 3) | KeyManager не трогает Redis (решение 1.1); re-wrap — операция proxy (этап 5) |
@@ -338,6 +339,8 @@ FEK → wrapped_cek (slice metadata) → CEK (RAM) → AES-256-GCM чанк в S
 | 8.2 | FEK для миграции — **Company KEK локально** (паттерн render: `FetchCompanyKEK` по service identity), а не per-file KeyManager-RPC | Миграция — сервисная операция; один KEK на компанию покрывает все файлы; нет N RPC на N файлов |
 | 8.4 | Стратегия чанка: прочитать все slice'ы чанка (в порядке pos) → один новый slice с новым CEK (merge, как компакция) → `ReencryptChunk` | Минимум slice'ов после миграции; совпадает с FR-OP-7 паттерном |
 | 8.6 | Во время миграции файла новые записи идут **зашифрованными** (FEK уже сгенерирован и записан в attr на старте миграции файла, `encrypted=1` сразу), а чтение legacy-чанков — до их swap | FR-MIG-6: запись в новую (зашифрованную) версию, чтение старой; mixed chunk list корректен. Порядок: `SetFileCrypto` → почанковый swap |
+
+> 8.5 — заменено 8.6: первоначальный порядок («сначала swap чанков, в конце `SetFileCrypto(encrypted=1)`») отклонён — новые записи во время миграции ушли бы как legacy.
 
 ### Решения Stage 9 (оба)
 
