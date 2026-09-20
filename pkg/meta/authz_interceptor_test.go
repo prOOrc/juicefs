@@ -20,7 +20,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
+	"github.com/juicedata/juicefs/pkg/oidc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
@@ -51,8 +53,8 @@ func (m *mockAuthzClient) CheckOrganizationAdmin(ctx context.Context, userID str
 // newTestInterceptor creates an AuthzInterceptor with a fixed userID extractor for testing.
 func newTestInterceptor(client AuthzClient, cache *InodePathCache, userID string) *AuthzInterceptor {
 	ai := NewAuthzInterceptor(client, cache, nil)
-	ai.userIDExtractor = func(ctx context.Context) string {
-		return userID
+	ai.userIDExtractor = func(ctx context.Context) (string, error) {
+		return userID, nil
 	}
 	return ai
 }
@@ -581,4 +583,51 @@ func TestIsAlwaysAllowed(t *testing.T) {
 	assert.False(t, isAlwaysAllowed("/company-abc", AuthzPermissionView))
 	// Non-root + Write → NOT always allowed
 	assert.False(t, isAlwaysAllowed("/company-abc/file.exr", AuthzPermissionWrite))
+}
+
+func TestExtractUserIDFromOIDC(t *testing.T) {
+	t.Run("valid UUID sub is returned unchanged", func(t *testing.T) {
+		sub := uuid.New().String()
+		ctx := oidc.WithIDToken(context.Background(), &oidc.IDToken{Subject: sub})
+		userID, err := extractUserIDFromOIDC(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, sub, userID)
+	})
+
+	t.Run("non-UUID sub is rejected", func(t *testing.T) {
+		ctx := oidc.WithIDToken(context.Background(), &oidc.IDToken{Subject: "not-a-uuid"})
+		_, err := extractUserIDFromOIDC(ctx)
+		assert.Error(t, err)
+	})
+
+	t.Run("empty sub is rejected", func(t *testing.T) {
+		ctx := oidc.WithIDToken(context.Background(), &oidc.IDToken{Subject: ""})
+		_, err := extractUserIDFromOIDC(ctx)
+		assert.Error(t, err)
+	})
+
+	t.Run("no claims in context is rejected", func(t *testing.T) {
+		_, err := extractUserIDFromOIDC(context.Background())
+		assert.Error(t, err)
+	})
+}
+
+func TestInterceptor_NonUUIDSub_Unauthenticated(t *testing.T) {
+	mockClient := new(mockAuthzClient)
+	cache := NewInodePathCache(100)
+	ai := NewAuthzInterceptor(mockClient, cache, nil)
+	// default extractor (extractUserIDFromOIDC) with a non-UUID sub
+	ctx := oidc.WithIDToken(context.Background(), &oidc.IDToken{Subject: "bad-subject"})
+
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		t.Fatal("handler must not be called")
+		return nil, nil
+	}
+	_, err := ai.UnaryInterceptor()(ctx, &pb.GetAttrRequest{Inode: 1},
+		&grpc.UnaryServerInfo{FullMethod: "/pb.MetaService/GetAttr"}, handler)
+
+	assert.Error(t, err)
+	st, ok := status.FromError(err)
+	assert.True(t, ok)
+	assert.Equal(t, codes.Unauthenticated, st.Code())
 }

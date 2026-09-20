@@ -1,0 +1,230 @@
+/*
+ * AGIO Renderfarm, Copyright 2026
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+// NOTE: this file is a copy of agio-platform's
+// src/application/authz/proto/key_manager.proto (sync with agio-platform).
+// Keep the message/field layout identical; only go_package differs.
+
+syntax = "proto3";
+
+package agio.platform.drive.crypto.v1;
+
+option go_package = "github.com/juicedata/juicefs/pkg/meta/keymanager_pb";
+
+// DriveKeyManagerService manages the agio Drive encryption key hierarchy
+// (Per-File FEK + Company KEK). It is served on the same gRPC server as
+// AuthzService. Consumers: the JuiceFS Meta Proxy (user clients) and render nodes
+// (FetchCompanyKEK only).
+//
+// Path contract: file-scoped RPCs (CreateFileKey, GetFileFEK, GetBulkFileFEK,
+// RotateFileFEK) receive the FULL client path (e.g. "/company-abc/projects/file.exr")
+// plus volume_name. The service strips the volume's companies prefix (the same
+// mechanism AuthzService uses) and derives the company from the first remaining
+// segment: the company code is resolved to a company ID server-side, so callers
+// never send company_id for file-scoped operations. Company-scoped RPCs
+// (FetchCompanyKEK, ProvisionCompanyKEK, RotateCompanyKEK) take company_id
+// explicitly — their callers (render nodes, admins) know their own company.
+service DriveKeyManagerService {
+  // CreateFileKey generates a new 32-byte FEK for a file and returns it wrapped
+  // under the company KEK as an AGFK blob. Requires Write permission on path.
+  rpc CreateFileKey(CreateFileKeyRequest) returns (CreateFileKeyResponse);
+
+  // GetFileFEK unwraps a previously issued wrapped FEK and returns the plaintext
+  // FEK (over TLS). Requires Read (read access) or Edit (write access) on path.
+  rpc GetFileFEK(GetFileFEKRequest) returns (GetFileFEKResponse);
+
+  // GetBulkFileFEK unwraps up to 1000 wrapped FEKs in one call. Per-entry authz;
+  // denied entries are reported individually, not as a whole-call failure.
+  rpc GetBulkFileFEK(GetBulkFileFEKRequest) returns (GetBulkFileFEKResponse);
+
+  // FetchCompanyKEK returns the company KEK (wrapped under the KMS master key) for
+  // a render node. Requires a valid Yandex Cloud IAM token (dedicated interceptor).
+  rpc FetchCompanyKEK(FetchCompanyKEKRequest) returns (FetchCompanyKEKResponse);
+
+  // ProvisionCompanyKEK provisions the company KEK if not already present. Idempotent.
+  rpc ProvisionCompanyKEK(ProvisionCompanyKEKRequest) returns (ProvisionCompanyKEKResponse);
+
+  // GetPermissionGeneration returns the current per-user permission generation
+  // counter (0 when absent). Clients compare it on heartbeat to detect revocation.
+  rpc GetPermissionGeneration(GetPermissionGenerationRequest) returns (GetPermissionGenerationResponse);
+
+  // GetSTSCredentials issues short-lived S3 credentials scoped to the company prefix.
+  rpc GetSTSCredentials(GetSTSCredentialsRequest) returns (GetSTSCredentialsResponse);
+
+  // RotateFileFEK generates a new FEK version for an existing file. Requires an
+  // organization admin (SpiceDB manage permission on the organization).
+  rpc RotateFileFEK(RotateFileFEKRequest) returns (RotateFileFEKResponse);
+
+  // RotateCompanyKEK creates a new KEK version and retires the previous one.
+  // Requires an organization admin.
+  rpc RotateCompanyKEK(RotateCompanyKEKRequest) returns (RotateCompanyKEKResponse);
+}
+
+// CreateFileKeyRequest carries the file identity and the AAD components needed to
+// wrap the FEK. The AAD is volume_uuid || company_id || drive_file_id || inode ||
+// fek_version (byte encoding pinned by cross-repo known-answer vectors).
+//
+// The company is NOT carried by the caller: the client mounts the whole facility
+// and sees companies per authz, so it cannot name a company at mount time. The
+// service derives it from the first path segment after stripping the volume's
+// companies prefix (see the Path contract on DriveKeyManagerService).
+message CreateFileKeyRequest {
+  string user_id = 1;       // from OIDC token 'sub' claim (UUID)
+  reserved 2;               // company_id — removed: derived server-side from the path
+  string volume_uuid = 3;   // JuiceFS volume UUID (AAD component)
+  string drive_file_id = 4; // stable file identifier (AAD component)
+  int64 inode = 5;          // inode number (AAD component)
+  string path = 6;          // full client path, e.g. /company-abc/projects/file.exr
+  string volume_name = 7;   // JuiceFS volume name — resolves the companies prefix
+}
+
+message CreateFileKeyResponse {
+  bytes wrapped_fek = 1;    // AGFK blob
+  string drive_file_id = 2;
+  uint32 fek_version = 3;   // always 1 on create
+  uint32 kek_version = 4;   // Company KEK version used to wrap
+  string crypto_alg = 5;    // "AES-256-GCM"
+}
+
+// GetFileFEKRequest carries the wrapped FEK (issued by CreateFileKey) plus the AAD
+// components so the service can reconstruct the AAD and unwrap it. The company is
+// derived server-side from the path (see CreateFileKeyRequest).
+message GetFileFEKRequest {
+  string user_id = 1;
+  reserved 2;               // company_id — removed: derived server-side from the path
+  string volume_uuid = 3;
+  string drive_file_id = 4;
+  int64 inode = 5;
+  string path = 6;          // full client path, e.g. /company-abc/projects/file.exr
+  bytes wrapped_fek = 7;    // AGFK blob to unwrap
+  bool write_access = 8;    // true -> requires Edit, false -> Read
+  uint32 fek_version = 9;   // FEK version (AAD component; from CreateFileKey)
+  string volume_name = 10;  // JuiceFS volume name — resolves the companies prefix
+}
+
+message GetFileFEKResponse {
+  bytes fek = 1;            // plaintext FEK (32 bytes), valid over TLS only
+  string drive_file_id = 2;
+  uint32 fek_version = 3;
+  uint32 kek_version = 4;
+  string crypto_alg = 5;
+}
+
+// FileFEKEntry is one entry of a GetBulkFileFEK batch.
+message FileFEKEntry {
+  string drive_file_id = 1;
+  int64 inode = 2;
+  string path = 3;
+  bytes wrapped_fek = 4;
+  bool write_access = 5;
+  uint32 fek_version = 6; // FEK version (AAD component)
+}
+
+// GetBulkFileFEKRequest: the company is derived server-side per entry from its path
+// (entries of one batch may belong to different companies).
+message GetBulkFileFEKRequest {
+  string user_id = 1;
+  reserved 2;               // company_id — removed: derived server-side from each entry's path
+  string volume_uuid = 3;
+  repeated FileFEKEntry entries = 4; // up to 1000
+  string volume_name = 5;   // JuiceFS volume name — resolves the companies prefix
+}
+
+// FileFEKResult is the per-entry outcome of a GetBulkFileFEK batch. When allowed is
+// false, fek is empty and error carries the reason (e.g. "permission denied").
+message FileFEKResult {
+  string drive_file_id = 1;
+  bytes fek = 2;
+  uint32 fek_version = 3;
+  uint32 kek_version = 4;
+  string crypto_alg = 5;
+  bool allowed = 6;
+  string error = 7;
+}
+
+message GetBulkFileFEKResponse {
+  repeated FileFEKResult results = 1; // same order as request entries
+}
+
+// FetchCompanyKEKRequest identifies the calling render node. The YC IAM token is
+// carried in the gRPC metadata and verified by the interceptor, not here.
+message FetchCompanyKEKRequest {
+  string company_id = 1;
+  string node_id = 2; // render node identity (from the verified IAM token)
+}
+
+// FetchCompanyKEKResponse carries the plaintext Company KEK (over TLS) so the render
+// node can unwrap FEKs locally. The node holds it in RAM for the mount session only.
+message FetchCompanyKEKResponse {
+  bytes kek = 1;         // plaintext Company KEK (32 bytes)
+  uint32 kek_version = 2;
+}
+
+message ProvisionCompanyKEKRequest {
+  string company_id = 1;
+}
+
+message ProvisionCompanyKEKResponse {
+  uint32 kek_version = 1;
+  bool created = 2; // false when the KEK already existed (idempotent no-op)
+}
+
+message GetPermissionGenerationRequest {
+  string user_id = 1;
+}
+
+message GetPermissionGenerationResponse {
+  uint64 generation = 1; // 0 when the counter is absent
+}
+
+message GetSTSCredentialsRequest {
+  string user_id = 1;
+  string company_id = 2;
+}
+
+// GetSTSCredentialsResponse carries short-lived S3 credentials (TTL <= 60 min). They
+// are never persisted; each issuance is audited.
+message GetSTSCredentialsResponse {
+  string access_key_id = 1;
+  string secret_access_key = 2;
+  string session_token = 3;
+  int64 expiration_unix = 4;
+}
+
+// RotateFileFEKRequest: the company is derived server-side from the path (the caller
+// is an org admin acting on a file, not on a company).
+message RotateFileFEKRequest {
+  string user_id = 1;
+  reserved 2;               // company_id — removed: derived server-side from the path
+  string volume_uuid = 3;
+  string drive_file_id = 4;
+  int64 inode = 5;
+  string path = 6;          // full client path, e.g. /company-abc/projects/file.exr
+  uint32 current_fek_version = 7; // FEK version in effect before rotation (>= 1)
+  string volume_name = 8;   // JuiceFS volume name — resolves the companies prefix
+}
+
+message RotateFileFEKResponse {
+  bytes wrapped_fek = 1; // new AGFK under the current KEK
+  uint32 fek_version = 2; // previous + 1
+  uint32 kek_version = 3;
+  string crypto_alg = 4;
+  bytes plaintext_fek = 5; // new FEK (over TLS only); the proxy needs it to re-wrap slices
+}
+
+message RotateCompanyKEKRequest {
+  string company_id = 1;
+  string user_id = 2; // org admin performing the rotation
+}
+
+message RotateCompanyKEKResponse {
+  uint32 new_kek_version = 1;
+  uint32 retiring_kek_version = 2;
+}

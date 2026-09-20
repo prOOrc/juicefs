@@ -18,8 +18,10 @@ package meta
 
 import (
 	"context"
+	"syscall"
 	"time"
 
+	kmpb "github.com/juicedata/juicefs/pkg/meta/keymanager_pb"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
@@ -154,28 +156,107 @@ func (s *MetaProxyServer) Create(ctx context.Context, req *pb.CreateRequest) (*p
 	errno := s.meta.Create(mctx, Ino(req.Parent), req.Name, uint16(req.Mode),
 		uint16(req.Cumask), uint32(req.Flags), &inode, &attr)
 
-	if errno == 0 {
-		childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
-		if childPath != "" {
-			s.inodePathCache.Set(inode, withDirSlash(childPath, &attr))
-		}
+	if errno != 0 {
+		return &pb.CreateResponse{Errno: uint32(errno)}, nil
 	}
 
-	return &pb.CreateResponse{
-		Errno: uint32(errno),
-		Inode: uint64(inode),
-		Attr:  AttrToProto(&attr),
-	}, nil
+	childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
+	if childPath != "" {
+		s.inodePathCache.Set(inode, withDirSlash(childPath, &attr))
+	}
+
+	// Encryption: issue the per-file FEK via KeyManager (FR-USR-1). The company
+	// is derived server-side from the path (decision 3.8) — the client never
+	// sends it. Any failure rolls the file back (FR-USR-2, decision 3.3).
+	if s.encryptionEnabled() && attr.Typ == TypeFile && s.keyManager != nil {
+		userID, err := extractUserIDFromOIDC(ctx) // FR-ID-3: UUID validation (decision 3.7)
+		if err != nil {
+			_ = s.meta.Unlink(mctx, Ino(req.Parent), req.Name)
+			return &pb.CreateResponse{Errno: uint32(syscall.EACCES)}, nil // fail-closed
+		}
+		resp, err := s.keyManager.CreateFileKey(ctx, &kmpb.CreateFileKeyRequest{
+			UserId:      userID,
+			VolumeUuid:  s.meta.GetFormat().UUID,
+			DriveFileId: req.DriveFileId,
+			Inode:       int64(inode),
+			Path:        childPath,
+			VolumeName:  s.volumeName,
+		})
+		if err != nil {
+			_ = s.meta.Unlink(mctx, Ino(req.Parent), req.Name) // rollback (FR-USR-2)
+			return &pb.CreateResponse{Errno: uint32(syscall.EIO)}, nil
+		}
+		setter, ok := s.meta.(fileCryptoSetter)
+		if !ok {
+			_ = s.meta.Unlink(mctx, Ino(req.Parent), req.Name)
+			return &pb.CreateResponse{Errno: uint32(syscall.EIO)}, nil
+		}
+		cryptoAlg := resp.CryptoAlg
+		if cryptoAlg == "" {
+			cryptoAlg = "AES-256-GCM"
+		}
+		if st := setter.SetFileCrypto(mctx, inode, &FileCrypto{
+			WrappedFek:  resp.WrappedFek,
+			DriveFileID: req.DriveFileId,
+			FekVersion:  uint32(resp.FekVersion),
+			CryptoAlg:   cryptoAlg,
+		}); st != 0 {
+			_ = s.meta.Unlink(mctx, Ino(req.Parent), req.Name)
+			return &pb.CreateResponse{Errno: uint32(st)}, nil
+		}
+		attr.Encrypted = true
+		attr.DriveFileID = req.DriveFileId
+		attr.FekVersion = uint32(resp.FekVersion)
+		attr.WrappedFek = resp.WrappedFek
+		attr.CryptoAlg = cryptoAlg
+	}
+
+	return &pb.CreateResponse{Errno: 0, Inode: uint64(inode), Attr: AttrToProto(&attr)}, nil
 }
 
 func (s *MetaProxyServer) Open(ctx context.Context, req *pb.OpenRequest) (*pb.OpenResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var attr Attr
 	errno := s.meta.Open(mctx, Ino(req.Inode), uint32(req.Flags), &attr)
-	return &pb.OpenResponse{
-		Errno: uint32(errno),
-		Attr:  AttrToProto(&attr),
-	}, nil
+	if errno != 0 {
+		return &pb.OpenResponse{Errno: uint32(errno)}, nil
+	}
+	resp := &pb.OpenResponse{Errno: 0, Attr: AttrToProto(&attr)}
+
+	if attr.Encrypted && s.keyManager != nil {
+		resp.Encrypted = true
+		resp.FekVersion = int32(attr.FekVersion)
+		// Client cache hit: authz was already checked by the interceptor and the
+		// client holds this FEK version, so KeyManager is not called (decision 3.1).
+		if req.CachedFekVersion != attr.FekVersion {
+			forWrite := req.Flags&(syscall.O_WRONLY|syscall.O_RDWR) != 0
+			path := s.inodePathCache.Get(Ino(req.Inode))
+			if path == "" {
+				return &pb.OpenResponse{Errno: uint32(syscall.EACCES)}, nil // fail-closed
+			}
+			userID, err := extractUserIDFromOIDC(ctx) // FR-ID-3 (decision 3.7)
+			if err != nil {
+				return &pb.OpenResponse{Errno: uint32(syscall.EACCES)}, nil // fail-closed
+			}
+			fekResp, err := s.keyManager.GetFileFEK(ctx, &kmpb.GetFileFEKRequest{
+				UserId:      userID,
+				VolumeUuid:  s.meta.GetFormat().UUID,
+				DriveFileId: attr.DriveFileID,
+				Inode:       int64(req.Inode),
+				Path:        path,
+				WrappedFek:  attr.WrappedFek,
+				WriteAccess: forWrite,
+				FekVersion:  attr.FekVersion,
+				VolumeName:  s.volumeName,
+			})
+			if err != nil {
+				return &pb.OpenResponse{Errno: uint32(syscall.EACCES)}, nil // fail-closed (NFR-AVAIL-3)
+			}
+			resp.Fek = fekResp.Fek
+			resp.FekVersion = int32(fekResp.FekVersion)
+		}
+	}
+	return resp, nil
 }
 
 func (s *MetaProxyServer) Close(ctx context.Context, req *pb.CloseRequest) (*pb.CloseResponse, error) {
@@ -359,9 +440,9 @@ func (s *MetaProxyServer) filterEntriesByAuthz(ctx context.Context, parentInode 
 		return entries // no authz configured — return all
 	}
 
-	userID := s.authzInterceptor.extractUserID(ctx)
-	if userID == "" {
-		authzLogger.Warnf("Readdir: empty userID — returning empty list (deny)")
+	userID, err := s.authzInterceptor.extractUserID(ctx)
+	if err != nil || userID == "" {
+		authzLogger.Warnf("Readdir: missing or invalid userID — returning empty list (deny): %v", err)
 		return nil // fail-closed: no user = no access
 	}
 

@@ -19,6 +19,7 @@ package meta
 import (
 	"context"
 	"sync"
+	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
@@ -52,6 +53,18 @@ type MetaProxyServer struct {
 	// Authorization (optional)
 	authzInterceptor *AuthzInterceptor
 	inodePathCache   *InodePathCache
+
+	// Encryption (optional): KeyManager client for per-file FEKs and the volume
+	// name used to resolve the companies prefix on the platform side.
+	keyManager KeyManagerClient
+	volumeName string
+}
+
+// fileCryptoSetter is implemented by metadata engines that can persist per-file
+// crypto metadata (redisMeta). Checked via type assertion so the Meta interface
+// stays unchanged for other engines.
+type fileCryptoSetter interface {
+	SetFileCrypto(ctx Context, inode Ino, c *FileCrypto) syscall.Errno
 }
 
 // NewMetaProxyServer creates a new MetaProxyServer.
@@ -68,6 +81,23 @@ func NewMetaProxyServer(m Meta, cacheMaxSize int) *MetaProxyServer {
 // Called during server setup in cmd/meta_proxy.go (before gRPC Serve).
 func (s *MetaProxyServer) SetAuthzInterceptor(ai *AuthzInterceptor) {
 	s.authzInterceptor = ai
+}
+
+// SetKeyManager configures the KeyManager client for per-file FEK encryption.
+// Called during server setup in cmd/meta_proxy.go (before gRPC Serve).
+func (s *MetaProxyServer) SetKeyManager(km KeyManagerClient) {
+	s.keyManager = km
+}
+
+// SetVolumeName sets the JuiceFS volume name passed to KeyManager requests
+// (the platform resolves the companies prefix from it).
+func (s *MetaProxyServer) SetVolumeName(name string) {
+	s.volumeName = name
+}
+
+// encryptionEnabled reports whether per-file FEK encryption is on for this volume.
+func (s *MetaProxyServer) encryptionEnabled() bool {
+	return s.meta.GetFormat().EncryptionEnabled
 }
 
 // InodePathCache returns the inode→path cache (for cmd/meta_proxy.go).

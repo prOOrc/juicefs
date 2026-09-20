@@ -1345,6 +1345,7 @@ type CreateRequest struct {
 	Mode          uint32                 `protobuf:"varint,4,opt,name=mode,proto3" json:"mode,omitempty"`
 	Cumask        uint32                 `protobuf:"varint,5,opt,name=cumask,proto3" json:"cumask,omitempty"`
 	Flags         uint32                 `protobuf:"varint,6,opt,name=flags,proto3" json:"flags,omitempty"`
+	DriveFileId   string                 `protobuf:"bytes,7,opt,name=drive_file_id,json=driveFileId,proto3" json:"drive_file_id,omitempty"` // client-generated UUID (encrypted volumes; ignored otherwise)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1421,6 +1422,13 @@ func (x *CreateRequest) GetFlags() uint32 {
 	return 0
 }
 
+func (x *CreateRequest) GetDriveFileId() string {
+	if x != nil {
+		return x.DriveFileId
+	}
+	return ""
+}
+
 type CreateResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
@@ -1482,12 +1490,13 @@ func (x *CreateResponse) GetAttr() *ProtoAttr {
 }
 
 type OpenRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
-	Inode         uint64                 `protobuf:"varint,2,opt,name=inode,proto3" json:"inode,omitempty"`
-	Flags         uint32                 `protobuf:"varint,3,opt,name=flags,proto3" json:"flags,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Ctx              *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
+	Inode            uint64                 `protobuf:"varint,2,opt,name=inode,proto3" json:"inode,omitempty"`
+	Flags            uint32                 `protobuf:"varint,3,opt,name=flags,proto3" json:"flags,omitempty"`
+	CachedFekVersion uint32                 `protobuf:"varint,4,opt,name=cached_fek_version,json=cachedFekVersion,proto3" json:"cached_fek_version,omitempty"` // FEK version already held by the client (0 = none)
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *OpenRequest) Reset() {
@@ -1541,10 +1550,20 @@ func (x *OpenRequest) GetFlags() uint32 {
 	return 0
 }
 
+func (x *OpenRequest) GetCachedFekVersion() uint32 {
+	if x != nil {
+		return x.CachedFekVersion
+	}
+	return 0
+}
+
 type OpenResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
 	Attr          *ProtoAttr             `protobuf:"bytes,2,opt,name=attr,proto3" json:"attr,omitempty"`
+	Fek           []byte                 `protobuf:"bytes,3,opt,name=fek,proto3" json:"fek,omitempty"` // plaintext FEK, TLS only (encrypted files; empty otherwise)
+	FekVersion    int32                  `protobuf:"varint,4,opt,name=fek_version,json=fekVersion,proto3" json:"fek_version,omitempty"`
+	Encrypted     bool                   `protobuf:"varint,5,opt,name=encrypted,proto3" json:"encrypted,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1591,6 +1610,27 @@ func (x *OpenResponse) GetAttr() *ProtoAttr {
 		return x.Attr
 	}
 	return nil
+}
+
+func (x *OpenResponse) GetFek() []byte {
+	if x != nil {
+		return x.Fek
+	}
+	return nil
+}
+
+func (x *OpenResponse) GetFekVersion() int32 {
+	if x != nil {
+		return x.FekVersion
+	}
+	return 0
+}
+
+func (x *OpenResponse) GetEncrypted() bool {
+	if x != nil {
+		return x.Encrypted
+	}
+	return false
 }
 
 type CloseRequest struct {
@@ -3465,25 +3505,31 @@ const file_meta_proto_rawDesc = "" +
 	"\rMkdirResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12!\n" +
-	"\x04attr\x18\x03 \x01(\v2\r.pb.ProtoAttrR\x04attr\"\xa0\x01\n" +
+	"\x04attr\x18\x03 \x01(\v2\r.pb.ProtoAttrR\x04attr\"\xc4\x01\n" +
 	"\rCreateRequest\x12!\n" +
 	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x16\n" +
 	"\x06parent\x18\x02 \x01(\x04R\x06parent\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x12\n" +
 	"\x04mode\x18\x04 \x01(\rR\x04mode\x12\x16\n" +
 	"\x06cumask\x18\x05 \x01(\rR\x06cumask\x12\x14\n" +
-	"\x05flags\x18\x06 \x01(\rR\x05flags\"_\n" +
+	"\x05flags\x18\x06 \x01(\rR\x05flags\x12\"\n" +
+	"\rdrive_file_id\x18\a \x01(\tR\vdriveFileId\"_\n" +
 	"\x0eCreateResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12!\n" +
-	"\x04attr\x18\x03 \x01(\v2\r.pb.ProtoAttrR\x04attr\"\\\n" +
+	"\x04attr\x18\x03 \x01(\v2\r.pb.ProtoAttrR\x04attr\"\x8a\x01\n" +
 	"\vOpenRequest\x12!\n" +
 	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\x12\x14\n" +
-	"\x05flags\x18\x03 \x01(\rR\x05flags\"G\n" +
+	"\x05flags\x18\x03 \x01(\rR\x05flags\x12,\n" +
+	"\x12cached_fek_version\x18\x04 \x01(\rR\x10cachedFekVersion\"\x98\x01\n" +
 	"\fOpenResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12!\n" +
-	"\x04attr\x18\x02 \x01(\v2\r.pb.ProtoAttrR\x04attr\"G\n" +
+	"\x04attr\x18\x02 \x01(\v2\r.pb.ProtoAttrR\x04attr\x12\x10\n" +
+	"\x03fek\x18\x03 \x01(\fR\x03fek\x12\x1f\n" +
+	"\vfek_version\x18\x04 \x01(\x05R\n" +
+	"fekVersion\x12\x1c\n" +
+	"\tencrypted\x18\x05 \x01(\bR\tencrypted\"G\n" +
 	"\fCloseRequest\x12!\n" +
 	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\"%\n" +

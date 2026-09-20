@@ -30,7 +30,7 @@ func AttrToProto(a *Attr) *pb.ProtoAttr {
 	if a == nil {
 		return nil
 	}
-	return &pb.ProtoAttr{
+	p := &pb.ProtoAttr{
 		Flags:      uint32(a.Flags),
 		Typ:        uint32(a.Typ),
 		Mode:       uint32(a.Mode),
@@ -51,13 +51,23 @@ func AttrToProto(a *Attr) *pb.ProtoAttr {
 		AccessAcl:  a.AccessACL,
 		DefaultAcl: a.DefaultACL,
 	}
+	if a.Encrypted || len(a.WrappedFek) > 0 {
+		p.FileCrypto = &pb.ProtoFileCrypto{
+			WrappedFek:  a.WrappedFek,
+			DriveFileId: a.DriveFileID,
+			Encrypted:   a.Encrypted,
+			FekVersion:  int32(a.FekVersion),
+			CryptoAlg:   a.CryptoAlg,
+		}
+	}
+	return p
 }
 
 func ProtoToAttr(p *pb.ProtoAttr) *Attr {
 	if p == nil {
 		return nil
 	}
-	return &Attr{
+	a := &Attr{
 		Flags:      uint8(p.Flags),
 		Typ:        uint8(p.Typ),
 		Mode:       uint16(p.Mode),
@@ -78,16 +88,25 @@ func ProtoToAttr(p *pb.ProtoAttr) *Attr {
 		AccessACL:  p.AccessAcl,
 		DefaultACL: p.DefaultAcl,
 	}
+	if fc := p.FileCrypto; fc != nil {
+		a.WrappedFek = fc.WrappedFek
+		a.DriveFileID = fc.DriveFileId
+		a.Encrypted = fc.Encrypted
+		a.FekVersion = uint32(fc.FekVersion)
+		a.CryptoAlg = fc.CryptoAlg
+	}
+	return a
 }
 
 // Slice conversion
 
 func SliceToProto(s Slice) *pb.ProtoSlice {
 	return &pb.ProtoSlice{
-		Id:   s.Id,
-		Size: s.Size,
-		Off:  s.Off,
-		Len:  s.Len,
+		Id:         s.Id,
+		Size:       s.Size,
+		Off:        s.Off,
+		Len:        s.Len,
+		WrappedCek: s.WrappedCEK,
 	}
 }
 
@@ -96,10 +115,11 @@ func ProtoToSlice(p *pb.ProtoSlice) Slice {
 		return Slice{}
 	}
 	return Slice{
-		Id:   p.Id,
-		Size: p.Size,
-		Off:  p.Off,
-		Len:  p.Len,
+		Id:         p.Id,
+		Size:       p.Size,
+		Off:        p.Off,
+		Len:        p.Len,
+		WrappedCEK: p.WrappedCek,
 	}
 }
 
@@ -248,36 +268,38 @@ func FormatToProtoPtr(f *Format) *pb.ProtoFormat {
 		return nil
 	}
 	return &pb.ProtoFormat{
-		Name:             f.Name,
-		Uuid:             f.UUID,
-		Storage:          f.Storage,
-		StorageClass:     f.StorageClass,
-		Bucket:           f.Bucket,
-		AccessKey:        f.AccessKey,
-		SecretKey:        f.SecretKey,
-		SessionToken:     f.SessionToken,
-		BlockSize:        int32(f.BlockSize),
-		Compression:      f.Compression,
-		Shards:           int32(f.Shards),
-		HashPrefix:       f.HashPrefix,
-		Capacity:         f.Capacity,
-		Inodes:           f.Inodes,
-		EncryptKey:       f.EncryptKey,
-		EncryptAlgo:      f.EncryptAlgo,
-		KeyEncrypted:     f.KeyEncrypted,
-		UploadLimit:      f.UploadLimit,
-		DownloadLimit:    f.DownloadLimit,
-		TrashDays:        int32(f.TrashDays),
-		MetaVersion:      int32(f.MetaVersion),
-		MinClientVersion: f.MinClientVersion,
-		MaxClientVersion: f.MaxClientVersion,
-		DirStats:         f.DirStats,
-		UserGroupQuota:   f.UserGroupQuota,
-		EnableAcl:        f.EnableACL,
-		RangerRestUrl:    f.RangerRestUrl,
-		RangerService:    f.RangerService,
-		KerbConf:         f.KerbConf,
-		Tiers:            tiersToProto(f.Tiers),
+		Name:              f.Name,
+		Uuid:              f.UUID,
+		Storage:           f.Storage,
+		StorageClass:      f.StorageClass,
+		Bucket:            f.Bucket,
+		AccessKey:         f.AccessKey,
+		SecretKey:         f.SecretKey,
+		SessionToken:      f.SessionToken,
+		BlockSize:         int32(f.BlockSize),
+		Compression:       f.Compression,
+		Shards:            int32(f.Shards),
+		HashPrefix:        f.HashPrefix,
+		Capacity:          f.Capacity,
+		Inodes:            f.Inodes,
+		EncryptKey:        f.EncryptKey,
+		EncryptAlgo:       f.EncryptAlgo,
+		KeyEncrypted:      f.KeyEncrypted,
+		UploadLimit:       f.UploadLimit,
+		DownloadLimit:     f.DownloadLimit,
+		TrashDays:         int32(f.TrashDays),
+		MetaVersion:       int32(f.MetaVersion),
+		MinClientVersion:  f.MinClientVersion,
+		MaxClientVersion:  f.MaxClientVersion,
+		DirStats:          f.DirStats,
+		UserGroupQuota:    f.UserGroupQuota,
+		EnableAcl:         f.EnableACL,
+		RangerRestUrl:     f.RangerRestUrl,
+		RangerService:     f.RangerService,
+		KerbConf:          f.KerbConf,
+		Tiers:             tiersToProto(f.Tiers),
+		EncryptionEnabled: f.EncryptionEnabled,
+		KekVersion:        int32(f.KEKVersion),
 	}
 }
 
@@ -301,36 +323,38 @@ func ProtoToFormat(p *pb.ProtoFormat) *Format {
 		return nil
 	}
 	return &Format{
-		Name:             p.Name,
-		UUID:             p.Uuid,
-		Storage:          p.Storage,
-		StorageClass:     p.StorageClass,
-		Bucket:           p.Bucket,
-		AccessKey:        p.AccessKey,
-		SecretKey:        p.SecretKey,
-		SessionToken:     p.SessionToken,
-		BlockSize:        int(p.BlockSize),
-		Compression:      p.Compression,
-		Shards:           int(p.Shards),
-		HashPrefix:       p.HashPrefix,
-		Capacity:         p.Capacity,
-		Inodes:           p.Inodes,
-		EncryptKey:       p.EncryptKey,
-		EncryptAlgo:      p.EncryptAlgo,
-		KeyEncrypted:     p.KeyEncrypted,
-		UploadLimit:      p.UploadLimit,
-		DownloadLimit:    p.DownloadLimit,
-		TrashDays:        int(p.TrashDays),
-		MetaVersion:      int(p.MetaVersion),
-		MinClientVersion: p.MinClientVersion,
-		MaxClientVersion: p.MaxClientVersion,
-		DirStats:         p.DirStats,
-		UserGroupQuota:   p.UserGroupQuota,
-		EnableACL:        p.EnableAcl,
-		RangerRestUrl:    p.RangerRestUrl,
-		RangerService:    p.RangerService,
-		KerbConf:         p.KerbConf,
-		Tiers:            tiersFromProto(p.Tiers),
+		Name:              p.Name,
+		UUID:              p.Uuid,
+		Storage:           p.Storage,
+		StorageClass:      p.StorageClass,
+		Bucket:            p.Bucket,
+		AccessKey:         p.AccessKey,
+		SecretKey:         p.SecretKey,
+		SessionToken:      p.SessionToken,
+		BlockSize:         int(p.BlockSize),
+		Compression:       p.Compression,
+		Shards:            int(p.Shards),
+		HashPrefix:        p.HashPrefix,
+		Capacity:          p.Capacity,
+		Inodes:            p.Inodes,
+		EncryptKey:        p.EncryptKey,
+		EncryptAlgo:       p.EncryptAlgo,
+		KeyEncrypted:      p.KeyEncrypted,
+		UploadLimit:       p.UploadLimit,
+		DownloadLimit:     p.DownloadLimit,
+		TrashDays:         int(p.TrashDays),
+		MetaVersion:       int(p.MetaVersion),
+		MinClientVersion:  p.MinClientVersion,
+		MaxClientVersion:  p.MaxClientVersion,
+		DirStats:          p.DirStats,
+		UserGroupQuota:    p.UserGroupQuota,
+		EnableACL:         p.EnableAcl,
+		RangerRestUrl:     p.RangerRestUrl,
+		RangerService:     p.RangerService,
+		KerbConf:          p.KerbConf,
+		Tiers:             tiersFromProto(p.Tiers),
+		EncryptionEnabled: p.EncryptionEnabled,
+		KEKVersion:        int(p.KekVersion),
 	}
 }
 
@@ -510,10 +534,11 @@ func fromProtoSlice(p *pb.ProtoSlice) *Slice {
 		return nil
 	}
 	return &Slice{
-		Id:   p.Id,
-		Size: p.Size,
-		Off:  p.Off,
-		Len:  p.Len,
+		Id:         p.Id,
+		Size:       p.Size,
+		Off:        p.Off,
+		Len:        p.Len,
+		WrappedCEK: p.WrappedCek,
 	}
 }
 

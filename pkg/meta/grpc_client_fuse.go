@@ -19,6 +19,7 @@ package meta
 import (
 	"syscall"
 
+	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
@@ -271,6 +272,9 @@ func (m *grpcMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 		Mode:   uint32(mode),
 		Cumask: uint32(cumask),
 		Flags:  flags,
+		// Client-generated file id the per-file FEK is bound to (FR-USR-3);
+		// ignored by the server on non-encrypted volumes.
+		DriveFileId: uuid.New().String(),
 	}
 	resp, err := m.client.Create(m.withSessionID(ctx), req)
 	if err != nil {
@@ -290,24 +294,42 @@ func (m *grpcMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 	return 0
 }
 
-// Open checks permission on a node and track it as open
+// Open checks permission on a node and track it as open. For encrypted files it
+// also obtains the plaintext FEK: from the server (KeyManager) on a cache miss,
+// or from the local LRU on a cache hit (decision 3.1).
 func (m *grpcMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
-	c := m.grpcContext(ctx)
-	req := &pb.OpenRequest{
-		Ctx:   c,
-		Inode: uint64(inode),
-		Flags: flags,
+	cachedVer := uint32(0)
+	if e, ok := m.fekCache.Get(uint64(inode)); ok {
+		cachedVer = e.version
 	}
-	resp, err := m.client.Open(m.withSessionID(ctx), req)
-	if err != nil {
-		return syscall.EIO
+
+	resp, errno := m.openOnce(ctx, inode, flags, cachedVer)
+	if errno != 0 {
+		return errno
 	}
-	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+	fek, ver := m.fekForOpen(resp, inode, cachedVer)
+	if resp.GetEncrypted() && fek == nil {
+		// The server skipped KeyManager because we claimed a matching cached
+		// version, but the LRU entry is gone (evicted in the meantime). Retry
+		// once without claiming a cached version so the server re-issues the FEK.
+		resp, errno = m.openOnce(ctx, inode, flags, 0)
+		if errno != 0 {
+			return errno
+		}
+		fek, ver = m.fekForOpen(resp, inode, 0)
 	}
+	if resp.GetEncrypted() && fek == nil {
+		return syscall.EIO // fail-closed: no FEK available
+	}
+
 	if attr != nil && resp.Attr != nil {
 		*attr = *ProtoToAttr(resp.Attr)
 		m.putAttrInCache(uint64(inode), attr)
+	}
+	if fek != nil && attr != nil {
+		m.fekCache.Add(uint64(inode), &fekEntry{fek: fek, version: ver})
+		attr.Fek = fek
+		attr.FekVersion = ver
 	}
 	return 0
 }
