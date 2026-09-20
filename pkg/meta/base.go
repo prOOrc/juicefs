@@ -289,8 +289,14 @@ type baseMeta struct {
 	msgCallbacks *msgCallbacks
 	reloadCb     []func(*Format)
 	umounting    bool
-	sesMu        sync.Mutex
-	aclCache     aclAPI.Cache
+
+	// FR-VER-1: policy for deleting crypto metadata. nil → deletable (current
+	// behavior). Future versioning will install a reference-count check here;
+	// the hook must return true for inodes without crypto metadata.
+	fileCryptoDeletable func(inode Ino) bool
+
+	sesMu    sync.Mutex
+	aclCache aclAPI.Cache
 
 	sessCtx Context
 	sessWG  sync.WaitGroup
@@ -998,6 +1004,29 @@ func (m *baseMeta) Init(format *Format, force bool) error {
 	return m.en.doInit(format, force)
 }
 
+// canDeleteFileCrypto reports whether the crypto metadata of inode may be
+// deleted (FR-VER-1). With no hook installed everything is deletable, which
+// preserves the current behavior.
+func (m *baseMeta) canDeleteFileCrypto(inode Ino) bool {
+	if m.fileCryptoDeletable == nil {
+		return true
+	}
+	return m.fileCryptoDeletable(inode)
+}
+
+// gcDeletedFile deletes the data of one deleted file unless its crypto
+// metadata is not deletable yet (FR-VER-1). It returns true when the data was
+// processed; a skipped inode stays in the deleted-files set and is retried on
+// the next GC cycle.
+func (m *baseMeta) gcDeletedFile(inode Ino, length uint64) bool {
+	if !m.canDeleteFileCrypto(inode) {
+		logger.Infof("skip cleanup of inode %d: crypto metadata is not deletable yet (FR-VER-1)", inode)
+		return false
+	}
+	m.en.doDeleteFileData(inode, length)
+	return true
+}
+
 func (m *baseMeta) cleanupDeletedFiles(ctx Context) {
 	defer m.sessWG.Done()
 	for {
@@ -1021,8 +1050,9 @@ func (m *baseMeta) cleanupDeletedFiles(ctx Context) {
 			status := bgJobSucc
 			for inode, length := range files {
 				logger.Debugf("cleanup chunks of inode %d with %d bytes", inode, length)
-				m.en.doDeleteFileData(inode, length)
-				processed++
+				if m.gcDeletedFile(inode, length) {
+					processed++
+				}
 				if time.Since(jobStart) > 50*time.Minute { // Yield my time slice to avoid conflicts with other clients
 					status = bgJobCanceled
 					break

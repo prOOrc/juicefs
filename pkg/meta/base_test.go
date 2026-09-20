@@ -6413,3 +6413,86 @@ func TestRedisLockIndexRelease(t *testing.T) {
 		t.Fatalf("locked$%d still lists plock inode after last owner released", r1.sid)
 	}
 }
+
+func TestGCRespectsFileCryptoDeletable(t *testing.T) {
+	m, err := newRedisMeta("redis", "127.0.0.1:6379/12", testConfig())
+	if err != nil || m.Name() != "redis" {
+		t.Fatalf("create meta: %s", err)
+	}
+	rm := m.(*redisMeta)
+	if err := m.Reset(); err != nil {
+		t.Fatalf("reset meta: %s", err)
+	}
+	if err := m.Init(testFormat(), true); err != nil {
+		t.Fatalf("init meta: %s", err)
+	}
+
+	ctx := Background()
+	var inode Ino
+	var attr Attr
+	if st := m.Create(ctx, RootInode, "encfile", 0644, 0, 0, &inode, &attr); st != 0 {
+		t.Fatalf("create: %s", st)
+	}
+	// Mark the file encrypted (the meta proxy would do this at create time).
+	attr.Encrypted = true
+	attr.DriveFileID = "df-1"
+	attr.FekVersion = 1
+	attr.CryptoAlg = "AES-256-GCM"
+	attr.WrappedFek = []byte("fake-agfk-blob")
+	if err := rm.rdb.Set(ctx, rm.inodeKey(inode), rm.marshal(&attr), 0).Err(); err != nil {
+		t.Fatalf("store encrypted attr: %s", err)
+	}
+	var got Attr
+	if st := m.GetAttr(ctx, inode, &got); st != 0 {
+		t.Fatalf("getattr: %s", st)
+	}
+	if !got.Encrypted || !bytes.Equal(got.WrappedFek, attr.WrappedFek) {
+		t.Fatalf("encrypted attr not persisted: %+v", got)
+	}
+
+	var sliceID uint64
+	if st := m.NewSlice(ctx, &sliceID); st != 0 {
+		t.Fatalf("new slice: %s", st)
+	}
+	wrappedCEK := []byte("fake-agck-blob")
+	if st := m.Write(ctx, inode, 0, 0, Slice{Id: sliceID, Size: 4096, Len: 4096, WrappedCEK: wrappedCEK}, time.Now()); st != 0 {
+		t.Fatalf("write: %s", st)
+	}
+	if st := m.GetAttr(ctx, inode, &attr); st != 0 {
+		t.Fatalf("getattr after write: %s", st)
+	}
+	if st := m.Unlink(ctx, RootInode, "encfile"); st != 0 {
+		t.Fatalf("unlink: %s", st)
+	}
+
+	readSlices := func() []Slice {
+		rm.of.InvalidateChunk(inode, 0) // bypass the client-side chunk cache
+		var ss []Slice
+		if st := m.Read(ctx, inode, 0, &ss); st != 0 {
+			return nil
+		}
+		return ss
+	}
+	if ss := readSlices(); len(ss) != 1 || !bytes.Equal(ss[0].WrappedCEK, wrappedCEK) {
+		t.Fatalf("setup: slices = %+v, want one with WrappedCEK", ss)
+	}
+
+	// Hook says "not deletable" -> GC must keep the crypto slice records.
+	rm.fileCryptoDeletable = func(Ino) bool { return false }
+	defer func() { rm.fileCryptoDeletable = nil }()
+	if rm.gcDeletedFile(inode, attr.Length) {
+		t.Fatal("gcDeletedFile processed an inode whose crypto metadata is not deletable")
+	}
+	if ss := readSlices(); len(ss) != 1 || !bytes.Equal(ss[0].WrappedCEK, wrappedCEK) {
+		t.Fatalf("crypto slice records were deleted: %+v", ss)
+	}
+
+	// Hook allows deletion -> GC removes the data.
+	rm.fileCryptoDeletable = func(Ino) bool { return true }
+	if !rm.gcDeletedFile(inode, attr.Length) {
+		t.Fatal("gcDeletedFile refused a deletable inode")
+	}
+	if ss := readSlices(); len(ss) != 0 {
+		t.Fatalf("slices after GC: %+v, want none", ss)
+	}
+}

@@ -3919,6 +3919,11 @@ func (m *redisMeta) cleanupLeakedInodes(delete bool) {
 			if _, ok := foundInodes[Ino(ino)]; !ok && time.Unix(attr.Ctime, 0).Before(cutoff) {
 				logger.Infof("found dangling inode: %s %+v", keys[i], attr)
 				if delete {
+					if attr.Encrypted && !m.canDeleteFileCrypto(Ino(ino)) {
+						// FR-VER-1: keep the crypto metadata (WrappedFek) until
+						// the policy allows deleting it.
+						continue
+					}
 					err = m.doDeleteSustainedInode(0, Ino(ino))
 					if err != nil {
 						logger.Errorf("delete leaked inode %d : %s", ino, err)
