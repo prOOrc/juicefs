@@ -130,6 +130,32 @@ func cmdMetaProxy() *cli.Command {
 				Value:  30 * time.Second,
 				Hidden: false,
 			},
+			// KeyManager flags (per-file FEK encryption)
+			&cli.StringFlag{
+				Name:   "keymanager-service",
+				Usage:  "KeyManager gRPC service address (e.g., localhost:9091). Enables per-file FEK encryption when set.",
+				Hidden: false,
+			},
+			&cli.StringFlag{
+				Name:   "keymanager-tls-cert",
+				Usage:  "TLS client certificate for KeyManager service connection (production use)",
+				Hidden: true,
+			},
+			&cli.StringFlag{
+				Name:   "keymanager-tls-key",
+				Usage:  "TLS client private key for KeyManager service connection (production use)",
+				Hidden: true,
+			},
+			&cli.StringFlag{
+				Name:   "keymanager-tls-ca",
+				Usage:  "TLS CA certificate for KeyManager service connection (production use)",
+				Hidden: true,
+			},
+			&cli.StringFlag{
+				Name:   "keymanager-server-name",
+				Usage:  "Server name for TLS certificate validation (default: service hostname)",
+				Hidden: true,
+			},
 		},
 		Action: func(c *cli.Context) error {
 			setup(c, 0)
@@ -146,6 +172,17 @@ func cmdMetaProxy() *cli.Command {
 			loggerProxy.Infof("gRPC address: %s", addr)
 
 			m := meta.NewClient(metaBackendUrl, meta.DefaultConf())
+
+			// Load the volume format so GetFormat (encryption checks) works from
+			// the first request. A not-yet-formatted volume is not fatal: the
+			// format is picked up by the first Init/Load RPC.
+			var volFormat *meta.Format
+			if format, err := m.Load(true); err != nil {
+				loggerProxy.Warnf("Failed to load volume format (is the volume formatted?): %v", err)
+			} else {
+				volFormat = format
+				loggerProxy.Infof("Volume %q loaded (per-file encryption enabled: %v)", format.Name, format.EncryptionEnabled)
+			}
 
 			cacheMaxSize := c.Int("authz-path-cache-size")
 			server := meta.NewMetaProxyServer(m, cacheMaxSize)
@@ -213,6 +250,28 @@ func cmdMetaProxy() *cli.Command {
 				unaryInterceptors = append(unaryInterceptors, interceptor.UnaryInterceptor())
 
 				loggerProxy.Warnf("Streaming DumpMeta/LoadMeta disabled (not covered by authz)")
+			}
+
+			// KeyManager (per-file FEK encryption, optional)
+			server.SetVolumeName(c.String("authz-volume-name"))
+			keymanagerAddr := c.String("keymanager-service")
+			if keymanagerAddr != "" {
+				tlsCert := c.String("keymanager-tls-cert")
+				tlsKey := c.String("keymanager-tls-key")
+				tlsCA := c.String("keymanager-tls-ca")
+				serverName := c.String("keymanager-server-name")
+
+				loggerProxy.Infof("Per-file FEK encryption enabled (keymanager service: %s)", keymanagerAddr)
+
+				keyManager, err := meta.NewKeyManagerClient(keymanagerAddr, tlsCert, tlsKey, tlsCA, serverName)
+				if err != nil {
+					loggerProxy.Fatalf("Failed to connect to keymanager service: %v", err)
+				}
+				server.SetKeyManager(keyManager)
+			} else if volFormat != nil && volFormat.EncryptionEnabled {
+				loggerProxy.Warnf("Volume has encryption enabled but --keymanager-service is not set — encrypted files cannot be created or opened")
+			} else {
+				loggerProxy.Infof("KeyManager not configured — per-file encryption disabled for all volumes")
 			}
 
 			// Apply interceptor chain

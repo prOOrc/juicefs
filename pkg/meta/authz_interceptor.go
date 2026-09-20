@@ -18,8 +18,11 @@ package meta
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/oidc"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -66,7 +69,7 @@ type AuthzInterceptor struct {
 	cache           *InodePathCache
 	handleResolver  HandleResolver
 	enabled         bool
-	userIDExtractor func(ctx context.Context) string // injectable for testing
+	userIDExtractor func(ctx context.Context) (string, error) // injectable for testing
 }
 
 // NewAuthzInterceptor creates a new authorization interceptor.
@@ -80,22 +83,29 @@ func NewAuthzInterceptor(client AuthzClient, cache *InodePathCache, resolver Han
 	}
 }
 
-// extractUserIDFromOIDC is the default userID extractor from OIDC claims.
-func extractUserIDFromOIDC(ctx context.Context) string {
+// extractUserIDFromOIDC returns the OIDC sub (= user.id UUID, invariant A6) and
+// validates its format: a malformed UUID is an identity-configuration error and
+// must fail closed (FR-ID-3, decision 3.7).
+func extractUserIDFromOIDC(ctx context.Context) (string, error) {
 	claims := oidc.ClaimsFromContext(ctx)
 	if claims == nil {
-		return ""
+		return "", errors.New("no oidc claims in context")
 	}
-	if idToken, ok := claims.(*oidc.IDToken); ok {
-		return idToken.Subject
+	idToken, ok := claims.(*oidc.IDToken)
+	if !ok {
+		return "", errors.New("oidc claims are not an id token")
 	}
-	return ""
+	sub := idToken.Subject
+	if _, err := uuid.Parse(sub); err != nil {
+		return "", fmt.Errorf("oidc sub %q is not a valid UUID: %w", sub, err)
+	}
+	return sub, nil // no transformation (FR-ID-2)
 }
 
 // extractUserID extracts the user ID from context using the configured extractor.
-func (ai *AuthzInterceptor) extractUserID(ctx context.Context) string {
+func (ai *AuthzInterceptor) extractUserID(ctx context.Context) (string, error) {
 	if ai.userIDExtractor == nil {
-		return ""
+		return "", errors.New("no user id extractor configured")
 	}
 	return ai.userIDExtractor(ctx)
 }
@@ -118,9 +128,10 @@ func (ai *AuthzInterceptor) UnaryInterceptor() grpc.UnaryServerInterceptor {
 			return nil, status.Error(codes.PermissionDenied, "access denied: unknown method")
 		}
 
-		// Extract user identity from OIDC claims
-		userID := ai.extractUserID(ctx)
-		if userID == "" {
+		// Extract user identity from OIDC claims (UUID-validated, FR-ID-3)
+		userID, err := ai.extractUserID(ctx)
+		if err != nil || userID == "" {
+			authzLogger.Warnf("Authz: invalid or missing user identity: method=%s err=%v", info.FullMethod, err)
 			return nil, status.Error(codes.Unauthenticated, "no authenticated user")
 		}
 

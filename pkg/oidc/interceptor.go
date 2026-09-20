@@ -52,6 +52,12 @@ func ClaimsFromContext(ctx context.Context) interface{} {
 	return nil
 }
 
+// WithIDToken returns a context carrying the given verified ID token, as set by
+// the OIDC interceptors. Useful for tests and in-process callers.
+func WithIDToken(ctx context.Context, idToken *IDToken) context.Context {
+	return context.WithValue(ctx, ctxKeyClaims{}, idToken)
+}
+
 // ExtractBearerToken extracts "Bearer <token>" from incoming gRPC metadata.
 // Returns empty string if no authorization header is present.
 func ExtractBearerToken(ctx context.Context) string {

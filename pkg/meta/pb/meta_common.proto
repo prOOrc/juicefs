@@ -49,6 +49,17 @@ message ProtoAttr {
   bool keep_cache = 17;
   uint32 access_acl = 18;
   uint32 default_acl = 19;
+  ProtoFileCrypto file_crypto = 20; // per-file crypto metadata (encrypted files only)
+}
+
+// ProtoFileCrypto carries per-file crypto metadata. The plaintext FEK is never
+// carried here — it travels only in OpenResponse over TLS.
+message ProtoFileCrypto {
+  bytes wrapped_fek = 1;   // AGFK blob (ciphertext)
+  string drive_file_id = 2; // client-generated UUID
+  bool encrypted = 3;
+  int32 fek_version = 4;
+  string crypto_alg = 5;    // "AES-256-GCM"
 }
 
 // Slice represents a chunk slice
@@ -57,6 +68,7 @@ message ProtoSlice {
   uint32 size = 2;
   uint32 off = 3;
   uint32 len = 4;
+  bytes wrapped_cek = 5;    // optional AGCK tail (encrypted slices only)
 }
 
 // Entry represents a directory entry
@@ -140,6 +152,8 @@ message ProtoFormat {
   string ranger_service = 28;
   string kerb_conf = 29;
   repeated ProtoTier tiers = 30;
+  bool encryption_enabled = 31; // per-file FEK encryption is on for this volume
+  int32 kek_version = 32;       // active Company KEK version (informational)
 }
 
 // ProtoTier represents a storage tier

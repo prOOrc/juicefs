@@ -267,6 +267,7 @@ message CreateRequest {
   uint32 mode = 4;
   uint32 cumask = 5;
   uint32 flags = 6;
+  string drive_file_id = 7; // client-generated UUID (encrypted volumes; ignored otherwise)
 }
 message CreateResponse {
   uint32 errno = 1;
@@ -278,10 +279,14 @@ message OpenRequest {
   MetaContext ctx = 1;
   uint64 inode = 2;
   uint32 flags = 3;
+  uint32 cached_fek_version = 4; // FEK version already held by the client (0 = none)
 }
 message OpenResponse {
   uint32 errno = 1;
   ProtoAttr attr = 2;
+  bytes fek = 3;         // plaintext FEK, TLS only (encrypted files; empty otherwise)
+  int32 fek_version = 4;
+  bool encrypted = 5;
 }
 
 message CloseRequest {

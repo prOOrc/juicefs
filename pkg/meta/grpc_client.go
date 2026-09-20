@@ -43,7 +43,17 @@ const (
 	defaultAttrCacheTTL      = time.Second
 	defaultDirCacheTTL       = time.Second
 	defaultHeartbeatInterval = 12 * time.Second
+
+	// FEK cache defaults (FR-USR-9)
+	defaultFekCacheSize = 100_000
+	defaultFekCacheTTL  = 15 * time.Minute
 )
+
+// fekEntry is a cached plaintext per-file FEK with the version it was issued at.
+type fekEntry struct {
+	fek     []byte
+	version uint32
+}
 
 // grpcMeta implements Meta interface as a gRPC client (Variant B - no baseMeta embedding)
 type grpcMeta struct {
@@ -60,6 +70,8 @@ type grpcMeta struct {
 	attrCache *expirable.LRU[uint64, *Attr]
 	// Directory cache (inode -> []*Entry)
 	dirCache *expirable.LRU[uint64, []*Entry]
+	// FEK cache (inode -> plaintext FEK); encrypted volumes only (FR-USR-9)
+	fekCache *expirable.LRU[uint64, *fekEntry]
 	// Cache TTLs
 	attrCacheTTL time.Duration
 	dirCacheTTL  time.Duration
@@ -143,6 +155,12 @@ func newGRPCMeta(driver, addr string, conf *Config) (Meta, error) {
 	// Create caches
 	attrCache := expirable.NewLRU[uint64, *Attr](attrCacheSize, nil, attrCacheTTL)
 	dirCache := expirable.NewLRU[uint64, []*Entry](dirCacheSize, nil, dirCacheTTL)
+	fekCache := expirable.NewLRU[uint64, *fekEntry](defaultFekCacheSize, func(_ uint64, e *fekEntry) {
+		// Zero the plaintext FEK on eviction (full secure-zeroing — stage 6).
+		for i := range e.fek {
+			e.fek[i] = 0
+		}
+	}, defaultFekCacheTTL)
 
 	// OIDC token manager (optional)
 	var tm *oidc.TokenManager
@@ -161,6 +179,7 @@ func newGRPCMeta(driver, addr string, conf *Config) (Meta, error) {
 		conn:              conn,
 		attrCache:         attrCache,
 		dirCache:          dirCache,
+		fekCache:          fekCache,
 		attrCacheTTL:      attrCacheTTL,
 		dirCacheTTL:       dirCacheTTL,
 		heartbeatInterval: heartbeatInterval,
