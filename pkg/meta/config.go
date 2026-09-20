@@ -110,6 +110,10 @@ type Format struct {
 
 	//kerberos
 	KerbConf string `json:",omitempty"`
+
+	// Encryption (AGIO Drive)
+	EncryptionEnabled bool `json:",omitempty"`
+	KEKVersion        int  `json:",omitempty"`
 }
 
 // Clone returns a deep copy of the format.
