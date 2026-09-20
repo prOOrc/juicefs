@@ -57,10 +57,11 @@ type rSlice struct {
 	id     uint64
 	length int
 	store  *cachedStore
+	cek    []byte // CEK of this slice; nil → legacy plaintext
 }
 
 func sliceForRead(id uint64, length int, store *cachedStore) *rSlice {
-	return &rSlice{id, length, store}
+	return &rSlice{id: id, length: length, store: store}
 }
 
 func (s *rSlice) blockSize(indx int) int {
@@ -128,6 +129,9 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 	}
 
 	key := s.key(indx)
+	if s.cek != nil {
+		return s.readEncryptedBlock(ctx, page, indx, boff)
+	}
 	if s.store.conf.CacheEnabled() {
 		start := time.Now()
 		r, err := s.store.bcache.load(key)
@@ -177,6 +181,81 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		copy(p, block.Data[boff:])
 	}
 	return len(p), nil
+}
+
+// readEncryptedBlock fetches one block of an encrypted slice (AGDF ciphertext
+// in both the cache and object storage), decrypts it under the slice CEK and
+// copies the requested range into page. Decryption happens once per block via
+// the read group; plaintext never reaches the cache (NFR-SEC-1). Range GET is
+// not used for ciphertext blocks — a partial ciphertext is useless, so a full
+// block is always fetched.
+func (s *rSlice) readEncryptedBlock(ctx context.Context, page *Page, indx int, boff int) (int, error) {
+	key := s.key(indx)
+	blockSize := s.blockSize(indx)
+	plain, err := s.store.group.Execute(key, func() (*Page, error) {
+		out := NewOffPage(blockSize)
+		ct := NewOffPage(blockSize + agdfOverhead)
+		defer ct.Release()
+		if s.store.conf.CacheEnabled() {
+			start := time.Now()
+			r, rerr := s.store.bcache.load(key)
+			if rerr == nil {
+				n, rerr := r.ReadAt(ct.Data, 0)
+				if !s.store.conf.OSCache {
+					dropOSCache(r)
+				}
+				_ = r.Close()
+				if errors.Is(rerr, io.EOF) {
+					rerr = nil // read to the end of the cached data
+				}
+				if rerr == nil && n > 0 {
+					if n < len(ct.Data) && n >= len(chunkMagic) && !IsLegacyBlock(ct.Data[:n]) {
+						rerr = fmt.Errorf("truncated AGDF block in cache")
+					}
+					if rerr == nil {
+						s.store.cacheHits.Add(1)
+						s.store.cacheHitBytes.Add(float64(n))
+						s.store.cacheReadHist.Observe(time.Since(start).Seconds())
+						return s.decryptBlock(out, ct.Data[:n], indx)
+					}
+				}
+				logger.Warnf("remove partial cached block %s: %d %s", key, n, rerr)
+				s.store.bcache.remove(key, false)
+			}
+		}
+		s.store.cacheMiss.Add(1)
+		s.store.cacheMissBytes.Add(float64(blockSize))
+		if lerr := s.store.loadCiphertext(ctx, key, ct, s.store.shouldCache(blockSize)); lerr != nil {
+			return out, lerr
+		}
+		return s.decryptBlock(out, ct.Data, indx)
+	})
+	defer plain.Release()
+	if err != nil {
+		return 0, err
+	}
+	if len(plain.Data) < boff+len(page.Data) {
+		return 0, fmt.Errorf("block %s shorter than expected: %d < %d", key, len(plain.Data), boff+len(page.Data))
+	}
+	n := copy(page.Data, plain.Data[boff:])
+	return n, nil
+}
+
+// decryptBlock fills out with the plaintext of one fetched block. A legacy
+// (non-AGDF) block passes through unmodified — mixed files exist only during
+// migration (stage 8). Any AGDF failure is fail-closed (NFR-SEC-11).
+func (s *rSlice) decryptBlock(out *Page, data []byte, indx int) (*Page, error) {
+	if IsLegacyBlock(data) {
+		n := copy(out.Data, data)
+		out.Data = out.Data[:n]
+		return out, nil
+	}
+	plain, err := DecryptBlock(s.cek, data, s.id, uint32(indx))
+	if err != nil {
+		return out, fmt.Errorf("decrypt block %s: %w", s.key(indx), err)
+	}
+	copy(out.Data, plain)
+	return out, nil
 }
 
 func (s *rSlice) delete(indx int) error {
@@ -246,9 +325,9 @@ type wSlice struct {
 	tierID      uint8
 }
 
-func sliceForWrite(id uint64, store *cachedStore, tierID uint8) *wSlice {
+func sliceForWrite(id uint64, store *cachedStore, tierID uint8, key []byte) *wSlice {
 	return &wSlice{
-		rSlice:    rSlice{id, 0, store},
+		rSlice:    rSlice{id: id, length: 0, store: store, cek: key},
 		pages:     make([][]*Page, chunkSize/store.conf.BlockSize),
 		errors:    make(chan error, chunkSize/store.conf.BlockSize),
 		writeback: store.conf.Writeback,
@@ -356,25 +435,39 @@ func (store *cachedStore) delete(key string) error {
 func (store *cachedStore) upload(ctx context.Context, key string, block *Page, s *wSlice) error {
 	sync := s != nil
 	blen := len(block.Data)
-	bufSize := store.compressor.CompressBound(blen)
+	encrypted := !IsLegacyBlock(block.Data)
 	var buf *Page
-	if bufSize > blen {
-		buf = NewOffPage(bufSize)
-	} else {
+	if encrypted {
+		// AGDF ciphertext: never compressed; cache and object storage hold
+		// ciphertext only (NFR-SEC-1). Data already carrying the AGDF magic
+		// is stored as-is — double-encrypt guard.
 		buf = block
 		buf.Acquire()
+	} else {
+		bufSize := store.compressor.CompressBound(blen)
+		if bufSize > blen {
+			buf = NewOffPage(bufSize)
+		} else {
+			buf = block
+			buf.Acquire()
+		}
 	}
 	defer buf.Release()
 	if sync && (blen < store.conf.BlockSize || store.conf.CacheLargeWrite) {
 		// block will be freed after written into disk
 		store.bcache.cache(key, block, false, false)
 	}
-	n, err := store.compressor.Compress(buf.Data, block.Data)
-	block.Release()
-	if err != nil {
-		return fmt.Errorf("Compress block key %s: %s", key, err)
+	var err error
+	if encrypted {
+		block.Release() // buf holds its own reference
+	} else {
+		n, cerr := store.compressor.Compress(buf.Data, block.Data)
+		block.Release()
+		if cerr != nil {
+			return fmt.Errorf("Compress block key %s: %s", key, cerr)
+		}
+		buf.Data = buf.Data[:n]
 	}
-	buf.Data = buf.Data[:n]
 
 	try, max := 0, 3
 	if sync {
@@ -419,6 +512,19 @@ func (s *wSlice) upload(indx int) {
 		}
 		if off != blen {
 			panic(fmt.Sprintf("block length does not match: %v != %v", off, blen))
+		}
+		if s.cek != nil && IsLegacyBlock(block.Data) {
+			// Encrypt once here so both the staging file and object storage
+			// hold AGDF ciphertext only (NFR-SEC-1).
+			ct, err := EncryptBlock(s.cek, block.Data, s.id, uint32(indx))
+			if err != nil {
+				s.errors <- fmt.Errorf("encrypt block %s: %s", key, err)
+				return
+			}
+			old := block
+			block = NewOffPage(len(ct))
+			copy(block.Data, ct)
+			old.Release()
 		}
 		ctx := context.WithValue(context.Background(), object.TierKey{}, s.tierID)
 		if s.writeback && blen < s.store.conf.WritebackThresholdSize {
@@ -822,6 +928,57 @@ func (store *cachedStore) load(ctx context.Context, key string, page *Page, cach
 	return nil
 }
 
+// loadCiphertext fetches a raw object into ct (sized for the largest possible
+// AGDF block) without any compression handling: encrypted blocks are stored
+// as plain AGDF blobs and never compressed. A shorter object (a legacy
+// plaintext block in a mixed file during migration) is accepted and trimmed.
+func (store *cachedStore) loadCiphertext(ctx context.Context, key string, ct *Page, cache bool) error {
+	defer func() {
+		e := recover()
+		if e != nil {
+			logger.Errorf("recovered from %s in loadCiphertext", e)
+		}
+	}()
+	store.currentDownload <- struct{}{}
+	defer func() { <-store.currentDownload }()
+	ct.Acquire()
+	var (
+		n     int
+		reqID string
+		sc    = object.DefaultStorageClass
+		start = time.Now()
+		err   error
+	)
+	err = utils.WithTimeout(ctx, func(cCtx context.Context) error {
+		defer ct.Release()
+		in, err := store.storage.Get(cCtx, key, 0, -1, object.WithRequestID(&reqID), object.WithStorageClass(&sc))
+		if err == nil {
+			n, err = io.ReadFull(in, ct.Data)
+			_ = in.Close()
+			if err == io.ErrUnexpectedEOF {
+				err = nil // legacy plaintext block: shorter than the max ciphertext size
+			}
+		}
+		return err
+	}, store.conf.GetTimeout)
+	if errors.Is(err, context.Canceled) {
+		return err
+	}
+	used := time.Since(start)
+	logRequest("GET", key, "", reqID, err, used)
+	store.objectDataBytes.WithLabelValues("GET", sc).Add(float64(n))
+	store.objectReqsHistogram.WithLabelValues("GET", sc).Observe(used.Seconds())
+	if err != nil {
+		store.objectReqErrors.Add(1)
+		return fmt.Errorf("get %s: %s", key, err)
+	}
+	ct.Data = ct.Data[:n]
+	if cache {
+		store.bcache.cache(key, ct, false, !store.conf.OSCache)
+	}
+	return nil
+}
+
 // NewCachedStore create a cached store.
 func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.Registerer) ChunkStore {
 	compressor := compress.NewCompressor(config.Compress)
@@ -1047,6 +1204,15 @@ func (store *cachedStore) uploadStagingFile(key string, stagingPath string) {
 	}
 
 	blen := parseObjOrigSize(key)
+	// Encrypted blocks are staged as AGDF ciphertext, which is larger than the
+	// plaintext size encoded in the object key.
+	if peek, perr := os.Open(stagingPath); perr == nil {
+		hdr := make([]byte, 4)
+		if _, rerr := io.ReadFull(peek, hdr); rerr == nil && !IsLegacyBlock(hdr) {
+			blen += agdfOverhead
+		}
+		_ = peek.Close()
+	}
 	f, err := openCacheFile(stagingPath, blen, store.conf.CacheChecksum)
 	if err != nil {
 		if store.isPendingValid(key) {
@@ -1162,11 +1328,19 @@ func (store *cachedStore) canUpload() bool {
 }
 
 func (store *cachedStore) NewReader(id uint64, length int) Reader {
-	return sliceForRead(id, length, store)
+	return store.NewReaderWithKey(id, length, nil)
+}
+
+func (store *cachedStore) NewReaderWithKey(id uint64, length int, key []byte) Reader {
+	return &rSlice{id: id, length: length, store: store, cek: key}
 }
 
 func (store *cachedStore) NewWriter(id uint64, tierID uint8) Writer {
-	return sliceForWrite(id, store, tierID)
+	return store.NewWriterWithKey(id, tierID, nil)
+}
+
+func (store *cachedStore) NewWriterWithKey(id uint64, tierID uint8, key []byte) Writer {
+	return sliceForWrite(id, store, tierID, key)
 }
 
 func (store *cachedStore) Remove(id uint64, length int) error {

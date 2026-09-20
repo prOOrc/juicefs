@@ -40,6 +40,12 @@ type Writer interface {
 type ChunkStore interface {
 	NewReader(id uint64, length int) Reader
 	NewWriter(id uint64, tierID uint8) Writer
+	// NewReaderWithKey returns a Reader that transparently decrypts the
+	// slice's blocks with key (the slice CEK). key == nil → plaintext (legacy).
+	NewReaderWithKey(id uint64, length int, key []byte) Reader
+	// NewWriterWithKey returns a Writer that transparently encrypts blocks
+	// with key. key == nil → plaintext (legacy).
+	NewWriterWithKey(id uint64, tierID uint8, key []byte) Writer
 	Remove(id uint64, length int) error
 	FillCache(id uint64, length uint32) error
 	EvictCache(id uint64, length uint32) error
