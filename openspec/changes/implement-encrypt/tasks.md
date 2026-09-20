@@ -284,31 +284,40 @@ service DriveKeyManagerService {
   rpc ProvisionCompanyKEK(ProvisionCompanyKEKRequest) returns (ProvisionCompanyKEKResponse);
 }
 
+// Контракт отредактирован в Stage 3 (решение 3.8): company_id из запросов
+// УБРАНО — компания определяется на стороне platform из пути (первый сегмент
+// после отсечения companies prefix, резолв кода в UUID); volume_name добавлен
+// для резолва prefix. Имена полей — как в реализованном proto platform (user_id,
+// write_access, fek).
+
 message CreateFileKeyRequest {
-  string actor_user_id = 1;    // OIDC sub (UUID, = user.id; A6)
-  string volume_name = 2;
-  string path = 3;             // полный путь для authz
+  string user_id = 1;          // OIDC sub (UUID, = user.id; A6)
+  reserved 2;                  // company_id — удалено в Stage 3 (решение 3.8)
+  string volume_uuid = 3;      // для AAD wrapped_fek
   string drive_file_id = 4;    // client-generated UUID
   uint64 inode = 5;
-  string volume_uuid = 6;      // для AAD wrapped_fek
+  string path = 6;             // полный путь клиента (e.g. /company-abc/projects/file.exr)
+  string volume_name = 7;      // имя тома JuiceFS — резолв companies prefix
 }
 
 message CreateFileKeyResponse {
-  bytes  plaintext_fek = 1;    // TLS only
+  bytes  fek = 1;              // plaintext FEK, TLS only
   bytes  wrapped_fek = 2;      // proxy пишет в Redis inode
   int32  fek_version = 3;
   int32  kek_version = 4;
 }
 
 message GetFileFEKRequest {
-  string actor_user_id = 1;    // OIDC sub (UUID, = user.id; A6)
-  string volume_name = 2;
-  string path = 3;
+  string user_id = 1;          // OIDC sub (UUID, = user.id; A6)
+  reserved 2;                  // company_id — удалено в Stage 3 (решение 3.8)
+  string volume_uuid = 3;      // AAD
   string drive_file_id = 4;
   uint64 inode = 5;
-  bool   for_write = 6;        // true → требовать Edit (FR-USR-5)
+  string path = 6;             // полный путь клиента
   bytes  wrapped_fek = 7;      // из attr (решение 1.1)
-  string volume_uuid = 8;      // AAD
+  bool   write_access = 8;     // true → требовать Edit (FR-USR-5)
+  uint32 fek_version = 9;      // ожидаемая версия FEK из attr
+  string volume_name = 10;     // имя тома JuiceFS — резолв companies prefix
 }
 
 message GetFileFEKResponse {
@@ -987,13 +996,13 @@ go fmt -l pkg/ cmd/   # пусто
 
 ### Tasks
 
-- [ ] 3.1 Proto-расширения форка (`ProtoFileCrypto`, `ProtoSlice.wrapped_cek`, `OpenResponse.fek/fek_version/encrypted`, `CreateRequest.drive_file_id`, `Format.encryption_enabled/kek_version`) + конверсии proto↔Go. Файлы: `pkg/meta/pb/meta.proto`, `pkg/meta/pb/meta_common.proto`, generated, `pkg/meta/grpc_convert.go`. Проверка: `go build ./...`; `go test ./pkg/meta/ -run 'TestAttrToProto|TestSliceToProto|TestFormatToProto'` (round-trip + legacy).
-- [ ] 3.2 `redisMeta.SetFileCrypto` — один Redis txn (GET attr → mutate crypto-поля → SET); интерфейс `fileCryptoSetter` (type-assertion, не в `Meta`). Файл: `pkg/meta/redis_fek.go`. Проверка: интеграционный тест с реальным Redis: `go test -run 'TestSetFileCrypto' ./pkg/meta/` (гейт `make test.meta.non-core`).
-- [ ] 3.3 KeyManager-клиент форка: копия proto platform + gRPC-обёртка (TLS по флагам). Файлы: `pkg/meta/keymanager_pb/key_manager.proto`, generated, `pkg/meta/keymanager_client.go`. Проверка: `go build ./...`; комментарий «sync with agio-platform» в копии proto.
-- [ ] 3.4 Proxy Create/Open с KeyManager: FEK при Create + rollback `Unlink` (FR-USR-2), FEK при Open только при `cached_fek_version != attr.FekVersion`, plaintext FEK только в `OpenResponse`; UUID-валидация identity (`extractUserIDFromOIDC` → `(string, error)`, interceptor → `Unauthenticated`). Файлы: `pkg/meta/grpc_server_fuse.go`, `pkg/meta/authz_interceptor.go`. Проверка: интеграционные тесты `TestEncryptedFullCycle`, `TestCreateRollback`, `TestUserWithoutPermission_Denied`, `TestNonUUIDSub_Unauthenticated` (Redis + MinIO + fake KeyManager).
-- [ ] 3.5 Клиент: FEK LRU 100k/TTL 15 мин в `grpcMeta`, `drive_file_id = uuid.New()` при Create, кэш-хит Open через `cached_fek_version`. Файлы: `pkg/meta/grpc_client.go`, `pkg/meta/grpc_client_fuse.go`. Проверка: `go test -run 'TestFekCache|TestEncrypted' ./pkg/meta/` — второй Open не вызывает KeyManager (counter).
-- [ ] 3.6 Wiring proxy: флаги `--keymanager-service`, `--keymanager-tls-*`; warning при отсутствии. Файл: `cmd/meta_proxy.go`. Проверка: `go build ./...`; `./juicefs meta-proxy --help` показывает флаги.
-- [ ] 3.7 Интеграционный suite этапа (Redis + MinIO + in-process fake KeyManager): полный цикл, deny, owner bypass, legacy volume без KeyManager-вызовов, cache-hit. Проверка: `make test.meta.non-core` зелёный; `go test -run 'TestEncrypted|TestFekCache|TestOwnerBypass|TestLegacyVolume' ./pkg/meta/`.
+- [x] 3.1 Proto-расширения форка (`ProtoFileCrypto`, `ProtoSlice.wrapped_cek`, `OpenResponse.fek/fek_version/encrypted`, `CreateRequest.drive_file_id`, `Format.encryption_enabled/kek_version`) + конверсии proto↔Go. Файлы: `pkg/meta/pb/meta.proto`, `pkg/meta/pb/meta_common.proto`, generated, `pkg/meta/grpc_convert.go`. Проверка: `go build ./...`; `go test ./pkg/meta/ -run 'TestAttrToProto|TestSliceToProto|TestFormatToProto'` (round-trip + legacy).
+- [x] 3.2 `redisMeta.SetFileCrypto` — один Redis txn (GET attr → mutate crypto-поля → SET); интерфейс `fileCryptoSetter` (type-assertion, не в `Meta`). Файл: `pkg/meta/redis_fek.go`. Проверка: интеграционный тест с реальным Redis: `go test -run 'TestSetFileCrypto' ./pkg/meta/` (гейт `make test.meta.non-core`).
+- [x] 3.3 KeyManager-клиент форка: копия proto platform + gRPC-обёртка (TLS по флагам). Файлы: `pkg/meta/keymanager_pb/key_manager.proto`, generated, `pkg/meta/keymanager_client.go`. Проверка: `go build ./...`; комментарий «sync with agio-platform» в копии proto.
+- [x] 3.4 Proxy Create/Open с KeyManager: FEK при Create + rollback `Unlink` (FR-USR-2), FEK при Open только при `cached_fek_version != attr.FekVersion`, plaintext FEK только в `OpenResponse`; UUID-валидация identity (`extractUserIDFromOIDC` → `(string, error)`, interceptor → `Unauthenticated`). Файлы: `pkg/meta/grpc_server_fuse.go`, `pkg/meta/authz_interceptor.go`. Проверка: интеграционные тесты `TestEncryptedFullCycle`, `TestCreateRollback`, `TestUserWithoutPermission_Denied`, `TestNonUUIDSub_Unauthenticated` (Redis + MinIO + fake KeyManager).
+- [x] 3.5 Клиент: FEK LRU 100k/TTL 15 мин в `grpcMeta`, `drive_file_id = uuid.New()` при Create, кэш-хит Open через `cached_fek_version`. Файлы: `pkg/meta/grpc_client.go`, `pkg/meta/grpc_client_fuse.go`. Проверка: `go test -run 'TestFekCache|TestEncrypted' ./pkg/meta/` — второй Open не вызывает KeyManager (counter).
+- [x] 3.6 Wiring proxy: флаги `--keymanager-service`, `--keymanager-tls-*`; warning при отсутствии. Файл: `cmd/meta_proxy.go`. Проверка: `go build ./...`; `./juicefs meta-proxy --help` показывает флаги.
+- [x] 3.7 Интеграционный suite этапа (Redis + MinIO + in-process fake KeyManager): полный цикл, deny, owner bypass, legacy volume без KeyManager-вызовов, cache-hit. Проверка: `make test.meta.non-core` зелёный; `go test -run 'TestEncrypted|TestFekCache|TestOwnerBypass|TestLegacyVolume' ./pkg/meta/`.
 
 ### Implementation details
 
@@ -1142,9 +1151,9 @@ func (s *MetaProxyServer) Create(ctx context.Context, req *pb.CreateRequest) (*p
 			return &pb.CreateResponse{Errno: uint32(syscall.EACCES)}, nil // fail-closed
 		}
 		resp, err := s.keyManager.CreateFileKey(ctx, &km.CreateFileKeyRequest{
-			ActorUserId: userID, VolumeName: s.volumeName, Path: childPath,
-			DriveFileId: req.DriveFileId, Inode: uint64(inode), VolumeUuid: s.volumeUUID,
-		})
+			UserId: userID, VolumeUuid: s.volumeUUID, DriveFileId: req.DriveFileId,
+			Inode: uint64(inode), Path: childPath, VolumeName: s.volumeName,
+		}) // компания — на стороне platform из пути (решение 3.8)
 		if err != nil {
 			_ = s.meta.Unlink(mctx, Ino(req.Parent), req.Name) // rollback (FR-USR-2, решение 3.3)
 			return &pb.CreateResponse{Errno: uint32(syscall.EIO)}, nil
@@ -1195,14 +1204,14 @@ func (s *MetaProxyServer) Open(ctx context.Context, req *pb.OpenRequest) (*pb.Op
 				return &pb.OpenResponse{Errno: uint32(syscall.EACCES)}, nil // fail-closed
 			}
 			fekResp, err := s.keyManager.GetFileFEK(ctx, &km.GetFileFEKRequest{
-				ActorUserId: userID, VolumeName: s.volumeName, Path: path,
-				DriveFileId: attr.DriveFileID, Inode: uint64(req.Inode), ForWrite: forWrite,
-				WrappedFek: attr.WrappedFek, VolumeUuid: s.volumeUUID,
-			})
+				UserId: userID, VolumeUuid: s.volumeUUID, DriveFileId: attr.DriveFileID,
+				Inode: uint64(req.Inode), Path: path, WrappedFek: attr.WrappedFek,
+				WriteAccess: forWrite, FekVersion: attr.FekVersion, VolumeName: s.volumeName,
+			}) // компания — на стороне platform из пути (решение 3.8)
 			if err != nil {
 				return &pb.OpenResponse{Errno: uint32(syscall.EACCES)}, nil // fail-closed (NFR-AVAIL-3)
 			}
-			resp.Fek = fekResp.PlaintextFek
+			resp.Fek = fekResp.Fek
 			resp.FekVersion = int32(fekResp.FekVersion)
 		}
 	}

@@ -137,6 +137,8 @@ service DriveKeyManagerService {
 
 Полные message-определения — tasks.md, Stage 1, шаг 6. Authz-гейтинг: `DriveAuthorizationService.CheckPermissionByPath`/`CheckBulkPermissionsByPaths` с Read/Edit, Company Owner bypass (`PermissionOwn`), fail-closed (SRS §15.3).
 
+**Определение компании (решение 3.8):** `CreateFileKey`/`GetFileFEK` принимают полный путь клиента и `volume_name`; `company_id` клиентом **не передаётся** — platform определяет компанию из первого сегмента пути после отсечения companies prefix тома (тот же механизм, что в `AuthzService`) и резолвит код в UUID. Клиент монтирует весь facility и видит компании по authz; компания для KEK/AAD выводится из пути. `FetchCompanyKEK`/`ProvisionCompanyKEK` принимают `company_id` явно (render-нода/admin знают свою компанию).
+
 ### Таблицы PG (agio-platform, SRS §5.3)
 
 DDL — tasks.md, Stage 1, шаг 1: `drive_company_crypto_key` (управление Company KEK: `key_purpose`, `key_version`, `kms_key_id`, `secret_ref`, `status active|retiring|retired`) и `drive_key_access_log` (аудит выдачи FEK, append-only, retention ≥ 12 мес). Таблицы `file_keys`/`subject_keys` из архитектурного плана v13 **исключены**.
@@ -287,6 +289,7 @@ FEK → wrapped_cek (slice metadata) → CEK (RAM) → AES-256-GCM чанк в S
 | 3.5 | `drive_file_id` генерируется в `grpcMeta.Create` (`uuid.New()`) и передаётся в `CreateRequest`; при `EncryptionEnabled=false` сервер игнорирует поле | FR-USR-3; просто и единообразно |
 | 3.6 | KeyManager-клиент форка: `pkg/meta/keymanager_pb/` (копия proto platform + generated code, паттерн `authz_pb/`) + `keymanager_client.go`; флаги proxy `--keymanager-service`, `--keymanager-tls-*` | Паттерн authz_pb; sync между репозиториями контролируется known-answer тестами (этап 9) |
 | 3.7 | **Валидация identity на Meta Proxy (FR-ID-3):** `extractUserIDFromOIDC` возвращает `(string, error)` и проверяет формат UUID; interceptor при ошибке → `codes.Unauthenticated`. Инвариант A6: `sub` ≡ `user.id`, маппинга нет — в KeyManager-запросы уходит `sub` как есть. В Create/Open проверка дублируется (defense in depth) → EACCES | FR-ID-2/3, AC-16; неверный формат = ошибка конфигурации идентичности, fail-closed на границе доверия |
+| 3.8 | Компания определяется на стороне platform из пути: `CreateFileKey`/`GetFileFEK` принимают полный путь клиента + `volume_name`, без `company_id`; platform отсечёт companies prefix тома (тот же механизм, что в `AuthzService`) и резолвит первый сегмент (company code) в UUID | Клиент монтирует весь facility и видит компании по authz — на момент mount конкретная компания ему неизвестна; company code неизменен, резолв кэшируется перманентно (паттерн `resolveCompanyIDs`); `FetchCompanyKEK`/`ProvisionCompanyKEK` не меняются (render/admin знают компанию явно) |
 
 ### Решения Stage 4 (форк)
 
