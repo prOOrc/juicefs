@@ -43,7 +43,13 @@ type blockingChunkStore struct {
 
 func (s *blockingChunkStore) NewReader(id uint64, length int) chunk.Reader   { return s.reader }
 func (s *blockingChunkStore) NewWriter(id uint64, tierID uint8) chunk.Writer { return nil }
-func (s *blockingChunkStore) Remove(id uint64, length int) error             { return nil }
+func (s *blockingChunkStore) NewReaderWithKey(id uint64, length int, key []byte) chunk.Reader {
+	return s.reader
+}
+func (s *blockingChunkStore) NewWriterWithKey(id uint64, tierID uint8, key []byte) chunk.Writer {
+	return nil
+}
+func (s *blockingChunkStore) Remove(id uint64, length int) error { return nil }
 func (s *blockingChunkStore) FillCache(id uint64, size uint32, parts []chunk.Range) error {
 	return nil
 }
@@ -115,7 +121,7 @@ func TestFileReaderCloseCancelsOngoingRead(t *testing.T) {
 	}
 	store := &blockingChunkStore{reader: reader}
 	dr, inode := createCancellationTestReader(t, store)
-	fr := dr.Open(inode, 4)
+	fr := dr.Open(inode, 4, nil)
 
 	done := make(chan struct{})
 	go func() {
@@ -154,7 +160,7 @@ func TestDataReaderInvalidateShouldCancelOngoingRead(t *testing.T) {
 	}
 	store := &blockingChunkStore{reader: reader}
 	dr, inode := createCancellationTestReader(t, store)
-	fr := dr.Open(inode, 4)
+	fr := dr.Open(inode, 4, nil)
 
 	done := make(chan struct{})
 	go func() {
