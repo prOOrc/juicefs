@@ -1315,6 +1315,12 @@ func (attr *Attr) reset() {
 	attr.AccessACL = aclAPI.None
 	attr.DefaultACL = aclAPI.None
 	attr.Tier = 0
+	attr.Encrypted = false
+	attr.DriveFileID = ""
+	attr.FekVersion = 0
+	attr.CryptoAlg = ""
+	attr.WrappedFek = nil
+	attr.Fek = nil
 	attr.Full = false
 }
 

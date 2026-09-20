@@ -2644,7 +2644,7 @@ func testOpenCache(t *testing.T, m Meta) {
 	if st := m.GetAttr(ctx, inode, attr2); st != 0 {
 		t.Fatalf("getattr f: %s", st)
 	}
-	if *attr != *attr2 {
+	if !reflect.DeepEqual(*attr, *attr2) {
 		t.Fatalf("attrs not the same: attr %+v; attr2 %+v", *attr, *attr2)
 	}
 	attr2.Uid = 1
@@ -4105,7 +4105,7 @@ func checkEntry(t *testing.T, m Meta, srcEntry, dstEntry *Entry, dstParentIno In
 	srcAttr.Atimensec = 0
 	dstAttr.Atime = 0
 	dstAttr.Atimensec = 0
-	if *srcAttr != *dstAttr {
+	if !reflect.DeepEqual(*srcAttr, *dstAttr) {
 		t.Fatalf("unmatched attr: %#v, %#v", *srcAttr, *dstAttr)
 	}
 

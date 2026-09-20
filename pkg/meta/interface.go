@@ -176,15 +176,32 @@ type Attr struct {
 	DefaultACL uint32 // default ACL id (default ACL and the access ACL share the same cache and store)
 
 	Tier uint8 // storage tier of the file
+
+	// Encryption (AGIO Drive): Encrypted marks a file whose data is
+	// encrypted at rest; WrappedFek is the AGFK blob (FEK wrapped under the
+	// company KEK). Fek is transient — unwrapped in memory only, never
+	// persisted.
+	Encrypted   bool   // file data is encrypted at rest
+	DriveFileID string // platform drive file id the FEK is bound to
+	FekVersion  uint32 // version of the file's FEK
+	CryptoAlg   string // cipher algorithm (e.g. "AES-256-GCM")
+	WrappedFek  []byte // AGFK blob: FEK wrapped under the company KEK
+	Fek         []byte `json:"-"` // transient unwrapped FEK; never marshaled
 }
 
 func (attr *Attr) Marshal() []byte {
 	size := uint32(36 + 24 + 4 + 8)
-	if attr.AccessACL|attr.DefaultACL != aclAPI.None {
+	// Encrypted attrs always carry the ACL fields: Unmarshal detects them by
+	// remaining length, and the crypto suffix after Tier would otherwise be
+	// misread as ACL ids.
+	if attr.AccessACL|attr.DefaultACL != aclAPI.None || attr.Encrypted {
 		size += 8
 	}
-	if attr.Tier != 0 {
+	if attr.Tier != 0 || attr.Encrypted {
 		size += 1
+	}
+	if attr.Encrypted {
+		size += uint32(1 + 4 + len(attr.WrappedFek) + 4 + len(attr.DriveFileID) + 4 + 1 + len(attr.CryptoAlg))
 	}
 	w := utils.NewBuffer(size)
 	w.Put8(attr.Flags)
@@ -201,14 +218,26 @@ func (attr *Attr) Marshal() []byte {
 	w.Put64(attr.Length)
 	w.Put32(attr.Rdev)
 	w.Put64(uint64(attr.Parent))
-	if attr.AccessACL+attr.DefaultACL > 0 {
+	if attr.AccessACL+attr.DefaultACL > 0 || attr.Encrypted {
 		w.Put32(attr.AccessACL)
 		w.Put32(attr.DefaultACL)
 	}
-	if attr.Tier != 0 {
+	if attr.Tier != 0 || attr.Encrypted {
 		w.Put8(uint8(attr.Tier))
 	}
-	logger.Tracef("attr: %+v -> %+v", attr, w.Bytes())
+	if attr.Encrypted {
+		w.Put8(1) // crypto suffix marker
+		w.Put32(uint32(len(attr.WrappedFek)))
+		w.Put(attr.WrappedFek)
+		w.Put32(uint32(len(attr.DriveFileID)))
+		w.Put([]byte(attr.DriveFileID))
+		w.Put32(attr.FekVersion)
+		w.Put8(uint8(len(attr.CryptoAlg)))
+		w.Put([]byte(attr.CryptoAlg))
+	}
+	logAttr := *attr
+	logAttr.Fek = nil // never log the plaintext FEK
+	logger.Tracef("attr: %+v -> %+v", logAttr, w.Bytes())
 	return w.Bytes()
 }
 
@@ -244,6 +273,60 @@ func (attr *Attr) Unmarshal(buf []byte) {
 		attr.Tier = rb.Get8()
 	} else {
 		attr.Tier = 0
+	}
+	// Optional crypto suffix (AGIO Drive): marker + length-prefixed fields.
+	// A single trailing byte is the legacy marshal slack, not a suffix; any
+	// corrupt suffix fails closed (crypto fields stay unset).
+	if rb.Left() > 1 {
+		marker := rb.Get8()
+		if marker != 1 {
+			logger.Errorf("corrupt attr crypto suffix: marker=%d", marker)
+			return
+		}
+		var wfek []byte
+		var dfid string
+		var fekVer uint32
+		var alg string
+		if rb.Left() < 4 {
+			logger.Errorf("corrupt attr crypto suffix: truncated wrappedFek length")
+			return
+		}
+		wfekLen := int(rb.Get32())
+		if rb.Left() < wfekLen {
+			logger.Errorf("corrupt attr crypto suffix: wrappedFek len=%d, left=%d", wfekLen, rb.Left())
+			return
+		}
+		wfek = append([]byte(nil), rb.Get(wfekLen)...)
+		if rb.Left() < 4 {
+			logger.Errorf("corrupt attr crypto suffix: truncated driveFileID length")
+			return
+		}
+		dfidLen := int(rb.Get32())
+		if rb.Left() < dfidLen {
+			logger.Errorf("corrupt attr crypto suffix: driveFileID len=%d, left=%d", dfidLen, rb.Left())
+			return
+		}
+		dfid = string(rb.Get(dfidLen))
+		if rb.Left() < 4 {
+			logger.Errorf("corrupt attr crypto suffix: truncated fekVersion")
+			return
+		}
+		fekVer = rb.Get32()
+		if rb.Left() < 1 {
+			logger.Errorf("corrupt attr crypto suffix: truncated cryptoAlg length")
+			return
+		}
+		algLen := int(rb.Get8())
+		if rb.Left() < algLen {
+			logger.Errorf("corrupt attr crypto suffix: cryptoAlg len=%d, left=%d", algLen, rb.Left())
+			return
+		}
+		alg = string(rb.Get(algLen))
+		attr.WrappedFek = wfek
+		attr.DriveFileID = dfid
+		attr.FekVersion = fekVer
+		attr.CryptoAlg = alg
+		attr.Encrypted = true
 	}
 	logger.Tracef("attr: %+v -> %+v", buf, attr)
 }
