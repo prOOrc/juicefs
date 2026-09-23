@@ -633,6 +633,7 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(m.opDist)
 	reg.MustRegister(m.opCount)
 	reg.MustRegister(m.opDuration)
+	initMlockMetrics(reg)
 }
 
 func (m *baseMeta) timeit(method string, start time.Time) {

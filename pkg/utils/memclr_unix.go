@@ -17,25 +17,15 @@
  * limitations under the License.
  */
 
-package cmd
+package utils
 
-import (
-	"github.com/juicedata/juicefs/pkg/utils"
-)
+import "golang.org/x/sys/unix"
 
-// mlockKey pins the key in RAM so it cannot be swapped to disk (FR-RND-3).
-// Best effort: some platforms (macOS, overcommit restrictions) refuse Mlock.
-func mlockKey(key []byte) {
-	if err := utils.MlockPage(key); err != nil {
-		logger.Warnf("mlock key (best effort): %s", err)
+// MlockPage locks the memory backing b into RAM so it cannot be swapped to
+// disk (NFR-SEC-3). Best-effort: callers must treat failure as non-fatal.
+func MlockPage(b []byte) error {
+	if len(b) == 0 {
+		return nil
 	}
-}
-
-// renderPreMountSetup applies the process tuning that launchMount performs in
-// the normal mount flow. render-mount runs foreground-only (no daemon stages),
-// so it must do this itself before serving.
-func renderPreMountSetup() {
-	increaseRlimit()
-	utils.AdjustOOMKiller(-1000)
-	utils.SetIOFlusher()
+	return unix.Mlock(b)
 }

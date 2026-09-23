@@ -153,6 +153,13 @@ type Config struct {
 
 	// the mount point for current volume (to follow symlink)
 	Mountpoint string
+
+	// WriteJournalPath enables offline write journaling (NFR-OFF-1/3): writes
+	// made while the hub is unreachable are journaled and replayed on
+	// reconnect. Empty → disabled.
+	WriteJournalPath string `json:"-"`
+	// HubState reports hub connectivity for the journal; nil → always online.
+	HubState func() meta.HubState `json:"-"`
 }
 
 type AnonymousAccount struct {
@@ -750,6 +757,10 @@ func (v *VFS) Read(ctx Context, ino Ino, buf []byte, off uint64, fh uint64) (n i
 		err = syscall.EBADF
 		return
 	}
+	if h.stale {
+		err = syscall.EIO // keys wiped (NFR-SEC-3): fail closed until the handle is reopened
+		return
+	}
 	if h.flags&O_RECOVERED != 0 {
 		// recovered
 		var attr Attr
@@ -812,6 +823,10 @@ func (v *VFS) Write(ctx Context, ino Ino, buf []byte, off, fh uint64) (err sysca
 	h := v.findHandle(ino, fh)
 	if h == nil {
 		err = syscall.EBADF
+		return
+	}
+	if h.stale {
+		err = syscall.EIO // keys wiped (NFR-SEC-3): fail closed until the handle is reopened
 		return
 	}
 	if off >= maxFileSize || off+size >= maxFileSize {
@@ -1235,6 +1250,7 @@ type VFS struct {
 	reader          DataReader
 	writer          DataWriter
 	cacheFiller     *CacheFiller
+	writeJournal    *WriteJournal // offline write durability (NFR-OFF-1/3); nil → disabled
 
 	handles   map[Ino][]*handle
 	handleIno map[uint64]Ino
@@ -1288,8 +1304,28 @@ func NewVFS(conf *Config, m meta.Meta, store chunk.ChunkStore, registerer promet
 	}
 	_ = os.Rename(statePath, statePath+".bak")
 
+	if conf.WriteJournalPath != "" {
+		j, err := NewWriteJournal(conf.WriteJournalPath)
+		if err != nil {
+			logger.Errorf("open write journal %s: %s", conf.WriteJournalPath, err)
+		} else {
+			v.writeJournal = j
+			if dw, ok := writer.(*dataWriter); ok {
+				dw.SetWriteJournal(j, conf.HubState)
+			}
+			if !j.Empty() {
+				// Crash recovery (NFR-OFF-3): re-apply journaled writes for the
+				// restored handles before serving user IO.
+				v.ReplayWriteJournal()
+			}
+		}
+	}
+
 	go v.cleanupModified()
 	initVFSMetrics(v, writer, reader, registerer)
+	if conf.Format.EncryptionEnabled {
+		v.startLogoutWatcher() // _JFS_LOGOUT control file (design 6.6)
+	}
 	return v
 }
 
@@ -1297,6 +1333,83 @@ func (v *VFS) invalidateAttr(ino Ino) {
 	v.modM.Lock()
 	v.modifiedAt[ino] = time.Now()
 	v.modM.Unlock()
+}
+
+// InvalidateAllKeys wipes all plaintext FEKs held by open handles and marks
+// them stale: further Read/Write on encrypted files fails with EIO until the
+// handle is closed (NFR-SEC-3). Legacy (non-encrypted) handles are untouched.
+func (v *VFS) InvalidateAllKeys() {
+	v.hanleM.Lock()
+	var hs []*handle
+	for _, list := range v.handles {
+		hs = append(hs, list...)
+	}
+	v.hanleM.Unlock()
+
+	for _, h := range hs {
+		h.Lock()
+		if h.encrypted {
+			if h.fek != nil {
+				utils.MemClear(h.fek)
+				h.fek = nil
+			}
+			h.stale = true
+		}
+		h.Unlock()
+		if fr, ok := h.reader.(*fileReader); ok && fr != nil {
+			fr.wipeKeys()
+		}
+		if fw, ok := h.writer.(*fileWriter); ok && fw != nil {
+			fw.wipeKeys()
+		}
+	}
+}
+
+// ReplayWriteJournal re-applies journaled writes through the normal write
+// path for files that are currently open (NFR-OFF-3). Records without an open
+// writer are kept for a later replay. The journal is truncated only when every
+// record was applied; on any error it is kept for retry. Re-applying a record
+// whose data already reached the hub is idempotent for reads: doWrite appends
+// a slice and buildSlice resolves overlaps last-write-wins, so an identical
+// (off, data) commit yields byte-identical content.
+func (v *VFS) ReplayWriteJournal() {
+	j := v.writeJournal
+	if j == nil || j.Empty() {
+		return
+	}
+	var skipped int
+	err := j.Replay(func(seq uint64, inode Ino, off int64, data []byte) error {
+		v.hanleM.Lock()
+		var fw *fileWriter
+		for _, h := range v.handles[inode] {
+			if w, ok := h.writer.(*fileWriter); ok && w != nil {
+				fw = w
+				break
+			}
+		}
+		v.hanleM.Unlock()
+		if fw == nil {
+			skipped++
+			return nil
+		}
+		if st := fw.Write(meta.Background(), uint64(off), data); st != 0 {
+			return fmt.Errorf("inode %d off %d: %s", inode, off, st)
+		}
+		return nil
+	})
+	if err != nil {
+		logger.Errorf("write journal replay stopped: %s (journal kept for retry)", err)
+		return
+	}
+	if skipped > 0 {
+		logger.Warnf("write journal: %d record(s) have no open writer, journal kept", skipped)
+		return
+	}
+	if err := j.Truncate(); err != nil {
+		logger.Errorf("truncate write journal: %s", err)
+	} else {
+		logger.Infof("write journal replayed and truncated")
+	}
 }
 
 func (v *VFS) ModifiedSince(ino Ino, start time.Time) bool {

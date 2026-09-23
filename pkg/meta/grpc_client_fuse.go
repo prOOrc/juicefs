@@ -296,8 +296,12 @@ func (m *grpcMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 
 // Open checks permission on a node and track it as open. For encrypted files it
 // also obtains the plaintext FEK: from the server (KeyManager) on a cache miss,
-// or from the local LRU on a cache hit (decision 3.1).
+// or from the local LRU on a cache hit (decision 3.1). A new Open always needs
+// the hub (permission check), so it fails closed while offline (NFR-OFF-2).
 func (m *grpcMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
+	if m.HubState() != HubOnline {
+		return syscall.EIO // fail-closed: no new opens while the hub is unreachable
+	}
 	cachedVer := uint32(0)
 	if e, ok := m.fekCache.Get(uint64(inode)); ok {
 		cachedVer = e.version
@@ -327,7 +331,7 @@ func (m *grpcMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscal
 		m.putAttrInCache(uint64(inode), attr)
 	}
 	if fek != nil && attr != nil {
-		m.fekCache.Add(uint64(inode), &fekEntry{fek: fek, version: ver})
+		m.cacheFek(inode, fek, ver)
 		attr.Fek = fek
 		attr.FekVersion = ver
 	}
@@ -354,7 +358,7 @@ func (m *grpcMeta) ResolveFileKey(ctx Context, inode Ino) (fek []byte, driveFile
 	if len(resp.GetFek()) == 0 {
 		return nil, "", 0, syscall.EIO // fail-closed: server reported encrypted but sent no FEK
 	}
-	m.fekCache.Add(uint64(inode), &fekEntry{fek: resp.GetFek(), version: uint32(resp.GetFekVersion())})
+	m.cacheFek(inode, resp.GetFek(), uint32(resp.GetFekVersion()))
 	return resp.GetFek(), resp.GetDriveFileId(), uint32(resp.GetFekVersion()), nil
 }
 

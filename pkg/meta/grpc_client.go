@@ -29,6 +29,7 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/oidc"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -47,6 +48,24 @@ const (
 	// FEK cache defaults (FR-USR-9)
 	defaultFekCacheSize = 100_000
 	defaultFekCacheTTL  = 15 * time.Minute
+
+	// defaultOfflineTimeout is how long the client may stay offline-connected
+	// before it disconnects and wipes its keys (NFR-OFF-4).
+	defaultOfflineTimeout = 15 * time.Minute
+)
+
+// HubState is the connectivity state of the meta proxy (hub) as seen by this
+// client (stage 6, NFR-OFF-1..4).
+type HubState int32
+
+const (
+	HubOnline HubState = iota // hub reachable
+	// HubOfflineConnected: hub unreachable but within offlineTimeout — cached
+	// reads still work, new encrypted Opens fail.
+	HubOfflineConnected
+	// HubDisconnected: offlineTimeout exceeded (or logout/OIDC expiry) — keys
+	// wiped, terminal until remount (design 6.6).
+	HubDisconnected
 )
 
 // fekEntry is a cached plaintext per-file FEK with the version it was issued at.
@@ -81,16 +100,26 @@ type grpcMeta struct {
 	heartbeatCancel   context.CancelFunc
 	heartbeatWg       sync.WaitGroup
 
+	// Hub state machine (stage 6, NFR-OFF-1..4)
+	hubState       int32 // atomic; HubState
+	hubMu          sync.Mutex
+	lastFail       time.Time // first failed RPC of the current offline window
+	offlineTimeout time.Duration
+	onWipe         func() // VFS hook (SetOnWipe): InvalidateAllKeys
+	onReconnect    func() // VFS hook (SetOnReconnect): ReplayWriteJournal
+
 	// OIDC (nil if not configured)
 	oidcConfig   *oidc.Config
 	tokenManager tokenProvider      // interface for testability
 	authGroup    singleflight.Group // coalesces concurrent token requests
 }
 
-// tokenProvider is the minimal interface needed by withAuth and Shutdown.
-// Implemented by *oidc.TokenManager.
+// tokenProvider is the minimal interface needed by withAuth, the heartbeat
+// OIDC check and Shutdown. Implemented by *oidc.TokenManager.
 type tokenProvider interface {
 	BearerToken(ctx context.Context) string
+	// CachedBearerToken is non-blocking: it never triggers browser auth.
+	CachedBearerToken(ctx context.Context) string
 	Stop()
 }
 
@@ -114,6 +143,7 @@ func newGRPCMeta(driver, addr string, conf *Config) (Meta, error) {
 	attrCacheTTL := query.duration("attr-cache-ttl", "attr_cache_ttl", defaultAttrCacheTTL)
 	dirCacheTTL := query.duration("dir-cache-ttl", "dir_cache_ttl", defaultDirCacheTTL)
 	heartbeatInterval := query.duration("heartbeat-interval", "heartbeat_interval", defaultHeartbeatInterval)
+	offlineTimeout := query.duration("offline-timeout", "offline_timeout", defaultOfflineTimeout)
 
 	// OIDC configuration (optional)
 	var oidcCfg *oidc.Config
@@ -156,10 +186,7 @@ func newGRPCMeta(driver, addr string, conf *Config) (Meta, error) {
 	attrCache := expirable.NewLRU[uint64, *Attr](attrCacheSize, nil, attrCacheTTL)
 	dirCache := expirable.NewLRU[uint64, []*Entry](dirCacheSize, nil, dirCacheTTL)
 	fekCache := expirable.NewLRU[uint64, *fekEntry](defaultFekCacheSize, func(_ uint64, e *fekEntry) {
-		// Zero the plaintext FEK on eviction (full secure-zeroing — stage 6).
-		for i := range e.fek {
-			e.fek[i] = 0
-		}
+		utils.MemClear(e.fek) // zero the plaintext FEK on eviction (NFR-SEC-3)
 	}, defaultFekCacheTTL)
 
 	// OIDC token manager (optional)
@@ -183,6 +210,7 @@ func newGRPCMeta(driver, addr string, conf *Config) (Meta, error) {
 		attrCacheTTL:      attrCacheTTL,
 		dirCacheTTL:       dirCacheTTL,
 		heartbeatInterval: heartbeatInterval,
+		offlineTimeout:    offlineTimeout,
 		oidcConfig:        oidcCfg,
 	}
 	// Assign only when non-nil: wrapping a nil *oidc.TokenManager in the
@@ -240,7 +268,120 @@ func (m *grpcMeta) Shutdown() error {
 
 	m.attrCache.Purge()
 	m.dirCache.Purge()
+	m.WipeKeys()
 	return nil
+}
+
+// WipeKeys zeroes all cached plaintext FEKs and drops the cache (NFR-SEC-3).
+// Called on logout, OIDC token expiry and offline timeout; after it returns
+// the client can no longer decrypt anything from its caches.
+func (m *grpcMeta) WipeKeys() {
+	if m.fekCache == nil {
+		return
+	}
+	for _, e := range m.fekCache.Values() {
+		utils.MemClear(e.fek)
+	}
+	m.fekCache.Purge() // onEvict zeroes the entries again — idempotent
+}
+
+// cacheFek stores a plaintext FEK in the LRU, pinning it in RAM first
+// (best-effort, NFR-SEC-3).
+func (m *grpcMeta) cacheFek(inode Ino, fek []byte, version uint32) {
+	mlockBestEffort("FEK", fek)
+	m.fekCache.Add(uint64(inode), &fekEntry{fek: fek, version: version})
+}
+
+// HubState returns the current hub connectivity state.
+func (m *grpcMeta) HubState() HubState {
+	return HubState(atomic.LoadInt32(&m.hubState))
+}
+
+// SetOnWipe installs the callback invoked when keys are wiped due to
+// disconnect or logout (VFS.InvalidateAllKeys, task 6.4 wiring).
+func (m *grpcMeta) SetOnWipe(cb func()) {
+	m.hubMu.Lock()
+	defer m.hubMu.Unlock()
+	m.onWipe = cb
+}
+
+// SetOnReconnect installs the callback fired when the hub transitions from
+// offline-connected back to online, so deferred writes can be synced
+// (VFS.ReplayWriteJournal, task 6.3).
+func (m *grpcMeta) SetOnReconnect(cb func()) {
+	m.hubMu.Lock()
+	defer m.hubMu.Unlock()
+	m.onReconnect = cb
+}
+
+// markHubOffline records a failed RPC: the first failure of an outage starts
+// the offline window (lastFail), later failures do not extend it.
+func (m *grpcMeta) markHubOffline() {
+	if atomic.CompareAndSwapInt32(&m.hubState, int32(HubOnline), int32(HubOfflineConnected)) {
+		m.hubMu.Lock()
+		m.lastFail = time.Now()
+		m.hubMu.Unlock()
+		logger.Warnf("hub unreachable: offline-connected for up to %s", m.offlineTimeout)
+	}
+}
+
+// markHubOnline records a successful RPC. A disconnected client is terminal
+// until remount (design 6.6): keys are already wiped, so a late recovery does
+// not resurrect the session. An offline-connected → online transition fires
+// the reconnect hook (write journal replay, task 6.3) in a goroutine so a
+// large replay does not stall the heartbeat.
+func (m *grpcMeta) markHubOnline() {
+	if m.HubState() == HubDisconnected {
+		return
+	}
+	wasOffline := atomic.CompareAndSwapInt32(&m.hubState, int32(HubOfflineConnected), int32(HubOnline))
+	if !wasOffline {
+		return
+	}
+	logger.Infof("hub reachable again: back online")
+	m.hubMu.Lock()
+	cb := m.onReconnect
+	m.hubMu.Unlock()
+	if cb != nil {
+		go cb()
+	}
+}
+
+// checkOfflineTimeout enforces the offline window (NFR-OFF-4): once
+// offlineTimeout has elapsed since the first failed RPC, disconnect and wipe.
+func (m *grpcMeta) checkOfflineTimeout() {
+	if m.HubState() != HubOfflineConnected {
+		return
+	}
+	m.hubMu.Lock()
+	exceeded := time.Since(m.lastFail) >= m.offlineTimeout
+	m.hubMu.Unlock()
+	if exceeded {
+		m.disconnect(fmt.Sprintf("offline for %s", m.offlineTimeout))
+	}
+}
+
+// Logout wipes all keys and marks the client disconnected (terminal until
+// remount). Called by the VFS logout watcher on _JFS_LOGOUT (design 6.6).
+func (m *grpcMeta) Logout() {
+	m.disconnect("logout")
+}
+
+// disconnect wipes all keys and marks the client disconnected (one-shot,
+// terminal until remount — design 6.6). Called on logout, OIDC expiry and
+// offline timeout.
+func (m *grpcMeta) disconnect(reason string) {
+	m.hubMu.Lock()
+	defer m.hubMu.Unlock()
+	if m.HubState() == HubDisconnected {
+		return
+	}
+	atomic.StoreInt32(&m.hubState, int32(HubDisconnected))
+	logger.Warnf("hub disconnected (%s): wiping keys", reason)
+	m.WipeKeys()
+	if m.onWipe != nil {
+		m.onWipe()
+	}
 }
 
 // withAuth adds session ID and OIDC bearer token (if configured) to gRPC metadata.
@@ -248,6 +389,15 @@ func (m *grpcMeta) Shutdown() error {
 func (m *grpcMeta) withAuth(ctx context.Context) context.Context {
 	if ctx == nil {
 		ctx = context.Background()
+	}
+
+	// Fail fast once disconnected: keys are wiped and the state is terminal
+	// until remount, so every RPC must fail immediately instead of hanging on
+	// a dead connection (NFR-OFF-4).
+	if m.HubState() == HubDisconnected {
+		c, cancel := context.WithCancel(context.Background())
+		cancel()
+		return c
 	}
 
 	md := make(metadata.MD, 2)
@@ -367,8 +517,21 @@ func (m *grpcMeta) startHeartbeat() {
 	}()
 }
 
-// doHeartbeat sends a heartbeat to the server
+// doHeartbeat sends a heartbeat to the server and drives the hub state
+// machine (stage 6): failure → offline-connected, success → online, and the
+// offline window is enforced on every failed beat.
 func (m *grpcMeta) doHeartbeat() {
+	// OIDC session check (design 6.7): while offline-connected, an empty
+	// cached bearer means the token is expired or revoked — disconnect now
+	// instead of waiting for the offline timeout. Non-blocking: never
+	// triggers browser auth.
+	if m.tokenManager != nil && m.HubState() == HubOfflineConnected {
+		if m.tokenManager.CachedBearerToken(context.Background()) == "" {
+			m.disconnect("oidc token expired or revoked")
+			return
+		}
+	}
+
 	ctx := m.withAuth(context.Background())
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -376,11 +539,17 @@ func (m *grpcMeta) doHeartbeat() {
 	resp, err := m.client.FlushSession(ctx, req)
 	if err != nil {
 		logger.Debugf("Heartbeat error: %v", err)
+		m.markHubOffline()
+		m.checkOfflineTimeout()
 		return
 	}
 	if resp.GetErrno() != 0 {
 		logger.Debugf("Heartbeat errno: %d", resp.GetErrno())
+		m.markHubOffline()
+		m.checkOfflineTimeout()
+		return
 	}
+	m.markHubOnline()
 }
 
 // Check integrity of an absolute path and repair it if asked

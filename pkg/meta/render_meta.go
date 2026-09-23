@@ -23,6 +23,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 // Render FEK cache parameters (FR-RND-7, NFR-PERF-5). The render node unwraps
@@ -72,11 +73,16 @@ func newRenderMetaWithCache(inner Meta, kek []byte, kekVersion uint32, volumeUUI
 		companyID:  companyID,
 		prefix:     prefix,
 		fekCache: expirable.NewLRU[uint64, *fekEntry](cacheSize, func(_ uint64, e *fekEntry) {
-			for i := range e.fek { // secure zeroing on eviction (NFR-SEC-3)
-				e.fek[i] = 0
-			}
+			utils.MemClear(e.fek) // secure zeroing on eviction (NFR-SEC-3)
 		}, cacheTTL),
 	}
+}
+
+// cacheFek stores a plaintext FEK in the LRU, pinning it in RAM first
+// (best-effort, NFR-SEC-3).
+func (m *RenderMeta) cacheFek(inode Ino, fek []byte, version uint32) {
+	mlockBestEffort("FEK", fek)
+	m.fekCache.Add(uint64(inode), &fekEntry{fek: fek, version: version})
 }
 
 // resolveFEK returns the plaintext FEK of an encrypted file: from the LRU on a
@@ -98,7 +104,7 @@ func (m *RenderMeta) resolveFEK(inode Ino, attr *Attr) (fek []byte, version uint
 	if err != nil {
 		return nil, 0, err
 	}
-	m.fekCache.Add(uint64(inode), &fekEntry{fek: fek, version: ver})
+	m.cacheFek(inode, fek, ver)
 	return fek, ver, nil
 }
 
@@ -283,7 +289,7 @@ func (m *RenderMeta) Create(ctx Context, parent Ino, name string, mode uint16, c
 	attr.FekVersion = 1
 	attr.WrappedFek = wrapped
 	attr.CryptoAlg = "AES-256-GCM"
-	m.fekCache.Add(uint64(*inode), &fekEntry{fek: fek, version: 1})
+	m.cacheFek(*inode, fek, 1)
 	attr.Fek = fek // so the VFS can open the new file without a second unwrap
 	return 0
 }
@@ -291,8 +297,9 @@ func (m *RenderMeta) Create(ctx Context, parent Ino, name string, mode uint16, c
 // WipeKeys zeroes the Company KEK and all cached FEKs. Called on unmount
 // (NFR-SEC-5); after it returns the node can no longer read encrypted data.
 func (m *RenderMeta) WipeKeys() {
-	for i := range m.kek {
-		m.kek[i] = 0
+	utils.MemClear(m.kek)
+	for _, e := range m.fekCache.Values() {
+		utils.MemClear(e.fek)
 	}
-	m.fekCache.Purge()
+	m.fekCache.Purge() // onEvict zeroes the entries again — idempotent
 }

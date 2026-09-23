@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -44,6 +46,12 @@ const (
 	ConfigInode     = minInternalNode + 4
 	trashInode      = meta.TrashInode
 )
+
+// logoutFileName is the control file the platform (or a user) creates at the
+// mount point root to log this client out: all plaintext keys are wiped and
+// the file is removed (design 6.6 — no new RPCs; re-login means remount or
+// token refresh).
+const logoutFileName = "_JFS_LOGOUT"
 
 var controlMutex sync.Mutex
 var controlHandlers = make(map[uint32]uint64)
@@ -148,6 +156,49 @@ func getInternalNodeByName(name string) *internalNode {
 		}
 	}
 	return nil
+}
+
+// logout wipes all plaintext keys on this client (NFR-SEC-5, AC-8): the meta
+// side via Logout/WipeKeys (type assertions — neither is part of the Meta
+// interface) and the open handles via InvalidateAllKeys.
+func (v *VFS) logout() {
+	if lo, ok := v.Meta.(interface{ Logout() }); ok {
+		lo.Logout() // state machine: wipe + onWipe (InvalidateAllKeys, task 6.4 wiring)
+	} else if wk, ok := v.Meta.(interface{ WipeKeys() }); ok {
+		wk.WipeKeys()
+	}
+	v.InvalidateAllKeys() // idempotent even when onWipe already ran it
+	if v.writeJournal != nil {
+		// The session is revoked: replaying journaled writes would fail closed,
+		// so drop them (they are plaintext data, not keys).
+		if err := v.writeJournal.Truncate(); err != nil {
+			logger.Warnf("truncate write journal on logout: %s", err)
+		}
+	}
+}
+
+// startLogoutWatcher polls for <mountpoint>/_JFS_LOGOUT once per second; when
+// the file appears, keys are wiped and the file is removed (design 6.6).
+func (v *VFS) startLogoutWatcher() {
+	mp := v.Conf.Meta.MountPoint
+	if mp == "" {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			path := filepath.Join(mp, logoutFileName)
+			if _, err := os.Stat(path); err != nil {
+				continue
+			}
+			logger.Infof("logout requested via %s: wiping keys", path)
+			v.logout()
+			if err := os.Remove(path); err != nil {
+				logger.Warnf("remove logout file %s: %s", path, err)
+			}
+		}
+	}()
 }
 
 func CollectMetrics(registry *prometheus.Registry) []byte {

@@ -316,6 +316,24 @@ func (f *fileReader) GetLength() uint64 {
 	return f.length
 }
 
+// wipeKeys zeroes the FEK and all cached CEKs (NFR-SEC-3). The FEK array is
+// shared with the owning handle, so zeroing it here covers both copies; the
+// FEK itself is touched under cekMu, the same lock readSlice uses.
+func (f *fileReader) wipeKeys() {
+	f.Lock()
+	defer f.Unlock()
+	f.cekMu.Lock()
+	if f.fek != nil {
+		utils.MemClear(f.fek)
+		f.fek = nil
+	}
+	for id, cek := range f.cekCache {
+		utils.MemClear(cek)
+		delete(f.cekCache, id)
+	}
+	f.cekMu.Unlock()
+}
+
 // protected by f
 func (f *fileReader) newSlice(block *frange) *sliceReader {
 	s := &sliceReader{}
@@ -839,23 +857,25 @@ func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.P
 
 	var key []byte
 	if len(s.WrappedCEK) > 0 {
+		// f.fek is read under cekMu: wipeKeys zeroes it under the same lock
+		// (NFR-SEC-3), so a concurrent logout cannot race with the unwrap.
 		f.cekMu.Lock()
 		cek, ok := f.cekCache[s.Id]
-		f.cekMu.Unlock()
 		if !ok {
 			if len(f.fek) == 0 {
+				f.cekMu.Unlock()
 				return fmt.Errorf("slice %d is encrypted but no FEK is available", s.Id)
 			}
 			var err error
 			cek, err = chunk.UnwrapCEK(f.fek, s.WrappedCEK, f.driveFileID, s.Id, f.fekVer)
 			if err != nil {
+				f.cekMu.Unlock()
 				return err // fail-closed (NFR-SEC-11)
 			}
-			f.cekMu.Lock()
 			f.cekCache[s.Id] = cek
-			f.cekMu.Unlock()
 		}
 		key = cek
+		f.cekMu.Unlock()
 	}
 	reader := r.store.NewReaderWithKey(s.Id, int(s.Size), key)
 	for read < len(buf) {

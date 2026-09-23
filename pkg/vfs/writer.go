@@ -205,19 +205,28 @@ func (c *chunkWriter) commitThread() {
 			f.commitcond.WaitWithTimeout(time.Millisecond * 100)
 		}
 		err := s.err
+		// Snapshot the FEK under lock: wipeKeys may zero it concurrently, and
+		// wrapping a CEK under a wiped key would commit undecryptable metadata.
+		var fekCopy []byte
+		if len(f.fek) > 0 {
+			fekCopy = append([]byte(nil), f.fek...)
+		}
+		stale := f.stale
 		f.Unlock()
 
 		if err == 0 {
 			var ss = meta.Slice{Id: s.id, Size: s.length, Off: s.soff, Len: s.slen}
 			if len(s.cek) > 0 {
-				wrapped, werr := chunk.WrapCEK(f.fek, s.cek, f.driveFileID, s.id, f.fekVer)
-				if werr != nil {
+				if stale {
+					err = syscall.EIO // keys wiped (NFR-SEC-3): fail closed
+				} else if wrapped, werr := chunk.WrapCEK(fekCopy, s.cek, f.driveFileID, s.id, f.fekVer); werr != nil {
 					logger.Errorf("wrap CEK for inode:%d slice:%d: %s", f.inode, s.id, werr)
 					err = syscall.EIO
 				} else {
 					ss.WrappedCEK = wrapped
 				}
 			}
+			utils.MemClear(fekCopy)
 			if err == 0 {
 				err = f.w.m.Write(meta.Background(), f.inode, c.indx, s.off, ss, s.lastMod)
 				f.w.reader.Invalidate(f.inode, uint64(c.indx)*meta.ChunkSize+uint64(s.off), uint64(ss.Len))
@@ -230,12 +239,20 @@ func (c *chunkWriter) commitThread() {
 				go func(id uint64, length int) {
 					_ = f.w.store.Remove(id, length)
 				}(s.id, int(s.length))
+			} else if f.w.hubOffline() {
+				// Hub unreachable: the data is durable in RAM and in the write
+				// journal; do not fail the user's write (NFR-OFF-1). It will be
+				// committed when the hub recovers or re-applied on reconnect.
+				logger.Warnf("write inode:%d indx:%d deferred (hub offline): %s", f.inode, c.indx, err)
+				err = 0
 			} else {
 				logger.Warnf("write inode:%d error: %s", f.inode, err)
 				err = syscall.EIO
 			}
-			f.err = err
-			logger.Errorf("write inode:%d indx:%d %s", f.inode, c.indx, err)
+			if err != 0 {
+				f.err = err
+				logger.Errorf("write inode:%d indx:%d %s", f.inode, c.indx, err)
+			}
 		}
 		s.committed = true
 		if s.growing {
@@ -264,10 +281,23 @@ type fileWriter struct {
 	fek         []byte
 	fekVer      uint32
 	driveFileID string
+	stale       bool // keys wiped (NFR-SEC-3): in-flight commits fail closed with EIO
 
 	flushcond  *utils.Cond // wait for chunks==nil (flush)
 	writecond  *utils.Cond // wait for flushwaiting==0 (write)
 	commitcond *utils.Cond // wait for committed==true of dependency slice (commit)
+}
+
+// wipeKeys zeroes the FEK and marks the writer stale so in-flight commits fail
+// closed instead of wrapping CEKs under a wiped key (NFR-SEC-3).
+func (f *fileWriter) wipeKeys() {
+	f.Lock()
+	defer f.Unlock()
+	if f.fek != nil {
+		utils.MemClear(f.fek)
+		f.fek = nil
+	}
+	f.stale = true
 }
 
 // protected by file
@@ -382,6 +412,7 @@ func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Er
 	}
 	f.writewaiting--
 
+	buf := data // user-level write for the journal (the loop reslices data)
 	indx := uint32(off / meta.ChunkSize)
 	pos := uint32(off % meta.ChunkSize)
 	for len(data) > 0 {
@@ -398,6 +429,14 @@ func (f *fileWriter) Write(ctx meta.Context, off uint64, data []byte) syscall.Er
 	}
 	if off+size > f.length {
 		f.length = off + size
+	}
+	if f.err == 0 && f.w.journal != nil && f.w.hubOffline() {
+		// Offline durability (NFR-OFF-1): the commit may not reach the hub,
+		// so record the user-level write for replay on reconnect.
+		if err := f.w.journal.Append(f.inode, int64(off), buf); err != nil {
+			logger.Errorf("append inode:%d off:%d to write journal: %s", f.inode, off, err)
+			return syscall.EIO
+		}
 	}
 	return f.err
 }
@@ -494,6 +533,30 @@ type dataWriter struct {
 	bufferSize int64
 	files      map[Ino]*fileWriter
 	maxRetries uint32
+
+	// offline write journaling (NFR-OFF-1/3); set once at construction via
+	// SetWriteJournal, read lock-free afterwards
+	journal  *WriteJournal
+	hubState func() meta.HubState // nil → hub always online (no journaling)
+}
+
+// SetWriteJournal enables offline write journaling: user-level writes made
+// while the hub is not online are appended to the journal and replayed
+// through the normal write path on reconnect.
+func (w *dataWriter) SetWriteJournal(j *WriteJournal, state func() meta.HubState) {
+	w.Lock()
+	defer w.Unlock()
+	w.journal = j
+	w.hubState = state
+}
+
+// hubOffline reports whether the hub is unreachable; a nil state provider
+// means "always online" (non-grpc mounts).
+func (w *dataWriter) hubOffline() bool {
+	if w.hubState == nil {
+		return false
+	}
+	return w.hubState() != meta.HubOnline
 }
 
 func NewDataWriter(conf *Config, m meta.Meta, store chunk.ChunkStore, reader DataReader) DataWriter {

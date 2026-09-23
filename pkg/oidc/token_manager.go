@@ -94,6 +94,22 @@ func (m *TokenManager) BearerToken(ctx context.Context) string {
 	return ""
 }
 
+// CachedBearerToken returns the bearer token from cache or a non-blocking
+// refresh; empty if no cached token exists or the refresh failed. Never
+// triggers interactive browser authentication — safe to call from background
+// goroutines (heartbeat OIDC check, design 6.7).
+func (m *TokenManager) CachedBearerToken(ctx context.Context) string {
+	mgr, err := m.ensureManager(ctx)
+	if err != nil || mgr == nil {
+		return ""
+	}
+	tok, _ := mgr.GetCachedToken(ctx)
+	if tok != nil && tok.IDToken != "" {
+		return "Bearer " + tok.IDToken
+	}
+	return ""
+}
+
 // Stop is a no-op — the library manages its own lifecycle.
 func (m *TokenManager) Stop() {}
 

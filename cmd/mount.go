@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -553,6 +554,15 @@ func mount(c *cli.Context) error {
 	setup(c, 2)
 	addr := c.Args().Get(0)
 	removePassword(addr)
+	// Pass --offline-timeout to the hub client via the meta URL query (NFR-OFF-4).
+	if strings.HasPrefix(addr, "grpc://") && c.IsSet("offline-timeout") {
+		if u, err := url.Parse(addr); err == nil {
+			values := u.Query()
+			values.Set("offline-timeout", c.String("offline-timeout"))
+			u.RawQuery = values.Encode()
+			addr = u.String()
+		}
+	}
 	mp := c.Args().Get(1)
 
 	stage := getDaemonStage()
@@ -615,6 +625,18 @@ func mount(c *cli.Context) error {
 
 	chunkConf := getChunkConf(c, format)
 	vfsConf := getVfsConf(c, metaConf, format, chunkConf)
+	// Offline write journaling (NFR-OFF-1/3): journaled in the local cache dir
+	// so writes survive a hub outage and are replayed on reconnect. Needs a
+	// real disk cache; with "memory" there is nothing durable to journal to.
+	if format.EncryptionEnabled && chunkConf.CacheDir != "" {
+		cacheDir := strings.Split(chunkConf.CacheDir, ",")[0]
+		if cacheDir != "memory" {
+			vfsConf.WriteJournalPath = filepath.Join(cacheDir, "write_journal.bin")
+		}
+	}
+	if gm, ok := metaCli.(interface{ HubState() meta.HubState }); ok {
+		vfsConf.HubState = gm.HubState
+	}
 	setFuseOption(c, format, vfsConf)
 	if stage == 0 || stage == 3 {
 		blob, err = NewReloadableStorage(format, metaCli, updateFormat(c))
@@ -690,6 +712,15 @@ func mount(c *cli.Context) error {
 		store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
 	})
 	v := vfs.NewVFS(vfsConf, metaCli, store, registerer, registry)
+	if format.EncryptionEnabled {
+		if gm, ok := metaCli.(interface {
+			SetOnWipe(func())
+			SetOnReconnect(func())
+		}); ok {
+			gm.SetOnWipe(v.InvalidateAllKeys) // NFR-SEC-3: wipe handle keys on disconnect/logout
+			gm.SetOnReconnect(v.ReplayWriteJournal)
+		}
+	}
 	installHandler(metaCli, mp, v, blob)
 	v.UpdateFormat = updateFormat(c)
 	initBackgroundTasks(c, vfsConf, metaConf, metaCli, blob, registerer, registry)
