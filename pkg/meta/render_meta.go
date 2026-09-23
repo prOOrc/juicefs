@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"fmt"
 	"syscall"
 	"time"
 
@@ -78,18 +79,13 @@ func newRenderMetaWithCache(inner Meta, kek []byte, kekVersion uint32, volumeUUI
 	}
 }
 
-// Open delegates to the backend and, for encrypted files, resolves the plaintext
-// FEK: from the LRU on a version-matching hit, otherwise by unwrapping the AGFK
-// blob locally. Any unwrap failure (foreign company KEK, tampered metadata) fails
-// closed with EIO — never a partial or wrong key (FR-TEST-12).
-func (m *RenderMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
-	st := m.Meta.Open(ctx, inode, flags, attr)
-	if st != 0 || attr == nil || !attr.Encrypted {
-		return st
-	}
+// resolveFEK returns the plaintext FEK of an encrypted file: from the LRU on a
+// version-matching hit, otherwise by unwrapping the AGFK blob under the Company
+// KEK. Any failure (foreign company KEK, tampered metadata) is returned as-is —
+// the caller fails closed (FR-RND-13).
+func (m *RenderMeta) resolveFEK(inode Ino, attr *Attr) (fek []byte, version uint32, err error) {
 	if e, ok := m.fekCache.Get(uint64(inode)); ok && e.version == attr.FekVersion {
-		attr.Fek = e.fek
-		return 0
+		return e.fek, e.version, nil
 	}
 	aad := FekAAD{
 		VolumeUUID:  m.volumeUUID,
@@ -100,12 +96,149 @@ func (m *RenderMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) sysc
 	}
 	fek, ver, err := UnwrapFEK(m.kek, attr.WrappedFek, aad)
 	if err != nil {
-		return syscall.EIO // fail-closed (FR-RND-13)
+		return nil, 0, err
 	}
 	m.fekCache.Add(uint64(inode), &fekEntry{fek: fek, version: ver})
+	return fek, ver, nil
+}
+
+// Open delegates to the backend and, for encrypted files, resolves the plaintext
+// FEK: from the LRU on a version-matching hit, otherwise by unwrapping the AGFK
+// blob locally. Any unwrap failure (foreign company KEK, tampered metadata) fails
+// closed with EIO — never a partial or wrong key (FR-TEST-12).
+func (m *RenderMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscall.Errno {
+	st := m.Meta.Open(ctx, inode, flags, attr)
+	if st != 0 || attr == nil || !attr.Encrypted {
+		return st
+	}
+	fek, ver, err := m.resolveFEK(inode, attr)
+	if err != nil {
+		return syscall.EIO // fail-closed (FR-RND-13)
+	}
 	attr.Fek = fek
 	attr.FekVersion = ver
 	return 0
+}
+
+// ResolveFileKey resolves the plaintext FEK of an encrypted file locally under
+// the Company KEK (D8): LRU hit on a version-matching entry, otherwise unwrap
+// the AGFK blob from the attr. It is installed as baseMeta.fileKeyResolver so
+// compaction of encrypted chunks can re-wrap slice CEKs; any failure fails
+// closed and the chunk is skipped (design 5.3).
+func (m *RenderMeta) ResolveFileKey(ctx Context, inode Ino) ([]byte, string, uint32, error) {
+	var attr Attr
+	if st := m.Meta.GetAttr(ctx, inode, &attr); st != 0 {
+		return nil, "", 0, fmt.Errorf("get attr %d: %s", inode, st)
+	}
+	if !attr.Encrypted {
+		return nil, "", 0, nil
+	}
+	fek, ver, err := m.resolveFEK(inode, &attr)
+	if err != nil {
+		return nil, "", 0, fmt.Errorf("unwrap FEK of %d: %w", inode, err)
+	}
+	return fek, attr.DriveFileID, ver, nil
+}
+
+// Clone delegates to the backend and, for encrypted sources, gives the target
+// its own FEK locally (design 5.2, render path): unwrap the source FEK under the
+// Company KEK, generate a fresh target FEK, persist it and re-wrap the shared
+// slice CEKs (zero-copy). Any failure rolls the whole clone back (fail-closed).
+func (m *RenderMeta) Clone(ctx Context, srcParentIno, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, concurrency uint8, count, total *uint64, dstIno *Ino) syscall.Errno {
+	st := m.Meta.Clone(ctx, srcParentIno, srcIno, dstParentIno, dstName, cmode, cumask, concurrency, count, total, dstIno)
+	if st != 0 || dstIno == nil {
+		return st
+	}
+	var srcAttr Attr
+	if st := m.Meta.GetAttr(ctx, srcIno, &srcAttr); st != 0 {
+		return st
+	}
+	if !srcAttr.Encrypted || len(srcAttr.WrappedFek) == 0 {
+		return 0 // legacy clone — no re-wrap
+	}
+	ops := &cloneKeyOps{
+		srcFek: func(i Ino, _ string, a *Attr) ([]byte, error) {
+			fek, _, err := UnwrapFEK(m.kek, a.WrappedFek, FekAAD{
+				VolumeUUID:  m.volumeUUID,
+				CompanyID:   m.companyID,
+				DriveFileID: a.DriveFileID,
+				Inode:       i,
+				FekVersion:  a.FekVersion,
+			})
+			return fek, err
+		},
+		dstFek: func(i Ino, _ string) ([]byte, *FileCrypto, error) {
+			fek, err := NewFEK()
+			if err != nil {
+				return nil, nil, err
+			}
+			driveFileID := uuid.New().String()
+			wrapped, err := WrapFEK(m.kek, fek, FekAAD{
+				VolumeUUID:  m.volumeUUID,
+				CompanyID:   m.companyID,
+				DriveFileID: driveFileID,
+				Inode:       i,
+				FekVersion:  1,
+			}, m.kekVersion)
+			if err != nil {
+				return nil, nil, err
+			}
+			return fek, &FileCrypto{
+				WrappedFek:  wrapped,
+				DriveFileID: driveFileID,
+				FekVersion:  1,
+				CryptoAlg:   "AES-256-GCM",
+			}, nil
+		},
+	}
+	if st := cloneRewrap(ctx, m.Meta, srcIno, *dstIno, "", "", ops); st != 0 {
+		var removed uint64
+		_ = m.Meta.Remove(ctx, dstParentIno, dstName, true, 1, &removed) // rollback (fail-closed)
+		return st
+	}
+	return 0
+}
+
+// CopyFileRange delegates to the backend and, for an encrypted source, re-wraps
+// the copied range under the target's own FEK locally (design 5.5): both FEKs are
+// resolved under the Company KEK (LRU first). A legacy target cannot hold
+// encrypted slices — EOPNOTSUPP before the metadata operation (fail-closed).
+func (m *RenderMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, offOut uint64, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {
+	var srcAttr, dstAttr Attr
+	if st := m.Meta.GetAttr(ctx, fin, &srcAttr); st != 0 {
+		return st
+	}
+	srcEncrypted := srcAttr.Encrypted && len(srcAttr.WrappedFek) > 0
+	if srcEncrypted {
+		if st := m.Meta.GetAttr(ctx, fout, &dstAttr); st != 0 {
+			return st
+		}
+		if !dstAttr.Encrypted || len(dstAttr.WrappedFek) == 0 {
+			return syscall.EOPNOTSUPP // fail-closed: a legacy target cannot hold encrypted slices
+		}
+	}
+	st := m.Meta.CopyFileRange(ctx, fin, offIn, fout, offOut, size, flags, copied, outLength)
+	if st != 0 || !srcEncrypted || *copied == 0 {
+		return st
+	}
+	srcFek, _, err := m.resolveFEK(fin, &srcAttr)
+	if err != nil {
+		return syscall.EIO // fail-closed (FR-RND-13)
+	}
+	dstFek, _, err := m.resolveFEK(fout, &dstAttr)
+	if err != nil {
+		return syscall.EIO // fail-closed
+	}
+	rewrapper, ok := m.Meta.(sliceRangeRewrapper)
+	if !ok {
+		return syscall.EOPNOTSUPP
+	}
+	start := uint32(offOut / ChunkSize)
+	end := uint32((offOut + *copied - 1) / ChunkSize)
+	return rewrapper.RewrapSlicesRange(ctx, fout, srcFek, dstFek,
+		SliceCryptoAAD{DriveFileID: srcAttr.DriveFileID, FekVersion: srcAttr.FekVersion},
+		SliceCryptoAAD{DriveFileID: dstAttr.DriveFileID, FekVersion: dstAttr.FekVersion},
+		start, end)
 }
 
 // Create delegates to the backend and, for regular files, generates a per-file

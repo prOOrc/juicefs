@@ -385,3 +385,99 @@ func TestLegacyVolume_Unchanged(t *testing.T) {
 	require.Equal(t, 0, env.keyMgr.createCalls, "legacy volume must not call CreateFileKey")
 	require.Equal(t, 0, env.keyMgr.getFekCalls, "legacy volume must not call GetFileFEK")
 }
+
+// TestResolveFileKey (task 5.2): ResolveFileKey returns the plaintext FEK and the
+// drive file ID and writes the client's FEK LRU; the returned key must be exactly
+// the one inside the stored AGFK blob (AAD intact).
+func TestResolveFileKey(t *testing.T) {
+	env := newEncryptTestEnv(t, 0, true)
+	ctx := Background()
+	user := uuid.New().String()
+	cctx := userCtx(t, ctx, user)
+
+	var inode Ino
+	var attr Attr
+	require.Equal(t, syscall.Errno(0), env.client.Create(cctx, RootInode, "resolve.exr", 0644, 022, 0, &inode, &attr))
+	require.True(t, attr.Encrypted)
+
+	gm, ok := env.client.(*grpcMeta)
+	require.True(t, ok)
+
+	fek, driveFileID, ver, err := gm.ResolveFileKey(cctx, inode)
+	require.NoError(t, err)
+	require.Len(t, fek, fekSize)
+	require.Equal(t, attr.DriveFileID, driveFileID)
+	require.EqualValues(t, 1, ver)
+	require.Equal(t, 1, env.keyMgr.getFekCalls)
+
+	// The returned FEK is exactly the one inside the stored AGFK blob.
+	format := env.meta.GetFormat()
+	want, _, err := UnwrapFEK(env.keyMgr.kek, attr.WrappedFek, FekAAD{
+		VolumeUUID:  format.UUID,
+		CompanyID:   testCompanyID,
+		DriveFileID: attr.DriveFileID,
+		Inode:       inode,
+		FekVersion:  1,
+	})
+	require.NoError(t, err)
+	require.Equal(t, want, fek)
+
+	// The client LRU holds the resolved key (task 5.2).
+	e, ok := gm.fekCache.Get(uint64(inode))
+	require.True(t, ok)
+	require.Equal(t, fek, e.fek)
+	require.EqualValues(t, 1, e.version)
+}
+
+// TestResolveFileKey_Denied (task 5.2): KeyManager denies GetFileFEK → the client
+// gets EACCES and no key material, and nothing is cached (fail-closed). This env
+// has no authz interceptor; the denial is simulated at the KeyManager level, as in
+// TestUserWithoutPermission_Denied.
+func TestResolveFileKey_Denied(t *testing.T) {
+	env := newEncryptTestEnv(t, 12, true)
+	ctx := Background()
+	user := uuid.New().String()
+	cctx := userCtx(t, ctx, user)
+
+	var inode Ino
+	var attr Attr
+	require.Equal(t, syscall.Errno(0), env.client.Create(cctx, RootInode, "denied-resolve.exr", 0644, 022, 0, &inode, &attr))
+
+	env.keyMgr.mu.Lock()
+	env.keyMgr.denyGetFek = true
+	env.keyMgr.mu.Unlock()
+
+	gm, ok := env.client.(*grpcMeta)
+	require.True(t, ok)
+
+	fek, _, _, err := gm.ResolveFileKey(cctx, inode)
+	require.Error(t, err)
+	require.Nil(t, fek)
+	require.Equal(t, syscall.EACCES, errno(err))
+	_, cached := gm.fekCache.Get(uint64(inode))
+	require.False(t, cached, "a denied resolve must not cache anything")
+}
+
+// TestResolveFileKey_Legacy (task 5.2): a non-encrypted file answers
+// encrypted=false with no FEK and KeyManager is never called.
+func TestResolveFileKey_Legacy(t *testing.T) {
+	env := newEncryptTestEnv(t, 15, false)
+	ctx := Background()
+	user := uuid.New().String()
+	cctx := userCtx(t, ctx, user)
+
+	var inode Ino
+	var attr Attr
+	require.Equal(t, syscall.Errno(0), env.client.Create(cctx, RootInode, "plain-resolve.txt", 0644, 022, 0, &inode, &attr))
+	require.False(t, attr.Encrypted)
+
+	gm, ok := env.client.(*grpcMeta)
+	require.True(t, ok)
+
+	fek, driveFileID, ver, err := gm.ResolveFileKey(cctx, inode)
+	require.NoError(t, err)
+	require.Nil(t, fek)
+	require.Empty(t, driveFileID)
+	require.EqualValues(t, 0, ver)
+	require.Equal(t, 0, env.keyMgr.getFekCalls, "legacy file must not call GetFileFEK")
+}

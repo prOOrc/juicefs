@@ -140,6 +140,18 @@ func buildCEKAAD(driveFileID string, sliceID uint64, fekVersion uint32) []byte {
 	return buf
 }
 
+// CEKSize is the size in bytes of a slice content-encryption key (AES-256).
+const CEKSize = cekSize
+
+// NewCEK generates a fresh random slice CEK (NFR-SEC-9: unique per slice).
+func NewCEK() ([]byte, error) {
+	cek := make([]byte, cekSize)
+	if _, err := io.ReadFull(rand.Reader, cek); err != nil {
+		return nil, fmt.Errorf("agck: generate CEK: %w", err)
+	}
+	return cek, nil
+}
+
 // WrapCEK wraps cek (32 bytes) under the file's FEK and returns an AGCK blob (65 bytes).
 func WrapCEK(fek, cek []byte, driveFileID string, sliceID uint64, fekVersion uint32) ([]byte, error) {
 	if len(cek) != cekSize {

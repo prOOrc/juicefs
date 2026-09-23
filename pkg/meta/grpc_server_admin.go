@@ -21,6 +21,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
+	kmpb "github.com/juicedata/juicefs/pkg/meta/keymanager_pb"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
@@ -76,14 +78,100 @@ func (s *MetaProxyServer) GetTreeSummary(ctx context.Context, req *pb.GetTreeSum
 func (s *MetaProxyServer) Clone(ctx context.Context, req *pb.CloneRequest) (*pb.CloneResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var count, total uint64
+	var dstIno Ino
 	errno := s.meta.Clone(mctx, Ino(req.SrcParentIno), Ino(req.SrcIno),
 		Ino(req.DstParentIno), req.DstName, uint8(req.Cmode), uint16(req.Cumask),
-		uint8(req.Concurrency), &count, &total)
-	return &pb.CloneResponse{
-		Errno: uint32(errno),
-		Count: count,
-		Total: total,
-	}, nil
+		uint8(req.Concurrency), &count, &total, &dstIno)
+	if errno != 0 {
+		return &pb.CloneResponse{Errno: uint32(errno), Count: count, Total: total}, nil
+	}
+	resp := &pb.CloneResponse{Errno: 0, Count: count, Total: total, DstIno: uint64(dstIno)}
+
+	// FR-OP-1..3 (D7): the target must get its own FEK; shared slice CEKs are
+	// re-wrapped under it (zero-copy). Any failure rolls the whole clone back —
+	// a target with foreign key material is unusable.
+	if st := s.cloneEncryption(ctx, mctx, Ino(req.SrcIno), dstIno, Ino(req.DstParentIno), req.DstName); st != 0 {
+		var removed uint64
+		_ = s.meta.Remove(mctx, Ino(req.DstParentIno), req.DstName, true, 1, &removed)
+		return &pb.CloneResponse{Errno: uint32(st)}, nil
+	}
+
+	// Register the target in the path cache (as Create/Mkdir do): cloned entries
+	// bypass those handlers, and without this Open/ResolveFileKey on the target
+	// would fail closed with EACCES (unresolved path).
+	var dstAttr Attr
+	if st := s.meta.GetAttr(mctx, dstIno, &dstAttr); st == 0 {
+		dstPath := s.inodePathCache.BuildChildPath(Ino(req.DstParentIno), req.DstName)
+		s.inodePathCache.Set(dstIno, withDirSlash(dstPath, &dstAttr))
+	}
+	return resp, nil
+}
+
+// cloneEncryption orchestrates the per-file FEK sequence for a clone target
+// (design 5.2): GetFileFEK(src) → CreateFileKey(dst) → SetFileCrypto(dst) →
+// RewrapSlices. Legacy sources need no re-wrap and return 0 immediately.
+func (s *MetaProxyServer) cloneEncryption(ctx context.Context, mctx Context, srcIno, dstIno, dstParent Ino, dstName string) syscall.Errno {
+	var srcAttr Attr
+	if st := s.meta.GetAttr(mctx, srcIno, &srcAttr); st != 0 {
+		return st
+	}
+	if !srcAttr.Encrypted || len(srcAttr.WrappedFek) == 0 {
+		return 0 // legacy clone — no re-wrap
+	}
+	srcPath := s.inodePathCache.Get(srcIno)
+	dstPath := s.inodePathCache.BuildChildPath(dstParent, dstName)
+	if srcPath == "" || dstPath == "" {
+		return syscall.EACCES // fail-closed: cannot prove file identity to KeyManager
+	}
+	userID, err := extractUserIDFromOIDC(ctx)
+	if err != nil {
+		return syscall.EACCES // fail-closed
+	}
+	volUUID := s.meta.GetFormat().UUID
+	ops := &cloneKeyOps{
+		srcFek: func(i Ino, p string, a *Attr) ([]byte, error) {
+			r, err := s.keyManager.GetFileFEK(ctx, &kmpb.GetFileFEKRequest{
+				UserId: userID, VolumeUuid: volUUID, DriveFileId: a.DriveFileID,
+				Inode: int64(i), Path: p, WrappedFek: a.WrappedFek,
+				WriteAccess: false, FekVersion: a.FekVersion, VolumeName: s.volumeName,
+			})
+			if err != nil {
+				return nil, err
+			}
+			return r.Fek, nil
+		},
+		dstFek: func(i Ino, p string) ([]byte, *FileCrypto, error) {
+			driveFileID := uuid.New().String()
+			created, err := s.keyManager.CreateFileKey(ctx, &kmpb.CreateFileKeyRequest{
+				UserId: userID, VolumeUuid: volUUID, DriveFileId: driveFileID,
+				Inode: int64(i), Path: p, VolumeName: s.volumeName,
+			})
+			if err != nil {
+				return nil, nil, err
+			}
+			// CreateFileKey returns only the AGFK wrap; fetch the plaintext for
+			// the re-wrap (existing RPCs only — no KeyManager contract change).
+			r, err := s.keyManager.GetFileFEK(ctx, &kmpb.GetFileFEKRequest{
+				UserId: userID, VolumeUuid: volUUID, DriveFileId: driveFileID,
+				Inode: int64(i), Path: p, WrappedFek: created.WrappedFek,
+				WriteAccess: true, FekVersion: created.FekVersion, VolumeName: s.volumeName,
+			})
+			if err != nil {
+				return nil, nil, err
+			}
+			cryptoAlg := created.CryptoAlg
+			if cryptoAlg == "" {
+				cryptoAlg = "AES-256-GCM"
+			}
+			return r.Fek, &FileCrypto{
+				WrappedFek:  created.WrappedFek,
+				DriveFileID: driveFileID,
+				FekVersion:  uint32(created.FekVersion),
+				CryptoAlg:   cryptoAlg,
+			}, nil
+		},
+	}
+	return cloneRewrap(mctx, s.meta, srcIno, dstIno, srcPath, dstPath, ops)
 }
 
 func (s *MetaProxyServer) GetPaths(ctx context.Context, req *pb.GetPathsRequest) (*pb.GetPathsResponse, error) {

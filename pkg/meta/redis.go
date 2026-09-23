@@ -3779,7 +3779,7 @@ func (r *redisMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error)
 	return count, err
 }
 
-func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte) syscall.Errno {
+func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte, wrappedCEK []byte) syscall.Errno {
 	var rs []*redis.IntCmd // trash disabled: check reference of slices
 	if delayed == nil {
 		rs = make([]*redis.IntCmd, len(ss))
@@ -3803,7 +3803,8 @@ func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*
 
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.LTrim(ctx, key, int64(n), -1)
-			pipe.LPush(ctx, key, marshalSlice(pos, id, size, 0, size))
+			// wrappedCEK == nil → legacy 24-byte record (marshalSliceCEK fallback).
+			pipe.LPush(ctx, key, marshalSliceCEK(pos, id, size, 0, size, wrappedCEK))
 			for i := skipped; i > 0; i-- {
 				pipe.LPush(ctx, key, origin[(i-1)*sliceBytes:i*sliceBytes])
 			}

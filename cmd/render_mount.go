@@ -294,6 +294,16 @@ func renderMount(c *cli.Context) error {
 	rm := meta.NewRenderMeta(metaCli, kek, kekVersion, format.UUID, companyID, prefix)
 	defer rm.WipeKeys() // zero KEK + cached FEKs on every exit path (NFR-SEC-5)
 
+	// D8: let the backend compact encrypted chunks by resolving FEKs locally.
+	// Without this hook baseMeta skips them fail-closed (design 5.3).
+	if setter, ok := metaCli.(interface {
+		SetFileKeyResolver(func(ctx meta.Context, inode meta.Ino) ([]byte, string, uint32, error))
+	}); ok {
+		setter.SetFileKeyResolver(rm.ResolveFileKey)
+	} else {
+		logger.Warnf("meta backend %T does not support SetFileKeyResolver; encrypted chunks will not be compacted", metaCli)
+	}
+
 	logger.Infof("JuiceFS version %s", version.Version())
 	registerer, registry := wrapRegister(c, mp, format.Name)
 	store := chunk.NewCachedStore(blob, *chunkConf, registerer)

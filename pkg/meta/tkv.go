@@ -3110,7 +3110,9 @@ func (m *kvMeta) doCleanupDelayedSlices(ctx Context, edge int64) (int, error) {
 	return count, nil
 }
 
-func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte) syscall.Errno {
+// doCompactChunk: the KV backend stores fixed 24-byte slice records and never
+// persists the CEK tail (encrypted volumes run on Redis), so wrappedCEK is ignored.
+func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte, wrappedCEK []byte) syscall.Errno {
 	st := errno(m.txn(Background(), func(tx *kvTxn) error {
 		buf2 := tx.get(m.chunkKey(inode, indx))
 		if len(buf2) < len(buf) || !bytes.Equal(buf, buf2[:len(buf)]) {

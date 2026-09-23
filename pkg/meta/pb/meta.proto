@@ -73,6 +73,7 @@ service MetaService {
   rpc NewSlice(NewSliceRequest) returns (NewSliceResponse);
   rpc InvalidateChunkCache(InvalidateChunkCacheRequest) returns (InvalidateChunkCacheResponse);
   rpc CopyFileRange(CopyFileRangeRequest) returns (CopyFileRangeResponse);
+  rpc ResolveFileKey(ResolveFileKeyRequest) returns (ResolveFileKeyResponse);
 
   // --- Locks ---
   rpc Flock(FlockRequest) returns (FlockResponse);
@@ -439,4 +440,19 @@ message CopyFileRangeResponse {
   uint32 errno = 1;
   uint64 copied = 2;
   uint64 out_length = 3;
+}
+
+// ResolveFileKey returns the plaintext FEK of an encrypted file (authz: Read on
+// the inode). The client caches it in its FEK LRU; drive_file_id is returned so
+// callers can build slice AADs without an extra GetAttr.
+message ResolveFileKeyRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+}
+message ResolveFileKeyResponse {
+  uint32 errno = 1;
+  bytes fek = 2;         // plaintext FEK, TLS only (encrypted files; empty otherwise)
+  int32 fek_version = 3;
+  bool encrypted = 4;
+  string drive_file_id = 5;
 }

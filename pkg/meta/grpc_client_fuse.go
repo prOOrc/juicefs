@@ -334,6 +334,30 @@ func (m *grpcMeta) Open(ctx Context, inode Ino, flags uint32, attr *Attr) syscal
 	return 0
 }
 
+// ResolveFileKey obtains the plaintext FEK of an encrypted file from the proxy
+// (authz: Read on the inode) and caches it in the FEK LRU (task 5.2). For
+// non-encrypted files it returns nils without an RPC round-trip to KeyManager.
+// Any failure fails closed — callers must not proceed with a missing key.
+func (m *grpcMeta) ResolveFileKey(ctx Context, inode Ino) (fek []byte, driveFileID string, fekVersion uint32, err error) {
+	c := m.grpcContext(ctx)
+	req := &pb.ResolveFileKeyRequest{Ctx: c, Inode: uint64(inode)}
+	resp, err := m.client.ResolveFileKey(m.withSessionID(ctx), req)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	if resp.GetErrno() != 0 {
+		return nil, "", 0, syscall.Errno(resp.GetErrno())
+	}
+	if !resp.GetEncrypted() {
+		return nil, "", 0, nil
+	}
+	if len(resp.GetFek()) == 0 {
+		return nil, "", 0, syscall.EIO // fail-closed: server reported encrypted but sent no FEK
+	}
+	m.fekCache.Add(uint64(inode), &fekEntry{fek: resp.GetFek(), version: uint32(resp.GetFekVersion())})
+	return resp.GetFek(), resp.GetDriveFileId(), uint32(resp.GetFekVersion()), nil
+}
+
 // Close a file
 func (m *grpcMeta) Close(ctx Context, inode Ino) syscall.Errno {
 	c := m.grpcContext(ctx)

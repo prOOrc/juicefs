@@ -725,6 +725,7 @@ type CloneResponse struct {
 	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
 	Count         uint64                 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
 	Total         uint64                 `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`
+	DstIno        uint64                 `protobuf:"varint,4,opt,name=dst_ino,json=dstIno,proto3" json:"dst_ino,omitempty"` // inode of the clone target (root for directory clones)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -776,6 +777,13 @@ func (x *CloneResponse) GetCount() uint64 {
 func (x *CloneResponse) GetTotal() uint64 {
 	if x != nil {
 		return x.Total
+	}
+	return 0
+}
+
+func (x *CloneResponse) GetDstIno() uint64 {
+	if x != nil {
+		return x.DstIno
 	}
 	return 0
 }
@@ -2352,11 +2360,12 @@ const file_meta_admin_proto_rawDesc = "" +
 	"\bdst_name\x18\x05 \x01(\tR\adstName\x12\x14\n" +
 	"\x05cmode\x18\x06 \x01(\rR\x05cmode\x12\x16\n" +
 	"\x06cumask\x18\a \x01(\rR\x06cumask\x12 \n" +
-	"\vconcurrency\x18\b \x01(\rR\vconcurrency\"Q\n" +
+	"\vconcurrency\x18\b \x01(\rR\vconcurrency\"j\n" +
 	"\rCloneResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12\x14\n" +
 	"\x05count\x18\x02 \x01(\x04R\x05count\x12\x14\n" +
-	"\x05total\x18\x03 \x01(\x04R\x05total\"J\n" +
+	"\x05total\x18\x03 \x01(\x04R\x05total\x12\x17\n" +
+	"\adst_ino\x18\x04 \x01(\x04R\x06dstIno\"J\n" +
 	"\x0fGetPathsRequest\x12!\n" +
 	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x14\n" +
 	"\x05inode\x18\x02 \x01(\x04R\x05inode\">\n" +

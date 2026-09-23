@@ -92,7 +92,12 @@ func mount(url, mp string) {
 	m.OnMsg(meta.CompactChunk, meta.MsgCallback(func(args ...interface{}) error {
 		slices := args[0].([]meta.Slice)
 		sliceId := args[1].(uint64)
-		return vfs.Compact(chunkConf, store, slices, sliceId, 0)
+		wrapped, err := vfs.Compact(chunkConf, store, slices, sliceId, 0,
+			args[3].([]byte), args[4].(string), args[5].(uint32))
+		if p, ok := args[6].(*[]byte); ok {
+			*p = wrapped
+		}
+		return err
 	}))
 
 	conf := &vfs.Config{

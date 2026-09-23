@@ -714,7 +714,12 @@ func jfs_init(credentialPtr uintptr, count int32, cname, cjsonConf, cuser, group
 			slices := args[0].([]meta.Slice)
 			id := args[1].(uint64)
 			tierID := args[2].(uint8)
-			return vfs.Compact(chunkConf, store, slices, id, tierID)
+			wrapped, err := vfs.Compact(chunkConf, store, slices, id, tierID,
+				args[3].([]byte), args[4].(string), args[5].(uint32))
+			if p, ok := args[6].(*[]byte); ok {
+				*p = wrapped
+			}
+			return err
 		})
 		err = m.NewSession(!jConf.NoSession)
 		if err != nil {

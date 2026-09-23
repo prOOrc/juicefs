@@ -61,9 +61,12 @@ func TestCompact(t *testing.T) {
 
 	// compact
 	var cid uint64 = 1000
-	err := Compact(cconf, store, slices, cid, 0)
+	wrapped, err := Compact(cconf, store, slices, cid, 0, nil, "", 0)
 	if err != nil {
 		t.Fatalf("compact %d slices : %s", len(slices), err)
+	}
+	if wrapped != nil {
+		t.Fatalf("legacy compaction must not return a wrapped CEK")
 	}
 
 	// verify result
@@ -89,7 +92,7 @@ func TestCompact(t *testing.T) {
 
 	// failed
 	_ = store.Remove(1, 200)
-	err = Compact(cconf, store, slices, cid, 0)
+	_, err = Compact(cconf, store, slices, cid, 0, nil, "", 0)
 	if err == nil {
 		t.Fatalf("compact should fail with read but got nil")
 	}

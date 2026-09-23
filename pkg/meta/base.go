@@ -134,7 +134,10 @@ type engine interface {
 	doWrite(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time, numSlices *int, delta *dirStat, attr *Attr) syscall.Errno
 	doTruncate(ctx Context, inode Ino, flags uint8, length uint64, delta *dirStat, attr *Attr, skipPermCheck bool) syscall.Errno
 	doFallocate(ctx Context, inode Ino, mode uint8, off uint64, size uint64, delta *dirStat, attr *Attr) syscall.Errno
-	doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte) syscall.Errno
+	// doCompactChunk atomically replaces the compacted prefix of the chunk list
+	// with the new slice. wrappedCEK is the AGCK blob of the new slice (nil for
+	// legacy plaintext compaction); only engines that store the CEK tail persist it.
+	doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte, wrappedCEK []byte) syscall.Errno
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
@@ -294,6 +297,23 @@ type baseMeta struct {
 	// behavior). Future versioning will install a reference-count check here;
 	// the hook must return true for inodes without crypto metadata.
 	fileCryptoDeletable func(inode Ino) bool
+
+	// FR-VER-2: policy for deleting slice objects from object storage. nil →
+	// deletable (current behavior). Future versioning will install a snapshot
+	// reference check here; every GC point funnels through deleteSlice_.
+	sliceDeletable func(id uint64) bool
+
+	// FR-VER-3: policy for compacting the chunks of an inode. nil → allowed
+	// (current behavior). Future versioning will freeze files pinned by a
+	// snapshot; a denied inode is skipped, its slices stay as-is.
+	compactionAllowed func(inode Ino) bool
+
+	// D8 (stage 5): resolves the plaintext FEK of an encrypted file for
+	// compaction, which is triggered from meta without user context. Returns
+	// (fek, driveFileID, fekVersion); a nil/empty FEK means the file is not
+	// encrypted. Any error fails closed: the chunk is skipped (logged), data
+	// is untouched. nil → encrypted chunks are never compacted.
+	fileKeyResolver func(ctx Context, inode Ino) ([]byte, string, uint32, error)
 
 	sesMu    sync.Mutex
 	aclCache aclAPI.Cache
@@ -1012,6 +1032,13 @@ func (m *baseMeta) canDeleteFileCrypto(inode Ino) bool {
 		return true
 	}
 	return m.fileCryptoDeletable(inode)
+}
+
+// SetFileKeyResolver installs the FEK resolver used by compaction of encrypted
+// files (D8, stage 5). Render nodes resolve locally with the Company KEK;
+// without a resolver encrypted chunks are skipped fail-closed.
+func (m *baseMeta) SetFileKeyResolver(f func(ctx Context, inode Ino) ([]byte, string, uint32, error)) {
+	m.fileKeyResolver = f
 }
 
 // gcDeletedFile deletes the data of one deleted file unless its crypto
@@ -2859,6 +2886,11 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 		m.Unlock()
 	}()
 
+	if m.compactionAllowed != nil && !m.compactionAllowed(inode) {
+		// FR-VER-3: a version/snapshot pinned this file — skip compaction.
+		return
+	}
+
 	ss, st := m.en.doRead(Background(), inode, indx)
 	if st != 0 {
 		return
@@ -2867,10 +2899,25 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 		logger.Errorf("Corrupt value for inode %d chunk indx %d", inode, indx)
 		return
 	}
+	var hasCEK bool
 	for _, s := range ss {
 		if len(s.wrappedCEK) > 0 {
-			// Encrypted slices cannot be compacted until CEK-aware compaction lands:
-			// the merged slice would lose its wrapped CEK. Skip (fail-closed).
+			hasCEK = true
+			break
+		}
+	}
+	var fek []byte
+	var driveFileID string
+	var fekVer uint32
+	if hasCEK {
+		if m.fileKeyResolver == nil {
+			// D8: no FEK resolver installed — encrypted chunks are never compacted.
+			return
+		}
+		var err error
+		fek, driveFileID, fekVer, err = m.fileKeyResolver(Background(), inode)
+		if err != nil || len(fek) == 0 {
+			logger.Warnf("compaction skipped for %d:%d: FEK resolve: %v (fail-closed)", inode, indx, err)
 			return
 		}
 	}
@@ -2908,7 +2955,10 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 		}
 		tierID = int(attr.Tier)
 	}
-	err := m.newMsg(CompactChunk, slices, id, uint8(tierID))
+	// The handler (vfs.Compact) runs synchronously and stores the wrapped CEK of
+	// the new slice in wrappedCEK (nil for legacy compaction).
+	var wrappedCEK []byte
+	err := m.newMsg(CompactChunk, slices, id, uint8(tierID), fek, driveFileID, fekVer, &wrappedCEK)
 	if err != nil {
 		if !strings.Contains(err.Error(), "not exist") && !strings.Contains(err.Error(), "not found") {
 			logger.Warnf("compact %d %d with %d slices: %s", inode, indx, len(compacted), err)
@@ -2930,7 +2980,7 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 	for _, s := range ss {
 		origin = append(origin, marshalSliceCEK(s.pos, s.id, s.size, s.off, s.len, s.wrappedCEK)...)
 	}
-	st = m.en.doCompactChunk(inode, indx, origin, compacted, skipped, pos, id, size, dsbuf)
+	st = m.en.doCompactChunk(inode, indx, origin, compacted, skipped, pos, id, size, dsbuf, wrappedCEK)
 	if st == syscall.EINVAL {
 		logger.Infof("compaction for %d:%d is wasted, delete slice %d (%d bytes)", inode, indx, id, size)
 		m.deleteSlice(id, size)
@@ -3026,6 +3076,12 @@ func (m *baseMeta) tryDeleteFileData(inode Ino, length uint64, force bool) {
 }
 
 func (m *baseMeta) deleteSlice_(id uint64, size uint32) {
+	if m.sliceDeletable != nil && !m.sliceDeletable(id) {
+		// FR-VER-2: a future version/snapshot still references this slice —
+		// keep the object; GC retries on the next cycle.
+		logger.Debugf("skip deleting slice %d (%d bytes): not deletable yet (FR-VER-2)", id, size)
+		return
+	}
 	if err := m.newMsg(DeleteSlice, id, size); err != nil {
 		logger.Warnf("Delete data blocks of slice %d (%d bytes): %s", id, size, err)
 		return
@@ -3375,7 +3431,7 @@ func (m *baseMeta) ScanDeletedObject(ctx Context, tss trashSliceScan, pss pendin
 	return eg.Wait()
 }
 
-func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name string, cmode uint8, cumask uint16, concurrency uint8, count, total *uint64) syscall.Errno {
+func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name string, cmode uint8, cumask uint16, concurrency uint8, count, total *uint64, dstIno *Ino) syscall.Errno {
 
 	if srcIno.IsTrash() || srcParentIno.IsTrash() || parent.IsTrash() || (parent == RootInode && name == TrashName) {
 		return syscall.EPERM
@@ -3402,9 +3458,9 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	if eno = m.Access(ctx, parent, MODE_MASK_X|MODE_MASK_W, nil); eno != 0 {
 		return eno
 	}
-	var dstIno Ino
+	var lookupIno Ino
 	var _a Attr
-	if eno = m.en.doLookup(ctx, parent, name, &dstIno, &_a); eno == 0 {
+	if eno = m.en.doLookup(ctx, parent, name, &lookupIno, &_a); eno == 0 {
 		return syscall.EEXIST
 	} else if eno != syscall.ENOENT {
 		return eno
@@ -3423,17 +3479,21 @@ func (m *baseMeta) Clone(ctx Context, srcParentIno, srcIno, parent Ino, name str
 	}
 	concurrent := make(chan struct{}, concurrency)
 	if attr.Typ == TypeDirectory {
-		eno = m.cloneEntry(ctx, srcIno, parent, name, &dstIno, cmode, cumask, count, true, concurrent)
-		if eno == 0 {
-			eno = m.en.doAttachDirNode(ctx, parent, dstIno, name)
+		var newIno Ino
+		eno = m.cloneEntry(ctx, srcIno, parent, name, &newIno, cmode, cumask, count, true, concurrent)
+		if dstIno != nil {
+			*dstIno = newIno
 		}
-		if eno != 0 && dstIno != 0 {
-			if eno := m.en.doCleanupDetachedNode(ctx, dstIno); eno != 0 {
-				logger.Errorf("remove detached tree (%d): %s", dstIno, eno)
+		if eno == 0 {
+			eno = m.en.doAttachDirNode(ctx, parent, newIno, name)
+		}
+		if eno != 0 && newIno != 0 {
+			if eno := m.en.doCleanupDetachedNode(ctx, newIno); eno != 0 {
+				logger.Errorf("remove detached tree (%d): %s", newIno, eno)
 			}
 		}
 	} else {
-		eno = m.cloneEntry(ctx, srcIno, parent, name, nil, cmode, cumask, count, true, concurrent)
+		eno = m.cloneEntry(ctx, srcIno, parent, name, dstIno, cmode, cumask, count, true, concurrent)
 	}
 	if eno == 0 {
 		m.updateDirStat(ctx, parent, int64(attr.Length), align4K(attr.Length), 1)
