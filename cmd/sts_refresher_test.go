@@ -262,6 +262,10 @@ func (s *stubKeyManager) FetchCompanyKEK(ctx context.Context, req *kmpb.FetchCom
 	return nil, fmt.Errorf("not implemented")
 }
 
+func (s *stubKeyManager) ProvisionCompanyKEK(ctx context.Context, req *kmpb.ProvisionCompanyKEKRequest) (*kmpb.ProvisionCompanyKEKResponse, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
 func (s *stubKeyManager) GetPermissionGeneration(ctx context.Context, req *kmpb.GetPermissionGenerationRequest) (*kmpb.GetPermissionGenerationResponse, error) {
 	return nil, fmt.Errorf("not implemented")
 }

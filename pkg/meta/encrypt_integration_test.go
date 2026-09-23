@@ -155,6 +155,16 @@ func (f *fakeKeyManager) FetchCompanyKEK(ctx context.Context, req *kmpb.FetchCom
 	return &kmpb.FetchCompanyKEKResponse{Kek: kek, KekVersion: 1}, nil
 }
 
+func (f *fakeKeyManager) ProvisionCompanyKEK(ctx context.Context, req *kmpb.ProvisionCompanyKEKRequest) (*kmpb.ProvisionCompanyKEKResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if req.CompanyId != testCompanyID {
+		return nil, status.Error(codes.NotFound, "unknown company")
+	}
+	// the fake always has a KEK — provisioning is an idempotent no-op
+	return &kmpb.ProvisionCompanyKEKResponse{KekVersion: 1, Created: false}, nil
+}
+
 // bumpGeneration simulates the platform INCR drivepermgen:{userID} performed on
 // SetRole/DeleteRole/ClearRoles (task 7.1).
 func (f *fakeKeyManager) bumpGeneration() uint64 {
