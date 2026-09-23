@@ -96,6 +96,19 @@ func NewFEK() ([]byte, error) {
 // WrapFEK wraps plaintextFEK (32 bytes) under the Company KEK and returns an AGFK blob.
 // A fresh random nonce is used for every wrap (NFR-SEC-9).
 func WrapFEK(kek, plaintextFEK []byte, aad FekAAD, kekVersion uint32) ([]byte, error) {
+	nonce := make([]byte, fekNonceLen)
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, fmt.Errorf("agfk: nonce: %w", err)
+	}
+	return WrapFEKWithNonce(kek, plaintextFEK, aad, kekVersion, nonce)
+}
+
+// WrapFEKWithNonce is the deterministic variant of WrapFEK pinned by the cross-repo
+// known-answer vectors (stage 9). Production code must use WrapFEK.
+func WrapFEKWithNonce(kek, plaintextFEK []byte, aad FekAAD, kekVersion uint32, nonce []byte) ([]byte, error) {
+	if len(nonce) != fekNonceLen {
+		return nil, fmt.Errorf("agfk: nonce must be %d bytes, got %d", fekNonceLen, len(nonce))
+	}
 	if len(kek) != kekSize {
 		return nil, fmt.Errorf("agfk: kek must be %d bytes, got %d", kekSize, len(kek))
 	}
@@ -109,10 +122,6 @@ func WrapFEK(kek, plaintextFEK []byte, aad FekAAD, kekVersion uint32) ([]byte, e
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return nil, fmt.Errorf("agfk: gcm: %w", err)
-	}
-	nonce := make([]byte, fekNonceLen)
-	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, fmt.Errorf("agfk: nonce: %w", err)
 	}
 	sealed := gcm.Seal(nil, nonce, plaintextFEK, aad.bytes())
 	blob := make([]byte, 0, agfkLen)

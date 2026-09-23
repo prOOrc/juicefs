@@ -32,7 +32,7 @@ func TestSetFileCrypto(t *testing.T) {
 	if os.Getenv("SKIP_NON_CORE") == "true" {
 		t.Skipf("skip non-core test")
 	}
-	m, err := newRedisMeta("redis", "127.0.0.1:6379/13", testConfig())
+	m, err := newRedisMeta("redis", encTestRedisAddr()+"/13", testConfig())
 	require.NoError(t, err)
 	rm := m.(*redisMeta)
 	defer rm.Shutdown()
@@ -104,7 +104,7 @@ func newRewrapTestEnv(t *testing.T) (*redisMeta, Ino, []byte, []byte, []byte, []
 	if os.Getenv("SKIP_NON_CORE") == "true" {
 		t.Skipf("skip non-core test")
 	}
-	m, err := newRedisMeta("redis", "127.0.0.1:6379/11", testConfig())
+	m, err := newRedisMeta("redis", encTestRedisAddr()+"/11", testConfig())
 	require.NoError(t, err)
 	rm := m.(*redisMeta)
 	t.Cleanup(func() { _ = rm.Shutdown() })

@@ -6415,7 +6415,7 @@ func TestRedisLockIndexRelease(t *testing.T) {
 }
 
 func TestGCRespectsFileCryptoDeletable(t *testing.T) {
-	m, err := newRedisMeta("redis", "127.0.0.1:6379/12", testConfig())
+	m, err := newRedisMeta("redis", encTestRedisAddr()+"/12", testConfig())
 	if err != nil || m.Name() != "redis" {
 		t.Fatalf("create meta: %s", err)
 	}

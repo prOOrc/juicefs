@@ -71,6 +71,19 @@ func buildBlockAAD(sliceID uint64, blockIndex uint32) []byte {
 // EncryptBlock encrypts a block with AES-256-GCM under cek (32 bytes). A fresh random
 // nonce is used for every call (NFR-SEC-9). The result is an AGDF blob.
 func EncryptBlock(cek, plaintext []byte, sliceID uint64, blockIndex uint32) ([]byte, error) {
+	nonce := make([]byte, agdfNonceLen)
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, fmt.Errorf("agdf: nonce: %w", err)
+	}
+	return EncryptBlockWithNonce(cek, plaintext, sliceID, blockIndex, nonce)
+}
+
+// EncryptBlockWithNonce is the deterministic variant of EncryptBlock pinned by the
+// cross-repo known-answer vectors (stage 9). Production code must use EncryptBlock.
+func EncryptBlockWithNonce(cek, plaintext []byte, sliceID uint64, blockIndex uint32, nonce []byte) ([]byte, error) {
+	if len(nonce) != agdfNonceLen {
+		return nil, fmt.Errorf("agdf: nonce must be %d bytes, got %d", agdfNonceLen, len(nonce))
+	}
 	block, err := aes.NewCipher(cek)
 	if err != nil {
 		return nil, fmt.Errorf("agdf: aes cipher: %w", err)
@@ -78,10 +91,6 @@ func EncryptBlock(cek, plaintext []byte, sliceID uint64, blockIndex uint32) ([]b
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return nil, fmt.Errorf("agdf: gcm: %w", err)
-	}
-	nonce := make([]byte, agdfNonceLen)
-	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, fmt.Errorf("agdf: nonce: %w", err)
 	}
 	sealed := gcm.Seal(nil, nonce, plaintext, buildBlockAAD(sliceID, blockIndex))
 	out := make([]byte, 0, len(chunkMagic)+1+agdfNonceLen+len(sealed))
@@ -154,6 +163,19 @@ func NewCEK() ([]byte, error) {
 
 // WrapCEK wraps cek (32 bytes) under the file's FEK and returns an AGCK blob (65 bytes).
 func WrapCEK(fek, cek []byte, driveFileID string, sliceID uint64, fekVersion uint32) ([]byte, error) {
+	nonce := make([]byte, agdfNonceLen)
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, fmt.Errorf("agck: nonce: %w", err)
+	}
+	return WrapCEKWithNonce(fek, cek, driveFileID, sliceID, fekVersion, nonce)
+}
+
+// WrapCEKWithNonce is the deterministic variant of WrapCEK pinned by the cross-repo
+// known-answer vectors (stage 9). Production code must use WrapCEK.
+func WrapCEKWithNonce(fek, cek []byte, driveFileID string, sliceID uint64, fekVersion uint32, nonce []byte) ([]byte, error) {
+	if len(nonce) != agdfNonceLen {
+		return nil, fmt.Errorf("agck: nonce must be %d bytes, got %d", agdfNonceLen, len(nonce))
+	}
 	if len(cek) != cekSize {
 		return nil, fmt.Errorf("agck: cek must be %d bytes, got %d", cekSize, len(cek))
 	}
@@ -164,10 +186,6 @@ func WrapCEK(fek, cek []byte, driveFileID string, sliceID uint64, fekVersion uin
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return nil, fmt.Errorf("agck: gcm: %w", err)
-	}
-	nonce := make([]byte, agdfNonceLen)
-	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, fmt.Errorf("agck: nonce: %w", err)
 	}
 	sealed := gcm.Seal(nil, nonce, cek, buildCEKAAD(driveFileID, sliceID, fekVersion))
 	out := make([]byte, 0, len(cekMagic)+1+agdfNonceLen+len(sealed))

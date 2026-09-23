@@ -35,7 +35,7 @@ func newReencryptTestEnv(t *testing.T) (*redisMeta, Ino) {
 	if os.Getenv("SKIP_NON_CORE") == "true" {
 		t.Skipf("skip non-core test")
 	}
-	m, err := newRedisMeta("redis", "127.0.0.1:6379/0", testConfig())
+	m, err := newRedisMeta("redis", encTestRedisAddr()+"/0", testConfig())
 	require.NoError(t, err)
 	rm := m.(*redisMeta)
 	t.Cleanup(func() { _ = rm.Shutdown() })

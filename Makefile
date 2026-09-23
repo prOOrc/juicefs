@@ -114,6 +114,14 @@ test.meta.core:
 test.meta.non-core:
 	go test -v -cover -run='TestRedisCluster|TestPostgreSQLClient|TestLoadDumpSlow|TestEtcdClient|TestKeyDB' -count=1  -failfast -timeout=12m ./pkg/meta/... -args -test.gocoverdir="$(shell realpath cover/)"
 
+# Encryption integration suite (stage 9, task 9.3): the stage 3-8 encryption tests
+# against compose-managed Redis+MinIO. Self-contained: no local Redis required.
+ENC_INTEGRATION_RUN = TestEncIntegrationEnv|TestEncrypted|TestUserWithoutPermission|TestCreateRollback|TestOwnerBypass|TestLegacyVolume|TestResolveFileKey|TestSetFileCrypto|TestRewrapSlices|TestRender|TestClone|TestCopyFileRange|TestCompaction_Skipped|TestSliceDeletable|TestGCRespectsFileCryptoDeletable|TestWipeKeys|TestHubState|TestOfflineTimeout|TestOpenFailClosed|TestHeartbeat_GenerationChange|TestFekRotation|TestRotation|TestRevoke|TestKeyManagerUnavailable|TestReencrypt|TestRateLimit|TestLegacyReadable
+
+test.enc.integration:
+	docker compose -f docker-compose.enc-test.yml up -d && \
+	( REDIS_ADDR=localhost:6390 S3_ENDPOINT=localhost:9000 go test -tags=encintegration -count=1 -timeout=20m -run='$(ENC_INTEGRATION_RUN)' ./pkg/meta/... ./pkg/vfs/... ./cmd/... ; status=$$? ; docker compose -f docker-compose.enc-test.yml down -v ; exit $$status )
+
 test.pkg:
 	go test -tags gluster -v -cover -count=1  -failfast -timeout=12m $$(go list ./pkg/... | grep -v /meta) -args -test.gocoverdir="$(shell realpath cover/)"
 

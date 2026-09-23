@@ -30,7 +30,7 @@ import (
 // RenderMeta under the given Company KEK.
 func newRenderNode(t *testing.T, db int, subdir string, kek []byte, kekVersion uint32, volumeUUID, companyID string) *RenderMeta {
 	t.Helper()
-	m, err := newRedisMeta("redis", fmt.Sprintf("127.0.0.1:6379/%d", db), testConfig())
+	m, err := newRedisMeta("redis", fmt.Sprintf("%s/%d", encTestRedisAddr(), db), testConfig())
 	require.NoError(t, err)
 	rm := m.(*redisMeta)
 	_, err = rm.Load(true)
