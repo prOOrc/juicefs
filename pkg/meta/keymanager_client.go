@@ -30,10 +30,12 @@ import (
 )
 
 // KeyManagerClient is the interface to the agio-platform DriveKeyManagerService.
-// The proxy uses it to issue (CreateFileKey) and unwrap (GetFileFEK) per-file FEKs.
+// The proxy uses it to issue (CreateFileKey) and unwrap (GetFileFEK) per-file FEKs;
+// render nodes use FetchCompanyKEK once at mount (FR-RND-2).
 type KeyManagerClient interface {
 	CreateFileKey(ctx context.Context, req *kmpb.CreateFileKeyRequest) (*kmpb.CreateFileKeyResponse, error)
 	GetFileFEK(ctx context.Context, req *kmpb.GetFileFEKRequest) (*kmpb.GetFileFEKResponse, error)
+	FetchCompanyKEK(ctx context.Context, req *kmpb.FetchCompanyKEKRequest) (*kmpb.FetchCompanyKEKResponse, error)
 	Close() error
 }
 
@@ -50,6 +52,10 @@ func (c *platformKeyManager) GetFileFEK(ctx context.Context, req *kmpb.GetFileFE
 	return c.client.GetFileFEK(ctx, req)
 }
 
+func (c *platformKeyManager) FetchCompanyKEK(ctx context.Context, req *kmpb.FetchCompanyKEKRequest) (*kmpb.FetchCompanyKEKResponse, error) {
+	return c.client.FetchCompanyKEK(ctx, req)
+}
+
 // Close closes the underlying gRPC connection.
 func (c *platformKeyManager) Close() error {
 	if closer, ok := c.client.(interface{ Close() error }); ok {
@@ -62,6 +68,18 @@ func (c *platformKeyManager) Close() error {
 // For production, use TLS via --keymanager-tls-cert, --keymanager-tls-key, and
 // --keymanager-tls-ca flags (same pattern as the authz client).
 func NewKeyManagerClient(addr, tlsCert, tlsKey, tlsCA, serverName string) (KeyManagerClient, error) {
+	return newKeyManagerClient(addr, tlsCert, tlsKey, tlsCA, serverName, 0)
+}
+
+// NewRenderKeyManagerClient creates a gRPC client for the KeyManager service for
+// render nodes. When a CA is given the transport enforces TLS 1.3 (NFR-SEC-2):
+// the Company KEK travels in plaintext over this channel, so no downgrade to
+// older protocol versions is acceptable.
+func NewRenderKeyManagerClient(addr, tlsCA, serverName string) (KeyManagerClient, error) {
+	return newKeyManagerClient(addr, "", "", tlsCA, serverName, tls.VersionTLS13)
+}
+
+func newKeyManagerClient(addr, tlsCert, tlsKey, tlsCA, serverName string, minTLSVersion uint16) (KeyManagerClient, error) {
 	opts := []grpc.DialOption{}
 
 	if tlsCert != "" && tlsKey != "" && tlsCA != "" {
@@ -77,12 +95,29 @@ func NewKeyManagerClient(addr, tlsCert, tlsKey, tlsCA, serverName string) (KeyMa
 		if !cp.AppendCertsFromPEM(ca) {
 			return nil, fmt.Errorf("failed to parse CA certificate")
 		}
-		creds := credentials.NewTLS(&tls.Config{
+		cfg := &tls.Config{
 			Certificates: []tls.Certificate{cert},
 			RootCAs:      cp,
 			ServerName:   serverName,
-		})
-		opts = append(opts, grpc.WithTransportCredentials(creds))
+		}
+		if minTLSVersion != 0 {
+			cfg.MinVersion = minTLSVersion
+		}
+		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(cfg)))
+	} else if tlsCA != "" {
+		ca, err := os.ReadFile(tlsCA)
+		if err != nil {
+			return nil, fmt.Errorf("read CA file: %w", err)
+		}
+		cp := x509.NewCertPool()
+		if !cp.AppendCertsFromPEM(ca) {
+			return nil, fmt.Errorf("failed to parse CA certificate")
+		}
+		cfg := &tls.Config{RootCAs: cp, ServerName: serverName}
+		if minTLSVersion != 0 {
+			cfg.MinVersion = minTLSVersion
+		}
+		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(cfg)))
 	} else {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
