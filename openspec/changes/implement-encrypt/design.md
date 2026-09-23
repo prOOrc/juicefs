@@ -336,6 +336,8 @@ FEK → wrapped_cek (slice metadata) → CEK (RAM) → AES-256-GCM чанк в S
 | 7.5 | CEK rotation (FR-ROT-5/6) = ре-энкрипция файла инструментом этапа 8 (`juicefs reencrypt --file <path> --rotate-cek`); в этом этапе — только фиксация интерфейса и документация | Механика идентична миграции; не дублируем код |
 | 7.6 | Offboarding (FR-REV-6): CLI platform `keymanager rotate-user-keys --user <id> --company <id>` — перечисляет файлы по правам пользователя → batch через proxy RPC `RotateFileKeysByPaths` (rate-limited, возобновляемый) | РЕКОМЕНДУЕТСЯ при offboarding; автоматизация ручного процесса |
 
+> 7.7 — отсутствует в таблице (пропуск нумерации): интеграция отзыва = комбинация решений 7.1 (счётчик + RPC `GetPermissionGeneration`) и 7.3 (wipe при увеличении generation на heartbeat); отдельного архитектурного решения нет, см. блок решений 7.7 в tasks.md.
+
 ### Решения Stage 8 (форк)
 
 | # | Решение | Обоснование |
