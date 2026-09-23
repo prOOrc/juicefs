@@ -176,3 +176,48 @@ func TestOpenFailClosedOffline(t *testing.T) {
 	require.Equal(t, HubOfflineConnected, m.HubState())
 	require.Equal(t, syscall.EIO, m.Open(Background(), 1, 0, &Attr{}))
 }
+
+// TestHeartbeat_GenerationChange_WipesKeys verifies task 7.3 (FR-REV-2/7): the
+// heartbeat's permission generation is a monotonic platform counter — the first
+// beat initializes the baseline without wiping (a user with historical role
+// changes must keep freshly issued keys), an equal or lower value (including 0,
+// the KeyManager-unavailable sentinel) is a no-op, and an increase wipes all
+// cached FEKs and fires the onWipe hook (VFS.InvalidateAllKeys).
+func TestHeartbeat_GenerationChange_WipesKeys(t *testing.T) {
+	m := &grpcMeta{
+		fekCache:    expirable.NewLRU[uint64, *fekEntry](10, nil, time.Minute),
+		lastPermGen: -1, // as set by newGRPCMeta before the first heartbeat
+	}
+	fek := bytes.Repeat([]byte{0xEF}, 32)
+	m.fekCache.Add(1, &fekEntry{fek: fek, version: 1})
+	var wiped int32
+	m.SetOnWipe(func() { atomic.AddInt32(&wiped, 1) })
+
+	// first beat: baseline initialization, no wipe (generation may already be >0
+	// from role changes that predate this mount)
+	m.applyPermissionGeneration(5)
+	require.EqualValues(t, 5, m.lastPermGen)
+	require.Equal(t, 1, m.fekCache.Len(), "first beat must not wipe")
+	require.Equal(t, int32(0), atomic.LoadInt32(&wiped))
+
+	// unchanged generation: no-op
+	m.applyPermissionGeneration(5)
+	require.Equal(t, 1, m.fekCache.Len())
+	require.Equal(t, int32(0), atomic.LoadInt32(&wiped))
+
+	// KeyManager unavailable (proxy reports 0): must not wipe authorized users
+	m.applyPermissionGeneration(0)
+	require.Equal(t, 1, m.fekCache.Len(), "a 0 generation is a no-op, not a revocation")
+	require.Equal(t, int32(0), atomic.LoadInt32(&wiped))
+
+	// role change on the platform (INCR): increase → wipe + InvalidateAllKeys
+	m.applyPermissionGeneration(6)
+	require.EqualValues(t, 6, m.lastPermGen)
+	require.Zero(t, m.fekCache.Len(), "FEK cache must be empty after a generation increase")
+	require.Equal(t, make([]byte, 32), fek, "FEK backing array must be zeroed")
+	require.Equal(t, int32(1), atomic.LoadInt32(&wiped), "onWipe (InvalidateAllKeys) must fire")
+
+	// the wipe is not sticky: a later equal generation stays quiet
+	m.applyPermissionGeneration(6)
+	require.Equal(t, int32(1), atomic.LoadInt32(&wiped))
+}

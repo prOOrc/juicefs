@@ -21,6 +21,7 @@ import (
 	"strings"
 	"syscall"
 
+	kmpb "github.com/juicedata/juicefs/pkg/meta/keymanager_pb"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 )
 
@@ -93,7 +94,22 @@ func (s *MetaProxyServer) CloseSession(ctx context.Context, req *pb.CloseSession
 
 func (s *MetaProxyServer) FlushSession(ctx context.Context, req *pb.FlushSessionRequest) (*pb.FlushSessionResponse, error) {
 	s.meta.FlushSession()
-	return &pb.FlushSessionResponse{Errno: 0}, nil
+	resp := &pb.FlushSessionResponse{Errno: 0}
+	// Permission generation (task 7.3): the heartbeat is the revocation channel —
+	// the platform bumps drivepermgen:{userID} on every role change and the client
+	// wipes its keys when the value increases. Any failure here (no KeyManager, no
+	// verified identity, RPC error) leaves the field at 0: clients react only to an
+	// increase, so a KeyManager outage must not wipe keys of authorized users.
+	if s.keyManager != nil {
+		if userID, err := extractUserIDFromOIDC(ctx); err == nil {
+			if genResp, err := s.keyManager.GetPermissionGeneration(ctx, &kmpb.GetPermissionGenerationRequest{UserId: userID}); err == nil {
+				resp.PermissionGeneration = genResp.Generation
+			} else {
+				logger.Warnf("FlushSession: GetPermissionGeneration failed for user %s: %v", userID, err)
+			}
+		}
+	}
+	return resp, nil
 }
 
 func (s *MetaProxyServer) GetSession(ctx context.Context, req *pb.GetSessionRequest) (*pb.GetSessionResponse, error) {

@@ -30,6 +30,7 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	kmpb "github.com/juicedata/juicefs/pkg/meta/keymanager_pb"
@@ -60,6 +61,13 @@ type fakeKeyManager struct {
 	getFekCalls    int
 	lastCreatePath string
 	lastGetFekPath string
+
+	// Stage 7: permission generation counter (simulates the platform's
+	// drivepermgen:{userID} INCR on role change) and FEK rotation.
+	generation   uint64
+	denyRotate   bool
+	rotateCalls  int
+	lastRotateID string
 }
 
 var _ KeyManagerClient = (*fakeKeyManager)(nil)
@@ -145,6 +153,67 @@ func (f *fakeKeyManager) FetchCompanyKEK(ctx context.Context, req *kmpb.FetchCom
 	kek := make([]byte, len(f.kek))
 	copy(kek, f.kek)
 	return &kmpb.FetchCompanyKEKResponse{Kek: kek, KekVersion: 1}, nil
+}
+
+// bumpGeneration simulates the platform INCR drivepermgen:{userID} performed on
+// SetRole/DeleteRole/ClearRoles (task 7.1).
+func (f *fakeKeyManager) bumpGeneration() uint64 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.generation++
+	return f.generation
+}
+
+func (f *fakeKeyManager) GetPermissionGeneration(ctx context.Context, req *kmpb.GetPermissionGenerationRequest) (*kmpb.GetPermissionGenerationResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return &kmpb.GetPermissionGenerationResponse{Generation: f.generation}, nil
+}
+
+func (f *fakeKeyManager) GetSTSCredentials(ctx context.Context, req *kmpb.GetSTSCredentialsRequest) (*kmpb.GetSTSCredentialsResponse, error) {
+	if req.CompanyId != testCompanyID {
+		return nil, status.Error(codes.NotFound, "unknown company")
+	}
+	return &kmpb.GetSTSCredentialsResponse{
+		AccessKeyId:     "STS-FAKE",
+		SecretAccessKey: "fake-secret",
+		SessionToken:    "fake-token",
+		ExpirationUnix:  time.Now().Add(time.Hour).Unix(),
+	}, nil
+}
+
+// RotateFileFEK simulates the platform handler (task 7.5): a fresh FEK wrapped
+// under the company KEK with version = current + 1, plus the plaintext for the
+// proxy's RewrapSlices. The AAD uses the same company as every other fake call.
+func (f *fakeKeyManager) RotateFileFEK(ctx context.Context, req *kmpb.RotateFileFEKRequest) (*kmpb.RotateFileFEKResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.rotateCalls++
+	f.lastRotateID = req.DriveFileId
+	if f.denyRotate {
+		return nil, status.Error(codes.PermissionDenied, "rotate denied")
+	}
+	if req.CurrentFekVersion == 0 {
+		return nil, status.Error(codes.InvalidArgument, "current_fek_version must be >= 1")
+	}
+	newVersion := req.CurrentFekVersion + 1
+	fek, err := NewFEK()
+	if err != nil {
+		return nil, err
+	}
+	wrapped, err := WrapFEK(f.kek, fek, f.aad(req.VolumeUuid, req.DriveFileId, req.Inode, newVersion), 1)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]byte, len(fek))
+	copy(out, fek)
+	return &kmpb.RotateFileFEKResponse{
+		WrappedFek:   wrapped,
+		FekVersion:   newVersion,
+		KekVersion:   1,
+		CryptoAlg:    "AES-256-GCM",
+		PlaintextFek: out,
+	}, nil
 }
 
 func (f *fakeKeyManager) Close() error { return nil }

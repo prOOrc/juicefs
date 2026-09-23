@@ -32,6 +32,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
@@ -457,12 +458,37 @@ func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Con
 }
 
 type storageHolder struct {
+	mu sync.Mutex // guards ObjectStorage and fmt (STS swap vs OnReload)
 	object.ObjectStorage
 	fmt meta.Format
 }
 
 func (h *storageHolder) Shutdown() {
 	object.Shutdown(h.ObjectStorage)
+}
+
+// SetCredentials swaps the storage credential set in place (task 7.4): it
+// rebuilds the object storage from the holder's format with the new STS
+// credentials and replaces both atomically. The Redis Format is NOT updated —
+// STS credentials are ephemeral by design; if a later OnReload installs stale
+// static credentials, the next refresh (within ttl/2) swaps them back.
+func (h *storageHolder) SetCredentials(accessKey, secretKey, sessionToken string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	f := h.fmt
+	if err := f.Decrypt(); err != nil {
+		return fmt.Errorf("decrypt format for STS swap: %w", err)
+	}
+	f.AccessKey = accessKey
+	f.SecretKey = secretKey
+	f.SessionToken = sessionToken
+	blob, err := createStorage(f)
+	if err != nil {
+		return fmt.Errorf("create storage with STS credentials: %w", err)
+	}
+	h.ObjectStorage = blob
+	h.fmt = f
+	return nil
 }
 
 func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.Format)) (object.ObjectStorage, error) {
@@ -481,6 +507,8 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 		if patch != nil {
 			patch(new)
 		}
+		holder.mu.Lock()
+		defer holder.mu.Unlock()
 		old := &holder.fmt
 		if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey || new.SessionToken != old.SessionToken || new.Tiers[0].Sc != old.Tiers[0].Sc || !reflect.DeepEqual(new.Tiers, old.Tiers) {
 			logger.Infof("found new configuration: storage=%q bucket=%q ak=%q storageClass=%q tiers=%v", new.Storage, new.Bucket, new.AccessKey, new.Tiers[0].Sc, new.Tiers)
@@ -686,6 +714,48 @@ func mount(c *cli.Context) error {
 		daemonRun(c, addr, vfsConf)
 		return nil
 	}
+
+	// STS credentials (task 7.4): replace the static storage credentials with
+	// short-lived ones from the platform KeyManager and refresh them every
+	// ttl/2. Fail-fast: without initial credentials the mount does not start —
+	// there is no silent fallback to static keys.
+	if c.Bool("sts-enabled") {
+		if !format.EncryptionEnabled {
+			return fmt.Errorf("--sts-enabled requires an encrypted volume")
+		}
+		companyID := c.String("company-id")
+		if companyID == "" {
+			return fmt.Errorf("--company-id is required with --sts-enabled")
+		}
+		keyManagerAddr := c.String("keymanager-service")
+		if keyManagerAddr == "" {
+			return fmt.Errorf("--keymanager-service is required with --sts-enabled")
+		}
+		keyManager, err := meta.NewKeyManagerClient(keyManagerAddr,
+			c.String("keymanager-tls-cert"), c.String("keymanager-tls-key"),
+			c.String("keymanager-tls-ca"), c.String("keymanager-server-name"))
+		if err != nil {
+			return fmt.Errorf("keymanager: %w", err)
+		}
+		subjectFn := func(ctx context.Context) string { return "" }
+		if sm, ok := metaCli.(interface{ Subject(context.Context) string }); ok {
+			subjectFn = sm.Subject
+		}
+		holder, ok := blob.(*storageHolder)
+		if !ok {
+			return fmt.Errorf("sts: storage is not reloadable")
+		}
+		refresher := newSTSRefresher(&platformSTSProvider{
+			keyManager: keyManager,
+			subject:    subjectFn,
+			companyID:  companyID,
+		}, holder, defaultSTSTTL)
+		if err := refresher.Start(context.Background()); err != nil {
+			return fmt.Errorf("sts: %w", err)
+		}
+		defer refresher.Stop()
+	}
+
 	logger.Infof("JuiceFS version %s", version.Version())
 
 	if commPath := os.Getenv("_FUSE_FD_COMM"); commPath != "" {

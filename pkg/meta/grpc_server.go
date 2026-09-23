@@ -58,6 +58,10 @@ type MetaProxyServer struct {
 	// name used to resolve the companies prefix on the platform side.
 	keyManager KeyManagerClient
 	volumeName string
+
+	// rotateRate is the per-call rate limit (files/second) of the batch FEK
+	// rotation RPC (offboarding, task 7.6).
+	rotateRate int
 }
 
 // fileCryptoSetter is implemented by metadata engines that can persist per-file
@@ -74,6 +78,7 @@ func NewMetaProxyServer(m Meta, cacheMaxSize int) *MetaProxyServer {
 		meta:           m,
 		handlers:       make(map[uint64]*dirHandlerEntry),
 		inodePathCache: NewInodePathCache(cacheMaxSize),
+		rotateRate:     defaultRotateRate,
 	}
 }
 
@@ -93,6 +98,14 @@ func (s *MetaProxyServer) SetKeyManager(km KeyManagerClient) {
 // (the platform resolves the companies prefix from it).
 func (s *MetaProxyServer) SetVolumeName(name string) {
 	s.volumeName = name
+}
+
+// SetRotateRate overrides the batch rotation rate limit in files/second
+// (task 7.6; default 10). Values <= 0 disable the pacing.
+func (s *MetaProxyServer) SetRotateRate(rate int) {
+	if rate > 0 {
+		s.rotateRate = rate
+	}
 }
 
 // encryptionEnabled reports whether per-file FEK encryption is on for this volume.

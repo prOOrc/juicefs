@@ -74,6 +74,8 @@ service MetaService {
   rpc InvalidateChunkCache(InvalidateChunkCacheRequest) returns (InvalidateChunkCacheResponse);
   rpc CopyFileRange(CopyFileRangeRequest) returns (CopyFileRangeResponse);
   rpc ResolveFileKey(ResolveFileKeyRequest) returns (ResolveFileKeyResponse);
+  rpc RotateFileKey(RotateFileKeyRequest) returns (RotateFileKeyResponse);
+  rpc RotateFileKeysByPaths(RotateFileKeysByPathsRequest) returns (RotateFileKeysByPathsResponse);
 
   // --- Locks ---
   rpc Flock(FlockRequest) returns (FlockResponse);
@@ -455,4 +457,37 @@ message ResolveFileKeyResponse {
   int32 fek_version = 3;
   bool encrypted = 4;
   string drive_file_id = 5;
+}
+
+// RotateFileKey rotates the FEK of one encrypted file (offboarding, task 7.5):
+// GetFileFEK(old) -> platform RotateFileFEK (org-admin check + audit server-side)
+// -> SetFileCrypto(v+1) -> RewrapSlices. The caller's OIDC identity is used for
+// the KeyManager calls; admin_user_id must match it (kept for audit, mismatch
+// rejected). Any failure is fail-closed: the old key stays valid until
+// SetFileCrypto, and RewrapSlices is atomic per chunk.
+message RotateFileKeyRequest {
+  MetaContext ctx = 1;
+  uint64 inode = 2;
+  string admin_user_id = 3;
+}
+message RotateFileKeyResponse {
+  uint32 errno = 1;
+  int32 new_fek_version = 2;
+}
+
+// RotateFileKeysByPaths rotates the FEKs of a batch of files by path
+// (offboarding, task 7.6). Paths are full client paths (companies/{code}/...).
+// At most 100 per call; checkpoint is the index into the caller's path list for
+// resume; skipped paths carry a "path: reason" entry and still advance the
+// checkpoint. Rate-limited per call (default 10 files/s).
+message RotateFileKeysByPathsRequest {
+  string admin_user_id = 1;
+  repeated string paths = 2;
+  int64 checkpoint = 3;
+}
+message RotateFileKeysByPathsResponse {
+  uint32 errno = 1;
+  repeated string rotated_paths = 2;
+  repeated string skipped_paths = 3; // "path: reason"
+  int64 next_checkpoint = 4;
 }

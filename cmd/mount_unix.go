@@ -496,6 +496,36 @@ func mountFlags() []cli.Flag {
 			Usage: "disable transparent huge page to avoid latency spikes caused by kernel's memory compaction",
 		})
 	}
+	// STS credentials (task 7.4): short-lived storage credentials from the
+	// platform KeyManager instead of static keys in the volume format.
+	selfFlags = append(selfFlags, &cli.BoolFlag{
+		Name:  "sts-enabled",
+		Usage: "use short-lived STS storage credentials from the KeyManager (encrypted volumes only)",
+	})
+	selfFlags = append(selfFlags, &cli.StringFlag{
+		Name:  "company-id",
+		Usage: "company ID for STS credential requests (required with --sts-enabled)",
+	})
+	selfFlags = append(selfFlags, &cli.StringFlag{
+		Name:  "keymanager-service",
+		Usage: "KeyManager gRPC service address (e.g., localhost:9091); required with --sts-enabled",
+	})
+	selfFlags = append(selfFlags, &cli.StringFlag{
+		Name:  "keymanager-tls-cert",
+		Usage: "TLS client certificate for KeyManager service connection (production use)",
+	})
+	selfFlags = append(selfFlags, &cli.StringFlag{
+		Name:  "keymanager-tls-key",
+		Usage: "TLS client private key for KeyManager service connection (production use)",
+	})
+	selfFlags = append(selfFlags, &cli.StringFlag{
+		Name:  "keymanager-tls-ca",
+		Usage: "TLS CA certificate for KeyManager service connection (production use)",
+	})
+	selfFlags = append(selfFlags, &cli.StringFlag{
+		Name:  "keymanager-server-name",
+		Usage: "expected server name for KeyManager TLS verification (production use)",
+	})
 	return append(selfFlags, fuseFlags()...)
 }
 

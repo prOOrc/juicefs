@@ -31,11 +31,17 @@ import (
 
 // KeyManagerClient is the interface to the agio-platform DriveKeyManagerService.
 // The proxy uses it to issue (CreateFileKey) and unwrap (GetFileFEK) per-file FEKs;
-// render nodes use FetchCompanyKEK once at mount (FR-RND-2).
+// render nodes use FetchCompanyKEK once at mount (FR-RND-2). Stage 7 adds
+// GetPermissionGeneration (heartbeat revocation, task 7.3), GetSTSCredentials
+// (short-lived S3 credentials, task 7.4) and RotateFileFEK (offboarding rotation,
+// task 7.5).
 type KeyManagerClient interface {
 	CreateFileKey(ctx context.Context, req *kmpb.CreateFileKeyRequest) (*kmpb.CreateFileKeyResponse, error)
 	GetFileFEK(ctx context.Context, req *kmpb.GetFileFEKRequest) (*kmpb.GetFileFEKResponse, error)
 	FetchCompanyKEK(ctx context.Context, req *kmpb.FetchCompanyKEKRequest) (*kmpb.FetchCompanyKEKResponse, error)
+	GetPermissionGeneration(ctx context.Context, req *kmpb.GetPermissionGenerationRequest) (*kmpb.GetPermissionGenerationResponse, error)
+	GetSTSCredentials(ctx context.Context, req *kmpb.GetSTSCredentialsRequest) (*kmpb.GetSTSCredentialsResponse, error)
+	RotateFileFEK(ctx context.Context, req *kmpb.RotateFileFEKRequest) (*kmpb.RotateFileFEKResponse, error)
 	Close() error
 }
 
@@ -54,6 +60,18 @@ func (c *platformKeyManager) GetFileFEK(ctx context.Context, req *kmpb.GetFileFE
 
 func (c *platformKeyManager) FetchCompanyKEK(ctx context.Context, req *kmpb.FetchCompanyKEKRequest) (*kmpb.FetchCompanyKEKResponse, error) {
 	return c.client.FetchCompanyKEK(ctx, req)
+}
+
+func (c *platformKeyManager) GetPermissionGeneration(ctx context.Context, req *kmpb.GetPermissionGenerationRequest) (*kmpb.GetPermissionGenerationResponse, error) {
+	return c.client.GetPermissionGeneration(ctx, req)
+}
+
+func (c *platformKeyManager) GetSTSCredentials(ctx context.Context, req *kmpb.GetSTSCredentialsRequest) (*kmpb.GetSTSCredentialsResponse, error) {
+	return c.client.GetSTSCredentials(ctx, req)
+}
+
+func (c *platformKeyManager) RotateFileFEK(ctx context.Context, req *kmpb.RotateFileFEKRequest) (*kmpb.RotateFileFEKResponse, error) {
+	return c.client.RotateFileFEK(ctx, req)
 }
 
 // Close closes the underlying gRPC connection.

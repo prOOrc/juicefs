@@ -107,6 +107,14 @@ func renderMountFlags() []cli.Flag {
 			Name:  "node-id",
 			Usage: "node identifier reported to FetchCompanyKEK for audit; defaults to the hostname",
 		},
+		&cli.BoolFlag{
+			Name:  "sts-enabled",
+			Usage: "use short-lived STS storage credentials (AWS: AssumeRole with the node instance profile; YC: ephemeral access keys from the node IAM token) instead of static keys in the volume format",
+		},
+		&cli.StringFlag{
+			Name:  "sts-role-arn",
+			Usage: "IAM role ARN to assume for storage access (required with --sts-enabled on AWS volumes)",
+		},
 	})
 }
 
@@ -283,6 +291,44 @@ func renderMount(c *cli.Context) error {
 		return fmt.Errorf("object storage: %s", err)
 	}
 	logger.Infof("Data use %s", blob)
+
+	// STS credentials (task 7.4): replace the static storage credentials with
+	// short-lived ones scoped to the company prefix. AWS: AssumeRole with the
+	// node's instance profile; YC: ephemeral access keys issued from the node's
+	// IAM token (no static key involved). Fail-fast on the initial fetch.
+	if c.Bool("sts-enabled") {
+		holder, ok := blob.(*storageHolder)
+		if !ok {
+			return fmt.Errorf("sts: storage is not reloadable")
+		}
+		var provider stsCredentialsProvider
+		switch format.Storage {
+		case "aws":
+			roleARN := c.String("sts-role-arn")
+			if roleARN == "" {
+				return fmt.Errorf("--sts-role-arn is required with --sts-enabled on AWS volumes")
+			}
+			provider = &awsAssumeRoleProvider{
+				roleARN:     roleARN,
+				sessionName: nodeID,
+				bucket:      format.Bucket,
+				prefix:      prefix,
+				duration:    defaultSTSTTL,
+			}
+		default:
+			provider = &ycEphemeralKeyProvider{
+				token:       tp.Token,
+				sessionName: nodeID,
+				policy:      ycPrefixPolicy(format.Bucket, prefix),
+				duration:    defaultSTSTTL,
+			}
+		}
+		refresher := newSTSRefresher(provider, holder, defaultSTSTTL)
+		if err := refresher.Start(context.Background()); err != nil {
+			return fmt.Errorf("sts: %w", err)
+		}
+		defer refresher.Stop()
+	}
 
 	// Chroot to the company prefix BEFORE wrapping: the decorator inherits the
 	// restricted namespace (defense in depth, decision 4.2).

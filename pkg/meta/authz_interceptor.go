@@ -207,7 +207,8 @@ func (ai *AuthzInterceptor) requiredPermission(method string) AuthzPermission {
 		"Check", "CompactAll", "Compact", "ListSlices",
 		"HandleQuota", "ScanUserGroupUsage",
 		"CleanupTrashBefore", "CleanupDetachedNodesBefore",
-		"ScanDeletedObject", "ScanChangelog":
+		"ScanDeletedObject", "ScanChangelog",
+		"RotateFileKey", "RotateFileKeysByPaths":
 		return AuthzPermissionAdmin
 
 		// --- Post-filter: Readdir (handled in handler, not interceptor) ---

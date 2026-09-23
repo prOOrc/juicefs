@@ -108,6 +108,15 @@ type grpcMeta struct {
 	onWipe         func() // VFS hook (SetOnWipe): InvalidateAllKeys
 	onReconnect    func() // VFS hook (SetOnReconnect): ReplayWriteJournal
 
+	// Permission generation (stage 7, task 7.3): last generation seen on the
+	// heartbeat; -1 until the first successful beat. Only the heartbeat
+	// goroutine touches it.
+	lastPermGen int64
+	// heartbeatBaseCtx is a test seam: base context for heartbeats (nil →
+	// Background). Tests use it to carry a simulated OIDC identity so the
+	// proxy can resolve the user for GetPermissionGeneration.
+	heartbeatBaseCtx context.Context
+
 	// OIDC (nil if not configured)
 	oidcConfig   *oidc.Config
 	tokenManager tokenProvider      // interface for testability
@@ -120,6 +129,8 @@ type tokenProvider interface {
 	BearerToken(ctx context.Context) string
 	// CachedBearerToken is non-blocking: it never triggers browser auth.
 	CachedBearerToken(ctx context.Context) string
+	// Subject is the 'sub' claim of the cached ID token (non-blocking).
+	Subject(ctx context.Context) string
 	Stop()
 }
 
@@ -211,6 +222,7 @@ func newGRPCMeta(driver, addr string, conf *Config) (Meta, error) {
 		dirCacheTTL:       dirCacheTTL,
 		heartbeatInterval: heartbeatInterval,
 		offlineTimeout:    offlineTimeout,
+		lastPermGen:       -1, // unset until the first successful heartbeat (task 7.3)
 		oidcConfig:        oidcCfg,
 	}
 	// Assign only when non-nil: wrapping a nil *oidc.TokenManager in the
@@ -295,6 +307,16 @@ func (m *grpcMeta) cacheFek(inode Ino, fek []byte, version uint32) {
 // HubState returns the current hub connectivity state.
 func (m *grpcMeta) HubState() HubState {
 	return HubState(atomic.LoadInt32(&m.hubState))
+}
+
+// Subject returns the OIDC 'sub' claim of the cached ID token (the platform
+// user ID, invariant A6); empty when OIDC is not configured or no token is
+// cached. Used by the STS refresher to name the requesting user (task 7.4).
+func (m *grpcMeta) Subject(ctx context.Context) string {
+	if m.tokenManager == nil {
+		return ""
+	}
+	return m.tokenManager.Subject(ctx)
 }
 
 // SetOnWipe installs the callback invoked when keys are wiped due to
@@ -532,7 +554,11 @@ func (m *grpcMeta) doHeartbeat() {
 		}
 	}
 
-	ctx := m.withAuth(context.Background())
+	base := m.heartbeatBaseCtx
+	if base == nil {
+		base = context.Background()
+	}
+	ctx := m.withAuth(base)
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	req := &pb.FlushSessionRequest{}
@@ -550,6 +576,34 @@ func (m *grpcMeta) doHeartbeat() {
 		return
 	}
 	m.markHubOnline()
+	m.applyPermissionGeneration(resp.GetPermissionGeneration())
+}
+
+// applyPermissionGeneration applies the heartbeat's permission generation
+// (task 7.3, FR-REV-2/7): the platform counter only increases (INCR on every
+// role change), so the client wipes all key material exactly when the value
+// goes up. The first successful beat initializes the baseline without wiping —
+// a user with historical role changes must not lose freshly issued keys at
+// mount. A 0 or lower value (KeyManager unavailable, see FlushSession) is a
+// no-op: an outage must not revoke authorized users.
+func (m *grpcMeta) applyPermissionGeneration(gen uint64) {
+	g := int64(gen)
+	if m.lastPermGen < 0 {
+		m.lastPermGen = g
+		return
+	}
+	if g <= m.lastPermGen {
+		return
+	}
+	m.lastPermGen = g
+	logger.Warnf("permission generation increased to %d: wiping keys (revocation)", g)
+	m.WipeKeys()
+	m.hubMu.Lock()
+	cb := m.onWipe
+	m.hubMu.Unlock()
+	if cb != nil {
+		cb() // VFS.InvalidateAllKeys: stale handles fail with EIO on next use
+	}
 }
 
 // Check integrity of an absolute path and repair it if asked
