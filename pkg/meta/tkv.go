@@ -3173,6 +3173,12 @@ func (m *kvMeta) doCompactChunk(inode Ino, indx uint32, buf []byte, ss []*slice,
 	return st
 }
 
+// doReencryptChunk: not supported by the KV backend (encrypted volumes run on
+// Redis; the reencrypt worker fails with ENOSYS elsewhere).
+func (m *kvMeta) doReencryptChunk(inode Ino, indx uint32, origin []Slice, newSlice Slice, pos uint32, delayed []byte) syscall.Errno {
+	return syscall.ENOSYS
+}
+
 func (m *kvMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error {
 	// AiiiiiiiiCnnnn     file chunks
 	klen := 1 + 8 + 1 + 4

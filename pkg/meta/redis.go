@@ -21,6 +21,7 @@ package meta
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -3848,6 +3849,107 @@ func (m *redisMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*
 		}
 	}
 	return st
+}
+
+func (m *redisMeta) doReencryptChunk(inode Ino, indx uint32, origin []Slice, newSlice Slice, pos uint32, delayed []byte) syscall.Errno {
+	var rs []*redis.IntCmd // trash disabled: check reference of slices
+	if delayed == nil {
+		rs = make([]*redis.IntCmd, 0, len(origin))
+	}
+	var raw []*slice // stored records removed by the swap (refcount source of truth)
+	key := m.chunkKey(inode, indx)
+	ctx := Background()
+	st := errno(m.txn(ctx, func(tx *redis.Tx) error {
+		vals, err := tx.LRange(ctx, key, 0, -1).Result()
+		if err != nil {
+			return err
+		}
+		ss := readSlices(vals)
+		if ss == nil {
+			return syscall.EIO
+		}
+		// origin is the public list (buildSlice output, as Read returns): it may
+		// carry zero-fill entries for gaps and split records for overlaps, so
+		// compare in the same representation.
+		cur := buildSlice(ss)
+		if len(cur) != len(origin) {
+			return syscall.EAGAIN
+		}
+		for i, s := range cur {
+			o := origin[i]
+			if s.Id != o.Id || s.Size != o.Size || s.Off != o.Off || s.Len != o.Len || !bytes.Equal(s.WrappedCEK, o.WrappedCEK) {
+				return syscall.EAGAIN
+			}
+		}
+		raw = ss
+
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.Del(ctx, key)
+			pipe.RPush(ctx, key, marshalSliceCEK(pos, newSlice.Id, newSlice.Size, newSlice.Off, newSlice.Len, newSlice.WrappedCEK))
+			pipe.HSet(ctx, m.sliceRefs(), m.sliceKey(newSlice.Id, newSlice.Size), "0") // create the key to tracking it
+			if delayed != nil {
+				if len(delayed) > 0 {
+					pipe.HSet(ctx, m.delSlices(), fmt.Sprintf("%d_%d", newSlice.Id, time.Now().Unix()), delayed)
+				}
+			} else {
+				for _, s := range ss {
+					if s.id > 0 {
+						rs = append(rs, pipe.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(s.id, s.size), -1))
+					} else {
+						rs = append(rs, nil) // keep index alignment with raw
+					}
+				}
+			}
+			m.genLog(ctx, pipe, time.Now(), "REENCRYPTCHUNK(%d,%d,%d,%d)", inode, indx, newSlice.Id, newSlice.Size)
+			return nil
+		})
+		return err
+	}, key))
+	// there could be false-negative that the swap is successful, double-check
+	if st != 0 && st != syscall.EAGAIN {
+		if e := m.rdb.HGet(ctx, m.sliceRefs(), m.sliceKey(newSlice.Id, newSlice.Size)).Err(); e == nil {
+			st = 0 // successful
+		} else if e == redis.Nil {
+			logger.Infof("reencrypted chunk %d was not used", newSlice.Id)
+			st = syscall.EAGAIN // failed
+		}
+	}
+
+	if st == syscall.EAGAIN {
+		m.rdb.HIncrBy(ctx, m.sliceRefs(), m.sliceKey(newSlice.Id, newSlice.Size), -1)
+	} else if st == 0 {
+		m.cleanupZeroRef(m.sliceKey(newSlice.Id, newSlice.Size))
+		if delayed == nil {
+			for i, s := range raw {
+				if s.id > 0 && rs[i] != nil && rs[i].Err() == nil && rs[i].Val() < 0 {
+					m.deleteSlice(s.id, s.size)
+				}
+			}
+		}
+	}
+	return st
+}
+
+// ContiguousChunk snapshots a chunk's slice list with true positions resolved.
+// origin is the public list exactly as Read returns it (for ReencryptChunk's
+// conflict check); merged is the contiguous coverage [pos, pos+size) — gaps
+// materialized as zero-fill entries (Id=0), leading/trailing holes trimmed —
+// so concatenating merged in order yields exactly that range. The public Slice
+// type carries no pos, so this must run where the stored records are visible
+// (stage 8 reencrypt).
+func (m *redisMeta) ContiguousChunk(ctx Context, inode Ino, indx uint32) (pos uint32, size uint32, merged []Slice, origin []Slice, st syscall.Errno) {
+	key := m.chunkKey(inode, indx)
+	vals, err := m.rdb.LRange(ctx, key, 0, -1).Result()
+	if err != nil {
+		return 0, 0, nil, nil, errno(err)
+	}
+	ss := readSlices(vals)
+	if ss == nil {
+		return 0, 0, nil, nil, syscall.EIO
+	}
+	origin = buildSlice(ss)
+	pos, size, merged = compactChunk(ss)
+	return pos, size, merged, origin, 0
 }
 
 func (m *redisMeta) scanAllChunks(ctx Context, ch chan<- cchunk, bar *utils.Bar) error {

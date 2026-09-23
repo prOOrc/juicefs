@@ -91,6 +91,12 @@ func (m *grpcMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice 
 	return 0
 }
 
+// ReencryptChunk is not supported by the gRPC client (no proxy RPC; the
+// reencrypt worker runs against a local metadata engine).
+func (m *grpcMeta) ReencryptChunk(ctx Context, inode Ino, indx uint32, origin []Slice, newSlice Slice, pos uint32) syscall.Errno {
+	return syscall.ENOSYS
+}
+
 // InvalidateChunkCache invalidates chunk cache
 func (m *grpcMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno {
 	c := m.grpcContext(ctx)

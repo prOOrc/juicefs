@@ -3943,6 +3943,12 @@ func (m *dbMeta) doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*sli
 	return st
 }
 
+// doReencryptChunk: not supported by the SQL backend (encrypted volumes run on
+// Redis; the reencrypt worker fails with ENOSYS elsewhere).
+func (m *dbMeta) doReencryptChunk(inode Ino, indx uint32, origin []Slice, newSlice Slice, pos uint32, delayed []byte) syscall.Errno {
+	return syscall.ENOSYS
+}
+
 func dup(b []byte) []byte {
 	r := make([]byte, len(b))
 	copy(r, b)

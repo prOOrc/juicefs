@@ -138,6 +138,12 @@ type engine interface {
 	// with the new slice. wrappedCEK is the AGCK blob of the new slice (nil for
 	// legacy plaintext compaction); only engines that store the CEK tail persist it.
 	doCompactChunk(inode Ino, indx uint32, origin []byte, ss []*slice, skipped int, pos uint32, id uint64, size uint32, delayed []byte, wrappedCEK []byte) syscall.Errno
+	// doReencryptChunk atomically replaces the whole chunk list with newSlice at
+	// pos. origin is the slice list as read by the caller; if the stored list
+	// differs, the swap fails with EAGAIN and the caller must re-read and retry.
+	// delayed (non-nil when trash is enabled) defers the old slices' deletion
+	// so concurrent readers of a stale list keep working (FR-MIG-6).
+	doReencryptChunk(inode Ino, indx uint32, origin []Slice, newSlice Slice, pos uint32, delayed []byte) syscall.Errno
 
 	doGetParents(ctx Context, inode Ino) map[Ino]int
 	doUpdateDirStat(ctx Context, batch map[Ino]dirStat) error
@@ -2244,6 +2250,34 @@ func (m *baseMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice 
 				m.compactChunk(inode, indx, true, false, int(attr.Tier))
 			}
 		}
+	}
+	return st
+}
+
+// ReencryptChunk atomically replaces the whole chunk list of inode/indx with
+// newSlice (legacy-data migration). origin is the slice list as read by the
+// caller; if the stored list changed in between, the swap fails with EAGAIN
+// and the caller must re-read and retry. The open-file chunk cache is
+// invalidated on success so concurrent readers see the new list.
+func (m *baseMeta) ReencryptChunk(ctx Context, inode Ino, indx uint32, origin []Slice, newSlice Slice, pos uint32) syscall.Errno {
+	defer m.timeit("ReencryptChunk", time.Now())
+	f := m.of.find(inode)
+	if f != nil {
+		f.Lock()
+		defer f.Unlock()
+	}
+	var dsbuf []byte
+	if m.toTrash(0) {
+		dsbuf = make([]byte, 0, len(origin)*12)
+		for _, s := range origin {
+			if s.Id > 0 {
+				dsbuf = append(dsbuf, m.encodeDelayedSlice(s.Id, s.Size)...)
+			}
+		}
+	}
+	st := m.en.doReencryptChunk(inode, indx, origin, newSlice, pos, dsbuf)
+	if st == 0 {
+		m.of.InvalidateChunk(inode, indx)
 	}
 	return st
 }

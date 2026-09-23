@@ -559,6 +559,14 @@ type Meta interface {
 	NewSlice(ctx Context, id *uint64) syscall.Errno
 	// Write put a slice of data on top of the given chunk.
 	Write(ctx Context, inode Ino, indx uint32, off uint32, slice Slice, mtime time.Time) syscall.Errno
+	// ReencryptChunk atomically replaces the whole chunk list of inode/indx with
+	// one newSlice (legacy-data migration, stage 8). pos is the offset of
+	// newSlice inside the chunk (the merged range starts there). origin is the
+	// slice list as read by the caller; if the list changed in between, the swap
+	// fails with EAGAIN and the caller must re-read and retry. Refcounts of the
+	// old slices are decremented and the new slice's refcount is created in the
+	// same transaction.
+	ReencryptChunk(ctx Context, inode Ino, indx uint32, origin []Slice, newSlice Slice, pos uint32) syscall.Errno
 	// InvalidateChunkCache invalidate chunk cache
 	InvalidateChunkCache(ctx Context, inode Ino, indx uint32) syscall.Errno
 	// CopyFileRange copies part of a file to another one.

@@ -89,6 +89,8 @@ func Main(args []string) error {
 			cmdCompact(),
 			cmdTier(),
 			cmdMetaProxy(),
+			cmdReencrypt(),
+			cmdEnableEncryption(),
 		},
 	}
 

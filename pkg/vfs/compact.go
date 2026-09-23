@@ -59,11 +59,30 @@ func readSlice(store chunk.ChunkStore, s *meta.Slice, key []byte, page *chunk.Pa
 // non-nil when any source slice is encrypted — otherwise compaction fails closed.
 func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, id uint64, tierID uint8,
 	fek []byte, driveFileID string, fekVersion uint32) (wrappedCEK []byte, err error) {
+	return compactCore(conf, store, slices, id, tierID, fek, driveFileID, fekVersion, false)
+}
+
+// ReencryptChunkData merges a whole chunk list into one new slice id, always
+// encrypting the result under a fresh CEK wrapped with the file's FEK (stage 8
+// legacy-data migration and CEK rotation). Legacy plaintext sources are read
+// as-is and re-encrypted; encrypted sources are decrypted with their own CEKs
+// and re-wrapped. The caller persists the returned wrapped CEK in the new slice
+// record via ReencryptChunk.
+func ReencryptChunkData(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, id uint64, tierID uint8,
+	fek []byte, driveFileID string, fekVersion uint32) (wrappedCEK []byte, err error) {
+	return compactCore(conf, store, slices, id, tierID, fek, driveFileID, fekVersion, true)
+}
+
+// compactCore is the shared merge implementation of Compact and
+// ReencryptChunkData. alwaysEncrypt forces a fresh CEK even when every source
+// slice is legacy plaintext (reencrypt); otherwise the output stays plaintext.
+func compactCore(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, id uint64, tierID uint8,
+	fek []byte, driveFileID string, fekVersion uint32, alwaysEncrypt bool) (wrappedCEK []byte, err error) {
 	for utils.AllocMemory()-store.UsedMemory() > int64(conf.BufferSize)*3/2 {
 		time.Sleep(time.Millisecond * 100)
 	}
 	var size uint32
-	encrypted := false
+	encrypted := alwaysEncrypt
 	for _, s := range slices {
 		size += s.Len
 		if len(s.WrappedCEK) > 0 {
