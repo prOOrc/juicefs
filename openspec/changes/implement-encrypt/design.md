@@ -323,6 +323,8 @@ FEK → wrapped_cek (slice metadata) → CEK (RAM) → AES-256-GCM чанк в S
 | 6.6 | Logout: control file `_JFS_LOGOUT` во внутреннем dir (паттерн `CompactPath` из `pkg/vfs/internal.go`) → VFS → `WipeKeys()` + disconnected. Re-login = повторный mount (или refresh токена, если hub вернул доступ) | Существующий механизм control files; без новых RPC |
 | 6.7 | OIDC expiry: `tokenManager` — проверить callback о смерти сессии; если нет — heartbeat-проверка: `BearerToken()` вернул ошибку/expired → WipeKeys + disconnected | NFR-SEC-3 «истечение OIDC-сессии» |
 
+> 6.5 — отсутствует в таблице (пропуск нумерации): решение о write journal offline-записей реализовано в задаче 6.3 tasks.md, см. её блок решений (формат записи, точки append/replay, идемпотентность по `doWrite`/`buildSlice`).
+
 ### Решения Stage 7 (оба)
 
 | # | Решение | Обоснование |
