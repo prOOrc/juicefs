@@ -1375,10 +1375,10 @@ make test.meta.non-core   # или точечно: go test -run 'TestEncrypted|T
 
 ### Tasks
 
-- [ ] 4.1 Декоратор `RenderMeta` над `meta.Meta`: Open (FEK из LRU 100k/1h или локальный `UnwrapFEK`, чужая компания → EIO), Create (локальная генерация FEK + `SetFileCrypto` + rollback), остальные методы — делегирование. Файл: `pkg/meta/render_meta.go`. Проверка: `go test ./pkg/meta/ -run 'TestRenderMeta'` (unwrap, cross-company fail-closed, create, TTL).
-- [ ] 4.2 Команда `juicefs render-mount`: прямой Redis (subdir = company prefix), `FetchCompanyKEK` по IAM ноды (TLS 1.3; KEK никогда через CLI), mlock KEK + обнуление при unmount. Файл: `cmd/render_mount.go`. Проверка: `go build ./...`; `./juicefs render-mount --help`; интеграционный `TestRenderFullCycle` без OIDC/proxy/PG (AC-4).
-- [ ] 4.3 Aggressive caching (attr/entry timeout ≥ 60s) + pipelined readdir для render-режима. Файлы: `cmd/render_mount.go`, `pkg/meta/redis.go` (pipeline-ветка Readdir при необходимости). Проверка: unit/integration-тест таймаутов; проверка round-trips readdir (1 на директорию).
-- [ ] 4.4 Интеграционные тесты: render читает/пишет файл user-клиента; cross-company → EIO + chroot. Проверка: `go test -run 'TestRender' ./pkg/meta/` (Redis + MinIO) зелёный.
+- [x] 4.1 Декоратор `RenderMeta` над `meta.Meta`: Open (FEK из LRU 100k/1h или локальный `UnwrapFEK`, чужая компания → EIO), Create (локальная генерация FEK + `SetFileCrypto` + rollback), остальные методы — делегирование. Файл: `pkg/meta/render_meta.go`. Проверка: `go test ./pkg/meta/ -run 'TestRenderMeta'` (unwrap, cross-company fail-closed, create, TTL).
+- [x] 4.2 Команда `juicefs render-mount`: прямой Redis (subdir = company prefix), `FetchCompanyKEK` по IAM ноды (TLS 1.3; KEK никогда через CLI), mlock KEK + обнуление при unmount. Файл: `cmd/render_mount.go`. Проверка: `go build ./...`; `./juicefs render-mount --help`; интеграционный `TestRenderFullCycle` без OIDC/proxy/PG (AC-4).
+- [x] 4.3 Aggressive caching (attr/entry timeout ≥ 60s) + pipelined readdir для render-режима. Файлы: `cmd/render_mount.go`, `pkg/meta/redis.go` (pipeline-ветка Readdir при необходимости). Проверка: unit/integration-тест таймаутов; проверка round-trips readdir (1 на директорию). Примечание: pipeline-изменения в redis.go не потребовались — `doReaddir` уже батчит HSCAN + MGet (по 1 round-trip); кэширование — через принудительные attr/entry/dir-entry timeout ≥ 60s (`forceRenderCacheTimeouts`).
+- [x] 4.4 Интеграционные тесты: render читает/пишет файл user-клиента; cross-company → EIO + chroot. Проверка: `go test -run 'TestRender' ./pkg/meta/` (Redis + MinIO) зелёный.
 
 ### Implementation details
 
