@@ -73,6 +73,7 @@ func Main(args []string) error {
 			cmdProfile(),
 			cmdInfo(),
 			cmdMount(),
+			cmdRenderMount(),
 			cmdUmount(),
 			cmdGateway(),
 			cmdWebDav(),

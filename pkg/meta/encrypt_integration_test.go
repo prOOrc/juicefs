@@ -72,6 +72,14 @@ func newFakeKeyManager() *fakeKeyManager {
 	return &fakeKeyManager{kek: kek}
 }
 
+// newFakeKeyManagerWithKEK builds a fake KeyManager around a caller-provided KEK
+// (render tests need two distinct company KEKs).
+func newFakeKeyManagerWithKEK(kek []byte) *fakeKeyManager {
+	k := make([]byte, len(kek))
+	copy(k, kek)
+	return &fakeKeyManager{kek: k}
+}
+
 func (f *fakeKeyManager) aad(volumeUUID, driveFileID string, inode int64, fekVersion uint32) FekAAD {
 	return FekAAD{
 		VolumeUUID:  volumeUUID,
@@ -126,6 +134,17 @@ func (f *fakeKeyManager) GetFileFEK(ctx context.Context, req *kmpb.GetFileFEKReq
 		KekVersion:  1,
 		CryptoAlg:   "AES-256-GCM",
 	}, nil
+}
+
+func (f *fakeKeyManager) FetchCompanyKEK(ctx context.Context, req *kmpb.FetchCompanyKEKRequest) (*kmpb.FetchCompanyKEKResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if req.CompanyId != testCompanyID {
+		return nil, status.Error(codes.NotFound, "unknown company")
+	}
+	kek := make([]byte, len(f.kek))
+	copy(kek, f.kek)
+	return &kmpb.FetchCompanyKEKResponse{Kek: kek, KekVersion: 1}, nil
 }
 
 func (f *fakeKeyManager) Close() error { return nil }
