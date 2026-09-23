@@ -69,6 +69,8 @@ const (
 	MetaService_InvalidateChunkCache_FullMethodName       = "/pb.MetaService/InvalidateChunkCache"
 	MetaService_CopyFileRange_FullMethodName              = "/pb.MetaService/CopyFileRange"
 	MetaService_ResolveFileKey_FullMethodName             = "/pb.MetaService/ResolveFileKey"
+	MetaService_RotateFileKey_FullMethodName              = "/pb.MetaService/RotateFileKey"
+	MetaService_RotateFileKeysByPaths_FullMethodName      = "/pb.MetaService/RotateFileKeysByPaths"
 	MetaService_Flock_FullMethodName                      = "/pb.MetaService/Flock"
 	MetaService_Getlk_FullMethodName                      = "/pb.MetaService/Getlk"
 	MetaService_Setlk_FullMethodName                      = "/pb.MetaService/Setlk"
@@ -157,6 +159,8 @@ type MetaServiceClient interface {
 	InvalidateChunkCache(ctx context.Context, in *InvalidateChunkCacheRequest, opts ...grpc.CallOption) (*InvalidateChunkCacheResponse, error)
 	CopyFileRange(ctx context.Context, in *CopyFileRangeRequest, opts ...grpc.CallOption) (*CopyFileRangeResponse, error)
 	ResolveFileKey(ctx context.Context, in *ResolveFileKeyRequest, opts ...grpc.CallOption) (*ResolveFileKeyResponse, error)
+	RotateFileKey(ctx context.Context, in *RotateFileKeyRequest, opts ...grpc.CallOption) (*RotateFileKeyResponse, error)
+	RotateFileKeysByPaths(ctx context.Context, in *RotateFileKeysByPathsRequest, opts ...grpc.CallOption) (*RotateFileKeysByPathsResponse, error)
 	// --- Locks ---
 	Flock(ctx context.Context, in *FlockRequest, opts ...grpc.CallOption) (*FlockResponse, error)
 	Getlk(ctx context.Context, in *GetlkRequest, opts ...grpc.CallOption) (*GetlkResponse, error)
@@ -563,6 +567,26 @@ func (c *metaServiceClient) ResolveFileKey(ctx context.Context, in *ResolveFileK
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ResolveFileKeyResponse)
 	err := c.cc.Invoke(ctx, MetaService_ResolveFileKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *metaServiceClient) RotateFileKey(ctx context.Context, in *RotateFileKeyRequest, opts ...grpc.CallOption) (*RotateFileKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RotateFileKeyResponse)
+	err := c.cc.Invoke(ctx, MetaService_RotateFileKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *metaServiceClient) RotateFileKeysByPaths(ctx context.Context, in *RotateFileKeysByPathsRequest, opts ...grpc.CallOption) (*RotateFileKeysByPathsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RotateFileKeysByPathsResponse)
+	err := c.cc.Invoke(ctx, MetaService_RotateFileKeysByPaths_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1093,6 +1117,8 @@ type MetaServiceServer interface {
 	InvalidateChunkCache(context.Context, *InvalidateChunkCacheRequest) (*InvalidateChunkCacheResponse, error)
 	CopyFileRange(context.Context, *CopyFileRangeRequest) (*CopyFileRangeResponse, error)
 	ResolveFileKey(context.Context, *ResolveFileKeyRequest) (*ResolveFileKeyResponse, error)
+	RotateFileKey(context.Context, *RotateFileKeyRequest) (*RotateFileKeyResponse, error)
+	RotateFileKeysByPaths(context.Context, *RotateFileKeysByPathsRequest) (*RotateFileKeysByPathsResponse, error)
 	// --- Locks ---
 	Flock(context.Context, *FlockRequest) (*FlockResponse, error)
 	Getlk(context.Context, *GetlkRequest) (*GetlkResponse, error)
@@ -1259,6 +1285,12 @@ func (UnimplementedMetaServiceServer) CopyFileRange(context.Context, *CopyFileRa
 }
 func (UnimplementedMetaServiceServer) ResolveFileKey(context.Context, *ResolveFileKeyRequest) (*ResolveFileKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveFileKey not implemented")
+}
+func (UnimplementedMetaServiceServer) RotateFileKey(context.Context, *RotateFileKeyRequest) (*RotateFileKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RotateFileKey not implemented")
+}
+func (UnimplementedMetaServiceServer) RotateFileKeysByPaths(context.Context, *RotateFileKeysByPathsRequest) (*RotateFileKeysByPathsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RotateFileKeysByPaths not implemented")
 }
 func (UnimplementedMetaServiceServer) Flock(context.Context, *FlockRequest) (*FlockResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Flock not implemented")
@@ -2039,6 +2071,42 @@ func _MetaService_ResolveFileKey_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MetaServiceServer).ResolveFileKey(ctx, req.(*ResolveFileKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MetaService_RotateFileKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RotateFileKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MetaServiceServer).RotateFileKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MetaService_RotateFileKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MetaServiceServer).RotateFileKey(ctx, req.(*RotateFileKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MetaService_RotateFileKeysByPaths_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RotateFileKeysByPathsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MetaServiceServer).RotateFileKeysByPaths(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MetaService_RotateFileKeysByPaths_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MetaServiceServer).RotateFileKeysByPaths(ctx, req.(*RotateFileKeysByPathsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2931,6 +2999,14 @@ var MetaService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResolveFileKey",
 			Handler:    _MetaService_ResolveFileKey_Handler,
+		},
+		{
+			MethodName: "RotateFileKey",
+			Handler:    _MetaService_RotateFileKey_Handler,
+		},
+		{
+			MethodName: "RotateFileKeysByPaths",
+			Handler:    _MetaService_RotateFileKeysByPaths_Handler,
 		},
 		{
 			MethodName: "Flock",

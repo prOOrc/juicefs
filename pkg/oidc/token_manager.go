@@ -110,6 +110,26 @@ func (m *TokenManager) CachedBearerToken(ctx context.Context) string {
 	return ""
 }
 
+// Subject returns the 'sub' claim (the platform user ID UUID, invariant A6) of
+// the cached ID token without triggering interactive authentication; empty if
+// no cached token exists. Used by the STS refresher to name the requesting
+// user in GetSTSCredentials (task 7.4).
+func (m *TokenManager) Subject(ctx context.Context) string {
+	mgr, err := m.ensureManager(ctx)
+	if err != nil || mgr == nil {
+		return ""
+	}
+	tok, _ := mgr.GetCachedToken(ctx)
+	if tok == nil || tok.IDToken == "" {
+		return ""
+	}
+	claims, err := tok.DecodeWithoutVerify()
+	if err != nil || claims == nil {
+		return ""
+	}
+	return claims.Subject
+}
+
 // Stop is a no-op — the library manages its own lifecycle.
 func (m *TokenManager) Stop() {}
 

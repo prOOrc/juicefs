@@ -18,11 +18,13 @@ package meta
 
 import (
 	"context"
+	"fmt"
 	"syscall"
 	"time"
 
 	kmpb "github.com/juicedata/juicefs/pkg/meta/keymanager_pb"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
+	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 func (s *MetaProxyServer) StatFS(ctx context.Context, req *pb.StatFSRequest) (*pb.StatFSResponse, error) {
@@ -300,6 +302,179 @@ func (s *MetaProxyServer) ResolveFileKey(ctx context.Context, req *pb.ResolveFil
 	}
 	resp.Fek = fekResp.Fek
 	resp.FekVersion = int32(fekResp.FekVersion)
+	return resp, nil
+}
+
+// RotateFileKey rotates the FEK of one encrypted file (offboarding, task 7.5).
+// The caller's OIDC identity is used for the KeyManager calls; admin_user_id
+// must match it (the field exists for audit, a mismatch is rejected). Any
+// failure is fail-closed (see rotateFileFEK).
+func (s *MetaProxyServer) RotateFileKey(ctx context.Context, req *pb.RotateFileKeyRequest) (*pb.RotateFileKeyResponse, error) {
+	fail := func(e syscall.Errno) *pb.RotateFileKeyResponse {
+		return &pb.RotateFileKeyResponse{Errno: uint32(e)}
+	}
+	if s.keyManager == nil {
+		return fail(syscall.EOPNOTSUPP), nil
+	}
+	userID, err := extractUserIDFromOIDC(ctx)
+	if err != nil || userID != req.GetAdminUserId() {
+		return fail(syscall.EACCES), nil // fail-closed: identity must match the admin claim
+	}
+	mctx := s.metaCtx(ctx, req.Ctx)
+	var attr Attr
+	if st := s.meta.GetAttr(mctx, Ino(req.Inode), &attr); st != 0 {
+		return fail(st), nil
+	}
+	if !attr.Encrypted || len(attr.WrappedFek) == 0 {
+		return fail(syscall.EINVAL), nil // legacy file — nothing to rotate
+	}
+	path := s.inodePathCache.Get(Ino(req.Inode))
+	if path == "" {
+		return fail(syscall.EACCES), nil // fail-closed: cannot prove file identity to KeyManager
+	}
+	st := s.rotateFileFEK(ctx, mctx, userID, Ino(req.Inode), &attr, path)
+	if st != 0 {
+		return fail(st), nil
+	}
+	var newAttr Attr
+	if st := s.meta.GetAttr(mctx, Ino(req.Inode), &newAttr); st != 0 {
+		return fail(st), nil
+	}
+	return &pb.RotateFileKeyResponse{Errno: 0, NewFekVersion: int32(newAttr.FekVersion)}, nil
+}
+
+// rotateFileFEK performs the FEK rotation sequence for one file (task 7.5):
+// GetFileFEK(old) -> platform RotateFileFEK (org-admin check + audit
+// server-side) -> SetFileCrypto(v+1) -> RewrapSlices. Fail-closed at every
+// step; no rollback is needed — the old key stays valid until SetFileCrypto,
+// and RewrapSlices is atomic per chunk.
+func (s *MetaProxyServer) rotateFileFEK(ctx context.Context, mctx Context, userID string, inode Ino, attr *Attr, path string) syscall.Errno {
+	volUUID := s.meta.GetFormat().UUID
+	// 1. Current FEK (Read on the path, enforced by the platform).
+	oldResp, err := s.keyManager.GetFileFEK(ctx, &kmpb.GetFileFEKRequest{
+		UserId: userID, VolumeUuid: volUUID, DriveFileId: attr.DriveFileID,
+		Inode: int64(inode), Path: path, WrappedFek: attr.WrappedFek,
+		WriteAccess: false, FekVersion: attr.FekVersion, VolumeName: s.volumeName,
+	})
+	if err != nil {
+		return syscall.EACCES // fail-closed (NFR-AVAIL-3)
+	}
+	oldFek := oldResp.Fek
+	// 2. New FEK from the platform (org-admin check + audit server-side).
+	rot, err := s.keyManager.RotateFileFEK(ctx, &kmpb.RotateFileFEKRequest{
+		UserId: userID, VolumeUuid: volUUID, DriveFileId: attr.DriveFileID,
+		Inode: int64(inode), Path: path, CurrentFekVersion: attr.FekVersion, VolumeName: s.volumeName,
+	})
+	if err != nil {
+		utils.MemClear(oldFek)
+		return syscall.EACCES // fail-closed
+	}
+	newFek := rot.PlaintextFek
+	cryptoAlg := rot.CryptoAlg
+	if cryptoAlg == "" {
+		cryptoAlg = "AES-256-GCM"
+	}
+	newVersion := uint32(rot.FekVersion)
+	// 3. Persist the new wrapped FEK (from here on the old key is not authoritative).
+	setter, ok := s.meta.(fileCryptoSetter)
+	if !ok {
+		utils.MemClear(oldFek)
+		utils.MemClear(newFek)
+		return syscall.EIO
+	}
+	if st := setter.SetFileCrypto(mctx, inode, &FileCrypto{
+		WrappedFek:  rot.WrappedFek,
+		DriveFileID: attr.DriveFileID,
+		FekVersion:  newVersion,
+		CryptoAlg:   cryptoAlg,
+	}); st != 0 {
+		utils.MemClear(oldFek)
+		utils.MemClear(newFek)
+		return st
+	}
+	// 4. Re-wrap every slice CEK under the new FEK (zero-copy; atomic per chunk).
+	rewrapper, ok := s.meta.(sliceRewrapper)
+	if !ok {
+		utils.MemClear(oldFek)
+		utils.MemClear(newFek)
+		return syscall.EOPNOTSUPP
+	}
+	st := rewrapper.RewrapSlices(mctx, inode, oldFek, newFek,
+		SliceCryptoAAD{DriveFileID: attr.DriveFileID, FekVersion: attr.FekVersion},
+		SliceCryptoAAD{DriveFileID: attr.DriveFileID, FekVersion: newVersion})
+	utils.MemClear(oldFek)
+	utils.MemClear(newFek)
+	return st
+}
+
+// defaultRotateRate is the per-call rate limit of RotateFileKeysByPaths in
+// files/second (task 7.6).
+const defaultRotateRate = 10
+
+// maxRotateBatchPaths caps one RotateFileKeysByPaths call (task 7.6).
+const maxRotateBatchPaths = 100
+
+// RotateFileKeysByPaths rotates the FEKs of a batch of files by full client
+// path (offboarding, task 7.6): rate-limited, resumable via checkpoint (the
+// index into the caller's path list), and every skipped path is reported with
+// its reason while still advancing the checkpoint. The caller's OIDC identity
+// must match admin_user_id; each file goes through the same fail-closed
+// sequence as RotateFileKey.
+func (s *MetaProxyServer) RotateFileKeysByPaths(ctx context.Context, req *pb.RotateFileKeysByPathsRequest) (*pb.RotateFileKeysByPathsResponse, error) {
+	resp := &pb.RotateFileKeysByPathsResponse{}
+	if s.keyManager == nil {
+		resp.Errno = uint32(syscall.EOPNOTSUPP)
+		return resp, nil
+	}
+	userID, err := extractUserIDFromOIDC(ctx)
+	if err != nil || userID != req.GetAdminUserId() {
+		resp.Errno = uint32(syscall.EACCES) // fail-closed: identity must match the admin claim
+		return resp, nil
+	}
+	paths := req.GetPaths()
+	if len(paths) > maxRotateBatchPaths {
+		resp.Errno = uint32(syscall.EINVAL)
+		return resp, nil
+	}
+	start := int(req.GetCheckpoint())
+	if start < 0 || start > len(paths) {
+		resp.Errno = uint32(syscall.EINVAL)
+		return resp, nil
+	}
+	// No MetaContext in the request: the caller is an org admin (interceptor +
+	// platform check), and per-file authz is enforced by KeyManager on each path.
+	mctx := s.metaCtx(ctx, nil)
+	resp.NextCheckpoint = int64(start) // a fully-consumed batch reports its own end
+	var interval time.Duration
+	if s.rotateRate > 0 {
+		interval = time.Second / time.Duration(s.rotateRate)
+	}
+	for i := start; i < len(paths); i++ {
+		if i > start && interval > 0 {
+			select {
+			case <-ctx.Done():
+				resp.NextCheckpoint = int64(i) // resume where we stopped
+				return resp, nil
+			case <-time.After(interval):
+			}
+		}
+		p := paths[i]
+		var inode Ino
+		var attr Attr
+		st := s.meta.Resolve(mctx, RootInode, p, &inode, &attr, true)
+		if st == 0 && (!attr.Encrypted || len(attr.WrappedFek) == 0) {
+			st = syscall.EINVAL // legacy file — nothing to rotate
+		}
+		if st == 0 {
+			st = s.rotateFileFEK(ctx, mctx, userID, inode, &attr, p)
+		}
+		if st == 0 {
+			resp.RotatedPaths = append(resp.RotatedPaths, p)
+		} else {
+			resp.SkippedPaths = append(resp.SkippedPaths, fmt.Sprintf("%s: %s", p, st))
+		}
+		resp.NextCheckpoint = int64(i + 1) // skipped paths advance the checkpoint too
+	}
 	return resp, nil
 }
 

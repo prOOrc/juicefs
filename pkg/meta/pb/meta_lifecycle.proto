@@ -46,7 +46,14 @@ message CloseSessionRequest { }
 message CloseSessionResponse { uint32 errno = 1; }
 
 message FlushSessionRequest { }
-message FlushSessionResponse { uint32 errno = 1; }
+message FlushSessionResponse {
+  uint32 errno = 1;
+  // Permission generation of the calling user (platform counter, task 7.3).
+  // The proxy fills it from KeyManager GetPermissionGeneration on every
+  // heartbeat; 0 when unavailable (no KeyManager, no identity, RPC error) —
+  // clients wipe keys only on an INCREASE, so 0 is a safe no-op.
+  uint64 permission_generation = 2;
+}
 
 message ShutdownRequest { }
 message ShutdownResponse { uint32 errno = 1; }

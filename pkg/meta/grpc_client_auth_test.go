@@ -30,6 +30,7 @@ import (
 // mockTokenProvider simulates a token provider for testing withAuth.
 type mockTokenProvider struct {
 	token     string
+	subject   string
 	callCount int32
 	delay     func() // optional delay to test singleflight coalescing
 }
@@ -44,6 +45,10 @@ func (m *mockTokenProvider) BearerToken(ctx context.Context) string {
 
 func (m *mockTokenProvider) CachedBearerToken(ctx context.Context) string {
 	return m.token
+}
+
+func (m *mockTokenProvider) Subject(ctx context.Context) string {
+	return m.subject
 }
 
 func (m *mockTokenProvider) Stop() {}
@@ -63,6 +68,10 @@ func (s *slowTokenProvider) BearerToken(ctx context.Context) string {
 
 func (s *slowTokenProvider) CachedBearerToken(ctx context.Context) string {
 	return s.token
+}
+
+func (s *slowTokenProvider) Subject(ctx context.Context) string {
+	return ""
 }
 
 func (s *slowTokenProvider) Stop() {}

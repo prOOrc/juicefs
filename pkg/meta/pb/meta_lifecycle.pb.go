@@ -441,10 +441,15 @@ func (*FlushSessionRequest) Descriptor() ([]byte, []int) {
 }
 
 type FlushSessionResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Errno uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
+	// Permission generation of the calling user (platform counter, task 7.3).
+	// The proxy fills it from KeyManager GetPermissionGeneration on every
+	// heartbeat; 0 when unavailable (no KeyManager, no identity, RPC error) —
+	// clients wipe keys only on an INCREASE, so 0 is a safe no-op.
+	PermissionGeneration uint64 `protobuf:"varint,2,opt,name=permission_generation,json=permissionGeneration,proto3" json:"permission_generation,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *FlushSessionResponse) Reset() {
@@ -480,6 +485,13 @@ func (*FlushSessionResponse) Descriptor() ([]byte, []int) {
 func (x *FlushSessionResponse) GetErrno() uint32 {
 	if x != nil {
 		return x.Errno
+	}
+	return 0
+}
+
+func (x *FlushSessionResponse) GetPermissionGeneration() uint64 {
+	if x != nil {
+		return x.PermissionGeneration
 	}
 	return 0
 }
@@ -947,9 +959,10 @@ const file_meta_lifecycle_proto_rawDesc = "" +
 	"\x13CloseSessionRequest\",\n" +
 	"\x14CloseSessionResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x15\n" +
-	"\x13FlushSessionRequest\",\n" +
+	"\x13FlushSessionRequest\"a\n" +
 	"\x14FlushSessionResponse\x12\x14\n" +
-	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x11\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\x123\n" +
+	"\x15permission_generation\x18\x02 \x01(\x04R\x14permissionGeneration\"\x11\n" +
 	"\x0fShutdownRequest\"(\n" +
 	"\x10ShutdownResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\"\x0e\n" +
