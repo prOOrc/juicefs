@@ -364,3 +364,103 @@ func TestCopyFileRange_Encrypted(t *testing.T) {
 	require.Equal(t, 2, env.keyMgr.createCalls)
 	require.Equal(t, 4, env.keyMgr.getFekCalls)
 }
+
+// TestClone_Subset (FR-TEST-15, FR-OP-3): copying a subset of an encrypted file
+// (a range inside a single chunk) gives the target only the copied slice, re-wrapped
+// under its own FEK. The CEKs of the source's other chunks are NOT accessible through
+// the target: their AGCK blobs are bound to the source identity (driveFileID +
+// fekVersion) in the AAD, so unwrapping them with the target FEK fails closed.
+func TestClone_Subset(t *testing.T) {
+	env := newEncryptTestEnv(t, 2, true)
+	ctx := Background()
+	user := uuid.New().String()
+	cctx := userCtx(t, ctx, user)
+
+	const size = ChunkSize // 1 MiB
+	store := &cfrStore{data: map[uint64][]byte{
+		9101: bytes.Repeat([]byte{0xD1}, size),
+		9102: bytes.Repeat([]byte{0xD2}, size),
+		9103: bytes.Repeat([]byte{0xD3}, size),
+	}}
+
+	var srcIno Ino
+	var srcAttr Attr
+	require.Equal(t, syscall.Errno(0), env.client.Create(cctx, RootInode, "subset-src.exr", 0644, 022, 0, &srcIno, &srcAttr))
+	require.True(t, srcAttr.Encrypted)
+
+	gm, ok := env.client.(*grpcMeta)
+	require.True(t, ok)
+	srcFek, srcDFID, srcVer, err := gm.ResolveFileKey(cctx, srcIno)
+	require.NoError(t, err)
+
+	cekA, err := chunkenc.NewCEK()
+	require.NoError(t, err)
+	cekB, err := chunkenc.NewCEK()
+	require.NoError(t, err)
+	cekC, err := chunkenc.NewCEK()
+	require.NoError(t, err)
+	wrapSrc := func(cek []byte, id uint64) []byte {
+		blob, err := chunkenc.WrapCEK(srcFek, cek, srcDFID, id, srcVer)
+		require.NoError(t, err)
+		return blob
+	}
+	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 0, 0, Slice{Id: 9101, Size: size, Len: size, WrappedCEK: wrapSrc(cekA, 9101)}, time.Now()))
+	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 1, 0, Slice{Id: 9102, Size: size, Len: size, WrappedCEK: wrapSrc(cekB, 9102)}, time.Now()))
+	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 2, 0, Slice{Id: 9103, Size: size, Len: size, WrappedCEK: wrapSrc(cekC, 9103)}, time.Now()))
+
+	var dstIno Ino
+	var dstAttr Attr
+	require.Equal(t, syscall.Errno(0), env.client.Create(cctx, RootInode, "subset-dst.exr", 0644, 022, 0, &dstIno, &dstAttr))
+	require.True(t, dstAttr.Encrypted)
+
+	// Copy exactly chunk 1 (the middle chunk) of the source.
+	var copied, outLength uint64
+	st := env.client.CopyFileRange(cctx, srcIno, size, dstIno, 0, size, 0, &copied, &outLength)
+	require.Equal(t, syscall.Errno(0), st)
+	require.EqualValues(t, size, copied)
+
+	dstFek, dstDFID, dstVer, err := gm.ResolveFileKey(cctx, dstIno)
+	require.NoError(t, err)
+	require.NotEqual(t, srcDFID, dstAttr.DriveFileID)
+
+	// The target references exactly the copied slice, re-wrapped under its own FEK.
+	dstIDs := sliceIDSet(t, env.meta, dstIno)
+	require.Equal(t, map[uint64]bool{9102: true}, dstIDs, "target must reference only the copied chunk")
+	var cs []Slice
+	require.Equal(t, syscall.Errno(0), env.meta.Read(ctx, dstIno, 0, &cs))
+	require.Len(t, cs, 1)
+	cek, err := chunkenc.UnwrapCEK(dstFek, cs[0].WrappedCEK, dstDFID, cs[0].Id, dstVer)
+	require.NoError(t, err)
+	require.Equal(t, cekB, cek)
+
+	// FR-OP-3: the source's other chunks are not accessible through the target.
+	// Their AGCK blobs (still wrapped under the source FEK in the source lists) must
+	// fail to unwrap with the target FEK — AAD binds them to the source identity.
+	var srcCS [][]Slice
+	for indx := uint32(0); indx < 3; indx++ {
+		var c []Slice
+		require.Equal(t, syscall.Errno(0), env.meta.Read(ctx, srcIno, indx, &c))
+		srcCS = append(srcCS, c)
+	}
+	for _, id := range []uint64{9101, 9103} {
+		var blob []byte
+		for _, c := range srcCS {
+			if len(c) > 0 && c[0].Id == id {
+				blob = c[0].WrappedCEK
+			}
+		}
+		require.NotEmpty(t, blob)
+		_, err = chunkenc.UnwrapCEK(dstFek, blob, dstDFID, id, dstVer)
+		require.Error(t, err, "source slice %d must not unwrap under the target FEK", id)
+	}
+
+	// The source is intact: all three chunks still read under its own FEK.
+	for indx := uint32(0); indx < 3; indx++ {
+		s := srcCS[indx][0]
+		cek, err := chunkenc.UnwrapCEK(srcFek, s.WrappedCEK, srcDFID, s.Id, srcVer)
+		require.NoError(t, err)
+		data := readSliceData(t, store, s, cek)
+		want := byte(0xD1 + indx)
+		require.Equal(t, bytes.Repeat([]byte{want}, size), data)
+	}
+}

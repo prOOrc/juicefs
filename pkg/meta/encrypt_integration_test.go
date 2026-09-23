@@ -49,18 +49,30 @@ import (
 // consistent value between wrap and unwrap).
 const testCompanyID = "test-company"
 
+// encTestRedisAddr returns the Redis host:port for the encryption integration tests.
+// It defaults to the local 127.0.0.1:6379; the compose suite (make
+// test.enc.integration, stage 9) overrides it with REDIS_ADDR.
+func encTestRedisAddr() string {
+	if addr := os.Getenv("REDIS_ADDR"); addr != "" {
+		return addr
+	}
+	return "127.0.0.1:6379"
+}
+
 // fakeKeyManager is an in-process KeyManagerClient. It wraps/unwraps FEKs with a
 // fixed KEK using the production AGFK format, so the AAD binding (volume UUID,
 // drive file ID, inode, FEK version) is genuinely verified end to end.
 type fakeKeyManager struct {
-	mu             sync.Mutex
-	kek            []byte
-	denyCreate     bool
-	denyGetFek     bool
-	createCalls    int
-	getFekCalls    int
-	lastCreatePath string
-	lastGetFekPath string
+	mu              sync.Mutex
+	kek             []byte
+	denyCreate      bool
+	denyGetFek      bool
+	denyGetFekPaths map[string]bool // per-path GetFileFEK denial (FR-TEST-26: Read on X, not on Y)
+	errOverride     error           // when set, CreateFileKey/GetFileFEK fail with this (FR-TEST-4: KMS unavailable)
+	createCalls     int
+	getFekCalls     int
+	lastCreatePath  string
+	lastGetFekPath  string
 
 	// Stage 7: permission generation counter (simulates the platform's
 	// drivepermgen:{userID} INCR on role change) and FEK rotation.
@@ -103,6 +115,9 @@ func (f *fakeKeyManager) CreateFileKey(ctx context.Context, req *kmpb.CreateFile
 	defer f.mu.Unlock()
 	f.createCalls++
 	f.lastCreatePath = req.Path
+	if f.errOverride != nil {
+		return nil, f.errOverride
+	}
 	if f.denyCreate {
 		return nil, status.Error(codes.PermissionDenied, "create denied")
 	}
@@ -128,7 +143,10 @@ func (f *fakeKeyManager) GetFileFEK(ctx context.Context, req *kmpb.GetFileFEKReq
 	defer f.mu.Unlock()
 	f.getFekCalls++
 	f.lastGetFekPath = req.Path
-	if f.denyGetFek {
+	if f.errOverride != nil {
+		return nil, f.errOverride
+	}
+	if f.denyGetFek || f.denyGetFekPaths[req.Path] {
 		return nil, status.Error(codes.PermissionDenied, "get FEK denied")
 	}
 	fek, _, err := UnwrapFEK(f.kek, req.WrappedFek, f.aad(req.VolumeUuid, req.DriveFileId, req.Inode, req.FekVersion))
@@ -270,11 +288,11 @@ func newEncryptTestEnv(t *testing.T, db int, encryptionEnabled bool) *encryptTes
 		t.Skipf("skip non-core test")
 	}
 
-	rdb := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379", DB: db})
-	require.NoError(t, rdb.Ping(Background()).Err(), "local Redis must be running")
+	rdb := redis.NewClient(&redis.Options{Addr: encTestRedisAddr(), DB: db})
+	require.NoError(t, rdb.Ping(Background()).Err(), "Redis must be running at "+encTestRedisAddr())
 	require.NoError(t, rdb.FlushDB(Background()).Err())
 
-	m, err := newRedisMeta("redis", fmt.Sprintf("127.0.0.1:6379/%d", db), testConfig())
+	m, err := newRedisMeta("redis", fmt.Sprintf("%s/%d", encTestRedisAddr(), db), testConfig())
 	require.NoError(t, err)
 	rm := m.(*redisMeta)
 
@@ -537,6 +555,51 @@ func TestResolveFileKey_Denied(t *testing.T) {
 	require.False(t, cached, "a denied resolve must not cache anything")
 }
 
+// TestKeyManagerUnavailable_FailClosed (FR-TEST-4): a KeyManager that fails with a
+// transport error (not a permission denial) must fail closed the same way — Create
+// rolls back, Open delivers no key material.
+func TestKeyManagerUnavailable_FailClosed(t *testing.T) {
+	env := newEncryptTestEnv(t, 13, true)
+	ctx := Background()
+	user := uuid.New().String()
+	cctx := userCtx(t, ctx, user)
+
+	// A file created while KeyManager is healthy.
+	var inode Ino
+	var attr Attr
+	require.Equal(t, syscall.Errno(0), env.client.Create(cctx, RootInode, "km-down.exr", 0644, 022, 0, &inode, &attr))
+
+	// KeyManager goes down (transport-level failure).
+	env.keyMgr.mu.Lock()
+	env.keyMgr.errOverride = status.Error(codes.Unavailable, "keymanager unreachable")
+	env.keyMgr.mu.Unlock()
+
+	// Open must fail closed: no FEK reaches the client.
+	var openAttr Attr
+	st := env.client.Open(cctx, inode, syscall.O_RDONLY, &openAttr)
+	require.NotEqual(t, syscall.Errno(0), st)
+	require.Nil(t, openAttr.Fek)
+
+	// Create must fail and roll back: no file is left behind.
+	var newIno Ino
+	var newAttr Attr
+	st = env.client.Create(cctx, RootInode, "km-down2.exr", 0644, 022, 0, &newIno, &newAttr)
+	require.NotEqual(t, syscall.Errno(0), st)
+	var entries []*Entry
+	require.Equal(t, syscall.Errno(0), env.client.Readdir(cctx, RootInode, 1, &entries))
+	for _, e := range entries {
+		require.NotEqual(t, "km-down2.exr", string(e.Name))
+	}
+
+	// Recovery: KeyManager back → Open works again.
+	env.keyMgr.mu.Lock()
+	env.keyMgr.errOverride = nil
+	env.keyMgr.mu.Unlock()
+	st = env.client.Open(cctx, inode, syscall.O_RDONLY, &openAttr)
+	require.Equal(t, syscall.Errno(0), st)
+	require.Len(t, openAttr.Fek, fekSize)
+}
+
 // TestResolveFileKey_Legacy (task 5.2): a non-encrypted file answers
 // encrypted=false with no FEK and KeyManager is never called.
 func TestResolveFileKey_Legacy(t *testing.T) {
@@ -559,4 +622,48 @@ func TestResolveFileKey_Legacy(t *testing.T) {
 	require.Empty(t, driveFileID)
 	require.EqualValues(t, 0, ver)
 	require.Equal(t, 0, env.keyMgr.getFekCalls, "legacy file must not call GetFileFEK")
+}
+
+// TestInsiderCrossFileFEK_Denied (FR-TEST-26): a user who legitimately has Read on
+// file X must not be able to obtain the FEK of file Y — the KeyManager denies the
+// cross-file request, the client gets EACCES and no key material, nothing is
+// cached. The denial is per-path: X stays accessible (the insider is a real user,
+// not an anonymous one).
+func TestInsiderCrossFileFEK_Denied(t *testing.T) {
+	env := newEncryptTestEnv(t, 14, true)
+	ctx := Background()
+	insider := uuid.New().String()
+	cctx := userCtx(t, ctx, insider)
+
+	var inoX Ino
+	var attr Attr
+	require.Equal(t, syscall.Errno(0), env.client.Create(cctx, RootInode, "x.exr", 0644, 022, 0, &inoX, &attr))
+	require.True(t, attr.Encrypted)
+
+	var inoY Ino
+	var attrY Attr
+	require.Equal(t, syscall.Errno(0), env.client.Create(cctx, RootInode, "y.exr", 0644, 022, 0, &inoY, &attrY))
+	require.True(t, attrY.Encrypted)
+
+	// The platform grants the insider Read on X only: GetFileFEK for Y's path is
+	// denied while X stays allowed.
+	env.keyMgr.mu.Lock()
+	env.keyMgr.denyGetFekPaths = map[string]bool{"/y.exr": true}
+	env.keyMgr.mu.Unlock()
+
+	// X: legitimate access — FEK delivered.
+	var openX Attr
+	require.Equal(t, syscall.Errno(0), env.client.Open(cctx, inoX, syscall.O_RDONLY, &openX))
+	require.Len(t, openX.Fek, fekSize)
+
+	// Y: denied — EACCES, no key material, nothing cached (fail-closed).
+	var openY Attr
+	st := env.client.Open(cctx, inoY, syscall.O_RDONLY, &openY)
+	require.Equal(t, syscall.EACCES, st)
+	require.Nil(t, openY.Fek)
+
+	gm, ok := env.client.(*grpcMeta)
+	require.True(t, ok)
+	_, cached := gm.fekCache.Get(uint64(inoY))
+	require.False(t, cached, "a denied FEK must not be cached")
 }

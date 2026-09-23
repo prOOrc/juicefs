@@ -21,6 +21,7 @@ import (
 	"context"
 	"io"
 	"net"
+	"os"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -34,8 +35,18 @@ import (
 	"google.golang.org/grpc"
 )
 
+// encTestRedisAddr returns the Redis host:port for the encryption integration tests.
+// It defaults to the local 127.0.0.1:6379; the compose suite (make
+// test.enc.integration, stage 9) overrides it with REDIS_ADDR.
+func encTestRedisAddr() string {
+	if addr := os.Getenv("REDIS_ADDR"); addr != "" {
+		return addr
+	}
+	return "127.0.0.1:6379"
+}
+
 // reencryptTestMeta uses Redis DB 4 (DBs 11, 12, 14, 15 are taken by other cmd tests).
-const reencryptTestMeta = "redis://127.0.0.1:6379/4"
+func reencryptTestMeta() string { return "redis://" + encTestRedisAddr() + "/4" }
 
 type reencryptEnv struct {
 	m         meta.Meta
@@ -53,13 +64,13 @@ type reencryptEnv struct {
 // (FR-MIG-6).
 func newReencryptEnv(t *testing.T) *reencryptEnv {
 	t.Helper()
-	rdb := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379", DB: 4})
+	rdb := redis.NewClient(&redis.Options{Addr: encTestRedisAddr(), DB: 4})
 	if err := rdb.FlushDB(context.Background()).Err(); err != nil {
 		t.Fatalf("flush db: %s", err)
 	}
 	conf := meta.DefaultConf()
 	conf.NoBGJob = true
-	m := meta.NewClient(reencryptTestMeta, conf)
+	m := meta.NewClient(reencryptTestMeta(), conf)
 	format := &meta.Format{
 		Name: "reenc-test", UUID: "11111111-2222-3333-4444-555555555555",
 		Storage: "mem", Bucket: "test", BlockSize: 4096, Compression: "none",
@@ -393,8 +404,8 @@ func startFakeKeyManager(t *testing.T) (addr string, kek []byte) {
 // readable as plaintext passthrough; a second run is idempotent.
 func TestLegacyReadable_AfterEnable(t *testing.T) {
 	kmAddr, _ := startFakeKeyManager(t)
-	const metaURL = "redis://127.0.0.1:6379/5"
-	rdb := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379", DB: 5})
+	metaURL := "redis://" + encTestRedisAddr() + "/5"
+	rdb := redis.NewClient(&redis.Options{Addr: encTestRedisAddr(), DB: 5})
 	if err := rdb.FlushDB(context.Background()).Err(); err != nil {
 		t.Fatalf("flush db: %s", err)
 	}
