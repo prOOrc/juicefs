@@ -52,6 +52,7 @@ type handle struct {
 	fek       []byte
 	fekVer    uint32
 	encrypted bool
+	stale     bool // keys wiped (NFR-SEC-3): further IO on this handle fails with EIO
 
 	// rwlock
 	writing uint32

@@ -20,15 +20,13 @@
 package cmd
 
 import (
-	"golang.org/x/sys/unix"
-
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 // mlockKey pins the key in RAM so it cannot be swapped to disk (FR-RND-3).
 // Best effort: some platforms (macOS, overcommit restrictions) refuse Mlock.
 func mlockKey(key []byte) {
-	if err := unix.Mlock(key); err != nil {
+	if err := utils.MlockPage(key); err != nil {
 		logger.Warnf("mlock key (best effort): %s", err)
 	}
 }

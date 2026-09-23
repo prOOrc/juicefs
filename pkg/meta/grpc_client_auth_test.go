@@ -42,6 +42,10 @@ func (m *mockTokenProvider) BearerToken(ctx context.Context) string {
 	return m.token
 }
 
+func (m *mockTokenProvider) CachedBearerToken(ctx context.Context) string {
+	return m.token
+}
+
 func (m *mockTokenProvider) Stop() {}
 
 // slowTokenProvider blocks for a fixed duration to let goroutines pile up in singleflight.Do.
@@ -54,6 +58,10 @@ type slowTokenProvider struct {
 func (s *slowTokenProvider) BearerToken(ctx context.Context) string {
 	atomic.AddInt32(&s.callCount, 1)
 	time.Sleep(s.duration) // block long enough for other goroutines to reach Do
+	return s.token
+}
+
+func (s *slowTokenProvider) CachedBearerToken(ctx context.Context) string {
 	return s.token
 }
 

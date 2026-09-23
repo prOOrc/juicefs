@@ -302,6 +302,11 @@ func metaFlags() []cli.Flag {
 			Value: "12s",
 			Usage: "interval to send heartbeat; it's recommended that all clients use the same heartbeat value",
 		},
+		&cli.StringFlag{
+			Name:  "offline-timeout",
+			Value: "15m",
+			Usage: "how long an encrypted client stays in offline-connected mode after losing hub connectivity before disconnecting and wiping keys (grpc meta only)",
+		},
 		&cli.BoolFlag{
 			Name:  "read-only",
 			Usage: "allow lookup/read operations only",
