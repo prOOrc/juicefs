@@ -90,6 +90,7 @@ message CloneResponse {
   uint32 errno = 1;
   uint64 count = 2;
   uint64 total = 3;
+  uint64 dst_ino = 4; // inode of the clone target (root for directory clones)
 }
 
 message GetPathsRequest {

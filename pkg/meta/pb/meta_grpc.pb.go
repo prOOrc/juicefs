@@ -68,6 +68,7 @@ const (
 	MetaService_NewSlice_FullMethodName                   = "/pb.MetaService/NewSlice"
 	MetaService_InvalidateChunkCache_FullMethodName       = "/pb.MetaService/InvalidateChunkCache"
 	MetaService_CopyFileRange_FullMethodName              = "/pb.MetaService/CopyFileRange"
+	MetaService_ResolveFileKey_FullMethodName             = "/pb.MetaService/ResolveFileKey"
 	MetaService_Flock_FullMethodName                      = "/pb.MetaService/Flock"
 	MetaService_Getlk_FullMethodName                      = "/pb.MetaService/Getlk"
 	MetaService_Setlk_FullMethodName                      = "/pb.MetaService/Setlk"
@@ -155,6 +156,7 @@ type MetaServiceClient interface {
 	NewSlice(ctx context.Context, in *NewSliceRequest, opts ...grpc.CallOption) (*NewSliceResponse, error)
 	InvalidateChunkCache(ctx context.Context, in *InvalidateChunkCacheRequest, opts ...grpc.CallOption) (*InvalidateChunkCacheResponse, error)
 	CopyFileRange(ctx context.Context, in *CopyFileRangeRequest, opts ...grpc.CallOption) (*CopyFileRangeResponse, error)
+	ResolveFileKey(ctx context.Context, in *ResolveFileKeyRequest, opts ...grpc.CallOption) (*ResolveFileKeyResponse, error)
 	// --- Locks ---
 	Flock(ctx context.Context, in *FlockRequest, opts ...grpc.CallOption) (*FlockResponse, error)
 	Getlk(ctx context.Context, in *GetlkRequest, opts ...grpc.CallOption) (*GetlkResponse, error)
@@ -551,6 +553,16 @@ func (c *metaServiceClient) CopyFileRange(ctx context.Context, in *CopyFileRange
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CopyFileRangeResponse)
 	err := c.cc.Invoke(ctx, MetaService_CopyFileRange_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *metaServiceClient) ResolveFileKey(ctx context.Context, in *ResolveFileKeyRequest, opts ...grpc.CallOption) (*ResolveFileKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveFileKeyResponse)
+	err := c.cc.Invoke(ctx, MetaService_ResolveFileKey_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1080,6 +1092,7 @@ type MetaServiceServer interface {
 	NewSlice(context.Context, *NewSliceRequest) (*NewSliceResponse, error)
 	InvalidateChunkCache(context.Context, *InvalidateChunkCacheRequest) (*InvalidateChunkCacheResponse, error)
 	CopyFileRange(context.Context, *CopyFileRangeRequest) (*CopyFileRangeResponse, error)
+	ResolveFileKey(context.Context, *ResolveFileKeyRequest) (*ResolveFileKeyResponse, error)
 	// --- Locks ---
 	Flock(context.Context, *FlockRequest) (*FlockResponse, error)
 	Getlk(context.Context, *GetlkRequest) (*GetlkResponse, error)
@@ -1243,6 +1256,9 @@ func (UnimplementedMetaServiceServer) InvalidateChunkCache(context.Context, *Inv
 }
 func (UnimplementedMetaServiceServer) CopyFileRange(context.Context, *CopyFileRangeRequest) (*CopyFileRangeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CopyFileRange not implemented")
+}
+func (UnimplementedMetaServiceServer) ResolveFileKey(context.Context, *ResolveFileKeyRequest) (*ResolveFileKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveFileKey not implemented")
 }
 func (UnimplementedMetaServiceServer) Flock(context.Context, *FlockRequest) (*FlockResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Flock not implemented")
@@ -2005,6 +2021,24 @@ func _MetaService_CopyFileRange_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MetaServiceServer).CopyFileRange(ctx, req.(*CopyFileRangeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MetaService_ResolveFileKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveFileKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MetaServiceServer).ResolveFileKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MetaService_ResolveFileKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MetaServiceServer).ResolveFileKey(ctx, req.(*ResolveFileKeyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2893,6 +2927,10 @@ var MetaService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CopyFileRange",
 			Handler:    _MetaService_CopyFileRange_Handler,
+		},
+		{
+			MethodName: "ResolveFileKey",
+			Handler:    _MetaService_ResolveFileKey_Handler,
 		},
 		{
 			MethodName: "Flock",

@@ -182,7 +182,7 @@ func (m *grpcMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall
 }
 
 // Clone clones a file or directory
-func (m *grpcMeta) Clone(ctx Context, srcParentIno, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, concurrency uint8, count, total *uint64) syscall.Errno {
+func (m *grpcMeta) Clone(ctx Context, srcParentIno, srcIno, dstParentIno Ino, dstName string, cmode uint8, cumask uint16, concurrency uint8, count, total *uint64, dstIno *Ino) syscall.Errno {
 	c := m.grpcContext(ctx)
 	req := &pb.CloneRequest{
 		Ctx:          c,
@@ -206,6 +206,9 @@ func (m *grpcMeta) Clone(ctx Context, srcParentIno, srcIno, dstParentIno Ino, ds
 	}
 	if total != nil {
 		*total = resp.GetTotal()
+	}
+	if dstIno != nil {
+		*dstIno = Ino(resp.GetDstIno())
 	}
 	return 0
 }

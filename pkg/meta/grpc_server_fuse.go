@@ -259,6 +259,50 @@ func (s *MetaProxyServer) Open(ctx context.Context, req *pb.OpenRequest) (*pb.Op
 	return resp, nil
 }
 
+// ResolveFileKey returns the plaintext FEK of an encrypted file (task 5.2).
+// Authz is Read on the inode (interceptor). Non-encrypted files answer
+// encrypted=false without a KeyManager round-trip; any failure fails closed
+// with EACCES (NFR-AVAIL-3) — the client must never fall back to a wrong key.
+func (s *MetaProxyServer) ResolveFileKey(ctx context.Context, req *pb.ResolveFileKeyRequest) (*pb.ResolveFileKeyResponse, error) {
+	mctx := s.metaCtx(ctx, req.Ctx)
+	var attr Attr
+	if errno := s.meta.GetAttr(mctx, Ino(req.Inode), &attr); errno != 0 {
+		return &pb.ResolveFileKeyResponse{Errno: uint32(errno)}, nil
+	}
+	resp := &pb.ResolveFileKeyResponse{Errno: 0}
+	if !attr.Encrypted || s.keyManager == nil {
+		return resp, nil
+	}
+	resp.Encrypted = true
+	resp.FekVersion = int32(attr.FekVersion)
+	resp.DriveFileId = attr.DriveFileID
+	path := s.inodePathCache.Get(Ino(req.Inode))
+	if path == "" {
+		return &pb.ResolveFileKeyResponse{Errno: uint32(syscall.EACCES)}, nil // fail-closed
+	}
+	userID, err := extractUserIDFromOIDC(ctx)
+	if err != nil {
+		return &pb.ResolveFileKeyResponse{Errno: uint32(syscall.EACCES)}, nil // fail-closed
+	}
+	fekResp, err := s.keyManager.GetFileFEK(ctx, &kmpb.GetFileFEKRequest{
+		UserId:      userID,
+		VolumeUuid:  s.meta.GetFormat().UUID,
+		DriveFileId: attr.DriveFileID,
+		Inode:       int64(req.Inode),
+		Path:        path,
+		WrappedFek:  attr.WrappedFek,
+		WriteAccess: false, // read-only FEK (client cache refill / compaction)
+		FekVersion:  attr.FekVersion,
+		VolumeName:  s.volumeName,
+	})
+	if err != nil {
+		return &pb.ResolveFileKeyResponse{Errno: uint32(syscall.EACCES)}, nil // fail-closed (NFR-AVAIL-3)
+	}
+	resp.Fek = fekResp.Fek
+	resp.FekVersion = int32(fekResp.FekVersion)
+	return resp, nil
+}
+
 func (s *MetaProxyServer) Close(ctx context.Context, req *pb.CloseRequest) (*pb.CloseResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	errno := s.meta.Close(mctx, Ino(req.Inode))
@@ -547,11 +591,87 @@ func (s *MetaProxyServer) InvalidateChunkCache(ctx context.Context, req *pb.Inva
 func (s *MetaProxyServer) CopyFileRange(ctx context.Context, req *pb.CopyFileRangeRequest) (*pb.CopyFileRangeResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var copied, outLength uint64
+
+	// FR-OP-4: the slice-sharing path copies records verbatim, so an encrypted
+	// source shares slices whose CEKs are wrapped under the SOURCE FEK. The target
+	// must re-wrap them under its own FEK (post-op). A legacy target cannot hold
+	// encrypted slices at all — fail closed before touching metadata.
+	var srcAttr, dstAttr Attr
+	if st := s.meta.GetAttr(mctx, Ino(req.Fin), &srcAttr); st != 0 {
+		return &pb.CopyFileRangeResponse{Errno: uint32(st)}, nil
+	}
+	srcEncrypted := srcAttr.Encrypted && len(srcAttr.WrappedFek) > 0
+	if srcEncrypted {
+		if st := s.meta.GetAttr(mctx, Ino(req.Fout), &dstAttr); st != 0 {
+			return &pb.CopyFileRangeResponse{Errno: uint32(st)}, nil
+		}
+		if !dstAttr.Encrypted || len(dstAttr.WrappedFek) == 0 {
+			return &pb.CopyFileRangeResponse{Errno: uint32(syscall.EOPNOTSUPP)}, nil
+		}
+	}
+
 	errno := s.meta.CopyFileRange(mctx, Ino(req.Fin), req.OffIn, Ino(req.Fout),
 		req.OffOut, req.Size, uint32(req.Flags), &copied, &outLength)
+	if errno != 0 {
+		return &pb.CopyFileRangeResponse{Errno: uint32(errno), Copied: copied, OutLength: outLength}, nil
+	}
+
+	if srcEncrypted && copied > 0 {
+		if st := s.copyFileRangeRewrap(ctx, mctx, Ino(req.Fin), Ino(req.Fout), req.OffOut, copied, &srcAttr, &dstAttr); st != 0 {
+			return &pb.CopyFileRangeResponse{Errno: uint32(st)}, nil
+		}
+	}
 	return &pb.CopyFileRangeResponse{
-		Errno:     uint32(errno),
+		Errno:     0,
 		Copied:    copied,
 		OutLength: outLength,
 	}, nil
+}
+
+// copyFileRangeRewrap re-wraps the CEKs of the copied range in the target's chunk
+// lists from under the source FEK to under the target FEK (design 5.5): both FEKs
+// are resolved via KeyManager (Read on the source, Write on the target — authz is
+// enforced by the platform), then RewrapSlicesRange touches only the chunk lists
+// covering [offOut, offOut+copied). S3 data is not touched. Any failure fails
+// closed — the caller must treat the target range as unreadable.
+func (s *MetaProxyServer) copyFileRangeRewrap(ctx context.Context, mctx Context, fin, fout Ino, offOut, copied uint64, srcAttr, dstAttr *Attr) syscall.Errno {
+	srcPath := s.inodePathCache.Get(fin)
+	dstPath := s.inodePathCache.Get(fout)
+	if srcPath == "" || dstPath == "" {
+		return syscall.EACCES // fail-closed: cannot prove file identity to KeyManager
+	}
+	userID, err := extractUserIDFromOIDC(ctx)
+	if err != nil {
+		return syscall.EACCES // fail-closed
+	}
+	volUUID := s.meta.GetFormat().UUID
+	fekOf := func(attr *Attr, path string, ino Ino, writeAccess bool) ([]byte, error) {
+		r, err := s.keyManager.GetFileFEK(ctx, &kmpb.GetFileFEKRequest{
+			UserId: userID, VolumeUuid: volUUID, DriveFileId: attr.DriveFileID,
+			Inode: int64(ino), Path: path, WrappedFek: attr.WrappedFek,
+			WriteAccess: writeAccess, FekVersion: attr.FekVersion, VolumeName: s.volumeName,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return r.Fek, nil
+	}
+	srcFek, err := fekOf(srcAttr, srcPath, fin, false)
+	if err != nil {
+		return syscall.EACCES // fail-closed (NFR-AVAIL-3)
+	}
+	dstFek, err := fekOf(dstAttr, dstPath, fout, true)
+	if err != nil {
+		return syscall.EACCES // fail-closed
+	}
+	rewrapper, ok := s.meta.(sliceRangeRewrapper)
+	if !ok {
+		return syscall.EOPNOTSUPP
+	}
+	start := uint32(offOut / ChunkSize)
+	end := uint32((offOut + copied - 1) / ChunkSize)
+	return rewrapper.RewrapSlicesRange(mctx, fout, srcFek, dstFek,
+		SliceCryptoAAD{DriveFileID: srcAttr.DriveFileID, FekVersion: srcAttr.FekVersion},
+		SliceCryptoAAD{DriveFileID: dstAttr.DriveFileID, FekVersion: dstAttr.FekVersion},
+		start, end)
 }

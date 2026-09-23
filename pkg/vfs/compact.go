@@ -18,6 +18,7 @@ package vfs
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/chunk"
@@ -34,10 +35,10 @@ var (
 	})
 )
 
-func readSlice(store chunk.ChunkStore, s *meta.Slice, page *chunk.Page, off int) error {
+func readSlice(store chunk.ChunkStore, s *meta.Slice, key []byte, page *chunk.Page, off int) error {
 	buf := page.Data
 	read := 0
-	reader := store.NewReader(s.Id, int(s.Size))
+	reader := store.NewReaderWithKey(s.Id, int(s.Size), key)
 	for read < len(buf) {
 		p := page.Slice(read, len(buf)-read)
 		n, err := reader.ReadAt(context.Background(), p, off+int(s.Off))
@@ -51,18 +52,41 @@ func readSlice(store chunk.ChunkStore, s *meta.Slice, page *chunk.Page, off int)
 	return nil
 }
 
-func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, id uint64, tierID uint8) error {
+// Compact merges slices into a new slice id. For encrypted sources (slices with
+// wrapped CEKs) it unwraps each CEK under the file's FEK, reads with it, writes
+// the merged data under a fresh CEK and returns that CEK wrapped under the same
+// FEK (FR-OP-7); the caller persists it in the new slice record. fek must be
+// non-nil when any source slice is encrypted — otherwise compaction fails closed.
+func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, id uint64, tierID uint8,
+	fek []byte, driveFileID string, fekVersion uint32) (wrappedCEK []byte, err error) {
 	for utils.AllocMemory()-store.UsedMemory() > int64(conf.BufferSize)*3/2 {
 		time.Sleep(time.Millisecond * 100)
 	}
 	var size uint32
+	encrypted := false
 	for _, s := range slices {
 		size += s.Len
+		if len(s.WrappedCEK) > 0 {
+			encrypted = true
+		}
+	}
+	if encrypted && len(fek) == 0 {
+		return nil, fmt.Errorf("compact %d: encrypted slices require the file FEK (fail-closed)", id)
 	}
 	compactSizeHistogram.Observe(float64(size))
 	logger.Debugf("compact %d slices (%d bytes) to new slice %d", len(slices), size, id)
 
-	writer := store.NewWriter(id, tierID)
+	var newCEK []byte
+	var writer chunk.Writer
+	if encrypted {
+		newCEK, err = chunk.NewCEK()
+		if err != nil {
+			return nil, err
+		}
+		writer = store.NewWriterWithKey(id, tierID, newCEK)
+	} else {
+		writer = store.NewWriter(id, tierID)
+	}
 	writer.SetWriteback(false)
 
 	var pos int
@@ -71,27 +95,36 @@ func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, id 
 			_, err := writer.WriteAt(make([]byte, int(s.Len)), int64(pos))
 			if err != nil {
 				writer.Abort()
-				return err
+				return nil, err
 			}
 			pos += int(s.Len)
 			continue
+		}
+		var key []byte
+		if len(s.WrappedCEK) > 0 {
+			key, err = chunk.UnwrapCEK(fek, s.WrappedCEK, driveFileID, s.Id, fekVersion)
+			if err != nil {
+				logger.Errorf("can't compact to slice %d: unwrap CEK of slice %d: %s (fail-closed)", id, s.Id, err)
+				writer.Abort()
+				return nil, err
+			}
 		}
 		var read int
 		for read < int(s.Len) {
 			l := min(conf.BlockSize, int(s.Len)-read)
 			p := chunk.NewOffPage(l)
-			if err := readSlice(store, &slices[i], p, read); err != nil {
+			if err := readSlice(store, &slices[i], key, p, read); err != nil {
 				logger.Debugf("can't compact to slice %d, retry later, read %d: %s", id, i, err)
 				p.Release()
 				writer.Abort()
-				return err
+				return nil, err
 			}
 			_, err := writer.WriteAt(p.Data, int64(pos+read))
 			p.Release()
 			if err != nil {
 				logger.Errorf("can't compact to slice %d, retry later, write: %s", id, err)
 				writer.Abort()
-				return err
+				return nil, err
 			}
 			read += l
 			if pos+read >= conf.BlockSize {
@@ -102,9 +135,16 @@ func Compact(conf chunk.Config, store chunk.ChunkStore, slices []meta.Slice, id 
 		}
 		pos += int(s.Len)
 	}
-	err := writer.Finish(pos)
+	err = writer.Finish(pos)
 	if err != nil {
 		writer.Abort()
+		return nil, err
 	}
-	return err
+	if encrypted {
+		wrappedCEK, err = chunk.WrapCEK(fek, newCEK, driveFileID, id, fekVersion)
+		if err != nil {
+			return nil, fmt.Errorf("compact %d: wrap CEK: %w", id, err)
+		}
+	}
+	return wrappedCEK, nil
 }

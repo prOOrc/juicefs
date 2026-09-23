@@ -232,7 +232,7 @@ func (ai *AuthzInterceptor) requiredPermission(method string) AuthzPermission {
 		return AuthzPermissionView
 
 		// --- Read: open for reading, read data ---
-	case "Open", "Read":
+	case "Open", "Read", "ResolveFileKey":
 		return AuthzPermissionRead
 
 		// --- Read: access check (R_OK) ---
@@ -438,6 +438,8 @@ func (ai *AuthzInterceptor) extractInode(req interface{}) Ino {
 	case *pb.ReadRequest:
 		return Ino(r.Inode)
 	case *pb.WriteRequest:
+		return Ino(r.Inode)
+	case *pb.ResolveFileKeyRequest:
 		return Ino(r.Inode)
 	case *pb.NewSliceRequest:
 		return 0 // NewSlice doesn't target a specific inode
