@@ -17,6 +17,9 @@
 package cmd
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/juicedata/juicefs/pkg/meta"
 	kmpb "github.com/juicedata/juicefs/pkg/meta/keymanager_pb"
 	"github.com/urfave/cli/v2"
@@ -61,10 +64,35 @@ $ juicefs enable-encryption redis://localhost --company-id <uuid> --keymanager-s
 	}
 }
 
+// metaEngineScheme extracts the metadata engine scheme from a META-URL the same
+// way meta.NewClient does (pkg/meta/interface.go): an address without "://"
+// defaults to the Redis driver, otherwise the scheme is the part before "://".
+func metaEngineScheme(metaURL string) string {
+	if !strings.Contains(metaURL, "://") {
+		return "redis"
+	}
+	return metaURL[:strings.Index(metaURL, "://")]
+}
+
+// requireRedisEngine refuses metadata engines other than Redis: encrypted
+// volumes are Redis-only (delta spec domain-encrypt). The allowed schemes are
+// exactly the drivers registered for redisMeta in pkg/meta/redis.go.
+func requireRedisEngine(metaURL string) error {
+	scheme := metaEngineScheme(metaURL)
+	switch scheme {
+	case "redis", "rediss", "unix":
+		return nil
+	}
+	return fmt.Errorf("enable-encryption requires the Redis metadata engine, got %q — encrypted volumes are Redis-only", scheme)
+}
+
 func enableEncryption(c *cli.Context) error {
 	setup(c, 0)
 	addr := c.Args().Get(0)
 	removePassword(addr)
+	if err := requireRedisEngine(addr); err != nil {
+		return err
+	}
 	companyID := c.String("company-id")
 	kmAddr := c.String("keymanager-service")
 	if companyID == "" || kmAddr == "" {
