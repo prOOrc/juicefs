@@ -142,6 +142,31 @@ func (j *WriteJournal) Replay(fn func(seq uint64, inode Ino, off int64, data []b
 	return nil
 }
 
+// Inodes returns the distinct inodes present in the journal records, in
+// first-seen order. The snapshot is taken under the journal lock, mirroring
+// Replay; the replay re-Open phase (design A2) uses it to refresh the FEKs of
+// journaled files before their records are applied.
+func (j *WriteJournal) Inodes() []Ino {
+	if j == nil {
+		return nil
+	}
+	j.mu.Lock()
+	recs, err := j.readAll()
+	j.mu.Unlock()
+	if err != nil {
+		return nil
+	}
+	var inos []Ino
+	seen := make(map[Ino]struct{}, len(recs))
+	for _, r := range recs {
+		if _, ok := seen[r.inode]; !ok {
+			seen[r.inode] = struct{}{}
+			inos = append(inos, r.inode)
+		}
+	}
+	return inos
+}
+
 type journalRecord struct {
 	seq   uint64
 	inode Ino

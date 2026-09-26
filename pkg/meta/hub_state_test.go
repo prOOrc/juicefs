@@ -18,14 +18,47 @@ package meta
 
 import (
 	"bytes"
+	"context"
+	"errors"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
+
+// fakeHeartbeatClient is a pb.MetaServiceClient stub for heartbeat tests:
+// FlushSession returns the configured error or response.
+type fakeHeartbeatClient struct {
+	pb.MetaServiceClient
+	mu   sync.Mutex
+	err  error
+	resp *pb.FlushSessionResponse
+}
+
+func (c *fakeHeartbeatClient) set(err error, resp *pb.FlushSessionResponse) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.err = err
+	c.resp = resp
+}
+
+func (c *fakeHeartbeatClient) FlushSession(ctx context.Context, req *pb.FlushSessionRequest, opts ...grpc.CallOption) (*pb.FlushSessionResponse, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.err != nil {
+		return nil, c.err
+	}
+	if c.resp != nil {
+		return c.resp, nil
+	}
+	return &pb.FlushSessionResponse{}, nil
+}
 
 // TestHubStateMachine verifies the hub connectivity state machine (task 6.2,
 // NFR-OFF-1..4): online → offline-connected on failure, back online on
@@ -71,39 +104,107 @@ func TestHubStateMachine(t *testing.T) {
 }
 
 // TestHubStateMachine_ReconnectHook verifies that the reconnect callback fires
-// exactly once per offline-connected → online transition (task 6.3), and not
-// on repeated successes or after a terminal disconnect.
+// exactly once per offline-connected → online transition (task 6.3), driven by
+// a successful heartbeat beat, and not on repeated successes or after a
+// terminal disconnect.
 func TestHubStateMachine_ReconnectHook(t *testing.T) {
+	fc := &fakeHeartbeatClient{}
 	m := &grpcMeta{
 		fekCache:       expirable.NewLRU[uint64, *fekEntry](10, nil, time.Minute),
 		offlineTimeout: 15 * time.Minute,
+		client:         fc,
 	}
 	var reconnects int32
 	m.SetOnReconnect(func() { atomic.AddInt32(&reconnects, 1) })
 
-	m.markHubOnline() // already online: no transition, no callback
+	// already online: a successful beat is not a transition, no callback
+	m.doHeartbeat()
 	require.Equal(t, int32(0), atomic.LoadInt32(&reconnects))
 
-	m.markHubOffline()
-	m.markHubOnline() // offline-connected → online: fires once (in a goroutine)
+	// failing beat → offline-connected; recovery beat → online: fires once
+	fc.set(errors.New("hub down"), nil)
+	m.doHeartbeat()
+	require.Equal(t, HubOfflineConnected, m.HubState())
+	fc.set(nil, &pb.FlushSessionResponse{})
+	m.doHeartbeat()
 	require.Eventually(t, func() bool {
 		return atomic.LoadInt32(&reconnects) == 1
 	}, time.Second, time.Millisecond)
 
-	m.markHubOnline() // repeated success: no additional callback
+	// repeated success: no additional callback
+	m.doHeartbeat()
 	time.Sleep(50 * time.Millisecond)
 	require.Equal(t, int32(1), atomic.LoadInt32(&reconnects))
 
 	// after a terminal disconnect the hook must not fire on a late recovery
-	m.markHubOffline()
+	fc.set(errors.New("hub down"), nil)
+	m.doHeartbeat()
 	m.hubMu.Lock()
 	m.lastFail = time.Now().Add(-m.offlineTimeout - time.Second)
 	m.hubMu.Unlock()
 	m.checkOfflineTimeout()
 	require.Equal(t, HubDisconnected, m.HubState())
-	m.markHubOnline()
+	fc.set(nil, &pb.FlushSessionResponse{})
+	m.doHeartbeat()
 	time.Sleep(50 * time.Millisecond)
 	require.Equal(t, int32(1), atomic.LoadInt32(&reconnects))
+}
+
+// TestHubReconnect_GenerationBump_NoReplay verifies design A2 (task 6.8): on a
+// reconnect beat that also carries a permission generation increase, the key
+// wipe wins — onWipe fires and onReconnect does NOT (replaying under destroyed
+// FEKs would commit undecryptable data; the journal survives for the next
+// mount). A later offline window closed by a beat with an unchanged
+// generation then fires the reconnect hook.
+func TestHubReconnect_GenerationBump_NoReplay(t *testing.T) {
+	fc := &fakeHeartbeatClient{}
+	m := &grpcMeta{
+		fekCache:       expirable.NewLRU[uint64, *fekEntry](10, nil, time.Minute),
+		offlineTimeout: 15 * time.Minute,
+		client:         fc,
+		lastPermGen:    -1, // as set by newGRPCMeta before the first heartbeat
+	}
+	fek := bytes.Repeat([]byte{0xAB}, 32)
+	m.fekCache.Add(1, &fekEntry{fek: fek, version: 1})
+	var wiped, reconnects int32
+	m.SetOnWipe(func() { atomic.AddInt32(&wiped, 1) })
+	m.SetOnReconnect(func() { atomic.AddInt32(&reconnects, 1) })
+
+	// First beat: baseline generation, no wipe, no reconnect (already online).
+	fc.set(nil, &pb.FlushSessionResponse{PermissionGeneration: 5})
+	m.doHeartbeat()
+	require.EqualValues(t, 5, m.lastPermGen)
+	require.Equal(t, 1, m.fekCache.Len())
+	require.Equal(t, int32(0), atomic.LoadInt32(&wiped))
+	require.Equal(t, int32(0), atomic.LoadInt32(&reconnects))
+
+	// Force offline with a failing beat.
+	fc.set(errors.New("hub down"), nil)
+	m.doHeartbeat()
+	require.Equal(t, HubOfflineConnected, m.HubState())
+
+	// Reconnect beat carrying an INCREASED generation: the wipe fires and the
+	// replay must NOT.
+	fc.set(nil, &pb.FlushSessionResponse{PermissionGeneration: 6})
+	m.doHeartbeat()
+	require.Equal(t, HubOnline, m.HubState())
+	require.Zero(t, m.fekCache.Len(), "FEK cache must be wiped on the generation bump")
+	require.Equal(t, make([]byte, 32), fek, "FEK backing array must be zeroed")
+	require.Equal(t, int32(1), atomic.LoadInt32(&wiped), "onWipe must fire")
+	time.Sleep(50 * time.Millisecond)
+	require.Equal(t, int32(0), atomic.LoadInt32(&reconnects), "no replay on a beat that wiped the keys")
+
+	// Next offline window closed by a beat with the SAME generation: the
+	// reconnect hook fires (nothing was wiped this time).
+	fc.set(errors.New("hub down"), nil)
+	m.doHeartbeat()
+	require.Equal(t, HubOfflineConnected, m.HubState())
+	fc.set(nil, &pb.FlushSessionResponse{PermissionGeneration: 6})
+	m.doHeartbeat()
+	require.Eventually(t, func() bool {
+		return atomic.LoadInt32(&reconnects) == 1
+	}, time.Second, time.Millisecond)
+	require.Equal(t, int32(1), atomic.LoadInt32(&wiped), "no second wipe")
 }
 
 // TestHubStateMachine_WindowFromFirstFailure verifies that repeated failures do

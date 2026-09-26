@@ -329,7 +329,9 @@ func (m *grpcMeta) SetOnWipe(cb func()) {
 
 // SetOnReconnect installs the callback fired when the hub transitions from
 // offline-connected back to online, so deferred writes can be synced
-// (VFS.ReplayWriteJournal, task 6.3).
+// (VFS.ReplayWriteJournal, task 6.3). It is suppressed on a beat that also
+// wipes the keys (permission generation increase): replaying under destroyed
+// FEKs would commit undecryptable data (design A2).
 func (m *grpcMeta) SetOnReconnect(cb func()) {
 	m.hubMu.Lock()
 	defer m.hubMu.Unlock()
@@ -349,24 +351,21 @@ func (m *grpcMeta) markHubOffline() {
 
 // markHubOnline records a successful RPC. A disconnected client is terminal
 // until remount (design 6.6): keys are already wiped, so a late recovery does
-// not resurrect the session. An offline-connected → online transition fires
-// the reconnect hook (write journal replay, task 6.3) in a goroutine so a
-// large replay does not stall the heartbeat.
-func (m *grpcMeta) markHubOnline() {
+// not resurrect the session. It returns true iff the state transitioned
+// offline-connected → online on this call; doHeartbeat fires the reconnect
+// hook (write journal replay, task 6.3) only after it has also applied the
+// beat's permission generation — a revocation wipe must never race the replay
+// (design A2). The hook runs in a goroutine so a large replay does not stall
+// the heartbeat.
+func (m *grpcMeta) markHubOnline() bool {
 	if m.HubState() == HubDisconnected {
-		return
+		return false
 	}
 	wasOffline := atomic.CompareAndSwapInt32(&m.hubState, int32(HubOfflineConnected), int32(HubOnline))
-	if !wasOffline {
-		return
+	if wasOffline {
+		logger.Infof("hub reachable again: back online")
 	}
-	logger.Infof("hub reachable again: back online")
-	m.hubMu.Lock()
-	cb := m.onReconnect
-	m.hubMu.Unlock()
-	if cb != nil {
-		go cb()
-	}
+	return wasOffline
 }
 
 // checkOfflineTimeout enforces the offline window (NFR-OFF-4): once
@@ -575,8 +574,22 @@ func (m *grpcMeta) doHeartbeat() {
 		m.checkOfflineTimeout()
 		return
 	}
-	m.markHubOnline()
-	m.applyPermissionGeneration(resp.GetPermissionGeneration())
+	// Ordering (design A2): the reconnect hook (write journal replay) fires
+	// only when this beat both reconnected the client and did NOT wipe its
+	// keys. On a reconnect beat that also carries a generation bump the wipe
+	// wins: replaying under destroyed FEKs would commit undecryptable data, so
+	// the journal is left for the next mount (NewVFS replays after
+	// loadAllHandles with fresh FEKs).
+	reconnected := m.markHubOnline()
+	wiped := m.applyPermissionGeneration(resp.GetPermissionGeneration())
+	if reconnected && !wiped {
+		m.hubMu.Lock()
+		cb := m.onReconnect
+		m.hubMu.Unlock()
+		if cb != nil {
+			go cb()
+		}
+	}
 }
 
 // applyPermissionGeneration applies the heartbeat's permission generation
@@ -585,15 +598,17 @@ func (m *grpcMeta) doHeartbeat() {
 // goes up. The first successful beat initializes the baseline without wiping —
 // a user with historical role changes must not lose freshly issued keys at
 // mount. A 0 or lower value (KeyManager unavailable, see FlushSession) is a
-// no-op: an outage must not revoke authorized users.
-func (m *grpcMeta) applyPermissionGeneration(gen uint64) {
+// no-op: an outage must not revoke authorized users. It returns true iff this
+// beat wiped the keys; doHeartbeat uses that to suppress the reconnect hook
+// on the same beat (design A2).
+func (m *grpcMeta) applyPermissionGeneration(gen uint64) bool {
 	g := int64(gen)
 	if m.lastPermGen < 0 {
 		m.lastPermGen = g
-		return
+		return false
 	}
 	if g <= m.lastPermGen {
-		return
+		return false
 	}
 	m.lastPermGen = g
 	logger.Warnf("permission generation increased to %d: wiping keys (revocation)", g)
@@ -604,6 +619,7 @@ func (m *grpcMeta) applyPermissionGeneration(gen uint64) {
 	if cb != nil {
 		cb() // VFS.InvalidateAllKeys: stale handles fail with EIO on next use
 	}
+	return true
 }
 
 // Check integrity of an absolute path and repair it if asked
