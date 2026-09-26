@@ -2,7 +2,7 @@
 
 ## Why
 
-Подсистема шифрования agio Drive (SRS-001 v2.2, Per-File FEK + Per-Chunk CEK) полностью спроектирована, но не реализована: данные в S3 хранятся в plaintext, ключей CEK/FEK/KEK нет, render-ноды и user-клиенты не имеют криптографической изоляции. Целевой контракт капабилити `domain-encrypt` зафиксирован в delta-спеке этого change (`specs/domain-encrypt/spec.md`, 16 требований; перенесён из отозванной ветки `inventory-encrypt` — greenfield-капабилити не может находиться в SoT до реализации и попадёт в SoT при архивации этого change). Это блокирует требования аудита (SOC 2, MPAA TPN) и конкурентный паритет с LucidLink (стратегические решения S1/S4). Реализация запускается сейчас: контракт стабилен, межэтапные форматы зафиксированы в design.md («Межэтапные контракты»), декомпозиция на 10 этапов готова (tasks.md).
+Подсистема шифрования agio Drive (SRS-001 v2.3, Per-File FEK + Per-Chunk CEK) полностью спроектирована, но не реализована: данные в S3 хранятся в plaintext, ключей CEK/FEK/KEK нет, render-ноды и user-клиенты не имеют криптографической изоляции. Целевой контракт капабилити `domain-encrypt` зафиксирован в delta-спеке этого change (`specs/domain-encrypt/spec.md`, 17 требований; перенесён из отозванной ветки `inventory-encrypt` — greenfield-капабилити не может находиться в SoT до реализации и попадёт в SoT при архивации этого change). Это блокирует требования аудита (SOC 2, MPAA TPN) и конкурентный паритет с LucidLink (стратегические решения S1/S4). Реализация запускается сейчас: контракт стабилен, межэтапные форматы зафиксированы в design.md («Межэтапные контракты»), декомпозиция на 10 этапов готова (tasks.md).
 
 ## What Changes
 
@@ -25,11 +25,11 @@
 
 ### New Capabilities
 
-- `domain-encrypt`: greenfield-капабилити — в SoT её нет. Полный целевой контракт (16 требований, включая «Offboarding batch FEK rotation» с RPC `RotateFileKeysByPaths` — решение 7.7, design.md) зафиксирован в delta-спеке этого change; при архивации она становится Source of Truth.
+- `domain-encrypt`: greenfield-капабилити — в SoT её нет. Полный целевой контракт (17 требований, включая «Offboarding batch FEK rotation» с RPC `RotateFileKeysByPaths` — решение 7.7, design.md) зафиксирован в delta-спеке этого change; при архивации она становится Source of Truth.
 
 ### Modified Capabilities
 
-(нет)
+- `domain-meta-proxy`: change расширяет gRPC-поверхность Meta Proxy — новые RPC `ResolveFileKey` (authz Read), `RotateFileKey` / `RotateFileKeysByPaths` (org-admin gated), крипто-поля на существующих сообщениях (`OpenResponse.fek/fek_version/encrypted`, `CreateRequest.drive_file_id`, `FlushSessionResponse.permission_generation`, `Format.encryption_enabled/kek_version`, `ProtoSlice.wrapped_cek`). Delta: `specs/domain-meta-proxy/spec.md` (MODIFIED: gRPC service surface, Authorization interceptor). Без шифрования (`EncryptionEnabled=false`) поведение капабилити не меняется.
 
 ## Non-goals
 
@@ -39,11 +39,12 @@
 - Не менять upstream-поведение JuiceFS и не поддерживать совместимость с upstream (S2); целевой metadata-бэкенд — Redis, SQL/KV-ветки трогаются только если ломается компиляция общего кода.
 - Не шифровать метаданные (имена файлов в Redis остаются видимыми) и не менять authz-модель `domain-meta-proxy`/`domain-outbox`.
 - Не делать де-энкрипцию (обратную миграцию) — rollback задокументирован как «остановить создание новых зашифрованных файлов», полное откатывание шифрования = отдельный проект.
+- Не решать FR-ADMIN-2 (SRS §2.4): выделение административных RPC (`Init`, `GetFormat`, `Compact*`, `Quota`, `DumpMeta`, `Remove`) в отдельный привилегированный клиент или их удаление из публичного gRPC-интерфейса — отдельный hardening-change, трекается вне этого proposal; здесь админ-RPC остаются за `CheckOrganizationAdmin` (текущее поведение `domain-meta-proxy`).
 
 ## Related Requirements
 
-- SRS-001 (review, Final draft v2.2): Подсистема шифрования agio Drive — `specs/srs/SRS-001-agio-drive-encryption.md`. Ссылки по разделам (стабильных REQ-* ID у SRS нет до approved): §4 (иерархия ключей и форматы), §5 (хранение в Redis), §6 (user path), §7 (render path), §8 (операции Clone/CopyFileRange/Compaction), §9 (предусловия версионирования), §10 (offline/no-residuality), §11 (revocation), §12 (ротация), §14 (NFR), §15 (gRPC API), §16 (миграция), §17 (модификации), §18 (тестирование), §19 (план внедрения), §22 (Acceptance Criteria).
-- `domain-encrypt` (целевой контракт): `specs/domain-encrypt/spec.md` (delta этого change) — 16 требований; контент перенесён с ветки `inventory-encrypt` (2026-08-30), отозванной, т.к. greenfield-капабилити не может находиться в SoT до реализации. При архивации этого change delta станет `openspec/specs/domain-encrypt/`.
+- SRS-001 (review, Final draft v2.3): Подсистема шифрования agio Drive — `specs/srs/SRS-001-agio-drive-encryption.md`. Трассировка идёт по стабильным ID `FR-*`/`NFR-*` (схема зафиксирована с v2.3 — `specs/README.md`, `specs/index.md`) и по разделам: §4 (иерархия ключей и форматы), §5 (хранение в Redis), §6 (user path), §7 (render path), §8 (операции Clone/CopyFileRange/Compaction), §9 (предусловия версионирования), §10 (offline/no-residuality), §11 (revocation), §12 (ротация), §14 (NFR), §15 (gRPC API), §16 (миграция), §17 (модификации), §18 (тестирование), §19 (план внедрения), §22 (Acceptance Criteria).
+- `domain-encrypt` (целевой контракт): `specs/domain-encrypt/spec.md` (delta этого change) — 17 требований; контент перенесён с ветки `inventory-encrypt` (2026-08-30), отозванной, т.к. greenfield-капабилити не может находиться в SoT до реализации. При архивации этого change delta станет `openspec/specs/domain-encrypt/`.
 - ADR-001 (accepted): Гибридный spec-driven workflow — процесс, которому следует этот change.
 - BRD для agio Drive отсутствует (см. `specs/index.md`) — требования берутся из SRS-001 напрямую; бизнес-контекст и стратегические решения (S1–S4) зафиксированы в design.md (Context).
 
