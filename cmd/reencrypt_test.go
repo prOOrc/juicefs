@@ -653,7 +653,7 @@ func TestReencrypt_ConcurrentReadWrite(t *testing.T) {
 			pos := uint32(i * blockSize)
 			var st syscall.Errno
 			for attempt := 0; attempt < 100; attempt++ {
-				st = env.m.Write(meta.Background(), inode, 0, pos, meta.Slice{Id: id, Size: blockSize, Off: 0, Len: blockSize, WrappedCEK: wrappedCEK}, time.Now())
+				st = env.m.Write(meta.Background(), inode, 0, pos, meta.Slice{Id: id, Size: blockSize, Off: 0, Len: blockSize, WrappedCEK: wrappedCEK, FekVersion: a.FekVersion}, time.Now())
 				if st == 0 {
 					break
 				}
