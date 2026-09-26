@@ -448,6 +448,32 @@ func TestInterceptor_CopyFileRangeRequiresBothPaths(t *testing.T) {
 	assert.False(t, called, "handler should NOT be called when dst inode is missing")
 }
 
+func TestInterceptor_NewSlice_Allowed(t *testing.T) {
+	// NewSlice allocates a slice id on volume capacity and carries no inode;
+	// it writes and leaks nothing. Data becomes user-visible only when the
+	// slice is committed via Write, which is path-checked. Any authenticated
+	// user must pass through without an authz service call ("/" + View is
+	// always allowed).
+	mockClient := &mockAuthzClient{}
+	cache := NewInodePathCache(0)
+
+	ai := newTestInterceptor(mockClient, cache, "user-123")
+	interceptor := ai.UnaryInterceptor()
+
+	called := false
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		called = true
+		return &pb.NewSliceResponse{}, nil
+	}
+
+	_, err := interceptor(context.Background(), &pb.NewSliceRequest{},
+		&grpc.UnaryServerInfo{FullMethod: "/pb.MetaService/NewSlice"}, handler)
+
+	assert.NoError(t, err)
+	assert.True(t, called, "handler should be called for NewSlice (nothing to path-check)")
+	mockClient.AssertNotCalled(t, "CheckPermission", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
 func TestInterceptor_OpenWriteFlagsRequiresWrite(t *testing.T) {
 	mockClient := &mockAuthzClient{}
 	cache := NewInodePathCache(0)

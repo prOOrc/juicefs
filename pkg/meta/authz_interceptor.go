@@ -405,6 +405,13 @@ func (ai *AuthzInterceptor) resolveChecks(req interface{}, method string) []Auth
 		}
 		return []AuthzCheck{{Path: p, Permission: AuthzPermissionView}}
 
+	case *pb.NewSliceRequest:
+		// Slice allocation carries no inode: an id is allocated per-volume and
+		// becomes user-visible data only when committed via Write, which is
+		// path-checked. Allow any authenticated user (identity is already
+		// UUID-validated above); nothing is leaked or written by NewSlice itself.
+		return []AuthzCheck{{Path: "/", Permission: AuthzPermissionView}}
+
 	default:
 		// --- Inode-based: look up inode in cache ---
 		inode := ai.extractInode(req)
