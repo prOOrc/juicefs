@@ -26,6 +26,11 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// rewrapTestHook, if set, runs between the origin snapshot and the conflict
+// txn of rewrapChunkList — a test seam for deterministically landing a
+// concurrent write inside the checked window (TestRewrapSlices_Conflict).
+var rewrapTestHook func()
+
 // FileCrypto — crypto metadata of a file to be written into the inode attr.
 type FileCrypto struct {
 	WrappedFek  []byte
@@ -140,6 +145,9 @@ func (m *redisMeta) rewrapChunkList(ctx Context, ino Ino, indx uint32, srcFek, d
 		if !changed {
 			return 0
 		}
+		if rewrapTestHook != nil {
+			rewrapTestHook()
+		}
 		st := errno(m.txn(ctx, func(tx *redis.Tx) error {
 			cur, err := tx.LRange(ctx, key, 0, -1).Result()
 			if err != nil {
@@ -161,7 +169,12 @@ func (m *redisMeta) rewrapChunkList(ctx Context, ino Ino, indx uint32, srcFek, d
 			return st
 		}
 		if attempt+1 >= maxRewrapAttempts {
-			return st
+			// EAGAIN is an internal signal of the origin check; callers (clone,
+			// rotation, CopyFileRange) treat it as a transient conflict and must
+			// not see it. Exhausting retries means the list kept changing under
+			// sustained concurrent writes — fail closed like an unwrap failure.
+			logger.Errorf("rewrap chunk %d/%d: list kept changing after %d attempts", ino, indx, attempt+1)
+			return syscall.EIO
 		}
 		time.Sleep(time.Millisecond * 10)
 	}
