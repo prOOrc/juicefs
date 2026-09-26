@@ -17,7 +17,9 @@ context: |
 
   Активные фичи:
   - AGIO Drive v2 (ветка agio-drive-v2): Meta Proxy gRPC, OIDC authn, Authz via
-    agio-platform — реализовано; шифрование (SRS-001) — в проработке, per-stage changes.
+    agio-platform — реализовано; шифрование (SRS-001 v2.3) — реализуется единым
+    change implement-encrypt со стадийной декомпозицией (10 стадий в tasks.md;
+    ADR-001 допускает единый change для крупных фич).
   - Outbox (ветка outbox): события файловой системы Redis Streams → Kafka.
 
   Обязательные документы:

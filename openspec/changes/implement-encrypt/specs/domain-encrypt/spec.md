@@ -29,7 +29,12 @@ The system SHALL use a four-level key hierarchy: KMS Master Key → Company KEK 
 
 ### Requirement: Crypto metadata in Redis
 
-The inode attribute (`Attr`) SHALL carry persisted crypto fields — `encrypted` (bool), `drive_file_id` (UUID), `fek_version` (uint32), `crypto_alg` (string, `"AES-256-GCM"`), `wrapped_fek` (bytes, `AGFK` format) — as a variable-length suffix so that `wrapped_fek` is read in the same Redis round-trip as `GetAttr` (zero additional requests). A transient plaintext FEK field on `Attr` SHALL NEVER be marshaled into Redis. The slice record SHALL keep its fixed 24-byte base layout and carry an optional length-prefixed `AGCK` blob (`wrapped_cek`); records without the blob SHALL remain valid legacy plaintext records. The volume `Format` SHALL carry `encryption_enabled` (bool) and `kek_version` (int32). No file path SHALL be part of any AAD, so rename does not invalidate wrapped keys.
+The inode attribute (`Attr`) SHALL carry persisted crypto fields — `encrypted` (bool), `drive_file_id` (UUID), `fek_version` (uint32), `crypto_alg` (string, `"AES-256-GCM"`), `wrapped_fek` (bytes, `AGFK` format) — as a variable-length suffix so that `wrapped_fek` is read in the same Redis round-trip as `GetAttr` (zero additional requests). A transient plaintext FEK field on `Attr` SHALL NEVER be marshaled into Redis. The slice record SHALL keep its fixed 24-byte base layout and carry an optional length-prefixed `AGCK` blob (`wrapped_cek`); records without the blob SHALL remain valid legacy plaintext records. The volume `Format` SHALL carry `encryption_enabled` (bool) and `kek_version` (int32). No file path SHALL be part of any AAD, so rename does not invalidate wrapped keys. An encrypted volume SHALL require the Redis metadata engine: the administrative enable-encryption operation SHALL refuse to run on non-Redis engines, and the crypto metadata operations (`SetFileCrypto`, `RewrapSlices`) are Redis-only.
+
+#### Scenario: Enabling encryption on a non-Redis engine is refused
+
+- **WHEN** the enable-encryption administrative command is run against a volume whose metadata engine is not Redis
+- **THEN** the command SHALL fail with an explicit error and SHALL NOT set `encryption_enabled` on the volume
 
 #### Scenario: Legacy attribute and slice records are unchanged
 
@@ -122,7 +127,7 @@ The render client SHALL mount the volume directly against Redis and S3 without M
 
 ### Requirement: Versioning preconditions
 
-The metadata layer SHALL expose extension hooks so that future versioning/snapshots do not require reworking the crypto layer: a file-crypto-deletable hook (FEK lifecycle — FEK must not be deletable while referenced by an active version), a slice-deletable hook (version-aware GC), and a compaction-allowed hook (version-aware compaction); all hooks SHALL default to the current behavior (deletable/allowed) when unset. The `fek_version` field SHALL be supported end-to-end (attribute, `AGFK`/`AGCK` AAD, `Format.kek_version`) so that a file can hold multiple FEK versions without a format change.
+The metadata layer SHALL expose extension hooks so that future versioning/snapshots do not require reworking the crypto layer: a file-crypto-deletable hook (FEK lifecycle — FEK must not be deletable while referenced by an active version, a trash entry or a snapshot), a slice-deletable hook (version-aware GC), and a compaction-allowed hook (version-aware compaction); all hooks SHALL default to the current behavior (deletable/allowed) when unset. The `fek_version` field SHALL be supported end-to-end (attribute, `AGFK`/`AGCK` AAD, `Format.kek_version`) so that a file can hold multiple FEK versions without a format change.
 
 #### Scenario: Hook blocks crypto cleanup
 
@@ -140,8 +145,13 @@ Plaintext keys (FEK, CEK) SHALL reside only in RAM of the client process. On exp
 
 #### Scenario: Offline writes survive reconnect
 
-- **WHEN** the hub is unavailable and the client writes data, then the hub becomes available again
-- **THEN** the journaled writes SHALL be replayed and the data SHALL be readable and consistent
+- **WHEN** the hub is unavailable and the client writes data to files that are still open when the connection is restored
+- **THEN** the journaled writes of those files SHALL be replayed (under the current FEK resolved via a re-Open of each journaled file) and the data SHALL be readable and consistent; journaled records of files with no open writer SHALL NOT be silently dropped — they SHALL be retained in the journal and reported as a conflict
+
+#### Scenario: Write journal properties are pinned
+
+- **WHEN** offline-connected writes are journaled on the local disk
+- **THEN** journal records SHALL be appended only while the client is in the offline-connected state, the journal file SHALL have 0600 permissions and SHALL be truncated on explicit logout and after a successful replay; the payload of pending records is plaintext as an accepted boundary (see SRS-001 §3.2 T10, v2.3) and no plaintext key material SHALL ever be journaled
 
 ### Requirement: Revocation and STS
 
@@ -182,7 +192,7 @@ Existing unencrypted chunks SHALL remain readable transparently (`encrypted=0`) 
 
 ### Requirement: gRPC API surface
 
-The `MetaService` proto SHALL be extended with: `OpenResponse` fields `fek` (bytes, TLS-only), `fek_version`, `encrypted`; `CreateRequest` field `drive_file_id`; `Format` fields `encryption_enabled`, `kek_version`; `FlushSessionResponse` field `permission_generation`; and RPCs `ResolveFileKey` (returns plaintext FEK for an inode, authz Read), `RotateFileKey` (admin-gated FEK rotation) and `RotateFileKeysByPaths` (admin-gated batch FEK rotation by file paths; behavioral contract in the requirement Offboarding batch FEK rotation). The fork SHALL consume the agio-platform service `agio.platform.drive.crypto.v1.DriveKeyManagerService` with RPCs: `CreateFileKey`, `GetFileFEK`, `GetBulkFileFEK` (batch up to 1000 keys), `FetchCompanyKEK` (node-identity authenticated), `ProvisionCompanyKEK`, `GetPermissionGeneration`, `GetSTSCredentials`, `RotateFileFEK`, `RotateCompanyKEK`.
+The `MetaService` proto SHALL be extended with: `OpenResponse` fields `fek` (bytes, TLS-only), `fek_version`, `encrypted`; `CreateRequest` field `drive_file_id`; `Format` fields `encryption_enabled`, `kek_version`; `FlushSessionResponse` field `permission_generation`; and RPCs `ResolveFileKey` (returns plaintext FEK for an inode, authz Read), `RotateFileKey` (admin-gated FEK rotation) and `RotateFileKeysByPaths` (admin-gated batch FEK rotation by file paths; behavioral contract in the requirement Offboarding batch FEK rotation). The fork SHALL consume the agio-platform service `agio.platform.drive.crypto.v1.DriveKeyManagerService` with RPCs: `CreateFileKey`, `GetFileFEK`, `GetBulkFileFEK` (batch up to 1000 keys), `FetchCompanyKEK` (node-identity authenticated), `ProvisionCompanyKEK`, `GetPermissionGeneration`, `GetSTSCredentials`, `RotateFileFEK` (org-admin gated; the response carries the new wrapped FEK and the new plaintext FEK needed by the proxy for CEK re-wrap) and `RotateCompanyKEK`.
 
 #### Scenario: Plaintext FEK travels only in OpenResponse
 

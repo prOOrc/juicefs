@@ -3,7 +3,7 @@
 
 | Поле | Значение |
 |---|---|
-| **Версия** | 2.2 |
+| **Версия** | 2.3 |
 | **Статус** | Final draft |
 | **Продукт** | agio Drive — корпоративная файловая система для CG/VFX |
 | **Платформа** | agio-platform |
@@ -23,6 +23,7 @@
 | 2.0 | Двухуровневая CEK + FEK; encrypted local cache; offline-connected режим; revocation; LucidLink parity |
 | 2.1 | Корректная модель администратора компании (убран `CheckOrganizationAdmin`); раздел «Версионирование и снепшоты» — только криптографические предусловия |
 | **2.2** | **Зафиксирован инвариант идентичности**: OIDC `sub` ≡ `kratos.identity_id` ≡ `user.id` (UUID). Маппинг `sub → user.id` исключён; риск R12 заменён на остаточный R12' (дрейф идентичности). |
+| **2.3** | **Синхронизация с реализацией** (change `implement-encrypt`, решения интервью 2026-09-26): §15.1 = фактический контракт `DriveKeyManagerService` (9 RPC, поля `user_id`/`volume_uuid`, `GetBulkFileFEK` — entries-based); T10/NFR-SEC-1 — оформлена принятая граница write journal (plaintext payload, компенсирующие контроли, шифрование журнала — в бэклоге); NFR-PERF-3 — пометка DEVIATION pending decision (цель ≤10% не меняется, перезамер — гейт 10.7); FR-REDIS-5 — примечание об отклонении (внутренние бэкапы YC); фактическая схема ID `FR-*`/`NFR-*` зафиксирована как стабильная (specs/README.md, specs/index.md). |
 
 ---
 
@@ -186,7 +187,7 @@ Render plane:    Render Client → Redis (прямой) + S3 (прямой)
 | T7 | Атака на KMS | HSM; ротация; IAM least privilege | ✅ Облачный KMS |
 | T8 | **Легитимный пользователь сохранил ключи + данные offline** | **НЕ защищено криптографически** | ❌ Принятая граница |
 | T9 | **Дамп памяти подключённого клиента** | **НЕ защищено программно** | ❌ Принятая граница |
-| T10 | Потерянное устройство | Encrypted local cache (no residuality) | ✅ Защищено |
+| T10 | Потерянное устройство | Encrypted local cache (no residuality). Граница (v2.3): pending offline-записи в write journal — payload plaintext (0600; записи добавляются только в offline-connected-окнах ≤ offline-timeout, по умолчанию 15 мин; truncate при явном logout и после успешного replay). Компенсирующие контроли: дисковое шифрование managed-эндпоинтов (FileVault/BitLocker), права 0600, мониторинг offline-событий | ⚠️ Защищено с документированной границей |
 | T11 | Случайное/вредительское удаление данных | Будущее версионирование/корзина (§9); на текущем этапе — только криптографические предусловия | ⚠️ Отложено |
 
 ### 3.3 Фундаментальный предел (зафиксировать для аудита)
@@ -290,7 +291,7 @@ AAD = chunk_id || slice_index
 | **FR-REDIS-2** | `wrapped_cek` ДОЛЖЕН храниться в slice-метаданных чанка (расширение структуры slice). |
 | **FR-REDIS-3** | Metadata ДОЛЖНА включать поля: `drive_file_id` (UUID), `encrypted` (bool), `fek_version` (uint32), `crypto_alg` (string). |
 | **FR-REDIS-4** | `wrapped_fek` НЕ ДОЛЖЕН включать path в AAD (файл может быть переименован). |
-| **FR-REDIS-5** | Redis metadata backups ДОЛЖНЫ считаться критичными для восстановления данных и храниться в зашифрованном виде. |
+| **FR-REDIS-5** | Redis metadata backups ДОЛЖНЫ считаться критичными для восстановления данных и храниться в зашифрованном виде. Примечание (v2.3, оформленное отклонение): YC Managed Redis не поддерживает SSE-KMS/S3-экспорт — используются внутренние автоматические бэкапы YC (retention 35 дней) + обязательный restore-тест; отклонение отслеживается в change `drive-crypto-infra` (OQ1). |
 | **FR-REDIS-6** | Потеря `wrapped_fek` ДОЛЖНА рассматриваться как потеря доступа к содержимому файла. |
 
 ### 5.2 Что НЕ хранится в Redis
@@ -523,7 +524,7 @@ Render Node (FUSE)
 
 | ID | Требование |
 |---|---|
-| **NFR-SEC-1** | Локальный дисковый кэш чанков ДОЛЖЕН содержать только ciphertext (encryption before caching). Plaintext-кэш на диске ЗАПРЕЩЁН. |
+| **NFR-SEC-1** | Локальный дисковый кэш чанков ДОЛЖЕН содержать только ciphertext (encryption before caching). Plaintext-кэш на диске ЗАПРЕЩЁН. Скоуп (v2.3): покрывает кэш чанков и writeback staging; write journal offline-записей — принятая граница (payload plaintext, 0600, truncate при logout/replay — см. T10 в §3.2; шифрование журнала — бэклог). |
 | **NFR-SEC-2** | Все plaintext-ключи (FEK, CEK) ДОЛЖНЫ храниться только в RAM процесса клиента. |
 | **NFR-SEC-3** | При явном logout, истечении OIDC-сессии, получении revoke-сигнала, или превышении таймаута недоступности hub, клиент ДОЛЖЕН обнулить plaintext-ключи в RAM (`memclr`, не GC) и перейти в состояние disconnected. |
 | **NFR-SEC-4** | После disconnected локальный кэш ДОЛЖЕН стать нечитаемым. |
@@ -677,7 +678,7 @@ Render Node (FUSE)
 |---|---|---|
 | **NFR-PERF-1** | Latency `GetFileFEK` при кэш-хите | ≤ 5 мс (p99) |
 | **NFR-PERF-2** | Latency `GetFileFEK` при кэш-промахе | ≤ 100 мс (p99) |
-| **NFR-PERF-3** | Overhead шифрования на throughput | ≤ 10% |
+| **NFR-PERF-3** | Overhead шифрования на throughput. Цель не меняется; статус (v2.3): DEVIATION pending decision 2026-09-26 — первичный замер 31–44% на тестовой машине darwin/arm64 (tests/load/report-2026-09-23.md), повторный замер на production-классе железа (linux, конкурентно) — гейт 10.7 change `implement-encrypt` | ≤ 10% |
 | **NFR-PERF-4** | LRU-кэш FEK на клиенте | 100k, TTL 15 мин |
 | **NFR-PERF-5** | LRU-кэш FEK в Render-клиенте | 100k, TTL 1 час |
 | **NFR-PERF-6** | `wrapped_fek` читается в том же round-trip что и attr | 0 доп. Redis-запросов |
@@ -716,76 +717,128 @@ Render Node (FUSE)
 
 ### 15.1 KeyManagerService (agio-platform)
 
+Контракт синхронизирован с реализацией (v2.3): **9 RPC**, источник правды — `src/application/authz/proto/key_manager.proto` (agio-platform). Компания не передаётся клиентом в файловых RPC (`CreateFileKey`/`GetFileFEK`/`GetBulkFileFEK`/`RotateFileFEK`) — platform резолвит её из пути (`volume_name` + первый сегмент после companies prefix); `wrapped_fek` передаёт proxy из attr (KeyManager не читает Redis).
+
 ```protobuf
 package agio.platform.drive.crypto.v1;
 
 service DriveKeyManagerService {
-    rpc CreateFileKey(CreateFileKeyRequest)     returns (CreateFileKeyResponse);
-    rpc GetFileFEK(GetFileFEKRequest)           returns (GetFileFEKResponse);
-    rpc GetBulkFileFEK(GetBulkFileFEKRequest)   returns (GetBulkFileFEKResponse);
-    rpc RotateFileFEK(RotateFileFEKRequest)     returns (RotateFileFEKResponse);
-    rpc RotateCompanyKEK(RotateCompanyKEKRequest) returns (RotateCompanyKEKResponse);
+    rpc CreateFileKey(CreateFileKeyRequest)             returns (CreateFileKeyResponse);
+    rpc GetFileFEK(GetFileFEKRequest)                   returns (GetFileFEKResponse);
+    rpc GetBulkFileFEK(GetBulkFileFEKRequest)           returns (GetBulkFileFEKResponse);
+    rpc FetchCompanyKEK(FetchCompanyKEKRequest)         returns (FetchCompanyKEKResponse);   // render-ноды, IAM-токен
+    rpc ProvisionCompanyKEK(ProvisionCompanyKEKRequest) returns (ProvisionCompanyKEKResponse);
+    rpc GetPermissionGeneration(GetPermissionGenerationRequest) returns (GetPermissionGenerationResponse);
+    rpc GetSTSCredentials(GetSTSCredentialsRequest)     returns (GetSTSCredentialsResponse);
+    rpc RotateFileFEK(RotateFileFEKRequest)             returns (RotateFileFEKResponse);     // org-admin; ответ несёт plaintext FEK для re-wrap proxy
+    rpc RotateCompanyKEK(RotateCompanyKEKRequest)       returns (RotateCompanyKEKResponse);  // org-admin
 }
 
 message CreateFileKeyRequest {
-    string actor_user_id = 1;       // OIDC sub (UUID, = user.id)
-    string volume_name = 2;
-    string path = 3;
-    string drive_file_id = 4;       // client-generated UUID
-    uint64 inode = 5;
+    string user_id = 1;       // OIDC sub (UUID, = user.id; A6)
+    reserved 2;               // company_id — удалено: резолвится сервером из пути
+    string volume_uuid = 3;   // AAD
+    string drive_file_id = 4; // AAD
+    int64 inode = 5;          // AAD
+    string path = 6;          // полный путь клиента
+    string volume_name = 7;   // резолв companies prefix
 }
 
 message CreateFileKeyResponse {
-    bytes  plaintext_fek = 1;       // TLS only
-    bytes  wrapped_fek = 2;         // Meta Proxy writes to Redis
-    int32  fek_version = 3;
-    int32  kek_version = 4;
+    bytes wrapped_fek = 1;    // AGFK; plaintext FEK НЕ возвращается — proxy делает GetFileFEK (Write)
+    string drive_file_id = 2;
+    uint32 fek_version = 3;   // при create всегда 1
+    uint32 kek_version = 4;
+    string crypto_alg = 5;    // "AES-256-GCM"
 }
 
 message GetFileFEKRequest {
-    string actor_user_id = 1;       // OIDC sub (UUID, = user.id)
-    string volume_name = 2;
-    string path = 3;                // для authz
+    string user_id = 1;
+    reserved 2;               // company_id — удалено
+    string volume_uuid = 3;
     string drive_file_id = 4;
-    uint64 inode = 5;
-    bool   for_write = 6;           // true → требовать Edit
+    int64 inode = 5;
+    string path = 6;
+    bytes wrapped_fek = 7;    // AGFK из attr
+    bool write_access = 8;    // true → Edit, false → Read (FR-USR-5)
+    uint32 fek_version = 9;   // AAD
+    string volume_name = 10;
 }
 
 message GetFileFEKResponse {
-    bytes  plaintext_fek = 1;
-    int32  fek_version = 2;
-    int32  kek_version = 3;
+    bytes fek = 1;            // plaintext FEK, TLS only
+    string drive_file_id = 2;
+    uint32 fek_version = 3;
+    uint32 kek_version = 4;
+    string crypto_alg = 5;
+}
+
+message FileFEKEntry {
+    string drive_file_id = 1;
+    int64 inode = 2;
+    string path = 3;
+    bytes wrapped_fek = 4;
+    bool write_access = 5;
+    uint32 fek_version = 6;
 }
 
 message GetBulkFileFEKRequest {
-    string actor_user_id = 1;
-    string volume_name = 2;
-    repeated string drive_file_ids = 3;   // до 1000
+    string user_id = 1;       // naming единый с остальными RPC (не actor_user_id) — сверено с platform proto
+    reserved 2;               // company_id — резолвится сервером из пути каждой entry
+    string volume_uuid = 3;
+    repeated FileFEKEntry entries = 4; // до 1000; записи могут относиться к разным компаниям
+    string volume_name = 5;   // резолв companies prefix
 }
 
-message GetBulkFileFEKResponse {
-    message Entry {
-        string drive_file_id = 1;
-        bool   allowed = 2;
-        bytes  plaintext_fek = 3;
-        int32  fek_version = 4;
-    }
-    repeated Entry entries = 1;
+message FileFEKResult {
+    string drive_file_id = 1;
+    bytes fek = 2;
+    uint32 fek_version = 3;
+    uint32 kek_version = 4;
+    string crypto_alg = 5;
+    bool allowed = 6;
+    string error = 7;         // причина при allowed=false
+}
+
+message GetBulkFileFEKResponse { repeated FileFEKResult results = 1; } // порядок = порядку entries
+
+message FetchCompanyKEKRequest { string company_id = 1; string node_id = 2; } // IAM-токен — в gRPC metadata (interceptor)
+message FetchCompanyKEKResponse { bytes kek = 1; uint32 kek_version = 2; }    // plaintext KEK, TLS only
+
+message ProvisionCompanyKEKRequest { string company_id = 1; }
+message ProvisionCompanyKEKResponse { uint32 kek_version = 1; bool created = 2; } // идемпотентно
+
+message GetPermissionGenerationRequest { string user_id = 1; }
+message GetPermissionGenerationResponse { uint64 generation = 1; } // 0, если счётчика нет
+
+message GetSTSCredentialsRequest { string user_id = 1; string company_id = 2; }
+message GetSTSCredentialsResponse {  // TTL ≤ 60 мин, prefix-scoped, каждая выдача аудируется
+    string access_key_id = 1;
+    string secret_access_key = 2;
+    string session_token = 3;
+    int64 expiration_unix = 4;
 }
 
 message RotateFileFEKRequest {
-    string admin_user_id = 1;
-    string drive_file_id = 2;
+    string user_id = 1;       // org-admin (OIDC sub)
+    reserved 2;
+    string volume_uuid = 3;
+    string drive_file_id = 4;
+    int64 inode = 5;
+    string path = 6;
+    uint32 current_fek_version = 7; // версия до ротации (≥ 1)
+    string volume_name = 8;
+}
+message RotateFileFEKResponse {
+    bytes wrapped_fek = 1;    // новый AGFK под актуальным KEK
+    uint32 fek_version = 2;   // previous + 1
+    uint32 kek_version = 3;
+    string crypto_alg = 4;
+    bytes plaintext_fek = 5;  // новый FEK (TLS only) — нужен proxy для RewrapSlices
 }
 
-message RotateFileFEKResponse { int32 new_fek_version = 1; }
-
-message RotateCompanyKEKRequest {
-    string admin_user_id = 1;
-    string company_id = 2;
-}
-
-message RotateCompanyKEKResponse { int32 new_kek_version = 1; }
+message RotateCompanyKEKRequest { string company_id = 1; string user_id = 2; } // user_id — org-admin
+message RotateCompanyKEKResponse { uint32 new_kek_version = 1; uint32 retiring_kek_version = 2; }
 ```
 
 ### 15.2 Расширения MetaService proto (форк JuiceFS)
@@ -966,7 +1019,7 @@ KeyManager переиспользует существующую логику `A
 | AES-256-GCM + tamper detection | ✅ | NFR-SEC-6, NFR-SEC-11 |
 | Unique IV per write, no key/IV reuse | ✅ | NFR-SEC-9 |
 | Streaming, no full replication | ✅ | JuiceFS chunk streaming |
-| Encrypted local cache / no residuality | ✅ | NFR-SEC-1..5 |
+| Encrypted local cache / no residuality | ✅ (с границей write journal — см. T10 §3.2, v2.3) | NFR-SEC-1..5 |
 | Offline-connected mode | ✅ | NFR-OFF-1..4 |
 | Instant revocation | ✅ | FR-REV-1..7 (при условии STS) |
 | SSO + auto offboarding | ✅ | OIDC/Hydra + Kratos |
@@ -1005,7 +1058,7 @@ KeyManager переиспользует существующую логику `A
 
 ---
 
-## Приложение A. Traceability: план v13 → SRS v2.2
+## Приложение A. Traceability: план v13 → SRS-001 (трассировка выполнена на момент v2.2)
 
 | Требование плана v13 | Статус | Новое требование |
 |---|---|---|

@@ -368,6 +368,7 @@ FEK → wrapped_cek (slice metadata) → CEK (RAM) → AES-256-GCM чанк в S
 5. **PG (platform):** `drive_company_crypto_key` (управление KEK), `drive_key_access_log` (аудит, append-only, ≥12 мес); SQLBoiler-регенерация после миграций.
 6. **Known-answer векторы:** идентичный `vectors.json` в обоих репозиториях — единственная защита от дрейфа бинарных форматов.
 7. **YC-инфраструктура (`agio-terraform-yc`, `agio-cloud`):** KMS master keys per-company (`yandex_kms_symmetric_key`, rotation_period — см. Open Question 5), Lockbox (именованные секреты `drive/kek/{companyID}/v{version}`; YC не имеет сервиса «Secret Manager»), IAM service accounts / STS-роли (render-ноды, user-сессии), Redis metadata backups (внутренние бэкапы YC, retention 35 дней; SSE-KMS/S3-экспорт сервисом не поддерживается — OQ1 change `drive-crypto-infra`) — Terraform в `agio-terraform-yc` (изменения трекаются в его собственном openspec, spec-driven); k8s values для новых флагов platform (`kms_key_id`, `lockbox_folder`, IAM) — `agio-cloud` (chart `platform-api`).
+8. **KeyManager (HA-допущение, NFR-AVAIL-1):** целевая доступность ≥ 99.9% обеспечивается деплоем `platform-api` в ≥ 2 реплики за балансировщиком (KeyManager — тот же gRPC-сервер, что `AuthzService`, решение D6; stateless — FEK не кэшируется, только singleflight). Мониторинг — SLO-алерты доступности (error-rate/up) в stage 10 (задача 10.4).
 
 ## Risks / Trade-offs
 
@@ -453,3 +454,53 @@ FEK → wrapped_cek (slice metadata) → CEK (RAM) → AES-256-GCM чанк в S
 3. **Направление зависимости pkg/meta → pkg/chunk** для AGCK-примитивов (`RewrapSlices`): если `pkg/meta` не импортирует `pkg/chunk` — вынести AGCK-хелперы в общий пакет (решение фиксируется в stage 5).
 4. **Доступ к «сырому» `redisMeta` из `meta.NewClient`** для декоратора `RenderMeta` — проверить в stage 4; при необходимости конструктор напрямую.
 5. **Yandex KMS auto-rotation:** поведение Decrypt для старых версий ключа после ротации — проверить документацией + тестом ДО включения (stage 10); fallback — manual re-wrap KEK.
+
+## Addendum 2026-09-26 (пост-ревью: ротация, replay, компакция)
+
+Раздел фиксирует решения по итогам ревью проектирования (интервью 2026-09-26, утверждены пользователем). Сопутствующие правки: delta `domain-encrypt` (журнал/trash/Redis-only/RPC-список/сценарий replay), новая delta `domain-meta-proxy` (MODIFIED: service surface + authz-маппинг), proposal (non-goal FR-ADMIN-2, счётчик требований, Modified Capabilities), tasks (задачи 5.8/6.8/8.7/9.8, дополнения 10.4/10.6/10.7, реформулировка 9.6), SRS-001 v2.3.
+
+### A1. Fencing конкурентных записей при FEK-ротации (задача 5.8)
+
+Проблема: `RotateFileKey` (решение 7.5) и батч `RotateFileKeysByPaths` (7.7) не фенсит писателей с открытым handle. Slice, закоммиченный после `RewrapSlices` данного chunk list, несёт `wrapped_cek` под СТАРЫМ FEK (и старый `fek_version` в AAD); новый FEK его не разворачивает, старый уничтожен ротацией → невосстановимая потеря записи. Существующая риск-строка «RotateFileKey на открытом файле» (version check на следующем Open) защищала только чтение, не запись.
+
+Решение (зеркало паттерна 8.1):
+
+1. **Origin-проверка в `RewrapSlices`:** txn сравнивает текущий chunk list (в представлении `buildSlice`) с origin, снятым до re-wrap; расхождение → EAGAIN и повтор чанка (конкурентная запись подхватывается и переоборачивается корректно — srcFek у proxy есть).
+2. **Writer-side version-check:** при коммите записи (путь `doWrite`) сверяется `fek_version` записи с актуальным `attr.fek_version`; mismatch → клиент пере-резолвит FEK (re-Open / `ResolveFileKey`) и повторяет коммит с CEK под актуальным FEK. Две проверки закрывают окно совместно: origin-проверка ловит запись между txn-ами, version-check — после.
+3. Тесты: `TestRewrapSlices_Conflict` (EAGAIN + retry), `TestRotation_ConcurrentWriter` (ротация при активном писателе → все записи читаемы под новым FEK).
+
+### A2. Replay write journal после ротации/отзыва во время offline (задача 6.8)
+
+Проблема: replay (решение 6.3) идёт через fileWriter открытых файлов с FEK из handle. Ротация FEK во время offline-окна (типовой offboarding-сценарий, FR-REV-6) → записи были бы закоммичены под уничтоженный FEK. Порядок replay vs generation-wipe при отзыве не был определён.
+
+Решение:
+
+1. **Re-Open перед replay:** для каждого журнального файла выполняется re-Open (переиспользуется механика crash-recovery, `loadAllHandles`, tasks.md:824) — ответ даёт актуальные `fek`/`fek_version`, handle обновляется, записи коммитятся под актуальный FEK. Plaintext-журнал шифруется в момент коммита — пере-завёртка не нужна (это ключевое преимущество plaintext-журнала перед FEK-зашифрованным, см. решение 1 интервью).
+2. **Порядок при отзыве:** replay стартует только после успешного heartbeat с неизменным `permission_generation`; смена generation → `WipeKeys` без replay, журнал **сохраняется**; при следующем входе — повторная попытка (re-Open по п.1); при deny журнал не удаляется, конфликт показывается пользователю (не молча).
+3. Тесты: `TestReplayAfterRotation_UnderNewFEK`, `TestReplay_Denied_KeepsJournal`.
+
+### A3. Компакция encrypted-файлов в user mode (open decision → stage 10)
+
+Фиксация противоречия: решение 5.3 («резолвер не устанавливается → зашифрованные чанки пропускаются fail-closed; wiring к системному компактатору — вне этапа») конфликтует с опорой идемпотентности replay (решение 6.3, п.4) на автокомпакцию (`baseMeta.Read` при ≥5 slice'ов): в user mode автокомпакция для encrypted-файлов не выполняется → избыточные записи после replay/миграций не чистятся, метаданные и read-path деградируют со временем.
+
+Принятый минимальный путь: метрика `jfs_compactions_skipped_total` (задача 10.4) + операционное следствие в docs/ops (задача 10.5: пропущенная компакция encrypted-файлов — нормальное состояние до принятия полного решения; мониторинг роста slice-записей).
+
+Полный вариант — wiring клиентского `grpcMeta.ResolveFileKey` (метод существует, задача 5.2) или proxy-side сервисного резолвера в системный компактатор — **OPEN DECISION**, назначен на stage 10 (ревизия в рамках задач 10.4/10.5).
+
+### A4. Сводка решений интервью 2026-09-26
+
+| # | Решение | Где отражено |
+|---|---|---|
+| 1 | Write journal — отклонение оформлено (docs-only), шифрование журнала в бэклоге | SRS-001 v2.3 (§3.2 T10, §10.1 NFR-SEC-1, §21.1); delta `domain-encrypt` (сценарий свойств журнала); tasks 10.6 (disclosure) |
+| 2 | AC-11/FR-TEST-24: статус DEVIATION pending decision; цель ≤10% не ослабляется; перезамер на production-классе (linux, конкурентно) — гейт 10.7 | SRS v2.3 (NFR-PERF-3); tasks 10.7 |
+| 3 | SRS v2.3 = фактический контракт (§15.1: 9 RPC, entries-based `GetBulkFileFEK` — см. A5); схема ID FR-*/NFR-* зафиксирована | SRS-001; specs/README.md; specs/index.md |
+| 4 | Для крупных фич допустим единый change со стадийными tasks | ADR-001 (Последствия); openspec/config.yaml; specs/index.md |
+| 5 | N1/N2: fencing ротации + replay через re-Open | A1/A2 этого Addendum; tasks 5.8, 6.8 |
+| 6 | FR-ADMIN-2 — отдельный hardening-change (non-goal) | proposal (Non-goals) |
+| 7 | Guard enable-encryption на не-Redis движке | delta `domain-encrypt`; tasks 8.7 |
+| 8 | go-redis deadlock: патч собственного форка (по аналогии с minio-форком); гейты 10.7 формулируются «после фикса в собственном форке go-redis» | tasks 10.7 |
+| 9 | Чеклисты: 9.6 → 9.6a (подготовлен) / 9.6b (прогон, предусловие 10.7); проставление чеклистов 3–9 — отдельная процедура по evidence | tasks 9.6a/9.6b |
+
+### A5. Сверка контракта KeyManagerService с фактическим proto platform (2026-09-26)
+
+Проверка по фактическому proto `src/application/authz/proto/key_manager.proto` (agio-platform, read-only): сервис — **9 RPC**. RPC `GenerateRotatedFileKey` из эскизов этапа 7 (tasks 7.5 и раздел «Межэтапные контракты» выше) в реализации отсутствует — его роль выполняет `RotateFileFEK`, ответ которого несёт и новый `wrapped_fek` (v+1), и `plaintext_fek` для `RewrapSlices`; `GetBulkFileFEK` — entries-based (`FileFEKEntry`/`FileFEKResult`), без параллельных массивов из решения 1.3. SRS-001 §15.1 (v2.3) синхронизирован с фактическим proto. Эскизы в этом документе и tasks.md — исторические; источник правды контракта: platform proto + cross-repo known-answer векторы.

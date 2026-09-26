@@ -4,7 +4,7 @@ type: adr
 title: Гибридный spec-driven workflow (BRD/SRS + OpenSpec)
 status: accepted
 created: 2026-08-29
-updated: 2026-08-29
+updated: 2026-09-26
 ---
 
 # ADR: Гибридный spec-driven workflow (BRD/SRS + OpenSpec)
@@ -59,4 +59,4 @@ updated: 2026-08-29
 - Изменение утверждённых SRS требует обновления документа и `specs/index.md`.
 - Архитектор (`.qwen/agents/architect.md`) ведёт оба слоя; кодинг-агент работает только с `openspec/changes/`.
 - Source of Truth (`openspec/specs/`) заполняется инвентаризационным change по AGIO-капабилити и далее поддерживается через archive.
-- Шифрование (SRS-001) реализуется серией per-stage changes (по одному на stage-план 01–10).
+- Шифрование (SRS-001) реализуется change'ами по SRS. Для крупных фич допустим ЕДИНЫЙ change со стадийной декомпозицией в tasks.md (решение 2026-09-26: шифрование — единый change `implement-encrypt`, стадии 1–10 в его tasks.md); серия per-stage changes (по одному на stage-план 01–10) — опция для небольших изолированных изменений.
