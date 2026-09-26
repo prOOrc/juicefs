@@ -258,7 +258,10 @@ func (c *chunkWriter) commitThread() {
 				driveFileID := f.driveFileID
 				f.Unlock()
 				if stale {
-					err = syscall.EIO // keys wiped (NFR-SEC-3): fail closed
+					// Keys wiped (NFR-SEC-3): fail closed; clear the key copy
+					// so no plaintext material outlives the check.
+					utils.MemClear(fekCopy)
+					err = syscall.EIO
 					break
 				}
 				var wrapped []byte
@@ -366,6 +369,12 @@ func (f *fileWriter) refreshFEK() syscall.Errno {
 	}
 	f.Lock()
 	defer f.Unlock()
+	if f.stale {
+		// Keys were wiped (revocation/logout) while the resolve was in flight:
+		// do not resurrect key material in memory (NFR-SEC-3) — fail closed.
+		utils.MemClear(fek)
+		return syscall.EIO
+	}
 	if f.fek != nil {
 		utils.MemClear(f.fek)
 	}

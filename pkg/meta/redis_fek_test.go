@@ -412,6 +412,22 @@ func TestRewrapSlices_Conflict(t *testing.T) {
 		}
 	}()
 
+	// Deterministic conflict injection: the hook lands one extra append (under
+	// the OLD FEK, like the concurrent writer below) inside the snapshot→txn
+	// window that the origin check guards, so the EAGAIN-retry path is
+	// exercised on every run regardless of timing.
+	var hookFired atomic.Bool
+	rewrapTestHook = func() {
+		rewrapTestHook = nil
+		hookFired.Store(true)
+		id := uint64(1900)
+		st := mWrite(t, rm, ctx, inode, 0, 900*recLen, Slice{Id: id, Size: recLen, Len: recLen, WrappedCEK: wrapOld(randomKey32(t, 7), id), FekVersion: 1})
+		if st != 0 {
+			t.Errorf("injected write: %s", st)
+		}
+	}
+	defer func() { rewrapTestHook = nil }()
+
 	var rewErr syscall.Errno
 	var rewWg sync.WaitGroup
 	rewWg.Add(1)
@@ -424,6 +440,7 @@ func TestRewrapSlices_Conflict(t *testing.T) {
 	appender.Wait()
 	rewWg.Wait()
 	require.Equal(t, syscall.Errno(0), rewErr)
+	require.True(t, hookFired.Load(), "origin-check conflict path must have fired")
 
 	// A record may have landed after the concurrent run's final apply; a quiet
 	// second run (idempotent) brings the list to the fixed point before asserting.
