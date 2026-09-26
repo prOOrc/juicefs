@@ -69,6 +69,7 @@ message ProtoSlice {
   uint32 off = 3;
   uint32 len = 4;
   bytes wrapped_cek = 5;    // optional AGCK tail (encrypted slices only)
+  uint32 fek_version = 6;   // FEK version the wrapped_cek was wrapped under (0 = legacy/unknown)
 }
 
 // Entry represents a directory entry

@@ -19,6 +19,7 @@ package meta
 import (
 	"os"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -306,4 +307,354 @@ func TestSliceDeletable_Hook(t *testing.T) {
 	require.Equal(t, "-1", val, "blocked slice keeps its refcount field")
 	_, err = rm.rdb.HGet(ctx, rm.sliceRefs(), rm.sliceKey(5002, size)).Result()
 	require.ErrorIs(t, err, redis.Nil, "deleted slice refcount field must be cleaned up")
+}
+
+// mWrite is a convenience wrapper around redisMeta.Write for tests.
+func mWrite(t *testing.T, rm *redisMeta, ctx Context, inode Ino, indx, off uint32, s Slice) syscall.Errno {
+	t.Helper()
+	return rm.Write(ctx, inode, indx, off, s, time.Now())
+}
+
+// newFekTestEnv wires a real Redis (DB 11) with an encrypted file: Mknod +
+// SetFileCrypto(version 1). Returns the meta, the inode and the AADs/keys.
+func newFekTestEnv(t *testing.T) (*redisMeta, Ino, []byte, []byte, SliceCryptoAAD, SliceCryptoAAD) {
+	t.Helper()
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
+	}
+	m, err := newRedisMeta("redis", encTestRedisAddr()+"/11", testConfig())
+	require.NoError(t, err)
+	rm := m.(*redisMeta)
+	t.Cleanup(func() { _ = rm.Shutdown() })
+	require.NoError(t, rm.rdb.FlushDB(Background()).Err())
+	require.NoError(t, m.Init(testFormat(), true))
+	_, err = m.Load(true)
+	require.NoError(t, err)
+
+	ctx := Background()
+	var inode Ino
+	var attr Attr
+	require.Equal(t, syscall.Errno(0), m.Mknod(ctx, RootInode, "fekt", TypeFile, 0644, 022, 0, "", &inode, &attr))
+
+	oldFek, newFek := randomKey32(t, 1), randomKey32(t, 2)
+	srcAAD := SliceCryptoAAD{DriveFileID: "dfid-fekt", FekVersion: 1}
+	dstAAD := SliceCryptoAAD{DriveFileID: "dfid-fekt", FekVersion: 2}
+	require.Equal(t, syscall.Errno(0), rm.SetFileCrypto(ctx, inode, &FileCrypto{
+		WrappedFek:  []byte("agfk-blob"),
+		DriveFileID: srcAAD.DriveFileID,
+		FekVersion:  1,
+		CryptoAlg:   "AES-256-GCM",
+	}))
+	return rm, inode, oldFek, newFek, srcAAD, dstAAD
+}
+
+// TestRewrapSlices_Conflict (task 5.8, design Addendum A1): a concurrent writer
+// appending records while RewrapSlices runs must not lose or corrupt them: the
+// origin check rejects the stale apply with EAGAIN and the retry re-snapshots,
+// so every record — including those appended mid-rewrap — ends up wrapped under
+// the new FEK.
+func TestRewrapSlices_Conflict(t *testing.T) {
+	t.Run("origin comparison", func(t *testing.T) {
+		cases := []struct {
+			name   string
+			origin []string
+			cur    []string
+			want   bool
+		}{
+			{"identical lists", []string{"a", "b"}, []string{"a", "b"}, false},
+			{"empty lists", nil, nil, false},
+			{"appended record", []string{"a"}, []string{"a", "b"}, true},
+			{"changed record", []string{"a", "b"}, []string{"a", "c"}, true},
+			{"removed record", []string{"a", "b"}, []string{"a"}, true},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				require.Equal(t, tc.want, rewrapOriginChanged(tc.origin, tc.cur))
+			})
+		}
+	})
+
+	rm, inode, oldFek, newFek, srcAAD, dstAAD := newFekTestEnv(t)
+	ctx := Background()
+
+	const recLen = 4096
+	wrapOld := func(cek []byte, id uint64) []byte {
+		blob, err := chunkenc.WrapCEK(oldFek, cek, srcAAD.DriveFileID, id, srcAAD.FekVersion)
+		require.NoError(t, err)
+		return blob
+	}
+	// one initial record in chunk 0
+	require.Equal(t, syscall.Errno(0), mWrite(t, rm, ctx, inode, 0, 0, Slice{Id: 1001, Size: recLen, Len: recLen, WrappedCEK: wrapOld(randomKey32(t, 3), 1001), FekVersion: 1}))
+
+	// Concurrent appender: new records wrapped under the OLD FEK every ~5ms. The
+	// file's attr still says version 1 (no SetFileCrypto(2) in this test), so the
+	// writes pass the fencing check and land under the old FEK — exactly the
+	// records the origin-check retry must pick up and re-wrap.
+	stop := make(chan struct{})
+	var appender sync.WaitGroup
+	var nextID uint64 = 2000
+	appender.Add(1)
+	go func() {
+		defer appender.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			id := atomic.AddUint64(&nextID, 1)
+			st := mWrite(t, rm, ctx, inode, 0, uint32((id-2000)*recLen), Slice{Id: id, Size: recLen, Len: recLen, WrappedCEK: wrapOld(randomKey32(t, byte(id%251)), id), FekVersion: 1})
+			if st != 0 {
+				t.Errorf("appender write %d: %s", id, st)
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}()
+
+	var rewErr syscall.Errno
+	var rewWg sync.WaitGroup
+	rewWg.Add(1)
+	go func() {
+		defer rewWg.Done()
+		rewErr = rm.RewrapSlices(ctx, inode, oldFek, newFek, srcAAD, dstAAD)
+	}()
+	time.Sleep(100 * time.Millisecond) // let appends race the rewrap
+	close(stop)
+	appender.Wait()
+	rewWg.Wait()
+	require.Equal(t, syscall.Errno(0), rewErr)
+
+	// A record may have landed after the concurrent run's final apply; a quiet
+	// second run (idempotent) brings the list to the fixed point before asserting.
+	require.Equal(t, syscall.Errno(0), rm.RewrapSlices(ctx, inode, oldFek, newFek, srcAAD, dstAAD))
+
+	vals, err := rm.rdb.LRange(ctx, rm.chunkKey(inode, 0), 0, -1).Result()
+	require.NoError(t, err)
+	require.NotEmpty(t, vals)
+	for _, val := range vals {
+		s := new(slice)
+		s.read([]byte(val))
+		require.NotEmpty(t, s.wrappedCEK)
+		_, err := chunkenc.UnwrapCEK(newFek, s.wrappedCEK, dstAAD.DriveFileID, s.id, dstAAD.FekVersion)
+		require.NoError(t, err, "slice %d must unwrap under the new FEK/AAD", s.id)
+	}
+}
+
+// TestRewrapSlices_AlreadyRewrapped (task 5.8, design Addendum A1): a record
+// already wrapped under the NEW FEK/version (a writer that re-resolved its FEK
+// mid-rotation) survives RewrapSlices byte-identical; a record under a foreign
+// key/AAD still fails closed with EIO and leaves the list untouched.
+func TestRewrapSlices_AlreadyRewrapped(t *testing.T) {
+	rm, inode, oldFek, newFek, srcAAD, dstAAD := newFekTestEnv(t)
+	ctx := Background()
+
+	const recLen = 4096
+	cekOld, cekNew := randomKey32(t, 3), randomKey32(t, 4)
+	// record A under the old FEK/version (committed before the bump)
+	blobA, err := chunkenc.WrapCEK(oldFek, cekOld, srcAAD.DriveFileID, 3001, srcAAD.FekVersion)
+	require.NoError(t, err)
+	require.Equal(t, syscall.Errno(0), mWrite(t, rm, ctx, inode, 0, 0, Slice{Id: 3001, Size: recLen, Len: recLen, WrappedCEK: blobA, FekVersion: 1}))
+	// rotation bumps the version...
+	require.Equal(t, syscall.Errno(0), rm.SetFileCrypto(ctx, inode, &FileCrypto{
+		WrappedFek:  []byte("agfk-blob-v2"),
+		DriveFileID: srcAAD.DriveFileID,
+		FekVersion:  2,
+		CryptoAlg:   "AES-256-GCM",
+	}))
+	// ...and a writer that re-resolved mid-rotation commits record B already
+	// under the new FEK/version.
+	blobB, err := chunkenc.WrapCEK(newFek, cekNew, dstAAD.DriveFileID, 3002, dstAAD.FekVersion)
+	require.NoError(t, err)
+	require.Equal(t, syscall.Errno(0), mWrite(t, rm, ctx, inode, 0, recLen, Slice{Id: 3002, Size: recLen, Len: recLen, WrappedCEK: blobB, FekVersion: 2}))
+
+	key := rm.chunkKey(inode, 0)
+	before, err := rm.rdb.LRange(ctx, key, 0, -1).Result()
+	require.NoError(t, err)
+	require.Len(t, before, 2)
+
+	require.Equal(t, syscall.Errno(0), rm.RewrapSlices(ctx, inode, oldFek, newFek, srcAAD, dstAAD))
+
+	after, err := rm.rdb.LRange(ctx, key, 0, -1).Result()
+	require.NoError(t, err)
+	require.Len(t, after, 2)
+	require.NotEqual(t, before[0], after[0], "record A must be re-wrapped")
+	require.Equal(t, before[1], after[1], "record B (already under the new FEK) must be byte-identical")
+
+	sa := new(slice)
+	sa.read([]byte(after[0]))
+	cekOut, err := chunkenc.UnwrapCEK(newFek, sa.wrappedCEK, dstAAD.DriveFileID, sa.id, dstAAD.FekVersion)
+	require.NoError(t, err)
+	require.Equal(t, cekOld, cekOut)
+
+	t.Run("foreign key fails closed", func(t *testing.T) {
+		var fIno Ino
+		var fAttr Attr
+		require.Equal(t, syscall.Errno(0), rm.Mknod(ctx, RootInode, "foreign", TypeFile, 0644, 022, 0, "", &fIno, &fAttr))
+		require.Equal(t, syscall.Errno(0), rm.SetFileCrypto(ctx, fIno, &FileCrypto{
+			WrappedFek:  []byte("agfk-blob"),
+			DriveFileID: srcAAD.DriveFileID,
+			FekVersion:  1,
+			CryptoAlg:   "AES-256-GCM",
+		}))
+
+		foreign := randomKey32(t, 99)
+		blobC, err := chunkenc.WrapCEK(foreign, randomKey32(t, 5), srcAAD.DriveFileID, 4001, srcAAD.FekVersion)
+		require.NoError(t, err)
+		require.Equal(t, syscall.Errno(0), mWrite(t, rm, ctx, fIno, 0, 0, Slice{Id: 4001, Size: recLen, Len: recLen, WrappedCEK: blobC, FekVersion: 1}))
+
+		fKey := rm.chunkKey(fIno, 0)
+		fBefore, err := rm.rdb.LRange(ctx, fKey, 0, -1).Result()
+		require.NoError(t, err)
+
+		st := rm.RewrapSlices(ctx, fIno, oldFek, newFek, srcAAD, dstAAD)
+		require.Equal(t, syscall.EIO, st)
+
+		fAfter, err := rm.rdb.LRange(ctx, fKey, 0, -1).Result()
+		require.NoError(t, err)
+		require.Equal(t, fBefore, fAfter, "the list must be untouched after fail-closed")
+	})
+}
+
+// TestRotation_ConcurrentWriter (task 5.8, design Addendum A1): full fencing
+// scenario at the redisMeta level — a writer committing slices while rotation
+// bumps the FEK version and re-wraps. The writer fences on EAGAIN, re-reads the
+// version, re-wraps and retries (mirrors the VFS commit path); after both finish
+// and the old FEK is zeroed, every record must unwrap under the new FEK/version.
+func TestRotation_ConcurrentWriter(t *testing.T) {
+	rm, inode, oldFek, newFek, srcAAD, dstAAD := newFekTestEnv(t)
+	ctx := Background()
+
+	const recLen = 4096
+	const nWrites = 50
+
+	// Writer: wrap the CEK under the current FEK version (from the attr), commit
+	// with Slice.FekVersion set; on EAGAIN re-read the version, re-wrap and retry.
+	var writerErr error
+	var writerWg sync.WaitGroup
+	writerWg.Add(1)
+	go func() {
+		defer writerWg.Done()
+		for i := 0; i < nWrites; i++ {
+			id := uint64(5000 + i)
+			var st syscall.Errno
+			for attempt := 0; ; attempt++ {
+				var a Attr
+				if eno := rm.GetAttr(ctx, inode, &a); eno != 0 {
+					writerErr = eno
+					return
+				}
+				fek, aad := oldFek, srcAAD
+				if a.FekVersion == 2 {
+					fek, aad = newFek, dstAAD
+				}
+				blob, err := chunkenc.WrapCEK(fek, randomKey32(t, byte(i)), aad.DriveFileID, id, a.FekVersion)
+				if err != nil {
+					writerErr = err
+					return
+				}
+				st = mWrite(t, rm, ctx, inode, 0, uint32(i*recLen), Slice{Id: id, Size: recLen, Len: recLen, WrappedCEK: blob, FekVersion: a.FekVersion})
+				if st == 0 || st != syscall.EAGAIN || attempt >= 5 {
+					break
+				}
+			}
+			if st != 0 {
+				writerErr = st
+				return
+			}
+			time.Sleep(2 * time.Millisecond)
+		}
+	}()
+
+	// Rotation: bump the version, then re-wrap (the order of rotateFileFEK).
+	var rotErr syscall.Errno
+	var rotWg sync.WaitGroup
+	rotWg.Add(1)
+	go func() {
+		defer rotWg.Done()
+		time.Sleep(10 * time.Millisecond) // let some writes land under the old FEK
+		if st := rm.SetFileCrypto(ctx, inode, &FileCrypto{
+			WrappedFek:  []byte("agfk-blob-v2"),
+			DriveFileID: srcAAD.DriveFileID,
+			FekVersion:  2,
+			CryptoAlg:   "AES-256-GCM",
+		}); st != 0 {
+			rotErr = st
+			return
+		}
+		rotErr = rm.RewrapSlices(ctx, inode, oldFek, newFek, srcAAD, dstAAD)
+	}()
+
+	writerWg.Wait()
+	rotWg.Wait()
+	require.NoError(t, writerErr)
+	require.Equal(t, syscall.Errno(0), rotErr)
+
+	// Zero the old FEK: any record still wrapped under it can no longer be
+	// opened, so the assertions below prove every record is under the new FEK.
+	for i := range oldFek {
+		oldFek[i] = 0
+	}
+	var finalAttr Attr
+	require.Equal(t, syscall.Errno(0), rm.GetAttr(ctx, inode, &finalAttr))
+	require.EqualValues(t, 2, finalAttr.FekVersion)
+
+	for indx := uint32(0); indx <= uint32(finalAttr.Length/ChunkSize); indx++ {
+		vals, err := rm.rdb.LRange(ctx, rm.chunkKey(inode, indx), 0, -1).Result()
+		require.NoError(t, err)
+		for _, val := range vals {
+			s := new(slice)
+			s.read([]byte(val))
+			require.NotEmpty(t, s.wrappedCEK)
+			_, err := chunkenc.UnwrapCEK(newFek, s.wrappedCEK, dstAAD.DriveFileID, s.id, dstAAD.FekVersion)
+			require.NoError(t, err, "slice %d must unwrap under the new FEK/version", s.id)
+		}
+	}
+}
+
+// TestWrite_Fencing (task 5.8, design Addendum A1): doWrite fences encrypted
+// commits whose FEK version does not match the attr's — mismatched version →
+// EAGAIN, matching version → 0, legacy slices (no WrappedCEK) pass even into
+// encrypted files (mixed chunk lists are valid during migration).
+func TestWrite_Fencing(t *testing.T) {
+	rm, inode, oldFek, _, srcAAD, _ := newFekTestEnv(t)
+	ctx := Background()
+
+	const recLen = 4096
+	wrap := func(cek []byte, id uint64, ver uint32) []byte {
+		blob, err := chunkenc.WrapCEK(oldFek, cek, srcAAD.DriveFileID, id, ver)
+		require.NoError(t, err)
+		return blob
+	}
+
+	t.Run("mismatched version is fenced", func(t *testing.T) {
+		st := mWrite(t, rm, ctx, inode, 0, 0, Slice{Id: 6001, Size: recLen, Len: recLen, WrappedCEK: wrap(randomKey32(t, 2), 6001, 1), FekVersion: 2})
+		require.Equal(t, syscall.EAGAIN, st)
+	})
+
+	t.Run("matching version passes", func(t *testing.T) {
+		st := mWrite(t, rm, ctx, inode, 0, 0, Slice{Id: 6002, Size: recLen, Len: recLen, WrappedCEK: wrap(randomKey32(t, 3), 6002, 1), FekVersion: 1})
+		require.Equal(t, syscall.Errno(0), st)
+	})
+
+	t.Run("legacy slice passes into encrypted file", func(t *testing.T) {
+		st := mWrite(t, rm, ctx, inode, 0, recLen, Slice{Id: 6003, Size: recLen, Len: recLen})
+		require.Equal(t, syscall.Errno(0), st)
+	})
+
+	// After a version bump, the old version is fenced (the rotation direction).
+	require.Equal(t, syscall.Errno(0), rm.SetFileCrypto(ctx, inode, &FileCrypto{
+		WrappedFek:  []byte("agfk-blob-v2"),
+		DriveFileID: srcAAD.DriveFileID,
+		FekVersion:  2,
+		CryptoAlg:   "AES-256-GCM",
+	}))
+	t.Run("pre-bump version fenced after rotation", func(t *testing.T) {
+		st := mWrite(t, rm, ctx, inode, 0, 2*recLen, Slice{Id: 6004, Size: recLen, Len: recLen, WrappedCEK: wrap(randomKey32(t, 4), 6004, 1), FekVersion: 1})
+		require.Equal(t, syscall.EAGAIN, st)
+	})
+	t.Run("new version passes after rotation", func(t *testing.T) {
+		st := mWrite(t, rm, ctx, inode, 0, 2*recLen, Slice{Id: 6005, Size: recLen, Len: recLen, WrappedCEK: wrap(randomKey32(t, 5), 6005, 2), FekVersion: 2})
+		require.Equal(t, syscall.Errno(0), st)
+	})
 }

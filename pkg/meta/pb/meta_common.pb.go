@@ -403,7 +403,8 @@ type ProtoSlice struct {
 	Size          uint32                 `protobuf:"varint,2,opt,name=size,proto3" json:"size,omitempty"`
 	Off           uint32                 `protobuf:"varint,3,opt,name=off,proto3" json:"off,omitempty"`
 	Len           uint32                 `protobuf:"varint,4,opt,name=len,proto3" json:"len,omitempty"`
-	WrappedCek    []byte                 `protobuf:"bytes,5,opt,name=wrapped_cek,json=wrappedCek,proto3" json:"wrapped_cek,omitempty"` // optional AGCK tail (encrypted slices only)
+	WrappedCek    []byte                 `protobuf:"bytes,5,opt,name=wrapped_cek,json=wrappedCek,proto3" json:"wrapped_cek,omitempty"`  // optional AGCK tail (encrypted slices only)
+	FekVersion    uint32                 `protobuf:"varint,6,opt,name=fek_version,json=fekVersion,proto3" json:"fek_version,omitempty"` // FEK version the wrapped_cek was wrapped under (0 = legacy/unknown)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -471,6 +472,13 @@ func (x *ProtoSlice) GetWrappedCek() []byte {
 		return x.WrappedCek
 	}
 	return nil
+}
+
+func (x *ProtoSlice) GetFekVersion() uint32 {
+	if x != nil {
+		return x.FekVersion
+	}
+	return 0
 }
 
 // Entry represents a directory entry
@@ -1694,7 +1702,7 @@ const file_meta_common_proto_rawDesc = "" +
 	"\vfek_version\x18\x04 \x01(\x05R\n" +
 	"fekVersion\x12\x1d\n" +
 	"\n" +
-	"crypto_alg\x18\x05 \x01(\tR\tcryptoAlg\"u\n" +
+	"crypto_alg\x18\x05 \x01(\tR\tcryptoAlg\"\x96\x01\n" +
 	"\n" +
 	"ProtoSlice\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x12\n" +
@@ -1702,7 +1710,9 @@ const file_meta_common_proto_rawDesc = "" +
 	"\x03off\x18\x03 \x01(\rR\x03off\x12\x10\n" +
 	"\x03len\x18\x04 \x01(\rR\x03len\x12\x1f\n" +
 	"\vwrapped_cek\x18\x05 \x01(\fR\n" +
-	"wrappedCek\"Y\n" +
+	"wrappedCek\x12\x1f\n" +
+	"\vfek_version\x18\x06 \x01(\rR\n" +
+	"fekVersion\"Y\n" +
 	"\n" +
 	"ProtoEntry\x12\x14\n" +
 	"\x05inode\x18\x01 \x01(\x04R\x05inode\x12\x12\n" +

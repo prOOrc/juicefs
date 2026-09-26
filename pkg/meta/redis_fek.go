@@ -103,26 +103,34 @@ func (m *redisMeta) RewrapSlicesRange(ctx Context, dstIno Ino, srcFek, dstFek []
 	return 0
 }
 
-// rewrapChunkList re-wraps the AGCK tails of one chunk list in a single transaction:
-// LRange → unwrap under srcFek / wrap under dstFek → LSet. Records without an AGCK
-// tail (legacy) are left as-is. Any unwrap failure aborts the transaction
-// (fail-closed, EIO) — no partial rewrite of the list.
+// maxRewrapAttempts bounds the origin-check retry loop of rewrapChunkList: a
+// concurrent writer keeps appending while the rotation iterates, and each
+// conflict costs one re-snapshot + recompute round.
+const maxRewrapAttempts = 50
+
+// rewrapChunkList re-wraps the AGCK tails of one chunk list: snapshot → compute
+// → txn{verify origin → LSet}. Records without an AGCK tail (legacy) are left
+// as-is. Any unwrap failure aborts with EIO (fail-closed) — no partial rewrite
+// of the list. If a concurrent writer changed the list between the snapshot and
+// the transaction, the apply is rejected with EAGAIN and the whole round is
+// repeated from a fresh snapshot (design Addendum A1): the new record is picked
+// up and re-wrapped correctly, because the proxy still holds the old FEK.
 func (m *redisMeta) rewrapChunkList(ctx Context, ino Ino, indx uint32, srcFek, dstFek []byte, src, dst SliceCryptoAAD) syscall.Errno {
 	key := m.chunkKey(ino, indx)
-	err := m.txn(ctx, func(tx *redis.Tx) error {
-		vals, err := tx.LRange(ctx, key, 0, -1).Result()
+	for attempt := 0; ; attempt++ {
+		vals, err := m.rdb.LRange(ctx, key, 0, -1).Result()
 		if err != nil {
-			return err
+			return errno(err)
 		}
 		if len(vals) == 0 {
-			return nil // hole or empty chunk list
+			return 0 // hole or empty chunk list
 		}
 		newVals := make([]string, len(vals))
 		changed := false
 		for i, val := range vals {
 			nv, err := rewrapSliceRecord(val, srcFek, dstFek, src, dst)
 			if err != nil {
-				return err // fail-closed: no partial rewrite
+				return errno(err) // fail-closed: no partial rewrite
 			}
 			newVals[i] = nv
 			if nv != val {
@@ -130,21 +138,52 @@ func (m *redisMeta) rewrapChunkList(ctx Context, ino Ino, indx uint32, srcFek, d
 			}
 		}
 		if !changed {
-			return nil
+			return 0
 		}
-		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			for i, nv := range newVals {
-				pipe.LSet(ctx, key, int64(i), nv)
+		st := errno(m.txn(ctx, func(tx *redis.Tx) error {
+			cur, err := tx.LRange(ctx, key, 0, -1).Result()
+			if err != nil {
+				return err
 			}
-			m.genLog(ctx, pipe, time.Now(), "REWRAPSLICES(%d,%d)", ino, indx)
-			return nil
-		})
-		return err
-	}, key)
-	if err != nil {
-		return errno(err)
+			if rewrapOriginChanged(vals, cur) {
+				return syscall.EAGAIN // concurrent writer — retry from a fresh snapshot
+			}
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				for i, nv := range newVals {
+					pipe.LSet(ctx, key, int64(i), nv)
+				}
+				m.genLog(ctx, pipe, time.Now(), "REWRAPSLICES(%d,%d)", ino, indx)
+				return nil
+			})
+			return err
+		}, key))
+		if st != syscall.EAGAIN {
+			return st
+		}
+		if attempt+1 >= maxRewrapAttempts {
+			return st
+		}
+		time.Sleep(time.Millisecond * 10)
 	}
-	return 0
+}
+
+// rewrapOriginChanged reports whether the chunk list changed between the origin
+// snapshot and the in-transaction re-read. Raw-record comparison is deliberately
+// used instead of the buildSlice comparison that doReencryptChunk uses: re-wrap
+// maps record i→i by index, so any raw change (including an appended duplicate
+// of an identical record, which buildSlice would not see) invalidates the
+// computed values; raw equality is strictly stronger and safe because the retry
+// is idempotent.
+func rewrapOriginChanged(origin, cur []string) bool {
+	if len(origin) != len(cur) {
+		return true
+	}
+	for i := range origin {
+		if origin[i] != cur[i] {
+			return true
+		}
+	}
+	return false
 }
 
 // rewrapSliceRecord re-wraps the AGCK tail of one slice record from under srcFek to
@@ -166,6 +205,13 @@ func rewrapSliceRecord(val string, srcFek, dstFek []byte, src, dst SliceCryptoAA
 	s.read([]byte(val))
 	cek, err := chunkenc.UnwrapCEK(srcFek, s.wrappedCEK, src.DriveFileID, s.id, src.FekVersion)
 	if err != nil {
+		// Mixed-version tolerance (design Addendum A1): a writer that re-resolved
+		// its FEK mid-rotation commits under the NEW version while rotation is
+		// still iterating. The fallback is safe because the GCM tag + AAD binding
+		// make it fail-closed: only a genuine (dstFek, dstAAD) record passes.
+		if _, err2 := chunkenc.UnwrapCEK(dstFek, s.wrappedCEK, dst.DriveFileID, s.id, dst.FekVersion); err2 == nil {
+			return val, nil // already re-wrapped — leave byte-identical
+		}
 		return "", syscall.EIO // wrong FEK or tampered record — fail closed
 	}
 	newBlob, err := chunkenc.WrapCEK(dstFek, cek, dst.DriveFileID, s.id, dst.FekVersion)
