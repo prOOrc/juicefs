@@ -84,6 +84,11 @@ message Chunk {
   uint64 inode = 1;
   uint32 index = 2;
   bytes slices = 3; // array of meta.slice
+  // Each element is one full raw slice record: the 24-byte legacy base,
+  // optionally followed by a u32 blob length and an AGCK tail (encrypted
+  // slices). When set it takes precedence over the fixed-step `slices` field,
+  // which only carries 24-byte records.
+  repeated bytes slice_blobs = 4;
 }
 
 message Symlink {

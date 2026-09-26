@@ -18,6 +18,7 @@ package meta
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	"github.com/juicedata/juicefs/pkg/utils"
 )
@@ -174,6 +175,21 @@ func readSliceBuf(buf []byte) []*slice {
 		ss[i/sliceBytes] = s
 	}
 	return ss
+}
+
+// fixedSliceBuf packs the variable-length slice records of a Redis V2 dump
+// (Chunk.SliceBlobs) into the fixed 24-byte layout the sql/tkv engines store.
+// A record carrying an AGCK tail cannot be represented there — encrypted
+// volumes are Redis-only, so this fails closed instead of dropping the tail.
+func fixedSliceBuf(blobs [][]byte) ([]byte, error) {
+	buf := make([]byte, 0, len(blobs)*sliceBytes)
+	for _, b := range blobs {
+		if len(b) != sliceBytes {
+			return nil, fmt.Errorf("slice record of %d bytes cannot be stored in this engine: only Redis supports encrypted slices", len(b))
+		}
+		buf = append(buf, b...)
+	}
+	return buf, nil
 }
 
 func buildSlice(ss []*slice) []Slice {
