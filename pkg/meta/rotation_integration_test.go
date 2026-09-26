@@ -63,7 +63,7 @@ func TestFekRotation(t *testing.T) {
 	sliceID := uint64(7001)
 	wrapped, err := chunkenc.WrapCEK(oldFek, cek, attr.DriveFileID, sliceID, 1)
 	require.NoError(t, err)
-	require.Equal(t, syscall.Errno(0), env.meta.Write(ctx, inode, 0, 0, Slice{Id: sliceID, Size: size, Len: size, WrappedCEK: wrapped}, time.Now()))
+	require.Equal(t, syscall.Errno(0), env.meta.Write(ctx, inode, 0, 0, Slice{Id: sliceID, Size: size, Len: size, WrappedCEK: wrapped, FekVersion: 1}, time.Now()))
 
 	var before []Slice
 	require.Equal(t, syscall.Errno(0), env.meta.Read(ctx, inode, 0, &before))

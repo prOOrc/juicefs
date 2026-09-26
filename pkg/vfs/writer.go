@@ -31,6 +31,11 @@ import (
 
 const (
 	flushDuration = time.Second * 5
+
+	// maxFekRetries bounds the re-resolve-and-retry loop of commitThread after
+	// the engine fenced a commit wrapped under a stale FEK version (design
+	// Addendum A1).
+	maxFekRetries = 2
 )
 
 type FileWriter interface {
@@ -224,10 +229,49 @@ func (c *chunkWriter) commitThread() {
 					err = syscall.EIO
 				} else {
 					ss.WrappedCEK = wrapped
+					ss.FekVersion = f.fekVer
 				}
 			}
 			utils.MemClear(fekCopy)
 			if err == 0 {
+				err = f.w.m.Write(meta.Background(), f.inode, c.indx, s.off, ss, s.lastMod)
+				f.w.reader.Invalidate(f.inode, uint64(c.indx)*meta.ChunkSize+uint64(s.off), uint64(ss.Len))
+			}
+			// FEK rotation fencing (design Addendum A1): the engine rejected the
+			// commit because the record was wrapped under a stale FEK version.
+			// Re-resolve the FEK and re-wrap, bounded; after exhausting retries
+			// fall through to the error handling below (EAGAIN becomes EIO unless
+			// the hub is offline, where the existing deferral keeps the journal).
+			for retry := 0; err == syscall.EAGAIN && len(s.cek) > 0 && retry < maxFekRetries; retry++ {
+				if st := f.refreshFEK(); st != 0 {
+					err = st
+					break
+				}
+				f.Lock()
+				// Snapshot the FEK under lock: wipeKeys may zero it concurrently.
+				fekCopy = nil
+				if len(f.fek) > 0 {
+					fekCopy = append([]byte(nil), f.fek...)
+				}
+				stale = f.stale
+				fekVer := f.fekVer
+				driveFileID := f.driveFileID
+				f.Unlock()
+				if stale {
+					err = syscall.EIO // keys wiped (NFR-SEC-3): fail closed
+					break
+				}
+				var wrapped []byte
+				var werr error
+				wrapped, werr = chunk.WrapCEK(fekCopy, s.cek, driveFileID, s.id, fekVer)
+				utils.MemClear(fekCopy)
+				if werr != nil {
+					logger.Errorf("wrap CEK for inode:%d slice:%d: %s", f.inode, s.id, werr)
+					err = syscall.EIO
+					break
+				}
+				ss.WrappedCEK = wrapped
+				ss.FekVersion = fekVer
 				err = f.w.m.Write(meta.Background(), f.inode, c.indx, s.off, ss, s.lastMod)
 				f.w.reader.Invalidate(f.inode, uint64(c.indx)*meta.ChunkSize+uint64(s.off), uint64(ss.Len))
 			}
@@ -298,6 +342,39 @@ func (f *fileWriter) wipeKeys() {
 		f.fek = nil
 	}
 	f.stale = true
+}
+
+// refreshFEK re-resolves the file's FEK from the metadata engine (design
+// Addendum A1): called after the engine fenced a commit wrapped under a stale
+// FEK version. On success it replaces f.fek with a fresh copy and updates
+// f.fekVer (and f.driveFileID when the engine reports one) under the lock; the
+// old key is wiped so no in-flight wrap keeps using it.
+func (f *fileWriter) refreshFEK() syscall.Errno {
+	resolver, ok := f.w.m.(interface {
+		ResolveFileKey(meta.Context, meta.Ino) ([]byte, string, uint32, error)
+	})
+	if !ok {
+		return syscall.EOPNOTSUPP
+	}
+	fek, driveFileID, ver, err := resolver.ResolveFileKey(meta.Background(), f.inode)
+	if err != nil {
+		logger.Warnf("re-resolve FEK for inode:%d: %s", f.inode, err)
+		if eno, ok := err.(syscall.Errno); ok {
+			return eno
+		}
+		return syscall.EIO
+	}
+	f.Lock()
+	defer f.Unlock()
+	if f.fek != nil {
+		utils.MemClear(f.fek)
+	}
+	f.fek = append([]byte(nil), fek...) // fresh copy: the resolver's buffer must not be aliased
+	if driveFileID != "" {
+		f.driveFileID = driveFileID
+	}
+	f.fekVer = ver
+	return 0
 }
 
 // protected by file

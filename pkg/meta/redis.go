@@ -3137,6 +3137,14 @@ func (m *redisMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, sli
 		if attr.Typ != TypeFile {
 			return syscall.EPERM
 		}
+		// FEK rotation fencing (design Addendum A1): the record was wrapped under
+		// a stale FEK; the writer must re-resolve the FEK, re-wrap the CEK and
+		// retry. The check is atomic against SetFileCrypto because both WATCH the
+		// inode key. Legacy writes (WrappedCEK == nil) pass even into encrypted
+		// files — mixed chunk lists are valid during migration (decision 8.6).
+		if slice.WrappedCEK != nil && attr.Encrypted && slice.FekVersion != attr.FekVersion {
+			return syscall.EAGAIN
+		}
 		newleng := uint64(indx)*ChunkSize + uint64(off) + uint64(slice.Len)
 		if newleng > attr.Length {
 			delta.length = int64(newleng - attr.Length)

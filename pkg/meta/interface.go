@@ -417,6 +417,11 @@ type Slice struct {
 	// WrappedCEK is the AGCK blob (CEK wrapped under the file's FEK); nil for
 	// legacy plaintext slices. Persisted as an optional tail of the slice record.
 	WrappedCEK []byte
+
+	// FekVersion is the version of the FEK the WrappedCEK was wrapped under; set
+	// by writers at commit and checked by the engine in Write to fence concurrent
+	// FEK rotation (design Addendum A1). 0 = legacy/unknown.
+	FekVersion uint32
 }
 
 // Summary represents the total number of files/directories and

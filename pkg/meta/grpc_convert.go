@@ -107,6 +107,7 @@ func SliceToProto(s Slice) *pb.ProtoSlice {
 		Off:        s.Off,
 		Len:        s.Len,
 		WrappedCek: s.WrappedCEK,
+		FekVersion: s.FekVersion,
 	}
 }
 
@@ -120,6 +121,7 @@ func ProtoToSlice(p *pb.ProtoSlice) Slice {
 		Off:        p.Off,
 		Len:        p.Len,
 		WrappedCEK: p.WrappedCek,
+		FekVersion: p.FekVersion,
 	}
 }
 

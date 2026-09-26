@@ -6455,7 +6455,7 @@ func TestGCRespectsFileCryptoDeletable(t *testing.T) {
 		t.Fatalf("new slice: %s", st)
 	}
 	wrappedCEK := []byte("fake-agck-blob")
-	if st := m.Write(ctx, inode, 0, 0, Slice{Id: sliceID, Size: 4096, Len: 4096, WrappedCEK: wrappedCEK}, time.Now()); st != 0 {
+	if st := m.Write(ctx, inode, 0, 0, Slice{Id: sliceID, Size: 4096, Len: 4096, WrappedCEK: wrappedCEK, FekVersion: 1}, time.Now()); st != 0 {
 		t.Fatalf("write: %s", st)
 	}
 	if st := m.GetAttr(ctx, inode, &attr); st != 0 {

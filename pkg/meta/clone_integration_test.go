@@ -87,8 +87,8 @@ func TestClone_Rewrap_NoS3Rewrite(t *testing.T) {
 		require.NoError(t, err)
 		return blob
 	}
-	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 0, 0, Slice{Id: 7001, Size: size, Len: size, WrappedCEK: wrapSrc(cek1, 7001)}, time.Now()))
-	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 1, 0, Slice{Id: 7002, Size: size, Len: size, WrappedCEK: wrapSrc(cek2, 7002)}, time.Now()))
+	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 0, 0, Slice{Id: 7001, Size: size, Len: size, WrappedCEK: wrapSrc(cek1, 7001), FekVersion: srcVer}, time.Now()))
+	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 1, 0, Slice{Id: 7002, Size: size, Len: size, WrappedCEK: wrapSrc(cek2, 7002), FekVersion: srcVer}, time.Now()))
 
 	srcIDs := sliceIDSet(t, env.meta, srcIno)
 	require.Equal(t, map[uint64]bool{7001: true, 7002: true}, srcIDs)
@@ -300,9 +300,9 @@ func TestCopyFileRange_Encrypted(t *testing.T) {
 		return blob
 	}
 	// Three full chunks.
-	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 0, 0, Slice{Id: 8001, Size: size, Len: size, WrappedCEK: wrapSrc(cekA, 8001)}, time.Now()))
-	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 1, 0, Slice{Id: 8002, Size: size, Len: size, WrappedCEK: wrapSrc(cekB, 8002)}, time.Now()))
-	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 2, 0, Slice{Id: 8003, Size: size, Len: size, WrappedCEK: wrapSrc(cekC, 8003)}, time.Now()))
+	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 0, 0, Slice{Id: 8001, Size: size, Len: size, WrappedCEK: wrapSrc(cekA, 8001), FekVersion: srcVer}, time.Now()))
+	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 1, 0, Slice{Id: 8002, Size: size, Len: size, WrappedCEK: wrapSrc(cekB, 8002), FekVersion: srcVer}, time.Now()))
+	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 2, 0, Slice{Id: 8003, Size: size, Len: size, WrappedCEK: wrapSrc(cekC, 8003), FekVersion: srcVer}, time.Now()))
 
 	var dstIno Ino
 	var dstAttr Attr
@@ -404,9 +404,9 @@ func TestClone_Subset(t *testing.T) {
 		require.NoError(t, err)
 		return blob
 	}
-	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 0, 0, Slice{Id: 9101, Size: size, Len: size, WrappedCEK: wrapSrc(cekA, 9101)}, time.Now()))
-	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 1, 0, Slice{Id: 9102, Size: size, Len: size, WrappedCEK: wrapSrc(cekB, 9102)}, time.Now()))
-	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 2, 0, Slice{Id: 9103, Size: size, Len: size, WrappedCEK: wrapSrc(cekC, 9103)}, time.Now()))
+	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 0, 0, Slice{Id: 9101, Size: size, Len: size, WrappedCEK: wrapSrc(cekA, 9101), FekVersion: srcVer}, time.Now()))
+	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 1, 0, Slice{Id: 9102, Size: size, Len: size, WrappedCEK: wrapSrc(cekB, 9102), FekVersion: srcVer}, time.Now()))
+	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, srcIno, 2, 0, Slice{Id: 9103, Size: size, Len: size, WrappedCEK: wrapSrc(cekC, 9103), FekVersion: srcVer}, time.Now()))
 
 	var dstIno Ino
 	var dstAttr Attr
