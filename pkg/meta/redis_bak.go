@@ -21,6 +21,7 @@ package meta
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"strconv"
@@ -88,7 +89,7 @@ func (m *redisMeta) dumpMix(ctx Context, opt *DumpOption, ch chan<- *dumpedResul
 	pools := map[int][]*sync.Pool{
 		segTypeNode:    {{New: func() interface{} { return &pb.Node{} }}},
 		segTypeEdge:    {{New: func() interface{} { return &pb.Edge{} }}},
-		segTypeChunk:   {{New: func() interface{} { return &pb.Chunk{} }}, {New: func() interface{} { return make([]byte, 8*sliceBytes) }}},
+		segTypeChunk:   {{New: func() interface{} { return &pb.Chunk{} }}},
 		segTypeSymlink: {{New: func() interface{} { return &pb.Symlink{} }}},
 		segTypeXattr:   {{New: func() interface{} { return &pb.Xattr{} }}},
 		segTypeParent:  {{New: func() interface{} { return &pb.Parent{} }}},
@@ -102,8 +103,7 @@ func (m *redisMeta) dumpMix(ctx Context, opt *DumpOption, ch chan<- *dumpedResul
 			pools[segTypeEdge][0].Put(e)
 		}
 		for _, c := range b.Chunks {
-			pools[segTypeChunk][1].Put(c.Slices) // nolint:staticcheck
-			c.Slices = nil
+			c.SliceBlobs = nil // no stale records may leak between reuses
 			pools[segTypeChunk][0].Put(c)
 		}
 		for _, s := range b.Symlinks {
@@ -575,18 +575,30 @@ func (m *redisMeta) dumpChunks(ctx context.Context, ch chan<- *dumpedResult, key
 		pc.Inode = inos[k]
 		pc.Index = idxs[k]
 
-		pc.Slices = pools[1].Get().([]byte)
-		if len(pc.Slices) < len(vals)*sliceBytes {
-			pc.Slices = make([]byte, len(vals)*sliceBytes)
-		}
-		pc.Slices = pc.Slices[:len(vals)*sliceBytes]
-
-		for i, val := range vals {
-			if len(val) != sliceBytes {
+		// Store each record verbatim (24-byte legacy base, optionally + u32
+		// blob length + AGCK tail for encrypted slices); the loader prefers
+		// SliceBlobs over the fixed-step Slices field.
+		for _, val := range vals {
+			if len(val) < sliceBytes {
 				logger.Errorf("corrupt slice: len=%d, val=%v", len(val), []byte(val))
 				continue
 			}
-			copy(pc.Slices[i*sliceBytes:], []byte(val))
+			if tail := len(val) - sliceBytes; tail > 0 {
+				if tail < 4 {
+					logger.Errorf("corrupt slice: tail len=%d, val=%v", tail, []byte(val))
+					continue
+				}
+				blobLen := binary.BigEndian.Uint32([]byte(val[sliceBytes : sliceBytes+4]))
+				if tail != 4+int(blobLen) {
+					logger.Errorf("corrupt slice: tail len=%d, blobLen=%d", tail, blobLen)
+					continue
+				}
+			}
+			pc.SliceBlobs = append(pc.SliceBlobs, []byte(val))
+		}
+		if len(pc.SliceBlobs) == 0 {
+			pools[0].Put(pc) // all records corrupt: nothing to dump
+			continue
 		}
 		chunks = append(chunks, pc)
 	}
@@ -786,9 +798,23 @@ func (m *redisMeta) loadChunks(ctx Context, msg proto.Message) error {
 	batch := msg.(*pb.Batch)
 	pipe := m.rdb.Pipeline()
 	for _, chk := range batch.Chunks {
-		slices := make([]string, 0, len(chk.Slices))
-		for off := 0; off < len(chk.Slices); off += sliceBytes {
-			slices = append(slices, string(chk.Slices[off:off+sliceBytes]))
+		var slices []string
+		if len(chk.SliceBlobs) > 0 {
+			// New format: variable-length raw records (encrypted slices carry
+			// an AGCK tail); store them verbatim.
+			slices = make([]string, len(chk.SliceBlobs))
+			for i, b := range chk.SliceBlobs {
+				slices[i] = string(b)
+			}
+		} else {
+			// Legacy format: fixed 24-byte records (old bak files).
+			slices = make([]string, 0, len(chk.Slices)/sliceBytes)
+			for off := 0; off < len(chk.Slices); off += sliceBytes {
+				slices = append(slices, string(chk.Slices[off:off+sliceBytes]))
+			}
+		}
+		if len(slices) == 0 {
+			continue
 		}
 		pipe.RPush(ctx, m.chunkKey(Ino(chk.Inode), chk.Index), slices)
 

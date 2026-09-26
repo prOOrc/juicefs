@@ -735,10 +735,15 @@ func (x *Parent) GetCnt() int64 {
 }
 
 type Chunk struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Inode         uint64                 `protobuf:"varint,1,opt,name=inode,proto3" json:"inode,omitempty"`
-	Index         uint32                 `protobuf:"varint,2,opt,name=index,proto3" json:"index,omitempty"`
-	Slices        []byte                 `protobuf:"bytes,3,opt,name=slices,proto3" json:"slices,omitempty"` // array of meta.slice
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Inode  uint64                 `protobuf:"varint,1,opt,name=inode,proto3" json:"inode,omitempty"`
+	Index  uint32                 `protobuf:"varint,2,opt,name=index,proto3" json:"index,omitempty"`
+	Slices []byte                 `protobuf:"bytes,3,opt,name=slices,proto3" json:"slices,omitempty"` // array of meta.slice
+	// Each element is one full raw slice record: the 24-byte legacy base,
+	// optionally followed by a u32 blob length and an AGCK tail (encrypted
+	// slices). When set it takes precedence over the fixed-step `slices` field,
+	// which only carries 24-byte records.
+	SliceBlobs    [][]byte `protobuf:"bytes,4,rep,name=slice_blobs,json=sliceBlobs,proto3" json:"slice_blobs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -790,6 +795,13 @@ func (x *Chunk) GetIndex() uint32 {
 func (x *Chunk) GetSlices() []byte {
 	if x != nil {
 		return x.Slices
+	}
+	return nil
+}
+
+func (x *Chunk) GetSliceBlobs() [][]byte {
+	if x != nil {
+		return x.SliceBlobs
 	}
 	return nil
 }
@@ -1231,11 +1243,13 @@ const file_backup_proto_rawDesc = "" +
 	"\x06Parent\x12\x14\n" +
 	"\x05inode\x18\x01 \x01(\x04R\x05inode\x12\x16\n" +
 	"\x06parent\x18\x02 \x01(\x04R\x06parent\x12\x10\n" +
-	"\x03cnt\x18\x03 \x01(\x03R\x03cnt\"K\n" +
+	"\x03cnt\x18\x03 \x01(\x03R\x03cnt\"l\n" +
 	"\x05Chunk\x12\x14\n" +
 	"\x05inode\x18\x01 \x01(\x04R\x05inode\x12\x14\n" +
 	"\x05index\x18\x02 \x01(\rR\x05index\x12\x16\n" +
-	"\x06slices\x18\x03 \x01(\fR\x06slices\"7\n" +
+	"\x06slices\x18\x03 \x01(\fR\x06slices\x12\x1f\n" +
+	"\vslice_blobs\x18\x04 \x03(\fR\n" +
+	"sliceBlobs\"7\n" +
 	"\aSymlink\x12\x14\n" +
 	"\x05inode\x18\x01 \x01(\x04R\x05inode\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\fR\x06target\";\n" +

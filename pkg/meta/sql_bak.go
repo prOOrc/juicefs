@@ -634,13 +634,23 @@ func (m *dbMeta) loadChunks(ctx Context, msg proto.Message) error {
 	srRows := make([]*sliceRef, 0, len(chunks))
 	cs := make([]chunk, len(chunks))
 	for i, c := range chunks {
+		slices := c.Slices
+		if len(c.SliceBlobs) > 0 {
+			// Redis V2 dump: variable-length records; repack into the fixed
+			// 24-byte layout (fails closed on encrypted slice records).
+			fixed, err := fixedSliceBuf(c.SliceBlobs)
+			if err != nil {
+				return err
+			}
+			slices = fixed
+		}
 		pc := &cs[i]
 		pc.Inode = Ino(c.Inode)
 		pc.Indx = c.Index
-		pc.Slices = c.Slices
+		pc.Slices = slices
 		chkRows = append(chkRows, pc)
 
-		ss := readSliceBuf(c.Slices)
+		ss := readSliceBuf(slices)
 		for _, s := range ss {
 			srRows = append(srRows, &sliceRef{Id: s.id, Size: s.size, Refs: 1})
 		}

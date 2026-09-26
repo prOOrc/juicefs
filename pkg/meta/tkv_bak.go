@@ -553,11 +553,22 @@ func (m *kvMeta) loadNodes(ctx Context, msg proto.Message, pairs *[]*pair) {
 	}
 }
 
-func (m *kvMeta) loadChunks(ctx Context, msg proto.Message, pairs *[]*pair) {
+func (m *kvMeta) loadChunks(ctx Context, msg proto.Message, pairs *[]*pair) error {
 	batch := msg.(*pb.Batch)
 	for _, chk := range batch.Chunks {
-		*pairs = append(*pairs, &pair{m.chunkKey(Ino(chk.Inode), chk.Index), chk.Slices})
+		slices := chk.Slices
+		if len(chk.SliceBlobs) > 0 {
+			// Redis V2 dump: variable-length records; repack into the fixed
+			// 24-byte layout (fails closed on encrypted slice records).
+			fixed, err := fixedSliceBuf(chk.SliceBlobs)
+			if err != nil {
+				return err
+			}
+			slices = fixed
+		}
+		*pairs = append(*pairs, &pair{m.chunkKey(Ino(chk.Inode), chk.Index), slices})
 	}
+	return nil
 }
 
 func (m *kvMeta) loadEdges(ctx Context, msg proto.Message, pairs *[]*pair) {
@@ -728,7 +739,11 @@ func (m *kvMeta) LoadMetaV2(ctx Context, r io.Reader, opt *LoadOption) error {
 			case segTypeEdge:
 				m.loadEdges(ctx, task.msg, &pairs)
 			case segTypeChunk:
-				m.loadChunks(ctx, task.msg, &pairs)
+				if err := m.loadChunks(ctx, task.msg, &pairs); err != nil {
+					logger.Errorf("load chunks failed: %v", err)
+					ctx.Cancel()
+					return
+				}
 			case segTypeSymlink:
 				m.loadSymlinks(ctx, task.msg, &pairs)
 			case segTypeXattr:

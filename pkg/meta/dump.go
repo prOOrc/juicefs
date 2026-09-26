@@ -74,7 +74,15 @@ type DumpedAttr struct {
 	Length    uint64 `json:"length"`
 	Rdev      uint32 `json:"rdev,omitempty"`
 	Tier      uint8  `json:"tier,omitempty"`
-	full      bool
+	// Encryption (AGIO Drive): crypto fields of an encrypted file; absent in
+	// legacy dumps and loaded as zero values. WrappedFek is the AGFK blob
+	// (base64 in JSON, like DumpedSlice.WrappedCEK).
+	Encrypted   bool   `json:"encrypted,omitempty"`
+	WrappedFek  []byte `json:"wrapped_fek,omitempty"`
+	DriveFileID string `json:"drive_file_id,omitempty"`
+	FekVersion  uint32 `json:"fek_version,omitempty"`
+	CryptoAlg   string `json:"crypto_alg,omitempty"`
+	full        bool
 }
 
 type DumpedSlice struct {
@@ -418,6 +426,11 @@ func dumpAttr(a *Attr, d *DumpedAttr) {
 		d.Length = 0
 	}
 	d.Tier = a.Tier
+	d.Encrypted = a.Encrypted
+	d.WrappedFek = a.WrappedFek
+	d.DriveFileID = a.DriveFileID
+	d.FekVersion = a.FekVersion
+	d.CryptoAlg = a.CryptoAlg
 	d.full = a.Full
 }
 
@@ -437,7 +450,16 @@ func loadAttr(d *DumpedAttr) *Attr {
 		Nlink:     d.Nlink,
 		Rdev:      d.Rdev,
 		Tier:      d.Tier,
-		Full:      true,
+		// Encryption (AGIO Drive): restored verbatim. The ACL+Tier fields that
+		// make an encrypted attr's crypto suffix detectable are re-added by the
+		// engine on marshal (Attr.Marshal always writes them when Encrypted),
+		// so the re-marshaled bytes stay identical to the source attr.
+		Encrypted:   d.Encrypted,
+		WrappedFek:  d.WrappedFek,
+		DriveFileID: d.DriveFileID,
+		FekVersion:  d.FekVersion,
+		CryptoAlg:   d.CryptoAlg,
+		Full:        true,
 	} // Length and Parent not set
 }
 
