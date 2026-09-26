@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path"
 	"sync"
 	"syscall"
 	"testing"
@@ -350,5 +351,40 @@ func TestDumpLoad_Encrypted(t *testing.T) {
 		vals, err := rdb.LRange(Background(), rm.chunkKey(2, 0), 0, -1).Result()
 		require.NoError(t, err)
 		require.Equal(t, []string{string(rec1), string(rec2)}, vals)
+	})
+
+	t.Run("V2CrossEngineEncryptedFailClosed", func(t *testing.T) {
+		// A V2 dump whose chunk carries an AGCK-tailed record must FAIL to load
+		// into a non-Redis engine: the fixed 24-byte layout cannot represent
+		// the tail, and silently dropping it would lose the wrapped CEK.
+		cek, fek := randomKey32(t, 5), randomKey32(t, 6)
+		blob, err := chunkenc.WrapCEK(fek, cek, "dfid-failclosed", 103, 1)
+		require.NoError(t, err)
+		rec := marshalSliceCEK(0, 103, 4096, 0, 4096, blob)
+
+		var w bytes.Buffer
+		bak := newBakFormat()
+		fmtBytes, err := json.Marshal(&Format{Name: "encrypted", UUID: uuid.New().String()})
+		require.NoError(t, err)
+		require.NoError(t, bak.writeSegment(&w, newBakSegment(&pb.Format{Data: fmtBytes})))
+		require.NoError(t, bak.writeSegment(&w, newBakSegment(&pb.Batch{
+			Chunks: []*pb.Chunk{{Inode: 2, Index: 0, SliceBlobs: [][]byte{rec}}},
+		})))
+		require.NoError(t, bak.writeFooter(&w))
+
+		sm := NewClient("sqlite3://"+path.Join(t.TempDir(), "jfs-enc-failclosed.db"), testConfig())
+		t.Cleanup(func() { _ = sm.Close(Background(), 0) })
+		// LoadMetaV2's worker logs insert errors and cancels (pre-existing
+		// behavior: the error itself does not propagate to the caller), so the
+		// fail-closed contract is asserted at the data level: the AGCK-tailed
+		// record must NOT reach the engine's chunk table.
+		_ = sm.LoadMetaV2(Background(), bytes.NewReader(w.Bytes()), &LoadOption{Threads: 1})
+		// The AGCK-tailed record must not reach the engine: either the insert
+		// was refused before the chunk table was even created, or the table
+		// exists without the record.
+		rows, qerr := sm.(*dbMeta).db.SQL("select slices from chunk where inode = 2 and indx = 0").Query()
+		if qerr == nil {
+			require.Empty(t, rows, "AGCK-tailed record must be refused by the non-Redis engine")
+		}
 	})
 }
