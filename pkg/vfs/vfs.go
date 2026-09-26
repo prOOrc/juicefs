@@ -1366,19 +1366,35 @@ func (v *VFS) InvalidateAllKeys() {
 }
 
 // ReplayWriteJournal re-applies journaled writes through the normal write
-// path for files that are currently open (NFR-OFF-3). Records without an open
-// writer are kept for a later replay. The journal is truncated only when every
-// record was applied; on any error it is kept for retry. Re-applying a record
-// whose data already reached the hub is idempotent for reads: doWrite appends
-// a slice and buildSlice resolves overlaps last-write-wins, so an identical
-// (off, data) commit yields byte-identical content.
+// path for files that are currently open (NFR-OFF-3). Before any record is
+// applied, every journaled file with an open writer is re-Opened and its FEK
+// refreshed from the metadata (design A2): if the file's key was rotated while
+// the client was offline, the handle holds a destroyed FEK and replayed
+// records would commit undecryptable. The journal is plaintext, so only the
+// key material needs refreshing — journaled data is re-encrypted at commit
+// under the current FEK. Records without an open writer, or whose file failed
+// the re-Open (authz deny / stale writer), are kept for a later replay. The
+// journal is truncated only when every record was applied; on any error it is
+// kept for retry. Re-applying a record whose data already reached the hub is
+// idempotent for reads: doWrite appends a slice and buildSlice resolves
+// overlaps last-write-wins, so an identical (off, data) commit yields
+// byte-identical content.
 func (v *VFS) ReplayWriteJournal() {
 	j := v.writeJournal
 	if j == nil || j.Empty() {
 		return
 	}
+	failed := v.reopenJournaledFiles(j.Inodes())
 	var skipped int
 	err := j.Replay(func(seq uint64, inode Ino, off int64, data []byte) error {
+		if failed[inode] {
+			// re-Open failed (or the writer is stale): do not push the record
+			// through the write path with a destroyed FEK — it would fail after
+			// a wasted key round-trip. Counted as not applied, so the journal
+			// survives for the next retry.
+			skipped++
+			return nil
+		}
 		v.hanleM.Lock()
 		var fw *fileWriter
 		for _, h := range v.handles[inode] {
@@ -1402,13 +1418,91 @@ func (v *VFS) ReplayWriteJournal() {
 		return
 	}
 	if skipped > 0 {
-		logger.Warnf("write journal: %d record(s) have no open writer, journal kept", skipped)
+		logger.Warnf("write journal: %d record(s) not applied (no open writer or re-Open failed), journal kept", skipped)
 		return
 	}
 	if err := j.Truncate(); err != nil {
 		logger.Errorf("truncate write journal: %s", err)
 	} else {
 		logger.Infof("write journal replayed and truncated")
+	}
+}
+
+// reopenJournaledFiles re-Opens every journaled file that has an open writer
+// and refreshes the FEK of its handles, writer and readers from the metadata
+// (design A2, task 6.8). It returns the inodes whose records must be skipped:
+// the re-Open failed (authz deny / any error) or the writer is stale (keys
+// wiped by a revocation that raced the reconnect). For those files the journal
+// is kept and the conflict is surfaced to the user; the next mount replays
+// them after loadAllHandles with fresh FEKs.
+func (v *VFS) reopenJournaledFiles(inos []Ino) map[Ino]bool {
+	failed := make(map[Ino]bool)
+	for _, inode := range inos {
+		hs := v.findAllHandles(inode)
+		var fw *fileWriter
+		var flags uint32
+		for _, h := range hs {
+			if w, ok := h.writer.(*fileWriter); ok && w != nil {
+				fw = w
+				h.Lock()
+				flags = h.flags
+				h.Unlock()
+				break
+			}
+		}
+		if fw == nil {
+			continue // no open writer: the records stay skipped as before
+		}
+		fw.Lock()
+		stale := fw.stale
+		fw.Unlock()
+		if stale {
+			logger.Errorf("write journal replay: inode %d has a stale writer (keys wiped by revocation): its records are skipped and the write journal is kept until the volume is remounted", inode)
+			failed[inode] = true
+			continue
+		}
+		attr := &meta.Attr{}
+		if st := v.Meta.Open(meta.Background(), inode, flags, attr); st != 0 {
+			logger.Errorf("write journal replay: re-open of inode %d failed: %s — the write journal is kept and this file's records are skipped until the conflict is resolved and the volume is remounted", inode, st)
+			failed[inode] = true
+			continue
+		}
+		if !attr.Encrypted {
+			continue // nothing to refresh
+		}
+		v.refreshHandleKeys(hs, fw, attr)
+	}
+	return failed
+}
+
+// refreshHandleKeys installs a freshly resolved FEK (from the replay re-Open,
+// design A2) into every handle of the file plus its shared writer. The old key
+// material is wiped only after every pointer has been replaced: the original
+// open shares one backing array between handle, reader and writer, so clearing
+// it early would let a concurrent commit or read use a zeroed key.
+func (v *VFS) refreshHandleKeys(hs []*handle, fw *fileWriter, attr *meta.Attr) {
+	var old [][]byte
+	fw.Lock()
+	old = append(old, fw.fek)
+	fw.fek = attr.Fek
+	fw.fekVer = attr.FekVersion
+	fw.driveFileID = attr.DriveFileID
+	fw.Unlock()
+	for _, h := range hs {
+		if fr, ok := h.reader.(*fileReader); ok && fr != nil {
+			fr.setFEK(attr.Fek, attr.FekVersion, attr.DriveFileID)
+		}
+		h.Lock()
+		old = append(old, h.fek)
+		h.encrypted = true
+		h.fek = attr.Fek
+		h.fekVer = attr.FekVersion
+		h.Unlock()
+	}
+	for _, k := range old {
+		if k != nil {
+			utils.MemClear(k)
+		}
 	}
 }
 

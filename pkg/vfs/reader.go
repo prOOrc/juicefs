@@ -316,6 +316,21 @@ func (f *fileReader) GetLength() uint64 {
 	return f.length
 }
 
+// setFEK installs a freshly resolved FEK after the replay re-Open (design
+// A2): the file's key was rotated while the client was offline, so the cached
+// FEK is destroyed. The old key is wiped by the caller once every holder has
+// been updated; cached CEKs stay valid — they are data keys already unwrapped
+// and do not depend on the FEK version.
+func (f *fileReader) setFEK(fek []byte, ver uint32, driveFileID string) {
+	f.Lock()
+	defer f.Unlock()
+	f.cekMu.Lock()
+	f.fek = fek
+	f.fekVer = ver
+	f.driveFileID = driveFileID
+	f.cekMu.Unlock()
+}
+
 // wipeKeys zeroes the FEK and all cached CEKs (NFR-SEC-3). The FEK array is
 // shared with the owning handle, so zeroing it here covers both copies; the
 // FEK itself is touched under cekMu, the same lock readSlice uses.
