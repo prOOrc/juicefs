@@ -1354,14 +1354,14 @@ make test.meta.non-core   # или точечно: go test -run 'TestEncrypted|T
 
 ### Stage acceptance criteria
 
-- [ ] FR-USR-1..3, FR-USR-4..9, FR-USR-11, FR-API-1..3 реализованы.
-- [ ] Identity на proxy: `sub` валидируется как UUID, `Unauthenticated` при неверном формате; `sub` уходит в KeyManager без преобразования (FR-ID-2/3, AC-16).
-- [ ] Полный цикл create→write→read через proxy с шифрованием (FR-TEST-8).
-- [ ] Deny без прав (FR-TEST-9), rollback Create (FR-USR-2), owner bypass (FR-TEST-18, AC-15).
-- [ ] Кэш-хит FEK не ходит в KeyManager (NFR-PERF-1); authz на каждом Open сохраняется.
-- [ ] Plaintext FEK только в OpenResponse; GetAttr/Readdir — только wrapped_fek (T6, решение 3.4).
-- [ ] Legacy-том (EncryptionEnabled=false) — поведение без изменений.
-- [ ] Тесты зелёные: `make test.meta.core` + интеграционные.
+- [x] FR-USR-1..3, FR-USR-4..9, FR-USR-11, FR-API-1..3 реализованы.
+- [x] Identity на proxy: `sub` валидируется как UUID, `Unauthenticated` при неверном формате; `sub` уходит в KeyManager без преобразования (FR-ID-2/3, AC-16).
+- [x] Полный цикл create→write→read через proxy с шифрованием (FR-TEST-8).
+- [x] Deny без прав (FR-TEST-9), rollback Create (FR-USR-2), owner bypass (FR-TEST-18, AC-15).
+- [x] Кэш-хит FEK не ходит в KeyManager (NFR-PERF-1); authz на каждом Open сохраняется.
+- [x] Plaintext FEK только в OpenResponse; GetAttr/Readdir — только wrapped_fek (T6, решение 3.4).
+- [x] Legacy-том (EncryptionEnabled=false) — поведение без изменений.
+- [x] Тесты зелёные: `make test.meta.core` + интеграционные.
 
 ## 4. Stage 4 — Render-клиент (форк)
 
@@ -1562,13 +1562,13 @@ go test -run 'TestRender' ./pkg/meta/
 
 ### Stage acceptance criteria
 
-- [ ] FR-RND-1..14 реализованы (14 — «Render Proxy не требуется» — тривиально: его нет).
-- [ ] AC-4: render-клиент работает без OIDC/proxy/PG; один gRPC-вызов KEK при mount.
-- [ ] AC-5: cross-company доступ невозможен (криптографически + chroot).
-- [ ] KEK: только из FetchCompanyKEK по identity ноды, mlock, обнуление при unmount (FR-RND-2/3, NFR-SEC-5).
-- [ ] FEK LRU 100k/1h; CEK per open file (FR-RND-7/8).
-- [ ] Aggressive caching ≥60s; readdir pipelining (FR-RND-11/12).
-- [ ] Тесты зелёные.
+- [x] FR-RND-1..14 реализованы (14 — «Render Proxy не требуется» — тривиально: его нет).
+- [x] AC-4: render-клиент работает без OIDC/proxy/PG; один gRPC-вызов KEK при mount.
+- [x] AC-5: cross-company доступ невозможен (криптографически + chroot).
+- [x] KEK: только из FetchCompanyKEK по identity ноды, mlock, обнуление при unmount (FR-RND-2/3, NFR-SEC-5).
+- [x] FEK LRU 100k/1h; CEK per open file (FR-RND-7/8).
+- [x] Aggressive caching ≥60s; readdir pipelining (FR-RND-11/12).
+- [x] Тесты зелёные.
 
 ## 5. Stage 5 — Clone/CopyFileRange/Compaction (форк)
 
@@ -1805,12 +1805,12 @@ go test ./pkg/vfs/ -run 'TestCompact_WithCEK'
 
 ### Stage acceptance criteria
 
-- [ ] FR-OP-1..8 реализованы (clone/copyfilerange zero-copy, компакция с CEK).
-- [ ] AC-7: clone не переписывает S3-объекты (keys идентичны).
-- [ ] Target clone'а читается своим FEK; source — своим.
-- [ ] Компакция зашифрованных файлов: данные целы, новый CEK, fail-closed skip при ошибке resolve.
-- [ ] FR-VER-2/3: хуки `sliceDeletable`/`compactionAllowed` работают.
-- [ ] Тесты зелёные: `make test.meta.core` + интеграционные.
+- [x] FR-OP-1..8 реализованы (clone/copyfilerange zero-copy, компакция с CEK).
+- [x] AC-7: clone не переписывает S3-объекты (keys идентичны).
+- [x] Target clone'а читается своим FEK; source — своим.
+- [x] Компакция зашифрованных файлов: данные целы, новый CEK, fail-closed skip при ошибке resolve.
+- [x] FR-VER-2/3: хуки `sliceDeletable`/`compactionAllowed` работают.
+- [x] Тесты зелёные: `make test.meta.core` + интеграционные.
 
 ## 6. Stage 6 — Offline + No Residuality (форк)
 
@@ -2003,12 +2003,12 @@ go test -run 'TestLogout|TestOffline' ./pkg/meta/ ./pkg/vfs/
 
 ### Stage acceptance criteria
 
-- [ ] NFR-SEC-5: plaintext-ключи обнуляются при logout/отзыве/offline-timeout (MemClear + mlock).
-- [ ] AC-8: после logout кэш зашифрованных файлов нечитаем.
-- [ ] AC-9: offline-connected — чтение из кэша работает, запись в journal.
-- [ ] NFR-OFF-3: offline-записи replay'ятся при reconnect (идемпотентно).
-- [ ] State machine: online → offline-connected → disconnected (timeout 15m default, флаг `--offline-timeout`).
-- [ ] Тесты зелёные: `make test.pkg` + интеграционные.
+- [x] NFR-SEC-5: plaintext-ключи обнуляются при logout/отзыве/offline-timeout (MemClear + mlock).
+- [x] AC-8: после logout кэш зашифрованных файлов нечитаем.
+- [x] AC-9: offline-connected — чтение из кэша работает, запись в journal.
+- [x] NFR-OFF-3: offline-записи replay'ятся при reconnect (идемпотентно).
+- [x] State machine: online → offline-connected → disconnected (timeout 15m default, флаг `--offline-timeout`).
+- [x] Тесты зелёные: `make test.pkg` + интеграционные.
 
 ## 7. Stage 7 — Revocation + STS (оба репозитория)
 
@@ -2260,12 +2260,12 @@ go test -run 'TestRevoke|TestFekRotation|TestSTS' ./pkg/meta/
 
 ### Stage acceptance criteria
 
-- [ ] FR-REV-1..5: отзыв ≤ 30s (TTL) + heartbeat (12s) + WipeKeys.
-- [ ] AC-10: после DeleteRole пользователь теряет доступ к FEK.
-- [ ] STS: prefix-scoped policy, TTL ≤ 60m, refresh на половине TTL, fail-safe до expiry.
-- [ ] FEK rotation: S3 keys не изменились, старый FEK не разворачивает новые wrapped_cek (FR-ROT-4).
-- [ ] Offboarding: batch rotation resumable, idempotent, rate-limited.
-- [ ] Тесты зелёные: оба репозитория + интеграционные.
+- [x] FR-REV-1..5: отзыв ≤ 30s (TTL) + heartbeat (12s) + WipeKeys.
+- [x] AC-10: после DeleteRole пользователь теряет доступ к FEK.
+- [x] STS: prefix-scoped policy, TTL ≤ 60m, refresh на половине TTL, fail-safe до expiry.
+- [x] FEK rotation: S3 keys не изменились, старый FEK не разворачивает новые wrapped_cek (FR-ROT-4).
+- [x] Offboarding: batch rotation resumable, idempotent, rate-limited.
+- [x] Тесты зелёные: оба репозитория + интеграционные.
 
 ## 8. Stage 8 — Миграция legacy-данных (форк)
 
@@ -2465,12 +2465,12 @@ go test -run 'TestReencrypt|TestLegacyReadable' ./cmd/ ./pkg/meta/
 
 ### Stage acceptance criteria
 
-- [ ] FR-MIG-1..6: включение шифрования без downtime; legacy читаются; фоновая миграция.
-- [ ] AC-6: после enable-encryption legacy файлы читаются, новые — зашифрованы.
-- [ ] ReencryptChunk: атомарный swap, refcount корректен, идемпотентность.
-- [ ] Rate-limiting: IOPS/bandwidth/concurrency лимиты работают.
-- [ ] CEK rotation: старые объекты GC-кандидаты, данные читаются.
-- [ ] Тесты зелёные: `make test.meta.core` + интеграционные.
+- [x] FR-MIG-1..6: включение шифрования без downtime; legacy читаются; фоновая миграция.
+- [x] AC-6: после enable-encryption legacy файлы читаются, новые — зашифрованы.
+- [x] ReencryptChunk: атомарный swap, refcount корректен, идемпотентность.
+- [x] Rate-limiting: IOPS/bandwidth/concurrency лимиты работают.
+- [x] CEK rotation: старые объекты GC-кандидаты, данные читаются.
+- [x] Тесты зелёные: `make test.meta.core` + интеграционные.
 
 ## 9. Stage 9 — Тестирование (оба репозитория)
 
@@ -2697,13 +2697,13 @@ bash tests/security/run-all.sh
 
 ### Stage acceptance criteria
 
-- [ ] Cross-repo known-answer векторы: оба репозитория зелёные.
-- [ ] FR-TEST-1..30: таблица покрытия полная, пробелы заполнены.
-- [ ] `make test.enc.integration` зелёный.
-- [ ] Нагрузочные: отчёт с p50/p99; недостижение целей зафиксировано.
-- [ ] Security: 5 сценариев pass (AC-3).
+- [x] Cross-repo known-answer векторы: оба репозитория зелёные.
+- [x] FR-TEST-1..30: таблица покрытия полная, пробелы заполнены.
+- [x] `make test.enc.integration` зелёный.
+- [x] Нагрузочные: отчёт с p50/p99; недостижение целей зафиксировано.
+- [x] Security: 5 сценариев pass (AC-3).
 - [ ] Stage-прогон: чеклист выполнен.
-- [ ] AC-чеклист: все 16 AC со статусом.
+- [x] AC-чеклист: все 16 AC со статусом.
 
 ## 10. Stage 10 — Production rollout (оба репозитория + инфраструктура)
 
