@@ -1467,22 +1467,40 @@ func (v *VFS) reopenJournaledFiles(inos []Ino) map[Ino]bool {
 			failed[inode] = true
 			continue
 		}
+		if attr.Encrypted && len(attr.Fek) == 0 {
+			// An encrypted file without a plaintext FEK would silently route
+			// commits to the legacy plaintext path — fail closed instead.
+			logger.Errorf("write journal replay: re-open of inode %d returned no FEK for an encrypted file: its records are skipped and the write journal is kept", inode)
+			failed[inode] = true
+			continue
+		}
 		if !attr.Encrypted {
 			continue // nothing to refresh
 		}
-		v.refreshHandleKeys(hs, fw, attr)
+		if !v.refreshHandleKeys(hs, fw, attr) {
+			logger.Errorf("write journal replay: keys of inode %d were wiped during re-open: its records are skipped and the write journal is kept until the volume is remounted", inode)
+			failed[inode] = true
+		}
 	}
 	return failed
 }
 
 // refreshHandleKeys installs a freshly resolved FEK (from the replay re-Open,
-// design A2) into every handle of the file plus its shared writer. The old key
-// material is wiped only after every pointer has been replaced: the original
-// open shares one backing array between handle, reader and writer, so clearing
-// it early would let a concurrent commit or read use a zeroed key.
-func (v *VFS) refreshHandleKeys(hs []*handle, fw *fileWriter, attr *meta.Attr) {
+// design A2) into every handle of the file plus its shared writer. It returns
+// false without installing anything when the writer went stale (keys wiped by
+// revocation) while the re-Open was in flight — fresh key material must not be
+// resurrected in memory (NFR-SEC-3). The old key material is wiped only after
+// every pointer has been replaced: the original open shares one backing array
+// between handle, reader and writer, so clearing it early would let a
+// concurrent commit or read use a zeroed key.
+func (v *VFS) refreshHandleKeys(hs []*handle, fw *fileWriter, attr *meta.Attr) bool {
 	var old [][]byte
 	fw.Lock()
+	if fw.stale {
+		fw.Unlock()
+		utils.MemClear(attr.Fek)
+		return false
+	}
 	old = append(old, fw.fek)
 	fw.fek = attr.Fek
 	fw.fekVer = attr.FekVersion
@@ -1504,6 +1522,7 @@ func (v *VFS) refreshHandleKeys(hs []*handle, fw *fileWriter, attr *meta.Attr) {
 			utils.MemClear(k)
 		}
 	}
+	return true
 }
 
 func (v *VFS) ModifiedSince(ino Ino, start time.Time) bool {
