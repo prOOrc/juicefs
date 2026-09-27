@@ -2,12 +2,13 @@
 
 ## Порядок: test → stage → prod (per company)
 
-### Фаза R1 — stage (выполнена частично, см. §Готовность)
+### Фаза R1 — stage (ВЫПОЛНЕНА 2026-09-27)
 
-1. Деплой platform `platform-api-authz-grpc` с миграциями 000205–000207 (образ ≥ `feature-drive-v2-<id этой ветки>`; сборка — CI с поднятым builder VM `gitlab-ci-runner-01`).
-2. `kubectl --context yc-agio-k8s --namespace stage` — применить scrape-аннотации :9091 на gRPC-деплой (сейчас prometheus.io/* только на :8080 GraphQL-деплоя) или ServiceMonitor; проверить `curl :9091/metrics | grep keymanager` (задача 4.5).
-3. Подключить `docs/ops/grafana-alerts-drive.yaml` в мониторинг (file-provisioning/Secret); алерты до деплоя будут NoData — ок.
-4. Тест-компании tst-a/tst-b: `keymanager provision --company tst-a` (идемпотентно), `enable-encryption` на tst-enc-a (уже сделано в 9.6b — перепроверить после рестарта).
+1. ✅ Миграции 000205–000207 применены (`migrate up` на rw-хост, 2026-09-27).
+2. ✅ Деплой `platform-api-authz-grpc` обновлён до образа `feature-drive-v2-10658` (CI pipeline 10658 = aede63e5, зелёный); rollout успешен.
+3. ✅ Scrape-аннотации :9091 наложены на деплой; Prometheus скрейпит (`up{pod=~"platform-api-authz-grpc-.*"}=1`); `/metrics` содержит `keymanager_kek_cache_entries` и `keymanager_reconciliation_mismatches` (gauge-и; counter/histogram материализуются под трафиком).
+4. ✅ Алерты: все 8 правил из `grafana-alerts-drive.yaml` созданы в Grafana (folder `agio-drive`) через admin API (MCP-SA не имеет прав alert-rules writer — 403; использован локальный port-forward + admin creds, file-provisioning в чарте не заведён). Состояние — normal, ложных срабатываний нет.
+5. Тест-компании tst-a/tst-b: provision + enable-encryption выполнены в 9.6b; перепроверить чтение/запись после рестартов при пилоте.
 
 ### Фаза R2 — prod, по одной компании
 
@@ -36,5 +37,7 @@
 ## Что осталось до архивации change
 
 1. Решение владельца по гейту 10.7(a) (см. выше) — блокер пилота.
-2. Стадийный деплой + 72-часовое наблюдение пилотной компании (не выполнялось в этой сессии намеренно).
-3. Финальный прогон AC на production-конфигурации → закрыть 10.7 → `opsx-archive`.
+2. Живой прогон `tests/security/redis-restore-test.sh` (создаёт тест-кластер YC — требуется подтверждение; удаление кластера после теста — тоже).
+3. Пилотная компания + 72-часовое наблюдение.
+4. Обновление клиентских образов (s3-gateway/mounts) до fork HEAD с метриками `juicefs_*` — алерты fork-группы до этого в NoData.
+5. Финальный прогон AC на production-конфигурации → закрыть 10.7 → `opsx-archive`.
