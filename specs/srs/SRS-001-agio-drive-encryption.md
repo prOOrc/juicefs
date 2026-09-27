@@ -3,7 +3,7 @@
 
 | Поле | Значение |
 |---|---|
-| **Версия** | 2.3 |
+| **Версия** | 2.4 |
 | **Статус** | Final draft |
 | **Продукт** | agio Drive — корпоративная файловая система для CG/VFX |
 | **Платформа** | agio-platform |
@@ -24,6 +24,7 @@
 | 2.1 | Корректная модель администратора компании (убран `CheckOrganizationAdmin`); раздел «Версионирование и снепшоты» — только криптографические предусловия |
 | **2.2** | **Зафиксирован инвариант идентичности**: OIDC `sub` ≡ `kratos.identity_id` ≡ `user.id` (UUID). Маппинг `sub → user.id` исключён; риск R12 заменён на остаточный R12' (дрейф идентичности). |
 | **2.3** | **Синхронизация с реализацией** (change `implement-encrypt`, решения интервью 2026-09-26): §15.1 = фактический контракт `DriveKeyManagerService` (9 RPC, поля `user_id`/`volume_uuid`, `GetBulkFileFEK` — entries-based); T10/NFR-SEC-1 — оформлена принятая граница write journal (plaintext payload, компенсирующие контроли, шифрование журнала — в бэклоге); NFR-PERF-3 — пометка DEVIATION pending decision (цель ≤10% не меняется, перезамер — гейт 10.7); FR-REDIS-5 — примечание об отклонении (внутренние бэкапы YC); фактическая схема ID `FR-*`/`NFR-*` зафиксирована как стабильная (specs/README.md, specs/index.md). |
+| **2.4** | **Закрытие FR-REV-3** (change `implement-encrypt`, решение 2026-09-27, ADR-003): data-plane креды — platform-issued YC STS (`sts.yandexcloud.net`, policy scope `<volume>/*`, TTL ≤ 60 мин); render-ноды — RPC `GetNodeSTSCredentials` (IAM-токен ноды), пользователи — `GetSTSCredentials` через Meta Proxy (pass-through, `user_id` из сессии proxy); §15.1 = 10 RPC; volume/bucket деривируются платформой из facility-конфига. T5 дополнен (SA нод без ролей на S3-бакет; mount под отдельным uid). VM-IAM и YC ephemeral keys отклонены (см. ADR-003). |
 
 ---
 
@@ -182,7 +183,7 @@ Render plane:    Render Client → Redis (прямой) + S3 (прямой)
 | T2 | Компрометация Redis | FEK обёрнуты Company KEK; CEK обёрнуты FEK | ✅ Защищено |
 | T3 | Пользователь читает чужой файл | Per-file FEK + authz-gated KeyManager | ✅ Защищено |
 | T4 | Инсайдер: массовая выгрузка через легитимный доступ | Audit + anomaly detection + STS + rate-limit | ⚠️ Компенсирующие |
-| T5 | Компрометация render-ноды | Изоляция per-company (company key) | ⚠️ Ограничено компанией |
+| T5 | Компрометация render-ноды | Изоляция per-company (company key); data-plane — STS TTL ≤60 мин через `GetNodeSTSCredentials` (IAM ноды, ADR-003); SA нод без ролей на S3-бакет; mount-процесс под отдельным системным uid | ⚠️ Ограничено компанией (конфиденциальность); root ВМ — принятая граница (integrity/availability, окно ≤ TTL) |
 | T6 | Компрометация Meta Proxy / KeyManager | FEK не хранится дольше запроса; TLS; аудит | ⚠️ Доверенный компонент |
 | T7 | Атака на KMS | HSM; ротация; IAM least privilege | ✅ Облачный KMS |
 | T8 | **Легитимный пользователь сохранил ключи + данные offline** | **НЕ защищено криптографически** | ❌ Принятая граница |
@@ -584,7 +585,7 @@ Render Node (FUSE)
 |---|---|
 | **FR-REV-1** | При отзыве прав KeyManager ДОЛЖЕН немедленно отклонять новые запросы FEK от отозванного пользователя (fail-closed). |
 | **FR-REV-2** | Инвалидация кэшей ДОЛЖНА происходить в пределах TTL кэша (≤ 30s для authz, ≤ 15 мин для клиентского FEK-кэша). |
-| **FR-REV-3** | **ЗАВИСИМОСТЬ:** Data-plane ДОЛЖЕН использовать STS (короткоживущие S3 credentials, TTL ≤ 60 мин). Без STS отзыв доступа к S3 невозможен. |
+| **FR-REV-3** | Data-plane ДОЛЖЕН использовать короткоживущие отзывные S3 credentials — platform-issued STS, TTL ≤ 60 мин, session policy scope `<volume>/*`. Выдача ДОЛЖНА быть аутентифицированной (пользователь — через Meta Proxy, `user_id` из сессии; render-нода — верифицированный YC IAM-токен, RPC `GetNodeSTSCredentials`), authz-gated (пользователь — Read на корень компании) и аудитированной. Volume/bucket деривируются платформой из facility-конфига, клиент их не называет. (v2.4, ADR-003.) |
 | **FR-REV-4** | FEK rotation (re-wrap CEKs) ДОЛЖНА поддерживаться как операция без перешифрования данных в S3. |
 | **FR-REV-5** | CEK rotation (перешифровка данных) ДОЛЖНА поддерживаться для критичных файлов / инцидентов. |
 | **FR-REV-6** | При offboarding пользователя из компании РЕКОМЕНДУЕТСЯ FEK rotation всех файлов, к которым пользователь имел доступ. |
@@ -717,7 +718,7 @@ Render Node (FUSE)
 
 ### 15.1 KeyManagerService (agio-platform)
 
-Контракт синхронизирован с реализацией (v2.3): **9 RPC**, источник правды — `src/application/authz/proto/key_manager.proto` (agio-platform). Компания не передаётся клиентом в файловых RPC (`CreateFileKey`/`GetFileFEK`/`GetBulkFileFEK`/`RotateFileFEK`) — platform резолвит её из пути (`volume_name` + первый сегмент после companies prefix); `wrapped_fek` передаёт proxy из attr (KeyManager не читает Redis).
+Контракт синхронизирован с реализацией (v2.4): **10 RPC**, источник правды — `src/application/authz/proto/key_manager.proto` (agio-platform). `GetNodeSTSCredentials` (10-й RPC, v2.4/ADR-003) — выдача STS-кред render-ноде по верифицированному IAM-токену ВМ; `GetSTSCredentials` для пользователей вызывается через Meta Proxy (pass-through, `user_id` из сессии proxy); скоуп политики в обоих случаях — volume-scoped (`<volume>/*`), volume/bucket деривируются платформой из facility-конфига. Компания не передаётся клиентом в файловых RPC (`CreateFileKey`/`GetFileFEK`/`GetBulkFileFEK`/`RotateFileFEK`) — platform резолвит её из пути (`volume_name` + первый сегмент после companies prefix); `wrapped_fek` передаёт proxy из attr (KeyManager не читает Redis).
 
 ```protobuf
 package agio.platform.drive.crypto.v1;
