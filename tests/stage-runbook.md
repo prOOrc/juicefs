@@ -9,6 +9,10 @@
 результаты в таблице «Результаты» (проверка задачи 9.6: «чеклист выполнен,
 результаты записаны»). Инвентарь фактического окружения и применённые для
 прогона подготовительные шаги — в разделе «Инвентарь P1–P6 (прогон 2026-09-27)».
+**Перепрогон S4 2026-09-27** (закрытие FR-REV-3, tasks 7.8–7.12, ADR-003) —
+**pass**, см. строку S4 и раздел «Инвентарь STS-перепрогона (2026-09-27)»;
+открыый вопрос «принимает ли YC STS условие `s3:prefix`» закрыт фактом
+прогона (принимает, fallback не нужен).
 
 ## Предусловия
 
@@ -97,7 +101,7 @@
 | S1 Полный цикл | 2026-09-27 | I. Obukhov (ZCode) | **pass** | user-a1: mount через meta-proxy (OIDC Bearer, authz, KeyManager) → create `projects/s1.exr`, запись 1 MiB, sync, чтение — md5 совпадает (`908e4e56…`). В attr инода: `wrapped_fek` 69 байт (AGFK) + `drive_file_id` (UUID) + `AES-256-GCM`, fek_version 1. Audit platform: `create_file_key`/`get_file_fek` allow для user-a1. user-a2 (без прав): каталоги компании скрыты, чтение файла → EIO, 0 записей выдачи FEK в audit — deny |
 | S2 Owner bypass | 2026-09-27 | I. Obukhov (ZCode) | **pass** | owner-a (company `own` в SpiceDB, без path-прав) открыл и прочитал `s1.exr` — md5 совпал; `CheckOrganizationAdmin` не вызывался (0 обращений в логах за окно прогона) |
 | S3 Revocation (время до потери доступа: **новый Open — сразу (deny); кэш FEK — ~12–15 c**) | 2026-09-27 | I. Obukhov (ZCode) | **pass** | Отзыв: soft-delete `drive_object_permission` + удаление SpiceDB-роли + `INCR drivepermgen:<user-a1>`. Новый Open чужого файла → deny немедленно (authz). Уже закэшированный FEK: чтение терялось через **~14.5 c** после отзыва (heartbeat 12 c → generation bump → WipeKeys → re-Open denied) — в пределах целевого TTL heartbeat. STS-креденшелы после отзыва не выдаются (fail-closed, см. S4) |
-| S4 STS prefix-policy | 2026-09-27 | I. Obukhov (ZCode) | **partial (fail-closed подтверждён)** | `--sts-enabled` mount: `GetSTSCredentials` проходит authz и fail-closed (`PermissionDenied: no read permission on company` после отзыва user-a1). Выдача работающих prefix-scoped креденшелов на YC-stage недоступна по дизайну: AWS-провайдер требует `STS_ROLE_ARN` + AWS-совместимый STS (не настроен), YC-провайдер — зафиксированная fail-closed заглушка. Полное прохождение сценария — с AWS-совместимым S3/STS; prefix-policy S3-gateway (OPA `platform-api-authz:8080/s3/authz`) — существующий механизм platform |
+| S4 STS prefix-policy | 2026-09-27 (перепрогон, закрытие FR-REV-3) | I. Obukhov (ZCode) | **pass** | Полный сценарий на реальном YC STS (platform `feature-drive-v2-10656` = ed2ee79b, форк HEAD `113c10f2`). **S4.1 user-path:** mount user-a1 через meta-proxy с `--sts-enabled --company-id <tst-a>` — выдача `GetSTSCredentials` allow (audit: actor user-a1, refresh-выдачи каждые ttl/2), запись 1 MiB + чтение — md5 совпадает (`c6bed149…`), чанки реально залиты в S3 временными кредами (объекты `tst-enc-a/chunks/…` появились в момент записи); authz-проверки пути allow (`/companies/tst-a/projects/s4-sts-test.bin` VIEW/EDIT). **S4.2 отзыв:** после удаления SpiceDB-роли editor + INCR permgen новый запрос кред → fail-closed `PermissionDenied: no read permission on company` (mount не стартует), 3× deny в audit; TTL-истечение активных кред — 60 мин по дизайну (не ждали). **S4.3 node-path:** render-mount с IAM-токеном ноды (SA `drive-runbook-sa`, node `MAC3244`) — `FetchCompanyKEK` + `GetNodeSTSCredentials` allow (audit actor `render_node`), чтение зашифрованного файла S4.1 через node-маунт — md5 совпал; регрессия S5 (KEK-путь на свежем бинаре) — pass. **s3:prefix:** YC STS принял `StringLike` на `s3:prefix` (in-prefix LIST OK, out-prefix LIST denied — проверено живым probe'ом и прогоном) — fallback `sts_listbucket_unscoped` НЕ нужен (флаг остаётся false). Policy scope `<volume>/*` подтверждён: PUT/GET в `tst-enc-a/*` разрешены, `other-prefix/*` denied. |
 | S5 Render-нода с IAM | 2026-09-27 | I. Obukhov (ZCode) | **pass** | render-mount от компании A (локальная эмуляция ноды с YC IAM-токеном): `FetchCompanyKEK` по IAM → чтение `projects/s1.exr` — md5 совпал, **без OIDC, без прокси, без PG**. S5.3: render-mount компании B — chroot `companies/tst-b` пуст, `projects/s1.exr` через B-chroot → ENOENT; разворот FEK компании A под KEK компании B невозможен (AAD-привязка, fail-closed EIO — подтверждено `TestRenderCrossCompany` и диагностикой: чужой KEK → GCM tag failure). S5.4: audit `fetch_company_kek` allow (actor_type `render_node`, node-id из IAM-верификации) для обеих компаний |
 
 ## Инвентарь P1–P6 (прогон 2026-09-27)
@@ -129,3 +133,41 @@
    `resource-manager.apiary.io` не согласует ALPN h2 → все FetchCompanyKEK
    fail-closed; заменён на `resource-manager.api.cloud.yandex.net:443`
    (промежуточные `fc859338`/`61e49a51` — итерации диагностики эндпоинта).
+4. **YC STS требует `Principal` в каждом statement'е session policy**
+   (platform, `ed2ee79b`, перепрогон S4 2026-09-27): AssumeRole без Principal
+   проходил, но любой S3-запрос под выданными кредами падал с
+   `400 MalformedPolicy: required field missed: principal should be
+   specified` — запись через `--sts-enabled` зависала в ретраях upload'а.
+   Фикс: `buildSessionPolicy(..., includePrincipal)` ставит `"Principal":"*"`
+   обоим statement'ам только для YC-ветки (AWS session policy Principal
+   запрещает; AWS-политика осталась байт-в-байт прежней). Тем же прогоном
+   подтверждено: YC STS принимает условие `StringLike` на `s3:prefix`
+   (in-prefix LIST OK, out-prefix denied) — fallback
+   `sts_listbucket_unscoped` не требуется.
+5. **`platformKeyManager.Close()` был no-op** (форк, `113c10f2`, polish из
+   ревью P3): type-assertion на сгенерённом клиенте не срабатывал — gRPC
+   соединение не закрывалось на error-путях `--sts-enabled` render-mount.
+   Фикс: клиент хранит `*grpc.ClientConn` и закрывает его напрямую; заодно
+   соединение KeyManager закрывается на error-путях STS-блока и покрыт
+   Bearer-metadata тестом (bufconn, замена удалённому
+   `TestYCEphemeralKeyProvider`).
+6. **Флейк CI `TestConsolidationE2E_JuiceFSFullFlow`** (platform, pipeline
+   10656): E2E-тест консолидации drive периодически не дожидается условия за
+   30s на свежем runner'е; с STS-изменениями не связан, ретрай зелёный.
+   Кандидат на отдельный фикс (вне скоупа гейта).
+
+## Инвентарь STS-перепрогона (2026-09-27, закрытие FR-REV-3)
+
+Аддитивные ресурсы и шаги поверх инвентаря 9.6b (все в namespace `stage`,
+существующие не удалялись; роли user-a1, отозванные в S3 9.6b, восстановлены
+SpiceDB-отношением editor + un-delete `drive_object_permission` и после S4.2
+возвращены).
+
+| # | Ресурс | Как закрыто |
+|---|---|---|
+| R1 | SA для STS-выдачи | Terraform `drive_sts.tf` (agio-terraform-yc): SA `sa-drive-sts` + `yandex_storage_bucket_iam_binding` `storage.editor` на бакет `juicefs-data-b-stage` (уровень бакета, не folder); статический access key создан вручную `yc iam access-key create` (secret в tf state не попадает) |
+| R2 | Секреты деплоя | K8s secret `drive-grpc-creds` (namespace stage): `STS_YC_ACCESS_KEY_ID`/`STS_YC_ACCESS_KEY_SECRET`/`STS_ROLE_ARN=agio-drive-sts-stage`; env в деплой — через `envFrom` |
+| R3 | Деплой `platform-api-authz-grpc` | Обновлён образ до `feature-drive-v2-10656` (ed2ee79b, фикс Principal), env `STS_PROVIDER=yc` + `STS_ROLE_ARN`; `/tmp/drive-authz-grpc.yaml`; svc :9090, доступ клиентов через `kubectl port-forward` |
+| R4 | PG-конфиг резолвера | `facility_juicefs_config` (facility immers): добавлен jsonb-ключ `Bucket=juicefs-data-b-stage` (jsonb_set); `company.default_facility_id` (Tst A) → immers — навигация резолвера `JuicefsConfigResolver`, пустые значения fail-closed |
+| R5 | Node-path | render-нода эмулируется локально: IAM-токен `yc iam create-token --profile drive-runbook-sa` → `--iam-token-file`; SA ноды без ролей на S3-бакет (folder-bindings пусты, bucket-биндинг только у `sa-drive-sts`) — данные ходят под кредами, выданными platform'ом от своего SA |
+| R6 | Клиенты | Форк-бинарь `113c10f2` (`make juicefs`); meta-proxy на `127.0.0.1:9561` (`--authz-service/--keymanager-service 127.0.0.1:9090`, `--authz-volume-name tst-enc-a`); mount user-path: `grpc://…/tst-enc-a?oidc-…&oidc-scopes=openid,offline_access,profile,email&oidc-cache-dir=/tmp/jfs-oidc-a1 --sts-enabled --company-id <tst-a>` (набор scopes должен совпадать с 9.6b — имя кэш-файла oidc-login хэшируется от конфига провайдера); негатив: `--sts-enabled` против `redis://` meta → fail-fast «--sts-enabled requires a meta proxy (grpc) endpoint» |
