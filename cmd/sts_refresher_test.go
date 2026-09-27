@@ -21,15 +21,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	kmpb "github.com/juicedata/juicefs/pkg/meta/keymanager_pb"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
 // fakeSTSProvider delegates to a test-controlled closure.
@@ -157,70 +156,88 @@ func TestSTSRefresher_Stop(t *testing.T) {
 	}
 }
 
-// TestPlatformSTSProvider verifies the user-mode provider: the OIDC subject is
-// used as user_id, the company ID comes from the flag, and a missing subject
-// fails closed.
+// TestPlatformSTSProvider verifies the user-mode provider (task 7.12, ADR-003):
+// the request goes through the proxy's StsProxyService carrying only the
+// company ID — the proxy fills user_id from the authenticated session itself —
+// and the response fields are mapped into stsCredentials. Proxy errors are
+// propagated (fail-fast).
 func TestPlatformSTSProvider(t *testing.T) {
-	km := &stubKeyManager{stsResp: &kmpb.GetSTSCredentialsResponse{
+	proxy := &fakeStsProxyClient{resp: &pb.StsCredentialsResponse{
 		AccessKeyId:     "AK-P",
 		SecretAccessKey: "SK-P",
 		SessionToken:    "TOK-P",
 		ExpirationUnix:  time.Now().Add(time.Hour).Unix(),
 	}}
-	p := &platformSTSProvider{keyManager: km, subject: func(ctx context.Context) string { return "user-1" }, companyID: "comp-1"}
+	p := &platformSTSProvider{stsProxy: proxy, companyID: "comp-1"}
 	cred, err := p.Credentials(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, "AK-P", cred.AccessKey)
+	require.Equal(t, "SK-P", cred.SecretKey)
 	require.Equal(t, "TOK-P", cred.SessionToken)
-	require.Equal(t, "user-1", km.lastSTSUser)
-	require.Equal(t, "comp-1", km.lastSTSCompany)
+	require.True(t, cred.Expiry.After(time.Now()))
+	require.Equal(t, "comp-1", proxy.lastCompanyID)
 
-	p.subject = func(ctx context.Context) string { return "" }
+	proxy.err = errors.New("proxy down")
 	_, err = p.Credentials(context.Background())
-	require.Error(t, err, "a missing OIDC subject must fail closed")
+	require.Error(t, err, "a proxy failure must surface (fail-fast)")
 }
 
-// TestYCEphemeralKeyProvider verifies the YC REST contract: Bearer IAM token,
-// sessionName/policy/duration body, and response parsing.
-func TestYCEphemeralKeyProvider(t *testing.T) {
-	var gotAuth, gotBody string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotAuth = r.Header.Get("Authorization")
-		b, _ := io.ReadAll(r.Body)
-		gotBody = string(b)
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"accessKeyId":"YC-AK","secret":"YC-SK","sessionToken":"YC-TOK","expiresAt":"` + time.Now().Add(time.Hour).Format(time.RFC3339) + `"}`))
-	}))
-	defer srv.Close()
-
-	p := &ycEphemeralKeyProvider{
-		token:       func(ctx context.Context) (string, error) { return "IAM-TOKEN", nil },
-		sessionName: "render-node-1",
-		policy:      `{"Version":"2012-10-17"}`,
-		duration:    30 * time.Minute,
-		endpoint:    srv.URL,
+// TestPlatformNodeSTSProvider verifies the render-node provider (task 7.11,
+// ADR-003): it proxies CompanyId/NodeId to GetNodeSTSCredentials and maps the
+// response; a failing node IAM token fails closed before the RPC.
+func TestPlatformNodeSTSProvider(t *testing.T) {
+	km := &stubKeyManager{stsResp: &kmpb.GetSTSCredentialsResponse{
+		AccessKeyId:     "AK-N",
+		SecretAccessKey: "SK-N",
+		SessionToken:    "TOK-N",
+		ExpirationUnix:  time.Now().Add(time.Hour).Unix(),
+	}}
+	p := &platformNodeSTSProvider{
+		keyManager: km,
+		token:      &staticTokenProvider{token: "IAM-TOKEN"},
+		nodeID:     "render-node-1",
+		companyID:  "comp-1",
 	}
 	cred, err := p.Credentials(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, "YC-AK", cred.AccessKey)
-	require.Equal(t, "YC-SK", cred.SecretKey)
-	require.Equal(t, "YC-TOK", cred.SessionToken)
+	require.Equal(t, "AK-N", cred.AccessKey)
+	require.Equal(t, "SK-N", cred.SecretKey)
+	require.Equal(t, "TOK-N", cred.SessionToken)
 	require.True(t, cred.Expiry.After(time.Now()))
-	require.Equal(t, "Bearer IAM-TOKEN", gotAuth)
-	require.Contains(t, gotBody, `"sessionName":"render-node-1"`)
-	require.Contains(t, gotBody, `"duration":"1800s"`)
-	require.Contains(t, gotBody, `"policy":`)
+	require.Equal(t, "comp-1", km.lastNodeCompany)
+	require.Equal(t, "render-node-1", km.lastNodeID)
 
-	// a non-200 answer must surface the YC error body
-	srv.Close()
-	p.endpoint = "http://127.0.0.1:1" // connection refused
+	// a failing IAM token must fail closed
+	p.token = &staticTokenProvider{err: errors.New("metadata service unreachable")}
 	_, err = p.Credentials(context.Background())
 	require.Error(t, err)
 }
 
-// TestPrefixPolicies pins the policy shapes: AWS carries the s3:prefix
-// condition on ListBucket; YC does not (its schema does not document the
-// condition key). Both must be valid JSON with two statements.
+// staticTokenProvider is a fixed IAM token source for provider tests.
+type staticTokenProvider struct {
+	token string
+	err   error
+}
+
+func (p *staticTokenProvider) Token(ctx context.Context) (string, error) {
+	return p.token, p.err
+}
+
+// fakeStsProxyClient is a minimal StsProxyService client for the user-mode
+// provider test.
+type fakeStsProxyClient struct {
+	resp          *pb.StsCredentialsResponse
+	err           error
+	lastCompanyID string
+}
+
+func (f *fakeStsProxyClient) GetSTSCredentials(ctx context.Context, req *pb.StsCredentialsRequest, opts ...grpc.CallOption) (*pb.StsCredentialsResponse, error) {
+	f.lastCompanyID = req.GetCompanyId()
+	return f.resp, f.err
+}
+
+// TestPrefixPolicies pins the AWS policy shape: it carries the s3:prefix
+// condition on ListBucket and must be valid JSON with two statements.
 func TestPrefixPolicies(t *testing.T) {
 	check := func(policy, label string) map[string]interface{} {
 		t.Helper()
@@ -236,18 +253,15 @@ func TestPrefixPolicies(t *testing.T) {
 	check(awsPolicy, "AWS")
 	require.Contains(t, awsPolicy, `"s3:prefix"`)
 	require.Contains(t, awsPolicy, `arn:aws:s3:::bucket/companies/acme/*`)
-
-	ycPolicy := ycPrefixPolicy("bucket", "companies/acme/")
-	check(ycPolicy, "YC")
-	require.NotContains(t, ycPolicy, `"s3:prefix"`)
-	require.Contains(t, ycPolicy, `arn:aws:s3:::bucket/companies/acme/*`)
 }
 
-// stubKeyManager is a minimal KeyManagerClient for the STS provider test.
+// stubKeyManager is a minimal KeyManagerClient for the STS provider tests.
 type stubKeyManager struct {
-	stsResp        *kmpb.GetSTSCredentialsResponse
-	lastSTSUser    string
-	lastSTSCompany string
+	stsResp         *kmpb.GetSTSCredentialsResponse
+	lastSTSUser     string
+	lastSTSCompany  string
+	lastNodeID      string
+	lastNodeCompany string
 }
 
 func (s *stubKeyManager) CreateFileKey(ctx context.Context, req *kmpb.CreateFileKeyRequest) (*kmpb.CreateFileKeyResponse, error) {
@@ -273,6 +287,12 @@ func (s *stubKeyManager) GetPermissionGeneration(ctx context.Context, req *kmpb.
 func (s *stubKeyManager) GetSTSCredentials(ctx context.Context, req *kmpb.GetSTSCredentialsRequest) (*kmpb.GetSTSCredentialsResponse, error) {
 	s.lastSTSUser = req.UserId
 	s.lastSTSCompany = req.CompanyId
+	return s.stsResp, nil
+}
+
+func (s *stubKeyManager) GetNodeSTSCredentials(ctx context.Context, req *kmpb.GetNodeSTSCredentialsRequest) (*kmpb.GetSTSCredentialsResponse, error) {
+	s.lastNodeCompany = req.CompanyId
+	s.lastNodeID = req.NodeId
 	return s.stsResp, nil
 }
 

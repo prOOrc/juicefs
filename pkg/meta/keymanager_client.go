@@ -33,8 +33,8 @@ import (
 // The proxy uses it to issue (CreateFileKey) and unwrap (GetFileFEK) per-file FEKs;
 // render nodes use FetchCompanyKEK once at mount (FR-RND-2). Stage 7 adds
 // GetPermissionGeneration (heartbeat revocation, task 7.3), GetSTSCredentials
-// (short-lived S3 credentials, task 7.4) and RotateFileFEK (offboarding rotation,
-// task 7.5).
+// (short-lived S3 credentials, task 7.4), GetNodeSTSCredentials (render-node STS,
+// task 7.11) and RotateFileFEK (offboarding rotation, task 7.5).
 type KeyManagerClient interface {
 	CreateFileKey(ctx context.Context, req *kmpb.CreateFileKeyRequest) (*kmpb.CreateFileKeyResponse, error)
 	GetFileFEK(ctx context.Context, req *kmpb.GetFileFEKRequest) (*kmpb.GetFileFEKResponse, error)
@@ -44,6 +44,10 @@ type KeyManagerClient interface {
 	ProvisionCompanyKEK(ctx context.Context, req *kmpb.ProvisionCompanyKEKRequest) (*kmpb.ProvisionCompanyKEKResponse, error)
 	GetPermissionGeneration(ctx context.Context, req *kmpb.GetPermissionGenerationRequest) (*kmpb.GetPermissionGenerationResponse, error)
 	GetSTSCredentials(ctx context.Context, req *kmpb.GetSTSCredentialsRequest) (*kmpb.GetSTSCredentialsResponse, error)
+	// GetNodeSTSCredentials issues short-lived S3 credentials for the calling
+	// render node, authenticated by its YC IAM token in the gRPC metadata
+	// (ADR-003, task 7.11).
+	GetNodeSTSCredentials(ctx context.Context, req *kmpb.GetNodeSTSCredentialsRequest) (*kmpb.GetSTSCredentialsResponse, error)
 	RotateFileFEK(ctx context.Context, req *kmpb.RotateFileFEKRequest) (*kmpb.RotateFileFEKResponse, error)
 	Close() error
 }
@@ -75,6 +79,10 @@ func (c *platformKeyManager) GetPermissionGeneration(ctx context.Context, req *k
 
 func (c *platformKeyManager) GetSTSCredentials(ctx context.Context, req *kmpb.GetSTSCredentialsRequest) (*kmpb.GetSTSCredentialsResponse, error) {
 	return c.client.GetSTSCredentials(ctx, req)
+}
+
+func (c *platformKeyManager) GetNodeSTSCredentials(ctx context.Context, req *kmpb.GetNodeSTSCredentialsRequest) (*kmpb.GetSTSCredentialsResponse, error) {
+	return c.client.GetNodeSTSCredentials(ctx, req)
 }
 
 func (c *platformKeyManager) RotateFileFEK(ctx context.Context, req *kmpb.RotateFileFEKRequest) (*kmpb.RotateFileFEKResponse, error) {

@@ -39,6 +39,7 @@ const (
 	DriveKeyManagerService_ProvisionCompanyKEK_FullMethodName     = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/ProvisionCompanyKEK"
 	DriveKeyManagerService_GetPermissionGeneration_FullMethodName = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/GetPermissionGeneration"
 	DriveKeyManagerService_GetSTSCredentials_FullMethodName       = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/GetSTSCredentials"
+	DriveKeyManagerService_GetNodeSTSCredentials_FullMethodName   = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/GetNodeSTSCredentials"
 	DriveKeyManagerService_RotateFileFEK_FullMethodName           = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/RotateFileFEK"
 	DriveKeyManagerService_RotateCompanyKEK_FullMethodName        = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/RotateCompanyKEK"
 )
@@ -80,6 +81,10 @@ type DriveKeyManagerServiceClient interface {
 	GetPermissionGeneration(ctx context.Context, in *GetPermissionGenerationRequest, opts ...grpc.CallOption) (*GetPermissionGenerationResponse, error)
 	// GetSTSCredentials issues short-lived S3 credentials scoped to the company prefix.
 	GetSTSCredentials(ctx context.Context, in *GetSTSCredentialsRequest, opts ...grpc.CallOption) (*GetSTSCredentialsResponse, error)
+	// GetNodeSTSCredentials issues short-lived S3 credentials for a render node,
+	// authenticated by the node's YC IAM token (ADR-003). node_id is an audit
+	// fallback only (mirrors FetchCompanyKEKRequest.node_id).
+	GetNodeSTSCredentials(ctx context.Context, in *GetNodeSTSCredentialsRequest, opts ...grpc.CallOption) (*GetSTSCredentialsResponse, error)
 	// RotateFileFEK generates a new FEK version for an existing file. Requires an
 	// organization admin (SpiceDB manage permission on the organization).
 	RotateFileFEK(ctx context.Context, in *RotateFileFEKRequest, opts ...grpc.CallOption) (*RotateFileFEKResponse, error)
@@ -166,6 +171,16 @@ func (c *driveKeyManagerServiceClient) GetSTSCredentials(ctx context.Context, in
 	return out, nil
 }
 
+func (c *driveKeyManagerServiceClient) GetNodeSTSCredentials(ctx context.Context, in *GetNodeSTSCredentialsRequest, opts ...grpc.CallOption) (*GetSTSCredentialsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSTSCredentialsResponse)
+	err := c.cc.Invoke(ctx, DriveKeyManagerService_GetNodeSTSCredentials_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *driveKeyManagerServiceClient) RotateFileFEK(ctx context.Context, in *RotateFileFEKRequest, opts ...grpc.CallOption) (*RotateFileFEKResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RotateFileFEKResponse)
@@ -223,6 +238,10 @@ type DriveKeyManagerServiceServer interface {
 	GetPermissionGeneration(context.Context, *GetPermissionGenerationRequest) (*GetPermissionGenerationResponse, error)
 	// GetSTSCredentials issues short-lived S3 credentials scoped to the company prefix.
 	GetSTSCredentials(context.Context, *GetSTSCredentialsRequest) (*GetSTSCredentialsResponse, error)
+	// GetNodeSTSCredentials issues short-lived S3 credentials for a render node,
+	// authenticated by the node's YC IAM token (ADR-003). node_id is an audit
+	// fallback only (mirrors FetchCompanyKEKRequest.node_id).
+	GetNodeSTSCredentials(context.Context, *GetNodeSTSCredentialsRequest) (*GetSTSCredentialsResponse, error)
 	// RotateFileFEK generates a new FEK version for an existing file. Requires an
 	// organization admin (SpiceDB manage permission on the organization).
 	RotateFileFEK(context.Context, *RotateFileFEKRequest) (*RotateFileFEKResponse, error)
@@ -259,6 +278,9 @@ func (UnimplementedDriveKeyManagerServiceServer) GetPermissionGeneration(context
 }
 func (UnimplementedDriveKeyManagerServiceServer) GetSTSCredentials(context.Context, *GetSTSCredentialsRequest) (*GetSTSCredentialsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSTSCredentials not implemented")
+}
+func (UnimplementedDriveKeyManagerServiceServer) GetNodeSTSCredentials(context.Context, *GetNodeSTSCredentialsRequest) (*GetSTSCredentialsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetNodeSTSCredentials not implemented")
 }
 func (UnimplementedDriveKeyManagerServiceServer) RotateFileFEK(context.Context, *RotateFileFEKRequest) (*RotateFileFEKResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RotateFileFEK not implemented")
@@ -414,6 +436,24 @@ func _DriveKeyManagerService_GetSTSCredentials_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DriveKeyManagerService_GetNodeSTSCredentials_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetNodeSTSCredentialsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DriveKeyManagerServiceServer).GetNodeSTSCredentials(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DriveKeyManagerService_GetNodeSTSCredentials_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DriveKeyManagerServiceServer).GetNodeSTSCredentials(ctx, req.(*GetNodeSTSCredentialsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _DriveKeyManagerService_RotateFileFEK_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RotateFileFEKRequest)
 	if err := dec(in); err != nil {
@@ -484,6 +524,10 @@ var DriveKeyManagerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSTSCredentials",
 			Handler:    _DriveKeyManagerService_GetSTSCredentials_Handler,
+		},
+		{
+			MethodName: "GetNodeSTSCredentials",
+			Handler:    _DriveKeyManagerService_GetNodeSTSCredentials_Handler,
 		},
 		{
 			MethodName: "RotateFileFEK",

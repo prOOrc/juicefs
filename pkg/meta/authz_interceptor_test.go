@@ -657,3 +657,48 @@ func TestInterceptor_NonUUIDSub_Unauthenticated(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, codes.Unauthenticated, st.Code())
 }
+
+// TestInterceptor_StsProxyService (task 7.12, ADR-003): the STS pass-through is
+// authz-gated on the platform (Read on the company), so the proxy interceptor
+// only authenticates — an authenticated session reaches the handler without any
+// authz service call; a session without identity is rejected.
+func TestInterceptor_StsProxyService(t *testing.T) {
+	ai := &AuthzInterceptor{}
+	assert.Equal(t, AuthzPermissionView, ai.requiredPermission("/pb.StsProxyService/GetSTSCredentials"))
+
+	t.Run("authenticated session passes without authz call", func(t *testing.T) {
+		mockClient := &mockAuthzClient{}
+		ai := NewAuthzInterceptor(mockClient, NewInodePathCache(0), nil)
+		sub := uuid.New().String()
+		ctx := oidc.WithIDToken(context.Background(), &oidc.IDToken{Subject: sub})
+
+		called := false
+		handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+			called = true
+			return &pb.StsCredentialsResponse{}, nil
+		}
+		_, err := ai.UnaryInterceptor()(ctx, &pb.StsCredentialsRequest{CompanyId: "comp-1"},
+			&grpc.UnaryServerInfo{FullMethod: "/pb.StsProxyService/GetSTSCredentials"}, handler)
+
+		assert.NoError(t, err)
+		assert.True(t, called, "an authenticated session must reach the handler")
+		mockClient.AssertNotCalled(t, "CheckPermission", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("no identity is unauthenticated", func(t *testing.T) {
+		mockClient := &mockAuthzClient{}
+		ai := NewAuthzInterceptor(mockClient, NewInodePathCache(0), nil)
+
+		handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+			t.Fatal("handler must not be called")
+			return nil, nil
+		}
+		_, err := ai.UnaryInterceptor()(context.Background(), &pb.StsCredentialsRequest{CompanyId: "comp-1"},
+			&grpc.UnaryServerInfo{FullMethod: "/pb.StsProxyService/GetSTSCredentials"}, handler)
+
+		assert.Error(t, err)
+		st, ok := status.FromError(err)
+		assert.True(t, ok)
+		assert.Equal(t, codes.Unauthenticated, st.Code())
+	})
+}

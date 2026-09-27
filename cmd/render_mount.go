@@ -109,7 +109,7 @@ func renderMountFlags() []cli.Flag {
 		},
 		&cli.BoolFlag{
 			Name:  "sts-enabled",
-			Usage: "use short-lived STS storage credentials (AWS: AssumeRole with the node instance profile; YC: ephemeral access keys from the node IAM token) instead of static keys in the volume format",
+			Usage: "use short-lived STS storage credentials (AWS: AssumeRole with the node instance profile; YC: platform-issued STS via the KeyManager, authenticated by the node IAM token) instead of static keys in the volume format",
 		},
 		&cli.StringFlag{
 			Name:  "sts-role-arn",
@@ -174,14 +174,24 @@ func (p *fileTokenProvider) Token(ctx context.Context) (string, error) {
 	return token, nil
 }
 
+// ctxWithIAMToken attaches the node's YC IAM token to ctx in the "authorization"
+// gRPC metadata (Bearer scheme) — the authentication mechanism of the
+// IAM-protected KeyManager RPCs (FetchCompanyKEK, GetNodeSTSCredentials).
+func ctxWithIAMToken(ctx context.Context, tp iamTokenProvider) (context.Context, error) {
+	token, err := tp.Token(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+token), nil
+}
+
 // fetchCompanyKEK retrieves the Company KEK for companyID, authenticating with
 // the node's IAM token in the "authorization" gRPC metadata (Bearer scheme).
 func fetchCompanyKEK(ctx context.Context, km meta.KeyManagerClient, tp iamTokenProvider, companyID, nodeID string) ([]byte, uint32, error) {
-	token, err := tp.Token(ctx)
+	ctx, err := ctxWithIAMToken(ctx, tp)
 	if err != nil {
 		return nil, 0, err
 	}
-	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+token)
 	resp, err := km.FetchCompanyKEK(ctx, &kmpb.FetchCompanyKEKRequest{CompanyId: companyID, NodeId: nodeID})
 	if err != nil {
 		return nil, 0, fmt.Errorf("FetchCompanyKEK: %w", err)
@@ -190,6 +200,37 @@ func fetchCompanyKEK(ctx context.Context, km meta.KeyManagerClient, tp iamTokenP
 		return nil, 0, fmt.Errorf("unexpected Company KEK size %d (want %d)", len(resp.Kek), renderKEKSize)
 	}
 	return resp.Kek, resp.KekVersion, nil
+}
+
+// platformNodeSTSProvider obtains render-node STS credentials from the platform
+// KeyManager (GetNodeSTSCredentials, ADR-003): the node authenticates with its YC
+// IAM token, the platform scopes the session policy to the mounted volume.
+type platformNodeSTSProvider struct {
+	keyManager meta.KeyManagerClient
+	token      iamTokenProvider
+	nodeID     string
+	companyID  string
+}
+
+func (p *platformNodeSTSProvider) Credentials(ctx context.Context) (stsCredentials, error) {
+	// attach the IAM token the same way fetchCompanyKEK does
+	ctx, err := ctxWithIAMToken(ctx, p.token)
+	if err != nil {
+		return stsCredentials{}, fmt.Errorf("sts: node IAM token: %w", err)
+	}
+	resp, err := p.keyManager.GetNodeSTSCredentials(ctx, &kmpb.GetNodeSTSCredentialsRequest{
+		CompanyId: p.companyID,
+		NodeId:    p.nodeID,
+	})
+	if err != nil {
+		return stsCredentials{}, fmt.Errorf("sts: GetNodeSTSCredentials: %w", err)
+	}
+	return stsCredentials{
+		AccessKey:    resp.GetAccessKeyId(),
+		SecretKey:    resp.GetSecretAccessKey(),
+		SessionToken: resp.GetSessionToken(),
+		Expiry:       time.Unix(resp.GetExpirationUnix(), 0),
+	}, nil
 }
 
 // forceRenderCacheTimeouts enforces aggressive kernel-side caching for render
@@ -258,8 +299,12 @@ func renderMount(c *cli.Context) error {
 		_ = km.Close()
 		return fmt.Errorf("fetch company KEK: %s", err)
 	}
-	if cerr := km.Close(); cerr != nil {
-		logger.Warnf("close keymanager client: %s", cerr)
+	// The KeyManager connection is closed right after the one-shot KEK fetch,
+	// unless --sts-enabled keeps it for periodic GetNodeSTSCredentials refreshes.
+	if !c.Bool("sts-enabled") {
+		if cerr := km.Close(); cerr != nil {
+			logger.Warnf("close keymanager client: %s", cerr)
+		}
 	}
 	mlockKey(kek)
 	logger.Infof("Company KEK fetched (version %d), node %s, company %s", kekVersion, nodeID, companyID)
@@ -292,10 +337,12 @@ func renderMount(c *cli.Context) error {
 	}
 	logger.Infof("Data use %s", blob)
 
-	// STS credentials (task 7.4): replace the static storage credentials with
-	// short-lived ones scoped to the company prefix. AWS: AssumeRole with the
-	// node's instance profile; YC: ephemeral access keys issued from the node's
-	// IAM token (no static key involved). Fail-fast on the initial fetch.
+	// STS credentials (tasks 7.4/7.11, ADR-003): replace the static storage
+	// credentials with short-lived ones scoped to the volume. AWS: AssumeRole
+	// with the node's instance profile and a volume-scoped session policy; YC:
+	// platform-issued STS via GetNodeSTSCredentials — the node authenticates
+	// with its IAM token, the platform derives volume and bucket itself.
+	// Fail-fast on the initial fetch.
 	if c.Bool("sts-enabled") {
 		holder, ok := blob.(*storageHolder)
 		if !ok {
@@ -312,15 +359,15 @@ func renderMount(c *cli.Context) error {
 				roleARN:     roleARN,
 				sessionName: nodeID,
 				bucket:      format.Bucket,
-				prefix:      prefix,
+				prefix:      format.Name + "/", // chunk keys are <volume>/chunks/... (A6)
 				duration:    defaultSTSTTL,
 			}
 		default:
-			provider = &ycEphemeralKeyProvider{
-				token:       tp.Token,
-				sessionName: nodeID,
-				policy:      ycPrefixPolicy(format.Bucket, prefix),
-				duration:    defaultSTSTTL,
+			provider = &platformNodeSTSProvider{
+				keyManager: km,
+				token:      tp,
+				nodeID:     nodeID,
+				companyID:  companyID,
 			}
 		}
 		refresher := newSTSRefresher(provider, holder, defaultSTSTTL)
