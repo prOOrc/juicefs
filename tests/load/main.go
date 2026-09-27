@@ -334,9 +334,11 @@ func scenarioOpenMiss(e *env, inodes []meta.Ino, clients, iters int) result {
 
 // scenarioThroughput (FR-TEST-24): concurrent write+read through the chunk
 // store, legacy vs encrypted (CEK). The bytesTotal volume is split across
-// clients goroutines, each writing and reading its own blob under a unique
-// chunk id; the aggregate MB/s therefore stays comparable with the sequential
-// baseline. Target: ≤10% degradation.
+// clients goroutines, each writing and reading its own blob; since CachedStore
+// caps a single writer at chunkSize (64 MiB), every blob is written and read
+// back in ≤64 MiB slices, each under its own unique chunk id and
+// writer/reader. The aggregate MB/s therefore stays comparable with the
+// sequential baseline. Target: ≤10% degradation.
 func scenarioThroughput(clients, bytesTotal int) result {
 	blob, err := object.CreateStorage("mem", "test", "", "", "")
 	if err != nil {
@@ -353,13 +355,13 @@ func scenarioThroughput(clients, bytesTotal int) result {
 
 	run := func(withKey bool) time.Duration {
 		baseID := uint64(time.Now().UnixNano())
+		sliceSize := int64(64 << 20) // CachedStore caps one writer at chunkSize (64 MiB)
 		var wg sync.WaitGroup
 		wg.Add(clients)
 		start := time.Now()
 		for g := 0; g < clients; g++ {
 			go func(g int) {
 				defer wg.Done()
-				id := baseID + uint64(g)
 				var cek []byte
 				if withKey {
 					cek = make([]byte, 32)
@@ -367,32 +369,37 @@ func scenarioThroughput(clients, bytesTotal int) result {
 						cek[i] = byte(i + 1)
 					}
 				}
-				var w chunk.Writer
-				if withKey {
-					w = store.NewWriterWithKey(id, 0, cek)
-				} else {
-					w = store.NewWriter(id, 0)
-				}
-				for off := int64(0); off < int64(perBlob); off += int64(len(page)) {
-					n := min(int64(len(page)), int64(perBlob)-off)
-					if _, err := w.WriteAt(page[:n], off); err != nil {
-						panic(fmt.Sprintf("goroutine %d: write at %d: %v", g, off, err))
-					}
-				}
-				if err := w.Finish(perBlob); err != nil {
-					panic(fmt.Sprintf("goroutine %d: finish: %v", g, err))
-				}
-				var r chunk.Reader
-				if withKey {
-					r = store.NewReaderWithKey(id, perBlob, cek)
-				} else {
-					r = store.NewReader(id, perBlob)
-				}
 				buf := make([]byte, 1<<20)
-				for off := 0; off < perBlob; off += len(buf) {
-					p := &chunk.Page{Data: buf[:min(len(buf), perBlob-off)]}
-					if _, err := r.ReadAt(context.Background(), p, off); err != nil {
-						panic(fmt.Sprintf("goroutine %d: read at %d: %v", g, off, err))
+				for sliceOff := int64(0); sliceOff < int64(perBlob); sliceOff += sliceSize {
+					n := min(sliceSize, int64(perBlob)-sliceOff)
+					sliceIdx := sliceOff / sliceSize
+					id := baseID + uint64(g)*1e6 + uint64(sliceIdx)
+					var w chunk.Writer
+					if withKey {
+						w = store.NewWriterWithKey(id, 0, cek)
+					} else {
+						w = store.NewWriter(id, 0)
+					}
+					for off := int64(0); off < n; off += int64(len(page)) {
+						m := min(int64(len(page)), n-off)
+						if _, err := w.WriteAt(page[:m], off); err != nil {
+							panic(fmt.Sprintf("goroutine %d: write at %d: %v", g, sliceOff+off, err))
+						}
+					}
+					if err := w.Finish(int(n)); err != nil {
+						panic(fmt.Sprintf("goroutine %d: finish: %v", g, err))
+					}
+					var r chunk.Reader
+					if withKey {
+						r = store.NewReaderWithKey(id, int(n), cek)
+					} else {
+						r = store.NewReader(id, int(n))
+					}
+					for off := 0; off < int(n); off += len(buf) {
+						p := &chunk.Page{Data: buf[:min(len(buf), int(n)-off)]}
+						if _, err := r.ReadAt(context.Background(), p, off); err != nil {
+							panic(fmt.Sprintf("goroutine %d: read at %d: %v", g, sliceOff+int64(off), err))
+						}
 					}
 				}
 			}(g)
