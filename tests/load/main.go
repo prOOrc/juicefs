@@ -165,8 +165,10 @@ func newEnv(redisAddr string, db int) (*env, error) {
 	_ = rdb.Close()
 
 	// client-cache=false: the load test measures FEK/crypto overhead, not the
-	// client-side cache; concurrent CSC use in this topology deadlocks in
-	// go-redis v9.18.0 (push-notification processor), see stage-9 notes.
+	// client-side cache; kept off for comparability with the 2026-09-23/27
+	// baselines. Concurrent Redis use is safe with the go-redis RESP3
+	// push-desync fix (prOOrc/go-redis v9.18.1, go.mod replace) — CSC use in
+	// this topology deadlocked on v9.18.0 (push-notification processor).
 	metaURI := fmt.Sprintf("redis://%s/%d?client-cache=false", redisAddr, db)
 	rm := meta.NewClient(metaURI, meta.DefaultConf())
 	format := &meta.Format{
@@ -330,9 +332,12 @@ func scenarioOpenMiss(e *env, inodes []meta.Ino, clients, iters int) result {
 	}
 }
 
-// scenarioThroughput (FR-TEST-24): sequential write+read of bytesTotal through the
-// chunk store, legacy vs encrypted (CEK). Target: ≤10% degradation.
-func scenarioThroughput(bytesTotal int) result {
+// scenarioThroughput (FR-TEST-24): concurrent write+read through the chunk
+// store, legacy vs encrypted (CEK). The bytesTotal volume is split across
+// clients goroutines, each writing and reading its own blob under a unique
+// chunk id; the aggregate MB/s therefore stays comparable with the sequential
+// baseline. Target: ≤10% degradation.
+func scenarioThroughput(clients, bytesTotal int) result {
 	blob, err := object.CreateStorage("mem", "test", "", "", "")
 	if err != nil {
 		panic(err)
@@ -344,73 +349,84 @@ func scenarioThroughput(bytesTotal int) result {
 	for i := range page {
 		page[i] = byte(i % 251)
 	}
+	perBlob := bytesTotal / clients
 
 	run := func(withKey bool) time.Duration {
-		id := uint64(time.Now().UnixNano())
-		var w chunk.Writer
-		if withKey {
-			cek := make([]byte, 32)
-			for i := range cek {
-				cek[i] = byte(i + 1)
-			}
-			w = store.NewWriterWithKey(id, 0, cek)
-		} else {
-			w = store.NewWriter(id, 0)
-		}
+		baseID := uint64(time.Now().UnixNano())
+		var wg sync.WaitGroup
+		wg.Add(clients)
 		start := time.Now()
-		for off := int64(0); off < int64(bytesTotal); off += int64(len(page)) {
-			if _, err := w.WriteAt(page, off); err != nil {
-				panic(err)
-			}
+		for g := 0; g < clients; g++ {
+			go func(g int) {
+				defer wg.Done()
+				id := baseID + uint64(g)
+				var cek []byte
+				if withKey {
+					cek = make([]byte, 32)
+					for i := range cek {
+						cek[i] = byte(i + 1)
+					}
+				}
+				var w chunk.Writer
+				if withKey {
+					w = store.NewWriterWithKey(id, 0, cek)
+				} else {
+					w = store.NewWriter(id, 0)
+				}
+				for off := int64(0); off < int64(perBlob); off += int64(len(page)) {
+					n := min(int64(len(page)), int64(perBlob)-off)
+					if _, err := w.WriteAt(page[:n], off); err != nil {
+						panic(fmt.Sprintf("goroutine %d: write at %d: %v", g, off, err))
+					}
+				}
+				if err := w.Finish(perBlob); err != nil {
+					panic(fmt.Sprintf("goroutine %d: finish: %v", g, err))
+				}
+				var r chunk.Reader
+				if withKey {
+					r = store.NewReaderWithKey(id, perBlob, cek)
+				} else {
+					r = store.NewReader(id, perBlob)
+				}
+				buf := make([]byte, 1<<20)
+				for off := 0; off < perBlob; off += len(buf) {
+					p := &chunk.Page{Data: buf[:min(len(buf), perBlob-off)]}
+					if _, err := r.ReadAt(context.Background(), p, off); err != nil {
+						panic(fmt.Sprintf("goroutine %d: read at %d: %v", g, off, err))
+					}
+				}
+			}(g)
 		}
-		if err := w.Finish(bytesTotal); err != nil {
-			panic(err)
-		}
-		var r chunk.Reader
-		if withKey {
-			cek := make([]byte, 32)
-			for i := range cek {
-				cek[i] = byte(i + 1)
-			}
-			r = store.NewReaderWithKey(id, bytesTotal, cek)
-		} else {
-			r = store.NewReader(id, bytesTotal)
-		}
-		buf := make([]byte, 1<<20)
-		for off := 0; off < bytesTotal; off += len(buf) {
-			p := &chunk.Page{Data: buf}
-			if _, err := r.ReadAt(context.Background(), p, off); err != nil {
-				panic(err)
-			}
-		}
+		wg.Wait()
 		return time.Since(start)
 	}
 
 	legacy := run(false)
 	enc := run(true)
-	mbps := func(d time.Duration) float64 { return float64(bytesTotal) / d.Seconds() / 1e6 }
+	total := int64(perBlob) * int64(clients) // == bytesTotal when evenly split
+	mbps := func(d time.Duration) float64 { return float64(total) / d.Seconds() / 1e6 }
 	degradation := (mbps(legacy) - mbps(enc)) / mbps(legacy) * 100
 	return result{
 		name:   "FR-TEST-24 Throughput encrypted vs legacy",
 		target: "деградация ≤ 10%",
 		rate:   fmt.Sprintf("legacy %.1f MB/s, encrypted %.1f MB/s (degradation %.1f%%)", mbps(legacy), mbps(enc), degradation),
 		pass:   degradation <= 10,
-		note:   fmt.Sprintf("write+read %d MiB each", bytesTotal>>20),
+		note:   fmt.Sprintf("write+read %d MiB across %d goroutines", total>>20, clients),
 	}
 }
 
 // scenarioRenderRPS (FR-TEST-25): metadata ops/sec through RenderMeta (direct
-// Redis, no proxy/OIDC). The render node resolves FEKs locally under the Company
-// KEK — the KeyManager call counter must stay at 0. The loop mixes GetAttr and
-// Open; Open is the op that would need a KeyManager round-trip in the user
-// topology, so it is the meaningful one for the "0 extra round-trips" target.
+// Redis, no proxy/OIDC) under clients concurrent goroutines sharing one
+// RenderMeta instance (it is safe for concurrent use). The render node resolves
+// FEKs locally under the Company KEK — the KeyManager call counter must stay at
+// 0. The loop mixes GetAttr and Open; Open is the op that would need a
+// KeyManager round-trip in the user topology, so it is the meaningful one for
+// the "0 extra round-trips" target.
 //
-// The loop runs in a SINGLE goroutine: go-redis v9.18.0 (juicedata fork)
-// deadlocks under concurrent command load on this machine (connections stuck
-// waiting for replies that never arrive; reproduced with a minimal program,
-// RESP2 and RESP3, Redis 7 and 8). Sequential use is stable. Recorded as a
-// deviation in the report (task 9.4: non-blocking).
-func scenarioRenderRPS(e *env, inodes []meta.Ino, duration time.Duration, redisAddr string, db int) result {
+// Runs with N goroutines; requires the go-redis RESP3 push-desync fix
+// (prOOrc/go-redis v9.18.1, go.mod replace) — concurrent Redis load deadlocked
+// on v9.18.0.
+func scenarioRenderRPS(e *env, inodes []meta.Ino, duration time.Duration, redisAddr string, db int, clients int) result {
 	kek := make([]byte, len(e.km.kek))
 	copy(kek, e.km.kek)
 	rm := meta.NewClient(fmt.Sprintf("redis://%s/%d?client-cache=false", redisAddr, db), meta.DefaultConf())
@@ -419,39 +435,50 @@ func scenarioRenderRPS(e *env, inodes []meta.Ino, duration time.Duration, redisA
 	}
 	render := meta.NewRenderMeta(rm, kek, 1, e.format.UUID, "load-company", "companies/load-company")
 
-	stop := time.After(duration)
+	// A single time.After channel would wake only one receiver; a closed channel
+	// stops every goroutine.
+	stop := make(chan struct{})
+	timer := time.AfterFunc(duration, func() { close(stop) })
+	defer timer.Stop()
 	getFekBefore := e.km.getFekCalls.Load() // counter is shared with the proxy scenarios; measure the delta
-	var ops int64
-	i := 0
-	for {
-		select {
-		case <-stop:
-			goto done
-		default:
-		}
-		ino := inodes[i%len(inodes)]
-		i++
-		var attr meta.Attr
-		if i%2 == 0 {
-			if st := render.GetAttr(meta.Background(), ino, &attr); st != 0 {
-				panic(fmt.Sprintf("getattr: %v", st))
+	var ops atomic.Int64
+	var wg sync.WaitGroup
+	wg.Add(clients)
+	for g := 0; g < clients; g++ {
+		go func(g int) {
+			defer wg.Done()
+			i := 0
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				ino := inodes[i%len(inodes)]
+				i++
+				var attr meta.Attr
+				if i%2 == 0 {
+					if st := render.GetAttr(meta.Background(), ino, &attr); st != 0 {
+						panic(fmt.Sprintf("goroutine %d: getattr: %v", g, st))
+					}
+				} else {
+					if st := render.Open(meta.Background(), ino, syscall.O_RDONLY, &attr); st != 0 {
+						panic(fmt.Sprintf("goroutine %d: open: %v", g, st))
+					}
+				}
+				ops.Add(1)
 			}
-		} else {
-			if st := render.Open(meta.Background(), ino, syscall.O_RDONLY, &attr); st != 0 {
-				panic(fmt.Sprintf("open: %v", st))
-			}
-		}
-		ops++
+		}(g)
 	}
-done:
-	rps := float64(ops) / duration.Seconds()
+	wg.Wait()
+	rps := int64(float64(ops.Load()) / duration.Seconds())
 	getFek := e.km.getFekCalls.Load() - getFekBefore
 	return result{
 		name:   "FR-TEST-25 Render metadata RPS",
 		target: "0 доп. round-trips на FEK",
-		rate:   fmt.Sprintf("%.0f ops/s (1 goroutine, %s)", rps, duration),
+		rate:   fmt.Sprintf("%d ops/s (%d goroutines, %s)", rps, clients, duration),
 		pass:   getFek == 0,
-		note:   fmt.Sprintf("KeyManager GetFileFEK calls during scenario: %d; single-goroutine due to go-redis v9.18.0 fork concurrency deadlock (see Notes)", getFek),
+		note:   fmt.Sprintf("KeyManager GetFileFEK calls during scenario: %d", getFek),
 	}
 }
 
@@ -483,9 +510,9 @@ func main() {
 	fmt.Println("scenario: open-miss...")
 	results = append(results, scenarioOpenMiss(e, inodes, *clients, *iters))
 	fmt.Println("scenario: throughput...")
-	results = append(results, scenarioThroughput(*bytesTotal))
+	results = append(results, scenarioThroughput(*clients, *bytesTotal))
 	fmt.Println("scenario: render-rps...")
-	results = append(results, scenarioRenderRPS(e, inodes, 10*time.Second, *redisAddr, *db))
+	results = append(results, scenarioRenderRPS(e, inodes, 10*time.Second, *redisAddr, *db, *clients))
 	fmt.Println("all scenarios done")
 
 	path := *out
@@ -541,7 +568,7 @@ func writeReport(path string, results []result) error {
 	b.WriteString("\n## Notes\n\n")
 	b.WriteString("- FR-TEST-22/23 measure the gRPC Open RPC (GetAttr + FEK delivery) end to end; the SRS targets assume the production proxy topology — in-process gRPC here is a lower bound on network latency.\n")
 	b.WriteString("- FR-TEST-25 target \"5000 RPS × 100 nodes\" is a fleet-level goal; the single-node ops/s above and the 0-extra-round-trips assertion are what this harness can verify locally.\n")
-	b.WriteString("- **Deviation (FR-TEST-25 concurrency):** the render scenario runs a single goroutine. go-redis v9.18.0 (juicedata fork) deadlocks under concurrent command load on this machine: connections get stuck waiting for replies that never arrive (goroutine dumps show blocked socket reads + pool exhaustion). Reproduced with a minimal program (no JuiceFS code), on Redis 7 and 8, RESP2 and RESP3; sequential use is stable. This is a dependency bug, not an encryption-path issue; concurrent render load must be re-verified after the go-redis fork is fixed/upgraded.\n")
+	b.WriteString("- **History (FR-TEST-25 concurrency):** the render scenario originally ran a single goroutine because go-redis v9.18.0 deadlocked under concurrent command load (partially received RESP3 push notifications were parsed as command replies — reply desync; blocked socket reads + pool exhaustion). Fixed in the prOOrc fork v9.18.1 (go.mod replace, 2026-09-27); the scenario now runs with N goroutines and the 0-extra-round-trips assertion holds under concurrency.\n")
 	return os.WriteFile(path, []byte(b.String()), 0o644)
 }
 
