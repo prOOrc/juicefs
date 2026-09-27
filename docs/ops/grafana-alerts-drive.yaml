@@ -1,0 +1,98 @@
+# JuiceFS agio Drive — encryption alert rules (task 10.4).
+#
+# Prometheus-format rules; importable into Grafana as file-provisioned
+# rules (prometheus rule provider) or into Alertmanager tooling.
+# Served metric names: fork client metrics have the juicefs_ prefix
+# (WrapRegistererWithPrefix in cmd/mount.go); platform KeyManager
+# metrics are served by platform-api-authz-grpc on --metrics-port 9091.
+#
+# Apply to stage (requires VPN up): hand the file to the monitoring
+# stack (Prometheus ruleProvider secret or Grafana provisioning) — see
+# docs/ops/rb-enable-company.md "Метрики и алерты" and rollout.md.
+
+groups:
+  - name: agio-drive-keymanager
+    rules:
+      - alert: KeyManagerGetFileFEKHighLatency
+        expr: histogram_quantile(0.99, sum by (le) (rate(keymanager_request_duration_seconds{operation="get_file_fek"}[5m]))) > 0.1
+        for: 10m
+        labels:
+          service: agio-drive
+          severity: warning
+        annotations:
+          summary: "KeyManager GetFileFEK p99 > 100 мс (SRS FR-PERF)"
+          runbook: docs/ops/rb-incident-redis-loss.md
+
+      - alert: KeyManagerErrorRateHigh
+        expr: |
+          sum(rate(keymanager_requests_total{result="error"}[5m]))
+            / clamp_min(sum(rate(keymanager_requests_total[5m])), 1e-9) > 0.05
+        for: 5m
+        labels:
+          service: agio-drive
+          severity: critical
+        annotations:
+          summary: "KeyManager error rate > 5% за 5m (NFR-AVAIL-1)"
+          runbook: docs/ops/rb-incident-redis-loss.md
+
+      - alert: KeyManagerUnavailable
+        expr: up{pod=~"platform-api-authz-grpc-.*"} == 0 or absent(up{pod=~"platform-api-authz-grpc-.*"})
+        for: 2m
+        labels:
+          service: agio-drive
+          severity: critical
+        annotations:
+          summary: "platform-api-authz-grpc недоступен (SLO ≥ 99.9%)"
+          runbook: docs/ops/rb-incident-redis-loss.md
+
+      - alert: KeyManagerDenyRateSpike
+        expr: sum(increase(keymanager_requests_total{result="deny"}[15m])) > 100
+        for: 0m
+        labels:
+          service: agio-drive
+          severity: warning
+        annotations:
+          summary: "Deny-rate spike: >100 отказов KeyManager за 15m"
+          runbook: docs/ops/rb-revocation.md
+
+      - alert: KeyManagerReconciliationMismatches
+        expr: keymanager_reconciliation_mismatches > 0
+        for: 0m
+        labels:
+          service: agio-drive
+          severity: warning
+        annotations:
+          summary: "Daily reconciliation Kratos↔platform нашла расхождения"
+          runbook: docs/ops/rb-enable-company.md
+
+  - name: agio-drive-fork-clients
+    rules:
+      - alert: JuiceFSStsRefreshFailures
+        expr: increase(juicefs_sts_refresh_failures[10m]) > 0
+        for: 0m
+        labels:
+          service: agio-drive
+          severity: critical
+        annotations:
+          summary: "STS refresh failures на mount-клиенте — креды истекут без обновления"
+          runbook: docs/ops/rb-revocation.md
+
+      - alert: JuiceFSOfflineEvents
+        expr: increase(juicefs_offline_events[15m]) > 0
+        for: 0m
+        labels:
+          service: agio-drive
+          severity: info
+        annotations:
+          summary: "Клиент вошёл в offline-режим (первая потеря связи с meta)"
+          runbook: docs/ops/rb-incident-redis-loss.md
+
+      - alert: JuiceFSMlockFailures
+        expr: increase(juicefs_fek_mlock_failures[1h]) > 0
+        for: 0m
+        labels:
+          service: agio-drive
+          severity: warning
+        annotations:
+          summary: "mlock ключевого материала не удался (ключ может уйти в swap)"
+          runbook: docs/ops/rb-incident-kek-compromise.md
