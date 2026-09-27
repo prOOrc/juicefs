@@ -346,6 +346,7 @@ func renderMount(c *cli.Context) error {
 	if c.Bool("sts-enabled") {
 		holder, ok := blob.(*storageHolder)
 		if !ok {
+			_ = km.Close()
 			return fmt.Errorf("sts: storage is not reloadable")
 		}
 		var provider stsCredentialsProvider
@@ -353,6 +354,7 @@ func renderMount(c *cli.Context) error {
 		case "aws":
 			roleARN := c.String("sts-role-arn")
 			if roleARN == "" {
+				_ = km.Close()
 				return fmt.Errorf("--sts-role-arn is required with --sts-enabled on AWS volumes")
 			}
 			provider = &awsAssumeRoleProvider{
@@ -372,6 +374,7 @@ func renderMount(c *cli.Context) error {
 		}
 		refresher := newSTSRefresher(provider, holder, defaultSTSTTL)
 		if err := refresher.Start(context.Background()); err != nil {
+			_ = km.Close()
 			return fmt.Errorf("sts: %w", err)
 		}
 		defer refresher.Stop()
