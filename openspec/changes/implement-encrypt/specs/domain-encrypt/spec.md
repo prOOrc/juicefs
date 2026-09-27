@@ -235,3 +235,27 @@ The Meta Proxy SHALL expose an admin-gated batch RPC `RotateFileKeysByPaths` tha
 
 - **WHEN** a batch run is interrupted after some files were rotated and is restarted with the same path list
 - **THEN** already-rotated files SHALL NOT receive a second rotation and the final state SHALL be identical to an uninterrupted run
+
+### Requirement: Data-plane short-lived S3 credentials (FR-REV-3, ADR-003)
+
+The system SHALL provide short-lived S3 credentials (TTL ≤ 60 minutes) for data-plane access on encrypted volumes, issued only by the platform KeyManager with a session policy scoped to the mounted volume's object prefix (`<volume>/*` in the shared bucket). Issuance SHALL be authenticated and audited: user mounts obtain credentials through the Meta Proxy pass-through RPC, which fills `user_id` from the authenticated OIDC session (a client-supplied identity SHALL be ignored); render-node mounts obtain credentials via the `GetNodeSTSCredentials` RPC authenticated by the node's YC IAM token. The volume and bucket SHALL be derived server-side from the company's facility configuration — clients SHALL NOT be able to name the volume or bucket. A mount with `--sts-enabled` SHALL fail fast when credential issuance fails and SHALL NOT fall back to static bucket credentials.
+
+#### Scenario: User mount receives volume-scoped credentials
+
+- **WHEN** a user with Read permission on the company root mounts with `--sts-enabled` through the Meta Proxy
+- **THEN** the returned credentials SHALL be valid only for object operations under `arn:aws:s3:::<bucket>/<volume>/*` and SHALL expire within 60 minutes
+
+#### Scenario: User without company access is denied
+
+- **WHEN** a request for STS credentials names a company on which the authenticated user has no Read permission
+- **THEN** the request SHALL be denied and no credentials SHALL be returned
+
+#### Scenario: Render node authenticates by IAM token
+
+- **WHEN** a render node calls `GetNodeSTSCredentials` with a valid YC IAM token for its company
+- **THEN** the issuance SHALL be audited with actor type `render_node` and the node identity taken from the verified token
+
+#### Scenario: Mount fails fast without credentials
+
+- **WHEN** STS credential issuance fails at mount time with `--sts-enabled`
+- **THEN** the mount SHALL NOT start and SHALL NOT fall back to the volume's static bucket credentials

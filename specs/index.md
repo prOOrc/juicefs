@@ -22,9 +22,10 @@
 
 | ID | Type | Title | Status | Path | Source | Updated |
 |---|---|---|---|---|---|---|
-| SRS-001 | SRS | Подсистема шифрования agio Drive (Per-File FEK + Per-Chunk CEK) | review (Final draft v2.3) | specs/srs/SRS-001-agio-drive-encryption.md | - | 2026-09-26 |
+| SRS-001 | SRS | Подсистема шифрования agio Drive (Per-File FEK + Per-Chunk CEK) | review (Final draft v2.4) | specs/srs/SRS-001-agio-drive-encryption.md | - | 2026-09-27 |
 | ADR-001 | ADR | Гибридный spec-driven workflow (BRD/SRS + OpenSpec) | accepted | specs/decisions/ADR-001-hybrid-spec-workflow.md | - | 2026-09-26 |
 | ADR-002 | ADR | Outbox: события по дочерним объектам при move/rename/delete директории | draft | specs/decisions/ADR-002-outbox-child-events.md | - | 2026-08-29 |
+| ADR-003 | ADR | Data-plane креденшелы: platform-issued YC STS (закрытие FR-REV-3) | accepted | specs/decisions/ADR-003-data-plane-sts.md | - | 2026-09-27 |
 
 ## Рабочие документы (вне жизненного цикла BRD/SRS/ADR)
 
@@ -37,7 +38,7 @@
 
 - **BRD для agio Drive отсутствует.** Бизнес-контекст сейчас живёт в архитектурном плане v13. До создания BRD-001 OpenSpec changes ссылаются на SRS-001 и ADR напрямую; в proposal.md отсутствие BRD объясняется явно.
 - **SRS-001 использует фактическую схему ID** `FR-*`/`NFR-*` (например, `FR-USR-1`, `NFR-SEC-1`); схема `REQ-*`/`SEC-*` в нём не используется. Схема зафиксирована как стабильная с v2.3 (см. `specs/README.md`). Ссылки в changes допускаются как по ID, так и по разделам (например, `SRS-001#§6.2`).
-- Исторические версии SRS шифрования (v1.0, v2.0, v2.1 — в `.qwen/specs/`; v2.2 — в истории git `specs/srs/`) остаются как история; актуальная — только v2.3 в `specs/srs/`.
+- Исторические версии SRS шифрования (v1.0, v2.0, v2.1 — в `.qwen/specs/`; v2.2 — в истории git `specs/srs/`) остаются как история; актуальная — только v2.4 в `specs/srs/`.
 
 ## Связь с OpenSpec
 
