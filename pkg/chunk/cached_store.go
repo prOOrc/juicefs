@@ -241,6 +241,19 @@ func (s *rSlice) readEncryptedBlock(ctx context.Context, page *Page, indx int, b
 	return n, nil
 }
 
+// encryptedBlocksRead/encryptedBlocksWritten count AGDF blocks decrypted on
+// reads and encrypted on writes (task 10.4).
+var (
+	encryptedBlocksRead = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "encrypted_blocks_read",
+		Help: "number of blocks decrypted after fetching (AGDF data format)",
+	})
+	encryptedBlocksWritten = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "encrypted_blocks_written",
+		Help: "number of blocks encrypted before uploading (AGDF data format)",
+	})
+)
+
 // decryptBlock fills out with the plaintext of one fetched block. A legacy
 // (non-AGDF) block passes through unmodified — mixed files exist only during
 // migration (stage 8). Any AGDF failure is fail-closed (NFR-SEC-11).
@@ -254,6 +267,7 @@ func (s *rSlice) decryptBlock(out *Page, data []byte, indx int) (*Page, error) {
 	if err != nil {
 		return out, fmt.Errorf("decrypt block %s: %w", s.key(indx), err)
 	}
+	encryptedBlocksRead.Inc()
 	copy(out.Data, plain)
 	return out, nil
 }
@@ -521,6 +535,7 @@ func (s *wSlice) upload(indx int) {
 				s.errors <- fmt.Errorf("encrypt block %s: %s", key, err)
 				return
 			}
+			encryptedBlocksWritten.Inc()
 			old := block
 			block = NewOffPage(len(ct))
 			copy(block.Data, ct)
@@ -1144,6 +1159,8 @@ func (store *cachedStore) regMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(store.objectDataBytes)
 	reg.MustRegister(store.stageBlockDelay)
 	reg.MustRegister(store.stageBlockErrors)
+	reg.MustRegister(encryptedBlocksRead)
+	reg.MustRegister(encryptedBlocksWritten)
 	reg.MustRegister(prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
 			Name: "blockcache_blocks",

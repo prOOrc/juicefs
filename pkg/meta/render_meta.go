@@ -24,6 +24,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Render FEK cache parameters (FR-RND-7, NFR-PERF-5). The render node unwraps
@@ -55,6 +56,14 @@ type RenderMeta struct {
 }
 
 var _ Meta = (*RenderMeta)(nil)
+
+// fekUnwrapLatency measures the duration of the local FEK unwrap under the
+// Company KEK (task 10.4).
+var fekUnwrapLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
+	Name:    "fek_unwrap_latency_seconds",
+	Help:    "duration of the local FEK unwrap under the Company KEK",
+	Buckets: prometheus.ExponentialBuckets(0.001, 10, 4), // 1ms .. 1s
+})
 
 // NewRenderMeta wraps inner with local FEK handling. kek must be the 32-byte
 // Company KEK from FetchCompanyKEK; kekVersion is the version that RPC returned
@@ -91,8 +100,10 @@ func (m *RenderMeta) cacheFek(inode Ino, fek []byte, version uint32) {
 // the caller fails closed (FR-RND-13).
 func (m *RenderMeta) resolveFEK(inode Ino, attr *Attr) (fek []byte, version uint32, err error) {
 	if e, ok := m.fekCache.Get(uint64(inode)); ok && e.version == attr.FekVersion {
+		fekCacheHits.Inc()
 		return e.fek, e.version, nil
 	}
+	fekCacheMisses.Inc() // resolved by a local unwrap, not from the cache
 	aad := FekAAD{
 		VolumeUUID:  m.volumeUUID,
 		CompanyID:   m.companyID,
@@ -100,7 +111,9 @@ func (m *RenderMeta) resolveFEK(inode Ino, attr *Attr) (fek []byte, version uint
 		Inode:       inode,
 		FekVersion:  attr.FekVersion,
 	}
+	start := time.Now()
 	fek, ver, err := UnwrapFEK(m.kek, attr.WrappedFek, aad)
+	fekUnwrapLatency.Observe(time.Since(start).Seconds())
 	if err != nil {
 		return nil, 0, err
 	}
