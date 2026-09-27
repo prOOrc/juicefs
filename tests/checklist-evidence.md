@@ -119,7 +119,7 @@ platform authz — `ok`.
 | `make test.enc.integration` зелёный. | log3: `ok pkg/meta / pkg/vfs / cmd` (compose redis:6390 + minio:9000); -v rerun meta-части — 44 PASS, 0 FAIL (log3v) | pass |
 | Нагрузочные: отчёт с p50/p99; недостижение целей зафиксировано. | `tests/load/report-2026-09-27.md` (свежий): FR-TEST-22/23/25 PASS, FR-TEST-24 **DEVIATION 39.1%** зафиксирован (не блокирует, task 9.4; перезамер на production-классе — гейт 10.7a) | pass |
 | Security: 5 сценариев pass (AC-3). | `tests/security/report.md` (свежий 2026-09-27): PASS 5/5 | pass |
-| Stage-прогон: чеклист выполнен. | Ручной прогон S1–S5 на stage-окружении с реальным platform/KMS/SpiceDB/PG/IAM — **stage: закрывается прогоном 9.6b (S1–S5)**, локально невоспроизводим | ⏳ stage |
+| Stage-прогон: чеклист выполнен. | Выполнен 2026-09-27 (S1–S5 на stage с реальным platform/KMS/SpiceDB/PG/IAM): результаты — `tests/stage-runbook.md` (разделы «Результаты», «Инвентарь P1–P6») | pass (9.6b) |
 | AC-чеклист: все 16 AC со статусом. | `tests/acceptance.md` (9459aa54): AC-1..16 со статусами; AC-5/10/12/15 имеют stage-части, закрываемые 9.6b | pass |
 
 ## Отклонения (окружение, не крипто-регрессии)
