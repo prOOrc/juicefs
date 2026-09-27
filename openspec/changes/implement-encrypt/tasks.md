@@ -2499,7 +2499,7 @@ go test -run 'TestReencrypt|TestLegacyReadable' ./cmd/ ./pkg/meta/
 > Решения 9.5: все 5 сценариев PASS (`tests/security/report.md`). S26 = `TestInsiderCrossFileFEK_Denied` (pkg/meta, DB 14: инсайдер с Read на X получает FEK X, но Open Y → EACCES, FEK Y не выдан и не закэширован); S29 = `TestRenderCrossCompany`; S27/28/30 — крипто-харнес (`tests/security/main.go`): brute-force попытки raw AES-256-GCM open с чужими ключами/AAD + проверка отсутствия plaintext-байтов в блобах; S30 проверяет разрыв всей цепочки KEK→FEK→CEK→данные.
 
 - [x] 9.6a Stage-прогон: чеклист подготовлен — предусловия P1–P6 + сценарии S1–S5 с командами и таблицей «Результаты». Файлы: `tests/stage-runbook.md`. Проверка: чеклист и таблица результатов присутствуют в документе.
-- [ ] 9.6b Stage-прогон выполнен на stage-окружении (manual): реальный platform + KMS/SpiceDB/PG, owner bypass через SpiceDB, revoke с замером времени, STS prefix-policy, render-нода с IAM; результаты записаны в таблицу «Результаты» runbook'а. Является предусловием этапа 10 (10.7); закрывает stage-зависимые части AC-5/AC-10/AC-12/AC-15. Файлы: `tests/stage-runbook.md`. Проверка: чеклист выполнен, результаты записаны.
+- [x] 9.6b Stage-прогон выполнен на stage-окружении (manual): реальный platform + KMS/SpiceDB/PG, owner bypass через SpiceDB, revoke с замером времени, STS prefix-policy, render-нода с IAM; результаты записаны в таблицу «Результаты» runbook'а. Является предусловием этапа 10 (10.7); закрывает stage-зависимые части AC-5/AC-10/AC-12/AC-15. Файлы: `tests/stage-runbook.md`. Проверка: чеклист выполнен, результаты записаны.
 
 > Решения 9.6 (реформулировка 9.6 → 9.6a/9.6b — решение 9 интервью 2026-09-26): в рамках этапа подготовлен чеклист `tests/stage-runbook.md` (предусловия P1–P6 + сценарии S1–S5 с командами и таблицей результатов). Сам прогон — manual-шаг, требующий доступа к stage-окружению (реальные KMS/SpiceDB/PG/IAM); выполняется вне данного этапа как задача 9.6b / предусловие 10.7, результаты записываются в таблицу «Результаты» runbook'а.
 
@@ -2702,7 +2702,7 @@ bash tests/security/run-all.sh
 - [x] `make test.enc.integration` зелёный.
 - [x] Нагрузочные: отчёт с p50/p99; недостижение целей зафиксировано.
 - [x] Security: 5 сценариев pass (AC-3).
-- [ ] Stage-прогон: чеклист выполнен.
+- [x] Stage-прогон: чеклист выполнен.
 - [x] AC-чеклист: все 16 AC со статусом.
 
 ## 10. Stage 10 — Production rollout (оба репозитория + инфраструктура)
