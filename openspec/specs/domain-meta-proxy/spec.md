@@ -38,13 +38,14 @@ Verified-by: pkg/oidc/interceptor_test.go::TestUnaryInterceptorValidToken
 
 ### Requirement: Authorization interceptor
 
-When `--authz-service` is set, the server SHALL install a unary authz interceptor that maps each RPC to a required permission level (None, View, Read, Write, Admin) and enforces it via the agio-platform `AuthzService` gRPC (`CheckPermission`, `CheckBulkPermissions`, `CheckOrganizationAdmin`). Rules: lifecycle and DirHandler RPCs require no check; admin operations require `CheckOrganizationAdmin`; file-level operations require `CheckPermission` on resolved paths with fail-closed semantics (unresolved path, authz error, or empty user id → deny); the user id SHALL be the OIDC token `sub` claim without any mapping. Special mappings: `Open` requires Write when flags include write access else Read; `Access` maps W_OK→Write, R_OK→Read, else View; `Rename` requires Write on both source and destination parents; `Link` requires Read on the source inode and Write on the destination parent; `CopyFileRange` requires Read on the source and Write on the destination; `Resolve` SHALL be denied for all users. An unknown RPC method SHALL be denied with `PermissionDenied`.
+When `--authz-service` is set, the server SHALL install a unary authz interceptor that maps each RPC to a required permission level (None, View, Read, Write, Admin) and enforces it via the agio-platform `AuthzService` gRPC (`CheckPermission`, `CheckBulkPermissions`, `CheckOrganizationAdmin`). Rules: lifecycle and DirHandler RPCs require no check; admin operations require `CheckOrganizationAdmin`; file-level operations require `CheckPermission` on resolved paths with fail-closed semantics (unresolved path, authz error, or empty user id → deny); the user id SHALL be the OIDC token `sub` claim without any mapping. Special mappings: `Open` requires Write when flags include write access else Read; `Access` maps W_OK→Write, R_OK→Read, else View; `Rename` requires Write on both source and destination parents; `Link` requires Read on the source inode and Write on the destination parent; `CopyFileRange` requires Read on the source and Write on the destination; `Resolve` SHALL be denied for all users; `NewSlice` (slice-id allocation, which carries no inode and writes no data) SHALL be allowed for any authenticated user without an authz call — a slice becomes user-visible data only when committed via `Write`, which is path-checked. An unknown RPC method SHALL be denied with `PermissionDenied`.
 
 Verified-by: pkg/meta/authz_interceptor_test.go::TestRequiredPermission_View
 Verified-by: pkg/meta/authz_interceptor_test.go::TestInterceptor_DeniesUnauthorizedAccess
 Verified-by: pkg/meta/authz_interceptor_test.go::TestInterceptor_RenameRequiresBothParents
 Verified-by: pkg/meta/authz_interceptor_test.go::TestInterceptor_DeniesNonAdminOnAdminOps
 Verified-by: pkg/meta/authz_interceptor_test.go::TestInterceptor_DenyOnAuthzError
+Verified-by: pkg/meta/authz_interceptor_test.go::TestInterceptor_NewSlice_Allowed
 
 #### Scenario: Authz service error fails closed
 
