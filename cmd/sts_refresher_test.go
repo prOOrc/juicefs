@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"testing"
 	"time"
 
@@ -29,6 +30,9 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/test/bufconn"
 )
 
 // fakeSTSProvider delegates to a test-controlled closure.
@@ -301,3 +305,105 @@ func (s *stubKeyManager) RotateFileFEK(ctx context.Context, req *kmpb.RotateFile
 }
 
 func (s *stubKeyManager) Close() error { return nil }
+
+// bearerCapturingKeyManager is a bufconn KeyManager server that records the
+// "authorization" metadata of GetNodeSTSCredentials (review P3: Bearer
+// metadata must survive the real transport).
+type bearerCapturingKeyManager struct {
+	kmpb.UnimplementedDriveKeyManagerServiceServer
+	resp    *kmpb.GetSTSCredentialsResponse
+	gotAuth string
+}
+
+func (m *bearerCapturingKeyManager) GetNodeSTSCredentials(ctx context.Context, req *kmpb.GetNodeSTSCredentialsRequest) (*kmpb.GetSTSCredentialsResponse, error) {
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		if vals := md.Get("authorization"); len(vals) > 0 {
+			m.gotAuth = vals[0]
+		}
+	}
+	return m.resp, nil
+}
+
+// bufconnKeyManager adapts the generated gRPC client to meta.KeyManagerClient
+// over a bufconn listener (test-only); the forwarding methods mirror
+// platformKeyManager because the generated client signatures carry variadic
+// gRPC call options.
+type bufconnKeyManager struct {
+	client kmpb.DriveKeyManagerServiceClient
+	conn   *grpc.ClientConn
+}
+
+func (b *bufconnKeyManager) CreateFileKey(ctx context.Context, req *kmpb.CreateFileKeyRequest) (*kmpb.CreateFileKeyResponse, error) {
+	return b.client.CreateFileKey(ctx, req)
+}
+
+func (b *bufconnKeyManager) GetFileFEK(ctx context.Context, req *kmpb.GetFileFEKRequest) (*kmpb.GetFileFEKResponse, error) {
+	return b.client.GetFileFEK(ctx, req)
+}
+
+func (b *bufconnKeyManager) FetchCompanyKEK(ctx context.Context, req *kmpb.FetchCompanyKEKRequest) (*kmpb.FetchCompanyKEKResponse, error) {
+	return b.client.FetchCompanyKEK(ctx, req)
+}
+
+func (b *bufconnKeyManager) ProvisionCompanyKEK(ctx context.Context, req *kmpb.ProvisionCompanyKEKRequest) (*kmpb.ProvisionCompanyKEKResponse, error) {
+	return b.client.ProvisionCompanyKEK(ctx, req)
+}
+
+func (b *bufconnKeyManager) GetPermissionGeneration(ctx context.Context, req *kmpb.GetPermissionGenerationRequest) (*kmpb.GetPermissionGenerationResponse, error) {
+	return b.client.GetPermissionGeneration(ctx, req)
+}
+
+func (b *bufconnKeyManager) GetSTSCredentials(ctx context.Context, req *kmpb.GetSTSCredentialsRequest) (*kmpb.GetSTSCredentialsResponse, error) {
+	return b.client.GetSTSCredentials(ctx, req)
+}
+
+func (b *bufconnKeyManager) GetNodeSTSCredentials(ctx context.Context, req *kmpb.GetNodeSTSCredentialsRequest) (*kmpb.GetSTSCredentialsResponse, error) {
+	return b.client.GetNodeSTSCredentials(ctx, req)
+}
+
+func (b *bufconnKeyManager) RotateFileFEK(ctx context.Context, req *kmpb.RotateFileFEKRequest) (*kmpb.RotateFileFEKResponse, error) {
+	return b.client.RotateFileFEK(ctx, req)
+}
+
+func (b *bufconnKeyManager) Close() error {
+	return b.conn.Close()
+}
+
+// TestPlatformNodeSTSProviderBearerMetadata exercises platformNodeSTSProvider
+// over a real gRPC transport (bufconn): the node IAM token must reach the
+// server as "authorization: Bearer ..." metadata, which the in-memory
+// stubKeyManager cannot observe.
+func TestPlatformNodeSTSProviderBearerMetadata(t *testing.T) {
+	srv := &bearerCapturingKeyManager{resp: &kmpb.GetSTSCredentialsResponse{
+		AccessKeyId:     "AK-B",
+		SecretAccessKey: "SK-B",
+		SessionToken:    "TOK-B",
+		ExpirationUnix:  time.Now().Add(time.Hour).Unix(),
+	}}
+	lis := bufconn.Listen(1024 * 1024)
+	defer lis.Close()
+	gs := grpc.NewServer()
+	kmpb.RegisterDriveKeyManagerServiceServer(gs, srv)
+	go func() { _ = gs.Serve(lis) }()
+	defer gs.Stop()
+
+	dialer := func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) }
+	conn, err := grpc.NewClient("passthrough:///bufnet", grpc.WithContextDialer(dialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	km := &bufconnKeyManager{client: kmpb.NewDriveKeyManagerServiceClient(conn), conn: conn}
+	defer func() { require.NoError(t, km.Close()) }()
+
+	p := &platformNodeSTSProvider{
+		keyManager: km,
+		token:      &staticTokenProvider{token: "IAM-TOKEN"},
+		nodeID:     "render-node-1",
+		companyID:  "comp-1",
+	}
+	cred, err := p.Credentials(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "AK-B", cred.AccessKey)
+	require.Equal(t, "SK-B", cred.SecretKey)
+	require.Equal(t, "TOK-B", cred.SessionToken)
+	require.True(t, cred.Expiry.After(time.Now()))
+	require.Equal(t, "Bearer IAM-TOKEN", srv.gotAuth, "the IAM token must reach the server as Bearer gRPC metadata")
+}

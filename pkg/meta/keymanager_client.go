@@ -55,6 +55,7 @@ type KeyManagerClient interface {
 // platformKeyManager wraps the generated gRPC client for DriveKeyManagerService.
 type platformKeyManager struct {
 	client kmpb.DriveKeyManagerServiceClient
+	conn   *grpc.ClientConn
 }
 
 func (c *platformKeyManager) CreateFileKey(ctx context.Context, req *kmpb.CreateFileKeyRequest) (*kmpb.CreateFileKeyResponse, error) {
@@ -91,10 +92,7 @@ func (c *platformKeyManager) RotateFileFEK(ctx context.Context, req *kmpb.Rotate
 
 // Close closes the underlying gRPC connection.
 func (c *platformKeyManager) Close() error {
-	if closer, ok := c.client.(interface{ Close() error }); ok {
-		return closer.Close()
-	}
-	return nil
+	return c.conn.Close()
 }
 
 // NewKeyManagerClient creates a gRPC client for the KeyManager service.
@@ -162,5 +160,6 @@ func newKeyManagerClient(addr, tlsCert, tlsKey, tlsCA, serverName string, minTLS
 
 	return &platformKeyManager{
 		client: kmpb.NewDriveKeyManagerServiceClient(conn),
+		conn:   conn,
 	}, nil
 }
