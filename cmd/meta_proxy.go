@@ -284,6 +284,9 @@ func cmdMetaProxy() *cli.Command {
 
 			grpcServer := gRPC.NewServer(opts...)
 			pb.RegisterMetaServiceServer(grpcServer, server)
+			// STS pass-through (task 7.12, ADR-003): same server, same OIDC/authz
+			// interceptor chain; needs --keymanager-service to forward to the platform.
+			pb.RegisterStsProxyServiceServer(grpcServer, server)
 
 			lis, err := net.Listen("tcp", addr)
 			if err != nil {

@@ -80,6 +80,10 @@ type fakeKeyManager struct {
 	denyRotate   bool
 	rotateCalls  int
 	lastRotateID string
+
+	// Stage 7.12: the user_id the last GetSTSCredentials saw (STS pass-through
+	// test: the proxy must fill it from the authenticated session).
+	lastSTSUser string
 }
 
 var _ KeyManagerClient = (*fakeKeyManager)(nil)
@@ -202,12 +206,22 @@ func (f *fakeKeyManager) GetSTSCredentials(ctx context.Context, req *kmpb.GetSTS
 	if req.CompanyId != testCompanyID {
 		return nil, status.Error(codes.NotFound, "unknown company")
 	}
+	f.mu.Lock()
+	f.lastSTSUser = req.UserId
+	f.mu.Unlock()
 	return &kmpb.GetSTSCredentialsResponse{
 		AccessKeyId:     "STS-FAKE",
 		SecretAccessKey: "fake-secret",
 		SessionToken:    "fake-token",
 		ExpirationUnix:  time.Now().Add(time.Hour).Unix(),
 	}, nil
+}
+
+func (f *fakeKeyManager) GetNodeSTSCredentials(ctx context.Context, req *kmpb.GetNodeSTSCredentialsRequest) (*kmpb.GetSTSCredentialsResponse, error) {
+	if req.CompanyId != testCompanyID {
+		return nil, status.Error(codes.NotFound, "unknown company")
+	}
+	return f.GetSTSCredentials(ctx, &kmpb.GetSTSCredentialsRequest{UserId: req.NodeId, CompanyId: req.CompanyId})
 }
 
 // RotateFileFEK simulates the platform handler (task 7.5): a fresh FEK wrapped

@@ -58,6 +58,11 @@ service DriveKeyManagerService {
   // GetSTSCredentials issues short-lived S3 credentials scoped to the company prefix.
   rpc GetSTSCredentials(GetSTSCredentialsRequest) returns (GetSTSCredentialsResponse);
 
+  // GetNodeSTSCredentials issues short-lived S3 credentials for a render node,
+  // authenticated by the node's YC IAM token (ADR-003). node_id is an audit
+  // fallback only (mirrors FetchCompanyKEKRequest.node_id).
+  rpc GetNodeSTSCredentials(GetNodeSTSCredentialsRequest) returns (GetSTSCredentialsResponse);
+
   // RotateFileFEK generates a new FEK version for an existing file. Requires an
   // organization admin (SpiceDB manage permission on the organization).
   rpc RotateFileFEK(RotateFileFEKRequest) returns (RotateFileFEKResponse);
@@ -196,6 +201,14 @@ message GetSTSCredentialsResponse {
   string secret_access_key = 2;
   string session_token = 3;
   int64 expiration_unix = 4;
+}
+
+// GetNodeSTSCredentialsRequest identifies the calling render node; the YC IAM
+// token travels in the gRPC metadata and is verified by the interceptor
+// (FetchCompanyKEK trust model), not here.
+message GetNodeSTSCredentialsRequest {
+  string company_id = 1;
+  string node_id = 2; // render node identity (audit fallback from the verified IAM token)
 }
 
 // RotateFileFEKRequest: the company is derived server-side from the path (the caller

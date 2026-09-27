@@ -42,6 +42,9 @@ type dirHandlerEntry struct {
 // MetaProxyServer implements the MetaService gRPC server
 type MetaProxyServer struct {
 	pb.UnimplementedMetaServiceServer
+	// StsProxyService pass-through (task 7.12, ADR-003) is served by the same
+	// server: GetSTSCredentials in grpc_server_sts.go.
+	pb.UnimplementedStsProxyServiceServer
 
 	meta Meta
 

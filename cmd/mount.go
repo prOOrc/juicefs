@@ -43,6 +43,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/metric"
 	"github.com/juicedata/juicefs/pkg/usage"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -715,10 +716,12 @@ func mount(c *cli.Context) error {
 		return nil
 	}
 
-	// STS credentials (task 7.4): replace the static storage credentials with
-	// short-lived ones from the platform KeyManager and refresh them every
-	// ttl/2. Fail-fast: without initial credentials the mount does not start —
-	// there is no silent fallback to static keys.
+	// STS credentials (tasks 7.4/7.12, ADR-003): replace the static storage
+	// credentials with short-lived ones obtained through the meta proxy's
+	// StsProxyService pass-through and refresh them every ttl/2. The proxy fills
+	// user_id from the authenticated OIDC session; authorization (Read on the
+	// company) happens on the platform. Fail-fast: without initial credentials
+	// the mount does not start — there is no silent fallback to static keys.
 	if c.Bool("sts-enabled") {
 		if !format.EncryptionEnabled {
 			return fmt.Errorf("--sts-enabled requires an encrypted volume")
@@ -727,28 +730,22 @@ func mount(c *cli.Context) error {
 		if companyID == "" {
 			return fmt.Errorf("--company-id is required with --sts-enabled")
 		}
-		keyManagerAddr := c.String("keymanager-service")
-		if keyManagerAddr == "" {
-			return fmt.Errorf("--keymanager-service is required with --sts-enabled")
+		if !strings.HasPrefix(addr, "grpc://") {
+			return fmt.Errorf("--sts-enabled requires a meta proxy (grpc) endpoint")
 		}
-		keyManager, err := meta.NewKeyManagerClient(keyManagerAddr,
-			c.String("keymanager-tls-cert"), c.String("keymanager-tls-key"),
-			c.String("keymanager-tls-ca"), c.String("keymanager-server-name"))
-		if err != nil {
-			return fmt.Errorf("keymanager: %w", err)
-		}
-		subjectFn := func(ctx context.Context) string { return "" }
-		if sm, ok := metaCli.(interface{ Subject(context.Context) string }); ok {
-			subjectFn = sm.Subject
+		stsProxy, ok := metaCli.(interface {
+			StsProxyClient() pb.StsProxyServiceClient
+		})
+		if !ok {
+			return fmt.Errorf("--sts-enabled requires a meta proxy (grpc) endpoint")
 		}
 		holder, ok := blob.(*storageHolder)
 		if !ok {
 			return fmt.Errorf("sts: storage is not reloadable")
 		}
 		refresher := newSTSRefresher(&platformSTSProvider{
-			keyManager: keyManager,
-			subject:    subjectFn,
-			companyID:  companyID,
+			stsProxy:  stsProxy.StsProxyClient(),
+			companyID: companyID,
 		}, holder, defaultSTSTTL)
 		if err := refresher.Start(context.Background()); err != nil {
 			return fmt.Errorf("sts: %w", err)

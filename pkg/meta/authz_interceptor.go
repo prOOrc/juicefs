@@ -256,6 +256,14 @@ func (ai *AuthzInterceptor) requiredPermission(method string) AuthzPermission {
 	case "Write", "InvalidateChunkCache", "CopyFileRange", "NewSlice":
 		return AuthzPermissionWrite
 
+		// --- View: StsProxyService.GetSTSCredentials (task 7.12, ADR-003). The
+		// STS issuance itself is authz-gated on the platform (Read on the
+		// company); the proxy only authenticates the session here. resolveChecks
+		// maps this request to an always-allowed root check (like NewSlice), so
+		// no authz service call is made.
+	case "GetSTSCredentials":
+		return AuthzPermissionView
+
 		// --- Write: modify extended attributes ---
 	case "SetXattr", "RemoveXattr", "SetFacl":
 		return AuthzPermissionWrite
@@ -410,6 +418,13 @@ func (ai *AuthzInterceptor) resolveChecks(req interface{}, method string) []Auth
 		// becomes user-visible data only when committed via Write, which is
 		// path-checked. Allow any authenticated user (identity is already
 		// UUID-validated above); nothing is leaked or written by NewSlice itself.
+		return []AuthzCheck{{Path: "/", Permission: AuthzPermissionView}}
+
+	case *pb.StsCredentialsRequest:
+		// STS issuance (task 7.12, ADR-003) is authz-gated on the platform (Read
+		// on the company); the proxy only authenticates the session — the subject
+		// was already UUID-validated above. The root/View pair below is the
+		// isAlwaysAllowed marker: no authz service call, nothing resolved.
 		return []AuthzCheck{{Path: "/", Permission: AuthzPermissionView}}
 
 	default:
