@@ -357,6 +357,8 @@ require (
 
 replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/prOOrc/minio v0.0.0-20260801180151-4220e5cff7d4
 
+replace github.com/redis/go-redis/v9 v9.18.0 => github.com/prOOrc/go-redis/v9 v9.18.1
+
 replace github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8 => github.com/juicedata/go-fuse/v2 v2.1.1-0.20260610024748-b44a81936922
 
 replace github.com/dgrijalva/jwt-go v3.2.0+incompatible => github.com/golang-jwt/jwt v3.2.1+incompatible
