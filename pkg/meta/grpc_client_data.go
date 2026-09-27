@@ -684,6 +684,7 @@ func (m *grpcMeta) ScanUserGroupUsage(ctx Context) error {
 // by the server.
 func (m *grpcMeta) InitMetrics(registerer prometheus.Registerer) {
 	initMlockMetrics(registerer)
+	initCryptoMetrics(registerer)
 }
 
 // InitSharedMetrics initializes shared metrics (not supported by gRPC client)

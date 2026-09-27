@@ -439,6 +439,7 @@ func initBackgroundTasks(c *cli.Context, vfsConf *vfs.Config, metaConf *meta.Con
 		m.InitSharedMetrics(registerer)
 	}
 	vfs.InitMetrics(registerer)
+	registerer.MustRegister(stsRefreshFailures, reencryptFilesTotal, reencryptFilesRemaining)
 	vfsConf.Port.PrometheusAgent = metricsAddr
 	if c.IsSet("consul") {
 		metadata := make(map[string]string)

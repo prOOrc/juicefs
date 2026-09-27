@@ -27,10 +27,20 @@ var mlockFailures = prometheus.NewCounter(prometheus.CounterOpts{
 	Help: "number of failed attempts to mlock key material into RAM",
 })
 
+// fekMlockFailures counts failed attempts to pin FEK/KEK key material in RAM,
+// on top of mlock_failures (task 10.4).
+var fekMlockFailures = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: "fek_mlock_failures",
+	Help: "number of failed attempts to mlock FEK/KEK key material into RAM",
+})
+
 // mlockBestEffort pins key material in RAM so it cannot be swapped to disk.
 // Failure is counted and logged, never fatal (NFR-SEC-3).
 func mlockBestEffort(kind string, key []byte) {
 	if err := utils.MlockPage(key); err != nil {
+		if kind == "FEK" || kind == "KEK" {
+			fekMlockFailures.Inc()
+		}
 		mlockFailures.Inc()
 		logger.Warnf("mlock %s (best effort): %s", kind, err)
 	}
@@ -43,4 +53,18 @@ func initMlockMetrics(reg prometheus.Registerer) {
 		return
 	}
 	_ = reg.Register(mlockFailures)
+}
+
+// initCryptoMetrics registers the encryption/offline metrics of task 10.4
+// (defined next to their increment points); double registration is ignored.
+func initCryptoMetrics(reg prometheus.Registerer) {
+	if reg == nil {
+		return
+	}
+	_ = reg.Register(fekCacheHits)
+	_ = reg.Register(fekCacheMisses)
+	_ = reg.Register(fekUnwrapLatency)
+	_ = reg.Register(offlineEvents)
+	_ = reg.Register(fekMlockFailures)
+	_ = reg.Register(compactionsSkipped)
 }

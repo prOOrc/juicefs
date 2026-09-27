@@ -30,6 +30,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/oidc"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -338,10 +339,18 @@ func (m *grpcMeta) SetOnReconnect(cb func()) {
 	m.onReconnect = cb
 }
 
+// offlineEvents counts transitions of the hub state into offline-connected
+// (the first lost contact of an outage, not every failed heartbeat; task 10.4).
+var offlineEvents = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: "offline_events",
+	Help: "number of times the hub connection was lost (client went offline-connected)",
+})
+
 // markHubOffline records a failed RPC: the first failure of an outage starts
 // the offline window (lastFail), later failures do not extend it.
 func (m *grpcMeta) markHubOffline() {
 	if atomic.CompareAndSwapInt32(&m.hubState, int32(HubOnline), int32(HubOfflineConnected)) {
+		offlineEvents.Inc()
 		m.hubMu.Lock()
 		m.lastFail = time.Now()
 		m.hubMu.Unlock()

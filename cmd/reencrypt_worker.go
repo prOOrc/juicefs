@@ -29,12 +29,26 @@ import (
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/time/rate"
 )
 
 const (
 	reencryptMaxAttempts = 5
 	reencryptCryptoAlg   = "AES-256-GCM"
+)
+
+// reencryptFilesTotal counts processed files and reencryptFilesRemaining tracks
+// discovered-but-not-finished ones (task 10.4).
+var (
+	reencryptFilesTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "reencrypt_files_total",
+		Help: "number of files processed by the reencrypt worker (migrated, skipped or failed)",
+	})
+	reencryptFilesRemaining = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "reencrypt_files_remaining",
+		Help: "number of files discovered but not yet finished by the reencrypt worker",
+	})
 )
 
 // fileCryptoSetter is implemented by metadata engines that can persist the
@@ -157,8 +171,13 @@ func (w *reencryptWorker) walk(ctx meta.Context, dir meta.Ino) error {
 }
 
 func (w *reencryptWorker) processFile(ctx meta.Context, inode meta.Ino) {
+	reencryptFilesRemaining.Inc()
 	w.sem <- struct{}{}
-	defer func() { <-w.sem }()
+	defer func() {
+		<-w.sem
+		reencryptFilesRemaining.Dec()
+		reencryptFilesTotal.Inc()
+	}()
 	if err := w.migrateFile(ctx, inode); err != nil {
 		w.mu.Lock()
 		w.errors++

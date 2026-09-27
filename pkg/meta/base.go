@@ -646,6 +646,7 @@ func (m *baseMeta) InitMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(m.opCount)
 	reg.MustRegister(m.opDuration)
 	initMlockMetrics(reg)
+	initCryptoMetrics(reg)
 }
 
 func (m *baseMeta) timeit(method string, start time.Time) {
@@ -2968,6 +2969,13 @@ func (m *baseMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 	return 0
 }
 
+// compactionsSkipped counts compactions of encrypted chunks skipped fail-closed
+// (no FEK resolver installed, or FEK resolve failed; design Addendum A3).
+var compactionsSkipped = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: "compactions_skipped",
+	Help: "number of chunk compactions skipped fail-closed (encrypted file without a resolvable FEK)",
+})
+
 func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID int) {
 	// avoid too many or duplicated compaction
 	k := uint64(inode) + (uint64(indx) << 40)
@@ -3020,12 +3028,14 @@ func (m *baseMeta) compactChunk(inode Ino, indx uint32, once, force bool, tierID
 	if hasCEK {
 		if m.fileKeyResolver == nil {
 			// D8: no FEK resolver installed — encrypted chunks are never compacted.
+			compactionsSkipped.Inc()
 			return
 		}
 		var err error
 		fek, driveFileID, fekVer, err = m.fileKeyResolver(Background(), inode)
 		if err != nil || len(fek) == 0 {
 			logger.Warnf("compaction skipped for %d:%d: FEK resolve: %v (fail-closed)", inode, indx, err)
+			compactionsSkipped.Inc()
 			return
 		}
 	}

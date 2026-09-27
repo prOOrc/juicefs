@@ -28,6 +28,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	stssdk "github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
+	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
 )
 
@@ -152,6 +153,12 @@ func awsPrefixPolicy(bucket, prefix string) string {
 // 60-minute sessions (task 7.2), so refreshing at half of that keeps a margin.
 const defaultSTSTTL = 30 * time.Minute
 
+// stsRefreshFailures counts failed STS refresh calls (task 10.4, FR-REV-3).
+var stsRefreshFailures = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: "sts_refresh_failures",
+	Help: "number of failed STS credential refresh attempts",
+})
+
 // stsRefresher keeps the storage credential set fresh: it fetches on start
 // (fail-fast — the mount must not fall back to static credentials) and then
 // refreshes every ttl/2. On a refresh failure the previous credentials stay in
@@ -225,6 +232,7 @@ func (r *stsRefresher) refresh() {
 	defer cancel()
 	cred, err := r.provider.Credentials(ctx)
 	if err != nil {
+		stsRefreshFailures.Inc()
 		logger.Warnf("STS refresh failed: %v (keeping current credentials until expiry)", err)
 		r.checkExpiry()
 		return

@@ -20,6 +20,20 @@ import (
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
+	"github.com/prometheus/client_golang/prometheus"
+)
+
+// fekCacheHits/fekCacheMisses count client FEK resolutions served from the
+// local LRU vs fetched from the server (KeyManager) on Open (task 10.4).
+var (
+	fekCacheHits = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "fek_cache_hits",
+		Help: "number of FEK resolutions served from the local LRU cache",
+	})
+	fekCacheMisses = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "fek_cache_misses",
+		Help: "number of FEK resolutions that had to fetch the key (KeyManager or local unwrap)",
+	})
 )
 
 // openOnce performs a single Open RPC with the given cached FEK version.
@@ -45,10 +59,12 @@ func (m *grpcMeta) openOnce(ctx Context, inode Ino, flags uint32, cachedFekVersi
 // response itself (cache miss), or from the local LRU (cache hit).
 func (m *grpcMeta) fekForOpen(resp *pb.OpenResponse, inode Ino, cachedVer uint32) ([]byte, uint32) {
 	if len(resp.GetFek()) > 0 {
+		fekCacheMisses.Inc() // fetched through the server (KeyManager)
 		return resp.GetFek(), uint32(resp.GetFekVersion())
 	}
 	if cachedVer != 0 && cachedVer == uint32(resp.GetFekVersion()) {
 		if e, ok := m.fekCache.Get(uint64(inode)); ok {
+			fekCacheHits.Inc()
 			return e.fek, e.version
 		}
 	}
