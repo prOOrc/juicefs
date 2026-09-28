@@ -36,7 +36,7 @@
 
 ## Что осталось до архивации change
 
-1. Живой прогон `tests/security/redis-restore-test.sh` (создаёт тест-кластер YC — требуется подтверждение; удаление кластера после теста — тоже).
+1. ~~Живой прогон redis-restore-теста~~ — выполнен 2026-09-28 (restore в кластер `drive-restore-test` c9qmno08b9u02t99e3no, чтение зашифрованного файла OK, md5 совпал; кластер оставлен running до подтверждения удаления: `yc managed-redis cluster delete c9qmno08b9u02t99e3no --async`).
 2. Пилотная компания + 72-часовое наблюдение.
 3. Обновление клиентских образов (s3-gateway/mounts) до fork HEAD с метриками `juicefs_*` — алерты fork-группы до этого в NoData.
 4. Финальный прогон AC на production-конфигурации → закрыть 10.7 → `opsx-archive`.
