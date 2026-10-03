@@ -204,7 +204,7 @@ func cmdMetaProxy() *cli.Command {
 			keepaliveTimeout := c.Duration("grpc-keepalive-timeout")
 
 			loggerProxy.Info("Starting JuiceFS metadata proxy server")
-			loggerProxy.Infof("Metadata backend URL: %s", metaBackendUrl)
+			loggerProxy.Infof("Metadata backend URL: %s", utils.RemovePassword(metaBackendUrl))
 			loggerProxy.Infof("gRPC address: %s", addr)
 
 			m := meta.NewClient(metaBackendUrl, meta.DefaultConf())
