@@ -26,6 +26,20 @@ Verified-by: cmd/meta_proxy_test.go::TestMetaProxyTLS
 - **WHEN** `--oidc-issuer` is empty
 - **THEN** no OIDC interceptor SHALL be installed and requests pass without a token; the same SHALL hold for `--authz-service` and the authz interceptor
 
+### Requirement: Credential masking in command logs
+
+Команда `juicefs meta-proxy` SHALL NOT выводить в логи пароль metadata-движка: любое лог-сообщение, содержащее `--meta-backend` URL, SHALL печатать URL с замаскированным паролем (формат `redis://:****@host:port/db`) — тем же способом, что и лог metadata-адреса в `meta.NewClient`. Маскировка SHALL применяться безусловно, на всех уровнях логирования.
+
+#### Scenario: Startup log masks the backend password
+
+- **WHEN** прокси запускается с `--meta-backend` URL, содержащим пароль
+- **THEN** строка лога с metadata backend URL содержит `:****@` и не содержит подстроку пароля
+
+#### Scenario: No unmasked backend URL log statements remain
+
+- **WHEN** выполняется поиск лог-вызовов с `metaBackendUrl` (или иным meta URL) без маскировки в `cmd/meta_proxy.go`
+- **THEN** такие вызовы отсутствуют — каждый вывод URL проходит через `utils.RemovePassword`
+
 ### Requirement: gRPC service surface
 
 The server SHALL implement the `MetaService` gRPC service (78 RPCs) covering lifecycle (Init, Load, NewSession, CloseSession, FlushSession, GetSession, ListSessions, CleanStaleSessions), core FUSE operations, data path (Read, Write, NewSlice, InvalidateChunkCache, CopyFileRange), locks (Flock, Getlk, Setlk), xattrs, POSIX ACL (SetFacl/GetFacl passthrough), format tokens, admin operations (GetFormat, Remove, Clone, Check, Compact, quota, scans, Chroot, trash cleanup), DirHandler (NewDirHandler, DirHandlerList, DirHandlerInsert, DirHandlerDelete, DirHandlerClose) and streaming backup (DumpMeta, LoadMeta, DumpMetaV2, LoadMetaV2 with 64KB chunks). The `ListLocks` RPC SHALL return `codes.Unimplemented`. `GetDirStat` SHALL return errno `ENOSYS` in every response. `NewSession` SHALL return a non-zero session id only when the wrapped metadata engine is `*redisMeta`; for other engines it SHALL log an error and return sid 0.
