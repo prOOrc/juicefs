@@ -47,7 +47,10 @@ func (m *grpcMeta) openOnce(ctx Context, inode Ino, flags uint32, cachedFekVersi
 	}
 	resp, err := m.client.Open(m.withSessionID(ctx), req)
 	if err != nil {
-		return nil, syscall.EIO
+		// Map through the shared status table (implement-grpc-tls): the FEK
+		// refusal over a plaintext connection arrives as Unauthenticated and
+		// surfaces to the caller as EACCES.
+		return nil, grpcStatusToErrno(err)
 	}
 	if resp.GetErrno() != 0 {
 		return nil, syscall.Errno(resp.GetErrno())
