@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"context"
+	"crypto/tls"
+	"fmt"
 	"net"
 	"os"
 	"os/signal"
@@ -25,6 +27,7 @@ import (
 	"time"
 
 	gRPC "google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 
 	"github.com/juicedata/juicefs/pkg/meta"
@@ -35,6 +38,30 @@ import (
 )
 
 var loggerProxy = utils.GetLogger("juicefs-proxy")
+
+// serverTLSConfig builds the listener TLS config for the --tls-cert/--tls-key
+// pair (implement-grpc-tls, NFR-SEC-8). A nil config (both flags empty) means
+// plaintext listening — the default, unchanged behavior. Exactly one flag is
+// refused at startup with an error naming the missing one.
+func serverTLSConfig(certFile, keyFile string) (*tls.Config, error) {
+	if certFile == "" && keyFile == "" {
+		return nil, nil
+	}
+	if certFile == "" {
+		return nil, fmt.Errorf("--tls-cert is missing: TLS requires both --tls-cert and --tls-key")
+	}
+	if keyFile == "" {
+		return nil, fmt.Errorf("--tls-key is missing: TLS requires both --tls-cert and --tls-key")
+	}
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("load TLS certificate pair (%s, %s): %w", certFile, keyFile, err)
+	}
+	return &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
+	}, nil
+}
 
 func cmdMetaProxy() *cli.Command {
 	return &cli.Command{
@@ -130,6 +157,15 @@ func cmdMetaProxy() *cli.Command {
 				Value:  30 * time.Second,
 				Hidden: false,
 			},
+			// TLS listener flags (implement-grpc-tls)
+			&cli.StringFlag{
+				Name:  "tls-cert",
+				Usage: "TLS server certificate PEM file (enables TLS when set together with --tls-key)",
+			},
+			&cli.StringFlag{
+				Name:  "tls-key",
+				Usage: "TLS server private key PEM file (enables TLS when set together with --tls-cert)",
+			},
 			// KeyManager flags (per-file FEK encryption)
 			&cli.StringFlag{
 				Name:   "keymanager-service",
@@ -198,6 +234,17 @@ func cmdMetaProxy() *cli.Command {
 					MinTime:             time.Second * 5,
 					PermitWithoutStream: false,
 				}),
+			}
+
+			// TLS listener (optional; without --tls-cert/--tls-key the server
+			// stays plaintext — behavior unchanged)
+			tlsCfg, err := serverTLSConfig(c.String("tls-cert"), c.String("tls-key"))
+			if err != nil {
+				loggerProxy.Fatalf("Invalid TLS configuration: %v", err)
+			}
+			if tlsCfg != nil {
+				opts = append(opts, gRPC.Creds(credentials.NewTLS(tlsCfg)))
+				loggerProxy.Infof("TLS enabled for the gRPC listener (minimum version 1.2)")
 			}
 
 			// Build interceptor chain: OIDC (authentication) → Authz (authorization)
