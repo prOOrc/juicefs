@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -72,6 +73,12 @@ func (m *TokenManager) ensureManager(ctx context.Context) (*sdk.Manager, error) 
 	return mgr, nil
 }
 
+// interactiveAuthTimeout bounds the browser login wait: mounts started
+// outside an interactive session (WinFsp service mode) must fail with a
+// clear error instead of hanging forever on the OAuth callback (design 2,
+// domain-windows-mount "SHALL NOT hang").
+const interactiveAuthTimeout = 5 * time.Minute
+
 // GetToken returns a valid token. The library handles caching, refresh, and
 // interactive authentication automatically. Blocks on browser auth if no cached
 // token exists or refresh fails.
@@ -81,7 +88,23 @@ func (m *TokenManager) GetToken(ctx context.Context) (*sdk.TokenSet, error) {
 		tmLogger.Warnf("OIDC: discovery failed: %v", err)
 		return nil, nil
 	}
-	return mgr.GetToken(ctx)
+	// The library's browser flow waits on the OAuth callback until the context
+	// is done; with context.Background() (WinFsp service mode) that means
+	// forever. Bound it unless the caller already set a deadline.
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, interactiveAuthTimeout)
+		defer cancel()
+	}
+	tok, err := mgr.GetToken(ctx)
+	if err != nil && errors.Is(err, context.DeadlineExceeded) {
+		err = fmt.Errorf("oidc: interactive authentication timed out after %s (is the session non-interactive?): %w",
+			interactiveAuthTimeout, err)
+		// BearerToken() discards the returned error, so log it to reach the mount user.
+		tmLogger.Warnf("%v", err)
+		return nil, err
+	}
+	return tok, err
 }
 
 // BearerToken returns the ID token as a "Bearer ..." string, or empty if unavailable.
