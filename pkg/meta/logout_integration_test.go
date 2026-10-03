@@ -70,8 +70,7 @@ func TestLogout_CacheUnreadable(t *testing.T) {
 	require.Equal(t, 1, env.keyMgr.getFekCalls, "a disconnected client must not call KeyManager")
 
 	// A fresh client ("remount") hits the revoked permissions: fail-closed EACCES.
-	remounted, err := newGRPCMeta("grpc", env.addr, testConfig())
-	require.NoError(t, err)
+	remounted := env.dial(t)
 	defer remounted.Shutdown()
 
 	var remountAttr Attr

@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -231,7 +232,9 @@ func newGRPCMeta(driver, addr string, conf *Config) (Meta, error) {
 	if tlsCfg != nil {
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
 	} else {
-		dialOpts = append(dialOpts, grpc.WithInsecure())
+		// plaintext as before (insecure.NewCredentials is the non-deprecated
+		// spelling of the previous WithInsecure() default)
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 	conn, err := grpc.Dial(addr, dialOpts...)
 	if err != nil {

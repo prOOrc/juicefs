@@ -95,8 +95,7 @@ func TestFekRotation(t *testing.T) {
 
 	// 6. FR-ROT-4: the old FEK no longer opens the re-wrapped CEK; the new one
 	//    (issued by KeyManager to a fresh client) does, and yields the original CEK.
-	remounted, err := newGRPCMeta("grpc", env.addr, testConfig())
-	require.NoError(t, err)
+	remounted := env.dial(t)
 	defer remounted.Shutdown()
 	var remountAttr Attr
 	require.Equal(t, syscall.Errno(0), remounted.Open(userCtx(t, ctx, user), inode, syscall.O_RDONLY, &remountAttr))
