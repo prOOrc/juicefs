@@ -25,7 +25,22 @@ import (
 	kmpb "github.com/juicedata/juicefs/pkg/meta/keymanager_pb"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/utils"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 )
+
+// connectionIsTLS reports whether the RPC arrived over a TLS connection
+// (implement-grpc-tls: fail-closed plaintext FEK delivery).
+func connectionIsTLS(ctx context.Context) bool {
+	p, ok := peer.FromContext(ctx)
+	if !ok || p.AuthInfo == nil {
+		return false
+	}
+	_, ok = p.AuthInfo.(credentials.TLSInfo)
+	return ok
+}
 
 func (s *MetaProxyServer) StatFS(ctx context.Context, req *pb.StatFSRequest) (*pb.StatFSResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
@@ -225,12 +240,19 @@ func (s *MetaProxyServer) Open(ctx context.Context, req *pb.OpenRequest) (*pb.Op
 	}
 	resp := &pb.OpenResponse{Errno: 0, Attr: AttrToProto(&attr)}
 
-	if attr.Encrypted && s.keyManager != nil {
+	if attr.Encrypted {
+		// Fail-closed FEK (implement-grpc-tls): on an encrypted volume the
+		// plaintext FEK never leaves the server over a plaintext connection,
+		// regardless of the listener mode. Volumes without volume-level
+		// encryption enabled are unaffected.
+		if s.encryptionEnabled() && !connectionIsTLS(ctx) {
+			return nil, status.Error(codes.Unauthenticated, "plaintext FEK delivery requires a TLS connection")
+		}
 		resp.Encrypted = true
 		resp.FekVersion = int32(attr.FekVersion)
 		// Client cache hit: authz was already checked by the interceptor and the
 		// client holds this FEK version, so KeyManager is not called (decision 3.1).
-		if req.CachedFekVersion != attr.FekVersion {
+		if s.keyManager != nil && req.CachedFekVersion != attr.FekVersion {
 			forWrite := req.Flags&(syscall.O_WRONLY|syscall.O_RDWR) != 0
 			path := s.inodePathCache.Get(Ino(req.Inode))
 			if path == "" {
@@ -278,6 +300,12 @@ func (s *MetaProxyServer) ResolveFileKey(ctx context.Context, req *pb.ResolveFil
 	resp.Encrypted = true
 	resp.FekVersion = int32(attr.FekVersion)
 	resp.DriveFileId = attr.DriveFileID
+	// Fail-closed FEK (implement-grpc-tls): same TLS rule as Open — the
+	// GetFileFEK-derived plaintext never leaves the server over a plaintext
+	// connection on an encrypted volume.
+	if s.encryptionEnabled() && !connectionIsTLS(ctx) {
+		return nil, status.Error(codes.Unauthenticated, "plaintext FEK delivery requires a TLS connection")
+	}
 	path := s.inodePathCache.Get(Ino(req.Inode))
 	if path == "" {
 		return &pb.ResolveFileKeyResponse{Errno: uint32(syscall.EACCES)}, nil // fail-closed
