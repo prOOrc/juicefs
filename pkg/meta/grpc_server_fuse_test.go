@@ -39,10 +39,10 @@ func TestOpenFEKPlaintextRefused(t *testing.T) {
 	ts := newFekTransportServer(t, true, false)
 
 	_, err := ts.Open(ts.userSubCtx(context.Background()), &pb.OpenRequest{
-		Inode: testFekInode, Flags: uint32(syscall.O_RDONLY),
+		Inode: testFekInode, Flags: uint32(syscall.O_RDONLY), CachedFekVersion: 1,
 	})
 	require.Equal(t, codes.Unauthenticated, status.Code(err),
-		"plaintext Open on an encrypted volume must be refused")
+		"plaintext Open on an encrypted volume must be refused, cache hits included")
 
 	// The same holds for ResolveFileKey (GetFileFEK-derived fields).
 	_, err = ts.ResolveFileKey(ts.userSubCtx(context.Background()), &pb.ResolveFileKeyRequest{

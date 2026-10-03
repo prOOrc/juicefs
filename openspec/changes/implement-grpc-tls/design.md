@@ -38,7 +38,7 @@ TLS-детекция на сервере: grpc.AuthInfoFromContext(ctx) -> crede
 | Тесты клиента | `pkg/meta/grpc_client_test.go` | парсинг параметров, выбор creds, ошибка CA-файла |
 | Тесты сервера FEK | `pkg/meta/grpc_server_fuse_test.go` (при наличии; см. Open Questions) | сценарии plaintext/TLS для `Open` |
 
-Используемые API grpc-go (все существуют в текущей версии go.mod): `credentials.NewServerTLSFromFile(cert, key)`, `credentials.NewClientTLSFromFile(ca, serverName)`, детекция TLS-канала — `peer.FromContext(ctx)` + `p.AuthInfo.(credentials.TLSInfo)` (в grpc-go v1.80 `grpc.AuthInfoFromContext` удалён; `peer.FromContext` — официальный механизм доступа к AuthInfo). Минимальная версия TLS — `tls.VersionTLS12` (NFR-SEC-8); `NewClientTLSFromFile` использует дефолтный `MinVersion` гRPC-стека (1.2+ в текущих версиях), отдельный override не вводим.
+Используемые API grpc-go (все существуют в текущей версии go.mod): `credentials.NewServerTLSFromFile(cert, key)`, `credentials.NewClientTLSFromFile(ca, serverName)`, детекция TLS-канала — `peer.FromContext(ctx)` + `p.AuthInfo.(credentials.TLSInfo)` (в grpc-go v1.80 `grpc.AuthInfoFromContext` удалён; `peer.FromContext` — официальный механизм доступа к AuthInfo). Минимальная версия TLS — `tls.VersionTLS12` (NFR-SEC-8); `NewClientTLSFromFile` использует дефолтный `MinVersion` гRPC-стека (1.2+ в текущих версиях), отдельный override не вводим. При реализации plaintext-ветка dial вместо депрекейтнутого `grpc.WithInsecure()` использует эквивалентный `grpc.WithTransportCredentials(insecure.NewCredentials())` — поведение то же, линтер чист.
 
 ## Execution Flow
 
