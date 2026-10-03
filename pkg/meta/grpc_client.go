@@ -18,8 +18,11 @@ package meta
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -34,6 +37,7 @@ import (
 	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -139,6 +143,33 @@ var _ tokenProvider = (*oidc.TokenManager)(nil)
 
 var _ Meta = (*grpcMeta)(nil)
 
+// buildClientTLSConfig builds the client TLS config for the grpcMeta query
+// parameters (implement-grpc-tls, NFR-SEC-8). A nil config (tls=1 absent)
+// means plaintext. With caFile set, the root CA pool is loaded from that file
+// (fail-fast on an unreadable file — the error names it); otherwise the system
+// pool is used. serverName overrides the server name used for verification.
+func buildClientTLSConfig(enabled bool, caFile, serverName string) (*tls.Config, error) {
+	if !enabled {
+		return nil, nil
+	}
+	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
+	if caFile != "" {
+		pem, err := os.ReadFile(caFile)
+		if err != nil {
+			return nil, fmt.Errorf("read tls-ca %q: %w", caFile, err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(pem) {
+			return nil, fmt.Errorf("tls-ca %q contains no valid certificates", caFile)
+		}
+		cfg.RootCAs = pool
+	}
+	if serverName != "" {
+		cfg.ServerName = serverName
+	}
+	return cfg, nil
+}
+
 // newGRPCMeta creates a new gRPC meta client
 func newGRPCMeta(driver, addr string, conf *Config) (Meta, error) {
 	uri := driver + "://" + addr
@@ -183,11 +214,26 @@ func newGRPCMeta(driver, addr string, conf *Config) (Meta, error) {
 		}
 	}
 
+	// TLS configuration (optional; without tls=1 the connection stays
+	// plaintext — backward compatible with existing deployments)
+	tlsEnabled := query.pop("tls") == "1"
+	tlsCfg, err := buildClientTLSConfig(tlsEnabled,
+		query.get("tls-ca", "tls_ca"), query.get("tls-server-name", "tls_server_name"))
+	if err != nil {
+		return nil, err
+	}
+
 	u.RawQuery = values.Encode()
 	addr = u.Host
 
 	// Create gRPC connection
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	var dialOpts []grpc.DialOption
+	if tlsCfg != nil {
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+	} else {
+		dialOpts = append(dialOpts, grpc.WithInsecure())
+	}
+	conn, err := grpc.Dial(addr, dialOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("grpc dial %s: %w", addr, err)
 	}

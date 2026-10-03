@@ -18,12 +18,16 @@ package meta
 
 import (
 	"context"
+	"crypto/tls"
+	"os"
+	"path/filepath"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
 
@@ -35,6 +39,89 @@ func TestGRPCMetaCreation(t *testing.T) {
 	_, err := newGRPCMeta("grpc", "localhost:9561", conf)
 	// Expected to fail if no server is running
 	t.Logf("Connection result (expected to fail without server): %v", err)
+}
+
+// writeTestCAPEM generates a self-signed CA PEM and returns its path
+// (harness helper from grpc_server_test_helpers_test.go).
+func writeTestCAPEM(t *testing.T) string {
+	t.Helper()
+	return generateSelfSignedCAPEM(t)
+}
+
+// TestBuildClientTLSConfig (task 1.2): query-parameter parsing and credential
+// choice — plaintext by default, system pool without tls-ca, CA file loading,
+// server-name override, fail-fast on an unreadable CA file.
+func TestBuildClientTLSConfig(t *testing.T) {
+	t.Run("no tls param stays plaintext", func(t *testing.T) {
+		cfg, err := buildClientTLSConfig(false, "", "")
+		require.NoError(t, err)
+		assert.Nil(t, cfg, "nil config means WithInsecure dial")
+	})
+
+	t.Run("tls=1 without tls-ca uses the system pool", func(t *testing.T) {
+		cfg, err := buildClientTLSConfig(true, "", "")
+		require.NoError(t, err)
+		require.NotNil(t, cfg)
+		assert.Nil(t, cfg.RootCAs, "system pool must be used when no tls-ca is given")
+		assert.Equal(t, uint16(tls.VersionTLS12), cfg.MinVersion)
+		assert.Empty(t, cfg.ServerName)
+	})
+
+	t.Run("tls-server-name overrides verification name", func(t *testing.T) {
+		cfg, err := buildClientTLSConfig(true, "", "proxy.example.com")
+		require.NoError(t, err)
+		require.NotNil(t, cfg)
+		assert.Equal(t, "proxy.example.com", cfg.ServerName)
+	})
+
+	t.Run("valid tls-ca loads the root pool", func(t *testing.T) {
+		caPath := writeTestCAPEM(t)
+		cfg, err := buildClientTLSConfig(true, caPath, "")
+		require.NoError(t, err)
+		require.NotNil(t, cfg)
+		assert.NotNil(t, cfg.RootCAs, "CA file must populate the root pool")
+	})
+
+	t.Run("unreadable tls-ca fails with the file path", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "nonexistent", "ca.pem")
+		cfg, err := buildClientTLSConfig(true, missing, "")
+		require.Error(t, err)
+		assert.Nil(t, cfg)
+		assert.Contains(t, err.Error(), missing, "error must mention the CA file path")
+	})
+
+	t.Run("garbage tls-ca fails", func(t *testing.T) {
+		garbage := filepath.Join(t.TempDir(), "ca.pem")
+		require.NoError(t, os.WriteFile(garbage, []byte("not a pem"), 0600))
+		_, err := buildClientTLSConfig(true, garbage, "")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), garbage)
+	})
+}
+
+// TestGRPCMetaTLSQueryParsing (task 1.2): the full meta URL path — an
+// unreadable tls-ca fails client creation (fail-fast), the snake_case aliases
+// are accepted.
+func TestGRPCMetaTLSQueryParsing(t *testing.T) {
+	t.Run("missing ca file fails client creation", func(t *testing.T) {
+		_, err := newGRPCMeta("grpc", "localhost:9561?tls=1&tls-ca=/nonexistent/ca.pem", DefaultConf())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "/nonexistent/ca.pem")
+	})
+
+	t.Run("snake_case alias for tls-ca", func(t *testing.T) {
+		_, err := newGRPCMeta("grpc", "localhost:9561?tls=1&tls_ca=/nonexistent/ca.pem", DefaultConf())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "/nonexistent/ca.pem")
+	})
+
+	t.Run("tls=0 keeps plaintext dial", func(t *testing.T) {
+		m, err := newGRPCMeta("grpc", "localhost:9561?tls=0", DefaultConf())
+		if err == nil {
+			// Dial itself is lazy; client creation must not fail on TLS.
+			m.Shutdown()
+		}
+	})
 }
 
 // TestGRPCMetaName tests that grpcMeta returns correct name
