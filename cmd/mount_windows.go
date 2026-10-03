@@ -141,6 +141,17 @@ func mountFlags() []cli.Flag {
 			Name:  "owner-override",
 			Usage: "present POSIX ownership of all files and dirs as <uid>:<gid>; pass --owner-override= to present the mount process uid:gid; accepted on Windows but ignored — WinFsp does not enforce POSIX ownership",
 		},
+		// STS credentials (ADR-003): same semantics as the Unix build — the
+		// shared handling in cmd/mount.go rejects non-encrypted volumes and
+		// non-grpc endpoints and fails fast without static-credential fallback.
+		&cli.BoolFlag{
+			Name:  "sts-enabled",
+			Usage: "use short-lived STS storage credentials via the meta proxy (encrypted volumes only, requires a grpc:// meta endpoint)",
+		},
+		&cli.StringFlag{
+			Name:  "company-id",
+			Usage: "company ID for STS credential requests (required with --sts-enabled)",
+		},
 	}
 }
 
