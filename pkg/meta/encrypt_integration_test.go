@@ -24,8 +24,10 @@ package meta
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"sync"
 	"syscall"
@@ -40,6 +42,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -286,6 +289,9 @@ func userCtx(t *testing.T, ctx Context, userUUID string) Context {
 // encryptTestEnv wires the production proxy stack in-process: redisMeta +
 // MetaProxyServer + fake KeyManager behind a gRPC server, with a grpcMeta client.
 // Mirrors cmd/meta_proxy.go wiring minus real OIDC/authz (identity via metadata).
+// Since implement-grpc-tls the default env serves TLS and the client mounts
+// with tls=1&tls-ca; newEncryptTestEnvPlaintext keeps the plaintext variant for
+// the fail-closed FEK scenarios.
 type encryptTestEnv struct {
 	rdb     *redis.Client
 	meta    *redisMeta
@@ -294,9 +300,23 @@ type encryptTestEnv struct {
 	grpcSrv *grpc.Server
 	addr    string
 	client  Meta
+
+	tlsOn   bool
+	tlsCert testTLSCert
+	caPath  string
 }
 
 func newEncryptTestEnv(t *testing.T, db int, encryptionEnabled bool) *encryptTestEnv {
+	return newEncryptTestEnvMode(t, db, encryptionEnabled, true)
+}
+
+// newEncryptTestEnvPlaintext serves the same stack over plaintext (no TLS
+// listener) — for the "plaintext FEK delivery is refused" spec scenarios.
+func newEncryptTestEnvPlaintext(t *testing.T, db int, encryptionEnabled bool) *encryptTestEnv {
+	return newEncryptTestEnvMode(t, db, encryptionEnabled, false)
+}
+
+func newEncryptTestEnvMode(t *testing.T, db int, encryptionEnabled, tlsOn bool) *encryptTestEnv {
 	t.Helper()
 	if os.Getenv("SKIP_NON_CORE") == "true" {
 		t.Skipf("skip non-core test")
@@ -321,30 +341,54 @@ func newEncryptTestEnv(t *testing.T, db int, encryptionEnabled bool) *encryptTes
 	require.NoError(t, err)
 
 	server := NewMetaProxyServer(rm, 1000)
-	env := &encryptTestEnv{rdb: rdb, meta: rm, server: server, keyMgr: newFakeKeyManager()}
+	env := &encryptTestEnv{rdb: rdb, meta: rm, server: server, keyMgr: newFakeKeyManager(), tlsOn: tlsOn}
 	server.SetKeyManager(env.keyMgr)
 	server.SetVolumeName(format.Name)
 
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	grpcSrv := grpc.NewServer(grpc.ChainUnaryInterceptor(testIdentityInterceptor()))
+
+	var srvOpts []grpc.ServerOption
+	if tlsOn {
+		env.tlsCert = generateTestTLSCert(t)
+		env.caPath = env.tlsCert.certPath
+		srvOpts = append(srvOpts, grpc.Creds(credentials.NewTLS(&tls.Config{
+			Certificates: []tls.Certificate{env.tlsCert.cert},
+			MinVersion:   tls.VersionTLS12,
+		})))
+	}
+	srvOpts = append(srvOpts, grpc.ChainUnaryInterceptor(testIdentityInterceptor()))
+	grpcSrv := grpc.NewServer(srvOpts...)
 	pb.RegisterMetaServiceServer(grpcSrv, server)
 	go func() { _ = grpcSrv.Serve(lis) }()
 
-	client, err := newGRPCMeta("grpc", lis.Addr().String(), testConfig())
-	require.NoError(t, err)
-
 	env.grpcSrv = grpcSrv
 	env.addr = lis.Addr().String()
-	env.client = client
+	env.client = env.dial(t)
 
 	t.Cleanup(func() {
-		_ = client.Shutdown()
+		_ = env.client.Shutdown()
 		grpcSrv.Stop()
 		_ = rm.Shutdown()
 		_ = rdb.Close()
 	})
 	return env
+}
+
+// dial returns a fresh grpcMeta client connected like env.client (a "remount"):
+// TLS with the generated CA when the env serves TLS, plaintext otherwise.
+func (e *encryptTestEnv) dial(t *testing.T) Meta {
+	t.Helper()
+	target := e.addr
+	if e.tlsOn {
+		q := url.Values{}
+		q.Set("tls", "1")
+		q.Set("tls-ca", e.caPath)
+		target += "?" + q.Encode()
+	}
+	m, err := newGRPCMeta("grpc", target, testConfig())
+	require.NoError(t, err)
+	return m
 }
 
 // TestEncryptedFullCycle (FR-TEST-8): create → attr carries the wrapped FEK;
@@ -397,8 +441,7 @@ func TestEncryptedFullCycle(t *testing.T) {
 	require.Equal(t, openAttr.Fek, fek)
 
 	// "Remount": a fresh client has an empty FEK cache, so the server re-issues.
-	remounted, err := newGRPCMeta("grpc", env.addr, testConfig())
-	require.NoError(t, err)
+	remounted := env.dial(t)
 	defer remounted.Shutdown()
 
 	var remountAttr Attr
@@ -406,6 +449,28 @@ func TestEncryptedFullCycle(t *testing.T) {
 	require.Equal(t, syscall.Errno(0), st)
 	require.Len(t, remountAttr.Fek, fekSize)
 	require.Equal(t, 2, env.keyMgr.getFekCalls, "fresh client must trigger a KeyManager re-issue")
+}
+
+// TestEncryptedOpenPlaintextRefused (implement-grpc-tls, spec scenario "Open on
+// encrypted volume over plaintext connection"): over the plaintext variant of
+// the stack the server refuses the FEK with Unauthenticated, and the client
+// maps it to EACCES with no key material delivered.
+func TestEncryptedOpenPlaintextRefused(t *testing.T) {
+	env := newEncryptTestEnvPlaintext(t, 15, true)
+	ctx := Background()
+	user := uuid.New().String()
+	cctx := userCtx(t, ctx, user)
+
+	var inode Ino
+	var attr Attr
+	require.Equal(t, syscall.Errno(0), env.client.Create(cctx, RootInode, "plain.exr", 0644, 022, syscall.O_CREAT|syscall.O_EXCL, &inode, &attr))
+	require.True(t, attr.Encrypted, "Create (wrapped FEK only) is not affected by the TLS rule")
+
+	var openAttr Attr
+	st := env.client.Open(cctx, inode, syscall.O_RDONLY, &openAttr)
+	require.Equal(t, syscall.EACCES, st, "Unauthenticated FEK refusal must surface as EACCES")
+	require.Nil(t, openAttr.Fek)
+	require.Zero(t, env.keyMgr.getFekCalls, "the KeyManager must not be reached on a plaintext channel")
 }
 
 // TestUserWithoutPermission_Denied (FR-TEST-9): KeyManager denies the FEK → Open
