@@ -1349,23 +1349,14 @@ func checkIfMountProcessReady(mountpoint string, timeoutSec int) bool {
 	}
 }
 
-func RunAsSystemService(name string, mountpoint string, logPath string, defaultCacheDir string, ctx *cli.Context) error {
-	// https://winfsp.dev/doc/WinFsp-Service-Architecture/
-	logger.Info("Running as Windows system service.")
-
-	addr := ctx.Args().Get(0)
+// buildServiceCmdLine reconstructs the `juicefs mount` command line for the
+// WinFsp service registry: the meta URL (including all query parameters) and
+// every explicitly set flag must survive byte-for-byte so that a service-mode
+// restart connects with the same configuration as the foreground mount.
+func buildServiceCmdLine(ctx *cli.Context, addr, defaultCacheDir string) []string {
 	var cmds []string = []string{"mount", addr, "%2"}
 
 	hasCacheDir := false
-
-	alias := ctx.String("alias")
-	if alias == "" {
-		alias = name
-	}
-
-	asNetworkDrive := !ctx.Bool("as-local-volume")
-
-	logger.Infof("Mounting juicefs as Windows system service. This may require elevated privileges. (Network drive: %v)", asNetworkDrive)
 
 	// reconstruct command line from flags
 	for _, flag := range ctx.Command.Flags {
@@ -1434,6 +1425,26 @@ func RunAsSystemService(name string, mountpoint string, logPath string, defaultC
 	if !hasCacheDir && defaultCacheDir != "" {
 		cmds = append(cmds, "--cache-dir", "\""+defaultCacheDir+"\"")
 	}
+
+	return cmds
+}
+
+func RunAsSystemService(name string, mountpoint string, logPath string, defaultCacheDir string, ctx *cli.Context) error {
+	// https://winfsp.dev/doc/WinFsp-Service-Architecture/
+	logger.Info("Running as Windows system service.")
+
+	addr := ctx.Args().Get(0)
+
+	alias := ctx.String("alias")
+	if alias == "" {
+		alias = name
+	}
+
+	asNetworkDrive := !ctx.Bool("as-local-volume")
+
+	logger.Infof("Mounting juicefs as Windows system service. This may require elevated privileges. (Network drive: %v)", asNetworkDrive)
+
+	cmds := buildServiceCmdLine(ctx, addr, defaultCacheDir)
 
 	logger.Debug("Command line for juicefs service: ", strings.Join(cmds, " "))
 
