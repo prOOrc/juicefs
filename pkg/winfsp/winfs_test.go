@@ -75,6 +75,10 @@ func mountFlags() []cli.Flag {
 			Name:  "delay-close",
 			Usage: "delay file closing duration",
 		},
+		&cli.StringFlag{
+			Name:  "owner-override",
+			Usage: "present POSIX ownership of all files and dirs as <uid>:<gid>",
+		},
 	}
 }
 
@@ -182,5 +186,20 @@ func TestBuildServiceCmdLineAppFlag(t *testing.T) {
 
 	if indexOf(cmds, "--debug=true") < 0 {
 		t.Errorf("cmds %v does not contain the app flag %q", cmds, "--debug=true")
+	}
+}
+
+func TestBuildServiceCmdLineOwnerOverride(t *testing.T) {
+	ctx := newTestContext(t, mountFlags(),
+		[]string{"-d", "--owner-override", "2000:2000", testEncodedURL, "Z:"},
+		&cli.App{}, nil)
+	cmds := buildServiceCmdLine(ctx, ctx.Args().Get(0), `C:\ProgramData\juicefs\cache`)
+
+	i := indexOf(cmds, "--owner-override")
+	if i < 0 {
+		t.Fatalf("cmds %v does not contain %q", cmds, "--owner-override")
+	}
+	if i+1 >= len(cmds) || cmds[i+1] != "\"2000:2000\"" {
+		t.Errorf("cmds %v: %q is not followed by %q", cmds, "--owner-override", "\"2000:2000\"")
 	}
 }
