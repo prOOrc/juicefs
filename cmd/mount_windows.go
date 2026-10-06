@@ -132,6 +132,10 @@ func mountFlags() []cli.Flag {
 				return nil
 			},
 		},
+		&cli.StringFlag{
+			Name:  "owner-override",
+			Usage: "present POSIX ownership of all files and dirs as <uid>:<gid>; pass --owner-override= to present the mount process uid:gid; accepted on Windows but ignored — WinFsp does not enforce POSIX ownership",
+		},
 	}
 }
 

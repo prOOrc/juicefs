@@ -142,6 +142,7 @@ type Config struct {
 	HideInternal         bool
 	RootSquash           *AnonymousAccount `json:",omitempty"`
 	AllSquash            *AnonymousAccount `json:",omitempty"`
+	OwnerOverride        *AnonymousAccount `json:",omitempty"`
 	NonDefaultPermission bool              `json:",omitempty"`
 	UMask                uint16
 
@@ -186,13 +187,13 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 	if parent == rootID || name == internalNodes[0].name { // 0 is the control file
 		n := getInternalNodeByName(name)
 		if n != nil {
-			entry = &meta.Entry{Inode: n.inode, Attr: n.attr}
+			entry = &meta.Entry{Inode: n.inode, Attr: v.applyOwnerOverride(n.attr)}
 			return
 		}
 	}
 	if IsSpecialNode(parent) && name == "." {
 		if n := getInternalNode(parent); n != nil {
-			entry = &meta.Entry{Inode: n.inode, Attr: n.attr}
+			entry = &meta.Entry{Inode: n.inode, Attr: v.applyOwnerOverride(n.attr)}
 			return
 		}
 	}
@@ -205,7 +206,7 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 	}
 	err = v.Meta.Lookup(ctx, parent, name, &inode, attr, true)
 	if err == 0 {
-		entry = &meta.Entry{Inode: inode, Attr: attr}
+		entry = &meta.Entry{Inode: inode, Attr: v.applyOwnerOverride(attr)}
 	}
 	return
 }
@@ -213,16 +214,38 @@ func (v *VFS) Lookup(ctx Context, parent Ino, name string) (entry *meta.Entry, e
 func (v *VFS) GetAttr(ctx Context, ino Ino, opened uint8) (entry *meta.Entry, err syscall.Errno) {
 	if IsSpecialNode(ino) && getInternalNode(ino) != nil {
 		n := getInternalNode(ino)
-		entry = &meta.Entry{Inode: n.inode, Attr: n.attr}
+		entry = &meta.Entry{Inode: n.inode, Attr: v.applyOwnerOverride(n.attr)}
 		return
 	}
 	defer func() { logit(ctx, "getattr", err, "(%d):%s", ino, (*Entry)(entry)) }()
 	var attr = &Attr{}
 	err = v.Meta.GetAttr(ctx, ino, attr)
 	if err == 0 {
-		entry = &meta.Entry{Inode: ino, Attr: attr}
+		entry = &meta.Entry{Inode: ino, Attr: v.applyOwnerOverride(attr)}
 	}
 	return
+}
+
+// applyOwnerOverride presents the attr as owned by Config.OwnerOverride
+// (uid:gid) without touching stored metadata. When the flag is set, a
+// shallow copy is returned: some attrs (internal nodes) are shared between
+// requests and must stay untouched.
+func (v *VFS) applyOwnerOverride(attr *Attr) *Attr {
+	acc := v.Conf.OwnerOverride
+	if acc == nil || attr == nil {
+		return attr
+	}
+	presented := *attr
+	presented.Uid = acc.Uid
+	presented.Gid = acc.Gid
+	return &presented
+}
+
+// ApplyOwnerOverride is an exported wrapper around applyOwnerOverride for
+// bridges outside this package (pkg/fuse re-applies it after refreshing a
+// stale attr from meta).
+func (v *VFS) ApplyOwnerOverride(attr *Attr) *Attr {
+	return v.applyOwnerOverride(attr)
 }
 
 func get_filetype(mode uint16) uint8 {
@@ -482,6 +505,11 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 		return
 	}
 	readAt = h.readAt
+	if v.Conf.OwnerOverride != nil {
+		for _, e := range entries {
+			e.Attr = v.applyOwnerOverride(e.Attr)
+		}
+	}
 	logger.Debugf("readdir: [%d:%d] %d entries, offset=%d", ino, fh, len(entries), off)
 	return
 }

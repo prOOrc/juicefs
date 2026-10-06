@@ -60,7 +60,7 @@ func (fs *fileSystem) replyAttr(ctx *fuseContext, entry *meta.Entry, attr *fuse.
 		var attr meta.Attr
 		st := fs.v.Meta.GetAttr(ctx, entry.Inode, &attr)
 		if st == 0 {
-			*entry.Attr = attr
+			entry.Attr = fs.v.ApplyOwnerOverride(&attr)
 			set(fs.conf.AttrTimeout)
 		}
 	} else {
@@ -407,6 +407,7 @@ func (fs *fileSystem) ReadDirPlus(cancel <-chan struct{}, in *fuse.ReadIn, out *
 			break
 		}
 		if e.Attr.Full {
+			// Attr was ownership-overridden at the source (vfs.Readdir).
 			fs.replyEntry(ctx, eo, e)
 		} else {
 			eo.Ino = uint64(e.Inode)

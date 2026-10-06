@@ -430,6 +430,10 @@ func fuseFlags() []cli.Flag {
 			Name:  "all-squash",
 			Usage: "mapping all users to another one specified as <uid>:<gid>",
 		},
+		&cli.StringFlag{
+			Name:  "owner-override",
+			Usage: "present ownership of all files and dirs as <uid>:<gid>; pass --owner-override= (empty value) to present the mount process uid:gid",
+		},
 		&cli.BoolFlag{
 			Name:  "prefix-internal",
 			Usage: "add '.jfs' prefix to all internal files",
@@ -1171,6 +1175,11 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 			conf.RootSquash = &vfs.AnonymousAccount{Uid: uid, Gid: gid}
 			logger.Infof("Map root uid/gid 0 to %d/%d by setting root-squash", uid, gid)
 		}
+	}
+	if c.IsSet("owner-override") {
+		uid, gid := parseUIDGID(c.String("owner-override"), uint32(os.Getuid()), uint32(os.Getgid()))
+		conf.OwnerOverride = &vfs.AnonymousAccount{Uid: uid, Gid: gid}
+		logger.Infof("Map presented ownership to %d/%d by setting owner-override", uid, gid)
 	}
 	logger.Infof("Mounting volume %s at %q ...", conf.Format.Name, conf.Meta.MountPoint)
 	err := fuse.Serve(v, c.String("o"), c.Bool("enable-xattr"), c.Bool("enable-ioctl"))
