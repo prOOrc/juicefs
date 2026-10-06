@@ -55,6 +55,11 @@ type MetaProxyServer struct {
 
 	// Authorization (optional)
 	authzInterceptor *AuthzInterceptor
+	// authzMode: the authz interceptor is the only access gate — engine-level
+	// POSIX permission checks are skipped (see metaCtx). The client-carried
+	// POSIX uid is untrusted input, so enforcing stored ownership against it
+	// provides no security and only produces false denials.
+	authzMode       bool
 	inodePathCache   *InodePathCache
 
 	// Encryption (optional): KeyManager client for per-file FEKs and the volume
@@ -89,6 +94,15 @@ func NewMetaProxyServer(m Meta, cacheMaxSize int) *MetaProxyServer {
 // Called during server setup in cmd/meta_proxy.go (before gRPC Serve).
 func (s *MetaProxyServer) SetAuthzInterceptor(ai *AuthzInterceptor) {
 	s.authzInterceptor = ai
+}
+
+// SetAuthzMode enables authz-first access control: engine-level POSIX
+// permission checks are skipped (metaCtx builds contexts with
+// CheckPermission()==false) because the authz interceptor is the only access
+// gate. Called during server setup in cmd/meta_proxy.go when --authz-service
+// is configured.
+func (s *MetaProxyServer) SetAuthzMode(enabled bool) {
+	s.authzMode = enabled
 }
 
 // SetKeyManager configures the KeyManager client for per-file FEK encryption.
@@ -135,11 +149,17 @@ func (s *MetaProxyServer) ResolveHandle(handle uint64) (Ino, bool) {
 // helper to convert Context from proto
 func (s *MetaProxyServer) metaCtx(ctx context.Context, ctx2 *pb.MetaContext) Context {
 	if ctx2 == nil || (ctx2.Uid == 0 && ctx2.Gid == 0 && len(ctx2.Gids) == 0 && ctx2.Pid == 0) {
+		if s.authzMode {
+			return WrapWithCancelSkipPermCheck(ctx, 0, 0, []uint32{0})
+		}
 		return Background()
 	}
 	gids := ctx2.Gids
 	if len(gids) == 0 {
 		gids = []uint32{ctx2.Gid}
+	}
+	if s.authzMode {
+		return WrapWithCancelSkipPermCheck(ctx, ctx2.Pid, ctx2.Uid, gids)
 	}
 	return WrapWithCancel(ctx, ctx2.Pid, ctx2.Uid, gids)
 }
