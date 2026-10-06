@@ -294,6 +294,8 @@ func cmdMetaProxy() *cli.Command {
 
 				interceptor := meta.NewAuthzInterceptor(authzClient, server.InodePathCache(), server)
 				server.SetAuthzInterceptor(interceptor)
+				server.SetAuthzMode(true)
+				loggerProxy.Info("authz mode: engine-level POSIX access checks disabled (authz interceptor is the only access gate)")
 				unaryInterceptors = append(unaryInterceptors, interceptor.UnaryInterceptor())
 
 				loggerProxy.Warnf("Streaming DumpMeta/LoadMeta disabled (not covered by authz)")

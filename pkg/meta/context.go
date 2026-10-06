@@ -41,10 +41,11 @@ func Background() Context {
 
 type wrapContext struct {
 	context.Context
-	cancel func()
-	pid    uint32
-	uid    uint32
-	gids   []uint32
+	cancel     func()
+	pid        uint32
+	uid        uint32
+	gids       []uint32
+	checkPerm  bool
 }
 
 func (c *wrapContext) Uid() uint32 {
@@ -80,7 +81,7 @@ func (c *wrapContext) WithValue(k, v interface{}) Context {
 }
 
 func (c *wrapContext) CheckPermission() bool {
-	return true
+	return c.checkPerm
 }
 
 func NewContext(pid, uid uint32, gids []uint32) Context {
@@ -93,16 +94,29 @@ func WrapContext(ctx context.Context) Context {
 
 func WrapWithCancel(ctx context.Context, pid, uid uint32, gids []uint32) Context {
 	c, cancel := context.WithCancel(ctx)
-	return &wrapContext{c, cancel, pid, uid, gids}
+	return &wrapContext{c, cancel, pid, uid, gids, true}
+}
+
+// WrapWithCancelSkipPermCheck builds the same context as WrapWithCancel, but
+// with engine-level POSIX permission checks disabled. The meta proxy in authz
+// mode uses it: the authz interceptor is the only access gate there, and the
+// client-carried POSIX uid must not trigger stored-ownership checks.
+func WrapWithCancelSkipPermCheck(ctx context.Context, pid, uid uint32, gids []uint32) Context {
+	c, cancel := context.WithCancel(ctx)
+	return &wrapContext{c, cancel, pid, uid, gids, false}
 }
 
 func WrapWithTimeout(ctx Context, timeout time.Duration) Context {
 	c, cancel := context.WithTimeout(ctx, timeout)
-	return &wrapContext{c, cancel, ctx.Pid(), ctx.Uid(), ctx.Gids()}
+	checkPerm := true
+	if wc, ok := ctx.(*wrapContext); ok {
+		checkPerm = wc.checkPerm
+	}
+	return &wrapContext{c, cancel, ctx.Pid(), ctx.Uid(), ctx.Gids(), checkPerm}
 }
 
 func WrapWithoutCancel(ctx context.Context, pid, uid uint32, gids []uint32) Context {
-	return &wrapContext{ctx, nil, pid, uid, gids}
+	return &wrapContext{ctx, nil, pid, uid, gids, true}
 }
 
 func containsGid(ctx Context, gid uint32) bool {
