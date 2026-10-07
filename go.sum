@@ -736,6 +736,8 @@ github.com/prOOrc/go-redis/v9 v9.18.1 h1:gZBwZmMsVGT41b3p/LKx05+u/QMwJM03zJtRnZZ
 github.com/prOOrc/go-redis/v9 v9.18.1/go.mod h1:k3ufPphLU5YXwNTUcCRXGxUoF1fqxnhFQmscfkCoDA0=
 github.com/prOOrc/minio v0.0.0-20260801180151-4220e5cff7d4 h1:eIsVkiczsJhUHAQMUzO39gC7vWQPKq70LPhE4D0NuDc=
 github.com/prOOrc/minio v0.0.0-20260801180151-4220e5cff7d4/go.mod h1:1/4WHQKDOsWA1dd3ADrq9IE/jtFec9MHLy656kIXjNg=
+github.com/prOOrc/minio v0.0.0-20261007204724-76dfd376e994 h1:RtTyDPCArTgFmZkJUpO+284M3pEwHMXFZK0OXHKX4Kg=
+github.com/prOOrc/minio v0.0.0-20261007204724-76dfd376e994/go.mod h1:1/4WHQKDOsWA1dd3ADrq9IE/jtFec9MHLy656kIXjNg=
 github.com/prOOrc/oidc-login v0.0.0-20260804072428-dd6d8e9d3c41 h1:is4FQAPr3p6tWomKo9NxnDcjwRf2EngNr5ICEZd18Gs=
 github.com/prOOrc/oidc-login v0.0.0-20260804072428-dd6d8e9d3c41/go.mod h1:AsebKYWD8rE1b09/teeT1J48c7/6thvgk0WWkyiGaaw=
 github.com/prashantv/gostub v1.1.0 h1:BTyx3RfQjRHnUWaGF9oQos79AlQ5k8WNktv7VGvVH4g=
