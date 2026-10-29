@@ -69,10 +69,14 @@ func (s *compactEncStore) NewWriterWithKey(id uint64, tierID uint8, key []byte) 
 	return &compactEncWriter{store: s, id: id}
 }
 
-func (s *compactEncStore) Remove(id uint64, length int) error            { return nil }
-func (s *compactEncStore) FillCache(id uint64, length uint32) error      { return nil }
-func (s *compactEncStore) EvictCache(id uint64, length uint32) error     { return nil }
-func (s *compactEncStore) CheckCache(id uint64, length uint32, handler func(bool, string, int)) error {
+func (s *compactEncStore) Remove(id uint64, length int) error { return nil }
+func (s *compactEncStore) FillCache(id uint64, size uint32, parts []chunk.Range) error {
+	return nil
+}
+func (s *compactEncStore) EvictCache(id uint64, size uint32, parts []chunk.Range) error {
+	return nil
+}
+func (s *compactEncStore) CheckCache(id uint64, size uint32, parts []chunk.Range, handler func(bool, string, int)) error {
 	return nil
 }
 func (s *compactEncStore) UsedMemory() int64                  { return 0 }

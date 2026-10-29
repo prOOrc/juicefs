@@ -41,11 +41,11 @@ func Background() Context {
 
 type wrapContext struct {
 	context.Context
-	cancel     func()
-	pid        uint32
-	uid        uint32
-	gids       []uint32
-	checkPerm  bool
+	cancel    func()
+	pid       uint32
+	uid       uint32
+	gids      []uint32
+	checkPerm bool
 }
 
 func (c *wrapContext) Uid() uint32 {

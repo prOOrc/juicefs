@@ -436,7 +436,9 @@ func (m *grpcMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursiv
 }
 
 // GetTreeSummary gets tree summary
-func (m *grpcMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool, updateProgress func(count uint64, bytes uint64)) syscall.Errno {
+func (m *grpcMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN uint8, strict bool, sortBy TreeSort, updateProgress func(count uint64, bytes uint64)) syscall.Errno {
+	// sortBy is not plumbed through the proxy protocol yet; the server keeps
+	// the historical SortBySize ordering.
 	c := m.grpcContext(ctx)
 	req := &pb.GetTreeSummaryRequest{
 		Ctx:    c,
@@ -692,42 +694,54 @@ func (m *grpcMeta) InitSharedMetrics(registerer prometheus.Registerer) {
 	// Metrics are handled by the server
 }
 
-// ListSlices lists slices
-func (m *grpcMeta) ListSlices(ctx Context, slices map[Ino][]Slice, scanPending, delete bool, showProgress func()) syscall.Errno {
-	c := m.grpcContext(ctx)
-	protoEntries := make([]*pb.SliceMapEntry, 0, len(slices))
-	for ino, sls := range slices {
-		protoSlices := make([]*pb.ProtoSlice, 0, len(sls))
-		for _, s := range sls {
-			protoSlices = append(protoSlices, &pb.ProtoSlice{
-				Id:   s.Id,
-				Size: s.Size,
-				Off:  s.Off,
-				Len:  s.Len,
-			})
-		}
-		protoEntries = append(protoEntries, &pb.SliceMapEntry{
-			Inode:  uint64(ino),
-			Slices: protoSlices,
-		})
-	}
-	req := &pb.ListSlicesRequest{
-		Ctx:         c,
-		Slices:      protoEntries,
-		ScanPending: scanPending,
-		Delete:      delete,
-	}
-	resp, err := m.client.ListSlices(m.withSessionID(ctx), req)
+// CleanupSlices performs metadata cleanup and schedules slice deletion tasks
+// (successor of the removed ListSlices, upstream gc rework).
+func (m *grpcMeta) CleanupSlices(ctx Context) syscall.Errno {
+	req := &pb.CleanupSlicesRequest{Ctx: m.grpcContext(ctx)}
+	resp, err := m.client.CleanupSlices(m.withSessionID(ctx), req)
 	if err != nil {
 		return syscall.EIO
 	}
-	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+	return syscall.Errno(resp.GetErrno())
+}
+
+// WaitDeleteSlices waits for background slice-deletion tasks (handled by the server).
+func (m *grpcMeta) WaitDeleteSlices() {
+}
+
+// ScanSlices scans all slices used by all files, calling fn for each slice.
+func (m *grpcMeta) ScanSlices(ctx Context, opt *ScanSlicesOption, fn func(Ino, Slice) error) syscall.Errno {
+	stream, err := m.client.ScanSlices(m.withSessionID(ctx), &pb.ScanSlicesRequest{
+		Ctx:         m.grpcContext(ctx),
+		ScanPending: opt.ScanPending,
+	})
+	if err != nil {
+		return syscall.EIO
 	}
-	if showProgress != nil {
-		showProgress()
+	for {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			return 0
+		}
+		if err != nil {
+			return syscall.EIO
+		}
+		if resp.GetErrno() != 0 {
+			return syscall.Errno(resp.GetErrno())
+		}
+		for _, e := range resp.GetEntries() {
+			ps := e.GetSlice()
+			if ps == nil {
+				continue
+			}
+			if err := fn(Ino(e.GetInode()), Slice{Id: ps.GetId(), Size: ps.GetSize(), Off: ps.GetOff(), Len: ps.GetLen()}); err != nil {
+				return errno(err)
+			}
+			if opt.Progress != nil {
+				opt.Progress()
+			}
+		}
 	}
-	return 0
 }
 
 // LoadMetaV2 loads metadata v2 (not supported by gRPC client)
@@ -765,7 +779,7 @@ func (m *grpcMeta) OnMsg(mtype uint32, cb MsgCallback) {
 }
 
 // OnReload registers a callback for format changes (not supported by gRPC client)
-func (m *grpcMeta) OnReload(cb func(new *Format)) {
+func (m *grpcMeta) OnReload(cb func(new *Format) error) {
 	// Format changes are handled by the server
 }
 

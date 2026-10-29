@@ -3597,7 +3597,7 @@ func testCheckAndRepair(t *testing.T, m Meta) {
 		t.Fatalf("d4Inode nlink should be %d, but got %d", before.Nlink+5, after.Nlink)
 	}
 	after.Nlink = before.Nlink
-	if after != before {
+	if !reflect.DeepEqual(after, before) {
 		t.Fatalf("d4Inode attr should not be changed: %+v -> %+v", before, after)
 	}
 }
@@ -4450,7 +4450,7 @@ func testBatchClone(t *testing.T, m Meta) {
 
 	count = 0
 	var total uint64
-	if st := m.Clone(ctx, RootInode, srcDir, quotaDst, "c", 0, 022, CLONE_DEFAULT_CONCURRENCY, &count, &total); st != 0 {
+	if st := m.Clone(ctx, RootInode, srcDir, quotaDst, "c", 0, 022, CLONE_DEFAULT_CONCURRENCY, &count, &total, nil); st != 0 {
 		t.Fatalf("clone: %s", st)
 	}
 	var cloned Ino
@@ -4585,7 +4585,7 @@ func testClone(t *testing.T, m Meta) {
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				var count, total uint64
-				if st := m.Clone(Background(), tc.parent, tc.inode, dir, tc.name, 0, 022, 4, &count, &total); st != 0 {
+				if st := m.Clone(Background(), tc.parent, tc.inode, dir, tc.name, 0, 022, 4, &count, &total, nil); st != 0 {
 					t.Fatalf("clone: %s", st)
 				}
 				if err := waitCheckResult(m, dirStat{tc.length, tc.space, 1}, func() (*dirStat, syscall.Errno) {

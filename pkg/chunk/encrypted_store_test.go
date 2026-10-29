@@ -89,7 +89,14 @@ func TestEncryptedStore_CiphertextInS3AndCache(t *testing.T) {
 	defer store.Remove(id, len(data))
 
 	// Object storage must contain AGDF ciphertext only (NFR-SEC-1).
-	keys := sliceForRead(id, len(data), store.(*cachedStore)).keys()
+	rs := sliceForRead(id, len(data), store.(*cachedStore))
+	var keys []string
+	if rs.length > 0 {
+		lastIndx := (rs.length - 1) / rs.store.conf.BlockSize
+		for i := 0; i <= lastIndx; i++ {
+			keys = append(keys, rs.key(i))
+		}
+	}
 	if len(keys) != 3 {
 		t.Fatalf("blocks = %d, want 3", len(keys))
 	}
@@ -185,11 +192,15 @@ func TestLegacyStore_Unchanged(t *testing.T) {
 	}
 	defer store.Remove(id, len(data))
 
-	keys := sliceForRead(id, len(data), store.(*cachedStore)).keys()
-	for _, key := range keys {
-		raw := getRawObject(t, mem, key)
-		if !IsLegacyBlock(raw) {
-			t.Fatalf("legacy object %s must not carry the AGDF magic", key)
+	rs := sliceForRead(id, len(data), store.(*cachedStore))
+	if rs.length > 0 {
+		lastIndx := (rs.length - 1) / rs.store.conf.BlockSize
+		for i := 0; i <= lastIndx; i++ {
+			key := rs.key(i)
+			raw := getRawObject(t, mem, key)
+			if !IsLegacyBlock(raw) {
+				t.Fatalf("legacy object %s must not carry the AGDF magic", key)
+			}
 		}
 	}
 

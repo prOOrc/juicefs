@@ -206,7 +206,7 @@ func TestDumpLoad_Encrypted(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, envA.rdb.Set(ctx, envA.meta.setting(), fmtJSON, 0).Err())
 	envA.meta.Lock()
-	envA.meta.fmt = &fmtA
+	envA.meta.fmt.Store(&fmtA)
 	envA.meta.Unlock()
 
 	// Create an encrypted file through the proxy client: the attr carries the

@@ -1340,6 +1340,250 @@ func (x *ListSlicesResponse) GetSlices() []*SliceMapEntry {
 	return nil
 }
 
+type CleanupSlicesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CleanupSlicesRequest) Reset() {
+	*x = CleanupSlicesRequest{}
+	mi := &file_meta_admin_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CleanupSlicesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CleanupSlicesRequest) ProtoMessage() {}
+
+func (x *CleanupSlicesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_meta_admin_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CleanupSlicesRequest.ProtoReflect.Descriptor instead.
+func (*CleanupSlicesRequest) Descriptor() ([]byte, []int) {
+	return file_meta_admin_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *CleanupSlicesRequest) GetCtx() *MetaContext {
+	if x != nil {
+		return x.Ctx
+	}
+	return nil
+}
+
+type CleanupSlicesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CleanupSlicesResponse) Reset() {
+	*x = CleanupSlicesResponse{}
+	mi := &file_meta_admin_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CleanupSlicesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CleanupSlicesResponse) ProtoMessage() {}
+
+func (x *CleanupSlicesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_meta_admin_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CleanupSlicesResponse.ProtoReflect.Descriptor instead.
+func (*CleanupSlicesResponse) Descriptor() ([]byte, []int) {
+	return file_meta_admin_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *CleanupSlicesResponse) GetErrno() uint32 {
+	if x != nil {
+		return x.Errno
+	}
+	return 0
+}
+
+type ScanSlicesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
+	ScanPending   bool                   `protobuf:"varint,2,opt,name=scan_pending,json=scanPending,proto3" json:"scan_pending,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ScanSlicesRequest) Reset() {
+	*x = ScanSlicesRequest{}
+	mi := &file_meta_admin_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ScanSlicesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ScanSlicesRequest) ProtoMessage() {}
+
+func (x *ScanSlicesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_meta_admin_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ScanSlicesRequest.ProtoReflect.Descriptor instead.
+func (*ScanSlicesRequest) Descriptor() ([]byte, []int) {
+	return file_meta_admin_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *ScanSlicesRequest) GetCtx() *MetaContext {
+	if x != nil {
+		return x.Ctx
+	}
+	return nil
+}
+
+func (x *ScanSlicesRequest) GetScanPending() bool {
+	if x != nil {
+		return x.ScanPending
+	}
+	return false
+}
+
+type ScanSlicesEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Inode         uint64                 `protobuf:"varint,1,opt,name=inode,proto3" json:"inode,omitempty"`
+	Slice         *ProtoSlice            `protobuf:"bytes,2,opt,name=slice,proto3" json:"slice,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ScanSlicesEntry) Reset() {
+	*x = ScanSlicesEntry{}
+	mi := &file_meta_admin_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ScanSlicesEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ScanSlicesEntry) ProtoMessage() {}
+
+func (x *ScanSlicesEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_meta_admin_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ScanSlicesEntry.ProtoReflect.Descriptor instead.
+func (*ScanSlicesEntry) Descriptor() ([]byte, []int) {
+	return file_meta_admin_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *ScanSlicesEntry) GetInode() uint64 {
+	if x != nil {
+		return x.Inode
+	}
+	return 0
+}
+
+func (x *ScanSlicesEntry) GetSlice() *ProtoSlice {
+	if x != nil {
+		return x.Slice
+	}
+	return nil
+}
+
+type ScanSlicesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Errno         uint32                 `protobuf:"varint,1,opt,name=errno,proto3" json:"errno,omitempty"`
+	Entries       []*ScanSlicesEntry     `protobuf:"bytes,2,rep,name=entries,proto3" json:"entries,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ScanSlicesResponse) Reset() {
+	*x = ScanSlicesResponse{}
+	mi := &file_meta_admin_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ScanSlicesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ScanSlicesResponse) ProtoMessage() {}
+
+func (x *ScanSlicesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_meta_admin_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ScanSlicesResponse.ProtoReflect.Descriptor instead.
+func (*ScanSlicesResponse) Descriptor() ([]byte, []int) {
+	return file_meta_admin_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *ScanSlicesResponse) GetErrno() uint32 {
+	if x != nil {
+		return x.Errno
+	}
+	return 0
+}
+
+func (x *ScanSlicesResponse) GetEntries() []*ScanSlicesEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
 type HandleQuotaRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ctx           *MetaContext           `protobuf:"bytes,1,opt,name=ctx,proto3" json:"ctx,omitempty"`
@@ -1356,7 +1600,7 @@ type HandleQuotaRequest struct {
 
 func (x *HandleQuotaRequest) Reset() {
 	*x = HandleQuotaRequest{}
-	mi := &file_meta_admin_proto_msgTypes[22]
+	mi := &file_meta_admin_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1368,7 +1612,7 @@ func (x *HandleQuotaRequest) String() string {
 func (*HandleQuotaRequest) ProtoMessage() {}
 
 func (x *HandleQuotaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_admin_proto_msgTypes[22]
+	mi := &file_meta_admin_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1381,7 +1625,7 @@ func (x *HandleQuotaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HandleQuotaRequest.ProtoReflect.Descriptor instead.
 func (*HandleQuotaRequest) Descriptor() ([]byte, []int) {
-	return file_meta_admin_proto_rawDescGZIP(), []int{22}
+	return file_meta_admin_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *HandleQuotaRequest) GetCtx() *MetaContext {
@@ -1449,7 +1693,7 @@ type HandleQuotaResponse struct {
 
 func (x *HandleQuotaResponse) Reset() {
 	*x = HandleQuotaResponse{}
-	mi := &file_meta_admin_proto_msgTypes[23]
+	mi := &file_meta_admin_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1461,7 +1705,7 @@ func (x *HandleQuotaResponse) String() string {
 func (*HandleQuotaResponse) ProtoMessage() {}
 
 func (x *HandleQuotaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_admin_proto_msgTypes[23]
+	mi := &file_meta_admin_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1474,7 +1718,7 @@ func (x *HandleQuotaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HandleQuotaResponse.ProtoReflect.Descriptor instead.
 func (*HandleQuotaResponse) Descriptor() ([]byte, []int) {
-	return file_meta_admin_proto_rawDescGZIP(), []int{23}
+	return file_meta_admin_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *HandleQuotaResponse) GetErrno() uint32 {
@@ -1493,7 +1737,7 @@ type ScanUserGroupUsageRequest struct {
 
 func (x *ScanUserGroupUsageRequest) Reset() {
 	*x = ScanUserGroupUsageRequest{}
-	mi := &file_meta_admin_proto_msgTypes[24]
+	mi := &file_meta_admin_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1505,7 +1749,7 @@ func (x *ScanUserGroupUsageRequest) String() string {
 func (*ScanUserGroupUsageRequest) ProtoMessage() {}
 
 func (x *ScanUserGroupUsageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_admin_proto_msgTypes[24]
+	mi := &file_meta_admin_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1518,7 +1762,7 @@ func (x *ScanUserGroupUsageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScanUserGroupUsageRequest.ProtoReflect.Descriptor instead.
 func (*ScanUserGroupUsageRequest) Descriptor() ([]byte, []int) {
-	return file_meta_admin_proto_rawDescGZIP(), []int{24}
+	return file_meta_admin_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ScanUserGroupUsageRequest) GetCtx() *MetaContext {
@@ -1537,7 +1781,7 @@ type ScanUserGroupUsageResponse struct {
 
 func (x *ScanUserGroupUsageResponse) Reset() {
 	*x = ScanUserGroupUsageResponse{}
-	mi := &file_meta_admin_proto_msgTypes[25]
+	mi := &file_meta_admin_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1549,7 +1793,7 @@ func (x *ScanUserGroupUsageResponse) String() string {
 func (*ScanUserGroupUsageResponse) ProtoMessage() {}
 
 func (x *ScanUserGroupUsageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_admin_proto_msgTypes[25]
+	mi := &file_meta_admin_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1562,7 +1806,7 @@ func (x *ScanUserGroupUsageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScanUserGroupUsageResponse.ProtoReflect.Descriptor instead.
 func (*ScanUserGroupUsageResponse) Descriptor() ([]byte, []int) {
-	return file_meta_admin_proto_rawDescGZIP(), []int{25}
+	return file_meta_admin_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ScanUserGroupUsageResponse) GetErrno() uint32 {
@@ -1582,7 +1826,7 @@ type ChrootRequest struct {
 
 func (x *ChrootRequest) Reset() {
 	*x = ChrootRequest{}
-	mi := &file_meta_admin_proto_msgTypes[26]
+	mi := &file_meta_admin_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1594,7 +1838,7 @@ func (x *ChrootRequest) String() string {
 func (*ChrootRequest) ProtoMessage() {}
 
 func (x *ChrootRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_admin_proto_msgTypes[26]
+	mi := &file_meta_admin_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1607,7 +1851,7 @@ func (x *ChrootRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChrootRequest.ProtoReflect.Descriptor instead.
 func (*ChrootRequest) Descriptor() ([]byte, []int) {
-	return file_meta_admin_proto_rawDescGZIP(), []int{26}
+	return file_meta_admin_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ChrootRequest) GetCtx() *MetaContext {
@@ -1633,7 +1877,7 @@ type ChrootResponse struct {
 
 func (x *ChrootResponse) Reset() {
 	*x = ChrootResponse{}
-	mi := &file_meta_admin_proto_msgTypes[27]
+	mi := &file_meta_admin_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1645,7 +1889,7 @@ func (x *ChrootResponse) String() string {
 func (*ChrootResponse) ProtoMessage() {}
 
 func (x *ChrootResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_admin_proto_msgTypes[27]
+	mi := &file_meta_admin_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1658,7 +1902,7 @@ func (x *ChrootResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChrootResponse.ProtoReflect.Descriptor instead.
 func (*ChrootResponse) Descriptor() ([]byte, []int) {
-	return file_meta_admin_proto_rawDescGZIP(), []int{27}
+	return file_meta_admin_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *ChrootResponse) GetErrno() uint32 {
@@ -1678,7 +1922,7 @@ type CleanupTrashBeforeRequest struct {
 
 func (x *CleanupTrashBeforeRequest) Reset() {
 	*x = CleanupTrashBeforeRequest{}
-	mi := &file_meta_admin_proto_msgTypes[28]
+	mi := &file_meta_admin_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1690,7 +1934,7 @@ func (x *CleanupTrashBeforeRequest) String() string {
 func (*CleanupTrashBeforeRequest) ProtoMessage() {}
 
 func (x *CleanupTrashBeforeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_admin_proto_msgTypes[28]
+	mi := &file_meta_admin_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1703,7 +1947,7 @@ func (x *CleanupTrashBeforeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CleanupTrashBeforeRequest.ProtoReflect.Descriptor instead.
 func (*CleanupTrashBeforeRequest) Descriptor() ([]byte, []int) {
-	return file_meta_admin_proto_rawDescGZIP(), []int{28}
+	return file_meta_admin_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *CleanupTrashBeforeRequest) GetCtx() *MetaContext {
@@ -1730,7 +1974,7 @@ type CleanupTrashBeforeResponse struct {
 
 func (x *CleanupTrashBeforeResponse) Reset() {
 	*x = CleanupTrashBeforeResponse{}
-	mi := &file_meta_admin_proto_msgTypes[29]
+	mi := &file_meta_admin_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1742,7 +1986,7 @@ func (x *CleanupTrashBeforeResponse) String() string {
 func (*CleanupTrashBeforeResponse) ProtoMessage() {}
 
 func (x *CleanupTrashBeforeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_admin_proto_msgTypes[29]
+	mi := &file_meta_admin_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1755,7 +1999,7 @@ func (x *CleanupTrashBeforeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CleanupTrashBeforeResponse.ProtoReflect.Descriptor instead.
 func (*CleanupTrashBeforeResponse) Descriptor() ([]byte, []int) {
-	return file_meta_admin_proto_rawDescGZIP(), []int{29}
+	return file_meta_admin_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *CleanupTrashBeforeResponse) GetErrno() uint32 {
@@ -1782,7 +2026,7 @@ type CleanupDetachedNodesBeforeRequest struct {
 
 func (x *CleanupDetachedNodesBeforeRequest) Reset() {
 	*x = CleanupDetachedNodesBeforeRequest{}
-	mi := &file_meta_admin_proto_msgTypes[30]
+	mi := &file_meta_admin_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1794,7 +2038,7 @@ func (x *CleanupDetachedNodesBeforeRequest) String() string {
 func (*CleanupDetachedNodesBeforeRequest) ProtoMessage() {}
 
 func (x *CleanupDetachedNodesBeforeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_admin_proto_msgTypes[30]
+	mi := &file_meta_admin_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1807,7 +2051,7 @@ func (x *CleanupDetachedNodesBeforeRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use CleanupDetachedNodesBeforeRequest.ProtoReflect.Descriptor instead.
 func (*CleanupDetachedNodesBeforeRequest) Descriptor() ([]byte, []int) {
-	return file_meta_admin_proto_rawDescGZIP(), []int{30}
+	return file_meta_admin_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *CleanupDetachedNodesBeforeRequest) GetCtx() *MetaContext {
@@ -1833,7 +2077,7 @@ type CleanupDetachedNodesBeforeResponse struct {
 
 func (x *CleanupDetachedNodesBeforeResponse) Reset() {
 	*x = CleanupDetachedNodesBeforeResponse{}
-	mi := &file_meta_admin_proto_msgTypes[31]
+	mi := &file_meta_admin_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1845,7 +2089,7 @@ func (x *CleanupDetachedNodesBeforeResponse) String() string {
 func (*CleanupDetachedNodesBeforeResponse) ProtoMessage() {}
 
 func (x *CleanupDetachedNodesBeforeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_admin_proto_msgTypes[31]
+	mi := &file_meta_admin_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1858,7 +2102,7 @@ func (x *CleanupDetachedNodesBeforeResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use CleanupDetachedNodesBeforeResponse.ProtoReflect.Descriptor instead.
 func (*CleanupDetachedNodesBeforeResponse) Descriptor() ([]byte, []int) {
-	return file_meta_admin_proto_rawDescGZIP(), []int{31}
+	return file_meta_admin_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *CleanupDetachedNodesBeforeResponse) GetErrno() uint32 {
@@ -1882,7 +2126,7 @@ type ScanDeletedObjectRequest struct {
 
 func (x *ScanDeletedObjectRequest) Reset() {
 	*x = ScanDeletedObjectRequest{}
-	mi := &file_meta_admin_proto_msgTypes[32]
+	mi := &file_meta_admin_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1894,7 +2138,7 @@ func (x *ScanDeletedObjectRequest) String() string {
 func (*ScanDeletedObjectRequest) ProtoMessage() {}
 
 func (x *ScanDeletedObjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_admin_proto_msgTypes[32]
+	mi := &file_meta_admin_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1907,7 +2151,7 @@ func (x *ScanDeletedObjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScanDeletedObjectRequest.ProtoReflect.Descriptor instead.
 func (*ScanDeletedObjectRequest) Descriptor() ([]byte, []int) {
-	return file_meta_admin_proto_rawDescGZIP(), []int{32}
+	return file_meta_admin_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ScanDeletedObjectRequest) GetCtx() *MetaContext {
@@ -1962,7 +2206,7 @@ type ScanDeletedObjectResponse struct {
 
 func (x *ScanDeletedObjectResponse) Reset() {
 	*x = ScanDeletedObjectResponse{}
-	mi := &file_meta_admin_proto_msgTypes[33]
+	mi := &file_meta_admin_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1974,7 +2218,7 @@ func (x *ScanDeletedObjectResponse) String() string {
 func (*ScanDeletedObjectResponse) ProtoMessage() {}
 
 func (x *ScanDeletedObjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_admin_proto_msgTypes[33]
+	mi := &file_meta_admin_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1987,7 +2231,7 @@ func (x *ScanDeletedObjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScanDeletedObjectResponse.ProtoReflect.Descriptor instead.
 func (*ScanDeletedObjectResponse) Descriptor() ([]byte, []int) {
-	return file_meta_admin_proto_rawDescGZIP(), []int{33}
+	return file_meta_admin_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ScanDeletedObjectResponse) GetErrno() uint32 {
@@ -2085,7 +2329,7 @@ type TrashSlicesData struct {
 
 func (x *TrashSlicesData) Reset() {
 	*x = TrashSlicesData{}
-	mi := &file_meta_admin_proto_msgTypes[34]
+	mi := &file_meta_admin_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2097,7 +2341,7 @@ func (x *TrashSlicesData) String() string {
 func (*TrashSlicesData) ProtoMessage() {}
 
 func (x *TrashSlicesData) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_admin_proto_msgTypes[34]
+	mi := &file_meta_admin_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2110,7 +2354,7 @@ func (x *TrashSlicesData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrashSlicesData.ProtoReflect.Descriptor instead.
 func (*TrashSlicesData) Descriptor() ([]byte, []int) {
-	return file_meta_admin_proto_rawDescGZIP(), []int{34}
+	return file_meta_admin_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *TrashSlicesData) GetSlices() []*ProtoSlice {
@@ -2137,7 +2381,7 @@ type PendingSliceData struct {
 
 func (x *PendingSliceData) Reset() {
 	*x = PendingSliceData{}
-	mi := &file_meta_admin_proto_msgTypes[35]
+	mi := &file_meta_admin_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2149,7 +2393,7 @@ func (x *PendingSliceData) String() string {
 func (*PendingSliceData) ProtoMessage() {}
 
 func (x *PendingSliceData) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_admin_proto_msgTypes[35]
+	mi := &file_meta_admin_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2162,7 +2406,7 @@ func (x *PendingSliceData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PendingSliceData.ProtoReflect.Descriptor instead.
 func (*PendingSliceData) Descriptor() ([]byte, []int) {
-	return file_meta_admin_proto_rawDescGZIP(), []int{35}
+	return file_meta_admin_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *PendingSliceData) GetId() uint64 {
@@ -2191,7 +2435,7 @@ type TrashFileData struct {
 
 func (x *TrashFileData) Reset() {
 	*x = TrashFileData{}
-	mi := &file_meta_admin_proto_msgTypes[36]
+	mi := &file_meta_admin_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2203,7 +2447,7 @@ func (x *TrashFileData) String() string {
 func (*TrashFileData) ProtoMessage() {}
 
 func (x *TrashFileData) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_admin_proto_msgTypes[36]
+	mi := &file_meta_admin_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2216,7 +2460,7 @@ func (x *TrashFileData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrashFileData.ProtoReflect.Descriptor instead.
 func (*TrashFileData) Descriptor() ([]byte, []int) {
-	return file_meta_admin_proto_rawDescGZIP(), []int{36}
+	return file_meta_admin_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *TrashFileData) GetInode() uint64 {
@@ -2258,7 +2502,7 @@ type PendingFileData struct {
 
 func (x *PendingFileData) Reset() {
 	*x = PendingFileData{}
-	mi := &file_meta_admin_proto_msgTypes[37]
+	mi := &file_meta_admin_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2270,7 +2514,7 @@ func (x *PendingFileData) String() string {
 func (*PendingFileData) ProtoMessage() {}
 
 func (x *PendingFileData) ProtoReflect() protoreflect.Message {
-	mi := &file_meta_admin_proto_msgTypes[37]
+	mi := &file_meta_admin_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2283,7 +2527,7 @@ func (x *PendingFileData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PendingFileData.ProtoReflect.Descriptor instead.
 func (*PendingFileData) Descriptor() ([]byte, []int) {
-	return file_meta_admin_proto_rawDescGZIP(), []int{37}
+	return file_meta_admin_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *PendingFileData) GetInode() uint64 {
@@ -2399,7 +2643,20 @@ const file_meta_admin_proto_rawDesc = "" +
 	"\x06delete\x18\x04 \x01(\bR\x06delete\"U\n" +
 	"\x12ListSlicesResponse\x12\x14\n" +
 	"\x05errno\x18\x01 \x01(\rR\x05errno\x12)\n" +
-	"\x06slices\x18\x02 \x03(\v2\x11.pb.SliceMapEntryR\x06slices\"\xc2\x02\n" +
+	"\x06slices\x18\x02 \x03(\v2\x11.pb.SliceMapEntryR\x06slices\"9\n" +
+	"\x14CleanupSlicesRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\"-\n" +
+	"\x15CleanupSlicesResponse\x12\x14\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\"Y\n" +
+	"\x11ScanSlicesRequest\x12!\n" +
+	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12!\n" +
+	"\fscan_pending\x18\x02 \x01(\bR\vscanPending\"M\n" +
+	"\x0fScanSlicesEntry\x12\x14\n" +
+	"\x05inode\x18\x01 \x01(\x04R\x05inode\x12$\n" +
+	"\x05slice\x18\x02 \x01(\v2\x0e.pb.ProtoSliceR\x05slice\"Y\n" +
+	"\x12ScanSlicesResponse\x12\x14\n" +
+	"\x05errno\x18\x01 \x01(\rR\x05errno\x12-\n" +
+	"\aentries\x18\x02 \x03(\v2\x13.pb.ScanSlicesEntryR\aentries\"\xc2\x02\n" +
 	"\x12HandleQuotaRequest\x12!\n" +
 	"\x03ctx\x18\x01 \x01(\v2\x0f.pb.MetaContextR\x03ctx\x12\x10\n" +
 	"\x03cmd\x18\x02 \x01(\rR\x03cmd\x12\x12\n" +
@@ -2477,7 +2734,7 @@ func file_meta_admin_proto_rawDescGZIP() []byte {
 	return file_meta_admin_proto_rawDescData
 }
 
-var file_meta_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
+var file_meta_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
 var file_meta_admin_proto_goTypes = []any{
 	(*GetFormatRequest)(nil),                   // 0: pb.GetFormatRequest
 	(*GetFormatResponse)(nil),                  // 1: pb.GetFormatResponse
@@ -2501,67 +2758,76 @@ var file_meta_admin_proto_goTypes = []any{
 	(*CompactResponse)(nil),                    // 19: pb.CompactResponse
 	(*ListSlicesRequest)(nil),                  // 20: pb.ListSlicesRequest
 	(*ListSlicesResponse)(nil),                 // 21: pb.ListSlicesResponse
-	(*HandleQuotaRequest)(nil),                 // 22: pb.HandleQuotaRequest
-	(*HandleQuotaResponse)(nil),                // 23: pb.HandleQuotaResponse
-	(*ScanUserGroupUsageRequest)(nil),          // 24: pb.ScanUserGroupUsageRequest
-	(*ScanUserGroupUsageResponse)(nil),         // 25: pb.ScanUserGroupUsageResponse
-	(*ChrootRequest)(nil),                      // 26: pb.ChrootRequest
-	(*ChrootResponse)(nil),                     // 27: pb.ChrootResponse
-	(*CleanupTrashBeforeRequest)(nil),          // 28: pb.CleanupTrashBeforeRequest
-	(*CleanupTrashBeforeResponse)(nil),         // 29: pb.CleanupTrashBeforeResponse
-	(*CleanupDetachedNodesBeforeRequest)(nil),  // 30: pb.CleanupDetachedNodesBeforeRequest
-	(*CleanupDetachedNodesBeforeResponse)(nil), // 31: pb.CleanupDetachedNodesBeforeResponse
-	(*ScanDeletedObjectRequest)(nil),           // 32: pb.ScanDeletedObjectRequest
-	(*ScanDeletedObjectResponse)(nil),          // 33: pb.ScanDeletedObjectResponse
-	(*TrashSlicesData)(nil),                    // 34: pb.TrashSlicesData
-	(*PendingSliceData)(nil),                   // 35: pb.PendingSliceData
-	(*TrashFileData)(nil),                      // 36: pb.TrashFileData
-	(*PendingFileData)(nil),                    // 37: pb.PendingFileData
-	nil,                                        // 38: pb.HandleQuotaRequest.QuotasEntry
-	(*ProtoFormat)(nil),                        // 39: pb.ProtoFormat
-	(*MetaContext)(nil),                        // 40: pb.MetaContext
-	(*ProtoEntry)(nil),                         // 41: pb.ProtoEntry
-	(*ProtoSummary)(nil),                       // 42: pb.ProtoSummary
-	(*ProtoTreeSummary)(nil),                   // 43: pb.ProtoTreeSummary
-	(*SliceMapEntry)(nil),                      // 44: pb.SliceMapEntry
-	(*ProtoSlice)(nil),                         // 45: pb.ProtoSlice
-	(*ProtoQuota)(nil),                         // 46: pb.ProtoQuota
+	(*CleanupSlicesRequest)(nil),               // 22: pb.CleanupSlicesRequest
+	(*CleanupSlicesResponse)(nil),              // 23: pb.CleanupSlicesResponse
+	(*ScanSlicesRequest)(nil),                  // 24: pb.ScanSlicesRequest
+	(*ScanSlicesEntry)(nil),                    // 25: pb.ScanSlicesEntry
+	(*ScanSlicesResponse)(nil),                 // 26: pb.ScanSlicesResponse
+	(*HandleQuotaRequest)(nil),                 // 27: pb.HandleQuotaRequest
+	(*HandleQuotaResponse)(nil),                // 28: pb.HandleQuotaResponse
+	(*ScanUserGroupUsageRequest)(nil),          // 29: pb.ScanUserGroupUsageRequest
+	(*ScanUserGroupUsageResponse)(nil),         // 30: pb.ScanUserGroupUsageResponse
+	(*ChrootRequest)(nil),                      // 31: pb.ChrootRequest
+	(*ChrootResponse)(nil),                     // 32: pb.ChrootResponse
+	(*CleanupTrashBeforeRequest)(nil),          // 33: pb.CleanupTrashBeforeRequest
+	(*CleanupTrashBeforeResponse)(nil),         // 34: pb.CleanupTrashBeforeResponse
+	(*CleanupDetachedNodesBeforeRequest)(nil),  // 35: pb.CleanupDetachedNodesBeforeRequest
+	(*CleanupDetachedNodesBeforeResponse)(nil), // 36: pb.CleanupDetachedNodesBeforeResponse
+	(*ScanDeletedObjectRequest)(nil),           // 37: pb.ScanDeletedObjectRequest
+	(*ScanDeletedObjectResponse)(nil),          // 38: pb.ScanDeletedObjectResponse
+	(*TrashSlicesData)(nil),                    // 39: pb.TrashSlicesData
+	(*PendingSliceData)(nil),                   // 40: pb.PendingSliceData
+	(*TrashFileData)(nil),                      // 41: pb.TrashFileData
+	(*PendingFileData)(nil),                    // 42: pb.PendingFileData
+	nil,                                        // 43: pb.HandleQuotaRequest.QuotasEntry
+	(*ProtoFormat)(nil),                        // 44: pb.ProtoFormat
+	(*MetaContext)(nil),                        // 45: pb.MetaContext
+	(*ProtoEntry)(nil),                         // 46: pb.ProtoEntry
+	(*ProtoSummary)(nil),                       // 47: pb.ProtoSummary
+	(*ProtoTreeSummary)(nil),                   // 48: pb.ProtoTreeSummary
+	(*SliceMapEntry)(nil),                      // 49: pb.SliceMapEntry
+	(*ProtoSlice)(nil),                         // 50: pb.ProtoSlice
+	(*ProtoQuota)(nil),                         // 51: pb.ProtoQuota
 }
 var file_meta_admin_proto_depIdxs = []int32{
-	39, // 0: pb.GetFormatResponse.format:type_name -> pb.ProtoFormat
-	40, // 1: pb.RemoveRequest.ctx:type_name -> pb.MetaContext
-	40, // 2: pb.BatchUnlinkRequest.ctx:type_name -> pb.MetaContext
-	41, // 3: pb.BatchUnlinkRequest.entries:type_name -> pb.ProtoEntry
-	40, // 4: pb.GetSummaryRequest.ctx:type_name -> pb.MetaContext
-	42, // 5: pb.GetSummaryResponse.summary:type_name -> pb.ProtoSummary
-	40, // 6: pb.GetTreeSummaryRequest.ctx:type_name -> pb.MetaContext
-	43, // 7: pb.GetTreeSummaryResponse.tree:type_name -> pb.ProtoTreeSummary
-	40, // 8: pb.CloneRequest.ctx:type_name -> pb.MetaContext
-	40, // 9: pb.GetPathsRequest.ctx:type_name -> pb.MetaContext
-	40, // 10: pb.CheckRequest.ctx:type_name -> pb.MetaContext
-	40, // 11: pb.CompactAllRequest.ctx:type_name -> pb.MetaContext
-	40, // 12: pb.CompactRequest.ctx:type_name -> pb.MetaContext
-	40, // 13: pb.ListSlicesRequest.ctx:type_name -> pb.MetaContext
-	44, // 14: pb.ListSlicesRequest.slices:type_name -> pb.SliceMapEntry
-	44, // 15: pb.ListSlicesResponse.slices:type_name -> pb.SliceMapEntry
-	40, // 16: pb.HandleQuotaRequest.ctx:type_name -> pb.MetaContext
-	38, // 17: pb.HandleQuotaRequest.quotas:type_name -> pb.HandleQuotaRequest.QuotasEntry
-	40, // 18: pb.ScanUserGroupUsageRequest.ctx:type_name -> pb.MetaContext
-	40, // 19: pb.ChrootRequest.ctx:type_name -> pb.MetaContext
-	40, // 20: pb.CleanupTrashBeforeRequest.ctx:type_name -> pb.MetaContext
-	40, // 21: pb.CleanupDetachedNodesBeforeRequest.ctx:type_name -> pb.MetaContext
-	40, // 22: pb.ScanDeletedObjectRequest.ctx:type_name -> pb.MetaContext
-	34, // 23: pb.ScanDeletedObjectResponse.trash_slices:type_name -> pb.TrashSlicesData
-	35, // 24: pb.ScanDeletedObjectResponse.pending_slice:type_name -> pb.PendingSliceData
-	36, // 25: pb.ScanDeletedObjectResponse.trash_file:type_name -> pb.TrashFileData
-	37, // 26: pb.ScanDeletedObjectResponse.pending_file:type_name -> pb.PendingFileData
-	45, // 27: pb.TrashSlicesData.slices:type_name -> pb.ProtoSlice
-	46, // 28: pb.HandleQuotaRequest.QuotasEntry.value:type_name -> pb.ProtoQuota
-	29, // [29:29] is the sub-list for method output_type
-	29, // [29:29] is the sub-list for method input_type
-	29, // [29:29] is the sub-list for extension type_name
-	29, // [29:29] is the sub-list for extension extendee
-	0,  // [0:29] is the sub-list for field type_name
+	44, // 0: pb.GetFormatResponse.format:type_name -> pb.ProtoFormat
+	45, // 1: pb.RemoveRequest.ctx:type_name -> pb.MetaContext
+	45, // 2: pb.BatchUnlinkRequest.ctx:type_name -> pb.MetaContext
+	46, // 3: pb.BatchUnlinkRequest.entries:type_name -> pb.ProtoEntry
+	45, // 4: pb.GetSummaryRequest.ctx:type_name -> pb.MetaContext
+	47, // 5: pb.GetSummaryResponse.summary:type_name -> pb.ProtoSummary
+	45, // 6: pb.GetTreeSummaryRequest.ctx:type_name -> pb.MetaContext
+	48, // 7: pb.GetTreeSummaryResponse.tree:type_name -> pb.ProtoTreeSummary
+	45, // 8: pb.CloneRequest.ctx:type_name -> pb.MetaContext
+	45, // 9: pb.GetPathsRequest.ctx:type_name -> pb.MetaContext
+	45, // 10: pb.CheckRequest.ctx:type_name -> pb.MetaContext
+	45, // 11: pb.CompactAllRequest.ctx:type_name -> pb.MetaContext
+	45, // 12: pb.CompactRequest.ctx:type_name -> pb.MetaContext
+	45, // 13: pb.ListSlicesRequest.ctx:type_name -> pb.MetaContext
+	49, // 14: pb.ListSlicesRequest.slices:type_name -> pb.SliceMapEntry
+	49, // 15: pb.ListSlicesResponse.slices:type_name -> pb.SliceMapEntry
+	45, // 16: pb.CleanupSlicesRequest.ctx:type_name -> pb.MetaContext
+	45, // 17: pb.ScanSlicesRequest.ctx:type_name -> pb.MetaContext
+	50, // 18: pb.ScanSlicesEntry.slice:type_name -> pb.ProtoSlice
+	25, // 19: pb.ScanSlicesResponse.entries:type_name -> pb.ScanSlicesEntry
+	45, // 20: pb.HandleQuotaRequest.ctx:type_name -> pb.MetaContext
+	43, // 21: pb.HandleQuotaRequest.quotas:type_name -> pb.HandleQuotaRequest.QuotasEntry
+	45, // 22: pb.ScanUserGroupUsageRequest.ctx:type_name -> pb.MetaContext
+	45, // 23: pb.ChrootRequest.ctx:type_name -> pb.MetaContext
+	45, // 24: pb.CleanupTrashBeforeRequest.ctx:type_name -> pb.MetaContext
+	45, // 25: pb.CleanupDetachedNodesBeforeRequest.ctx:type_name -> pb.MetaContext
+	45, // 26: pb.ScanDeletedObjectRequest.ctx:type_name -> pb.MetaContext
+	39, // 27: pb.ScanDeletedObjectResponse.trash_slices:type_name -> pb.TrashSlicesData
+	40, // 28: pb.ScanDeletedObjectResponse.pending_slice:type_name -> pb.PendingSliceData
+	41, // 29: pb.ScanDeletedObjectResponse.trash_file:type_name -> pb.TrashFileData
+	42, // 30: pb.ScanDeletedObjectResponse.pending_file:type_name -> pb.PendingFileData
+	50, // 31: pb.TrashSlicesData.slices:type_name -> pb.ProtoSlice
+	51, // 32: pb.HandleQuotaRequest.QuotasEntry.value:type_name -> pb.ProtoQuota
+	33, // [33:33] is the sub-list for method output_type
+	33, // [33:33] is the sub-list for method input_type
+	33, // [33:33] is the sub-list for extension type_name
+	33, // [33:33] is the sub-list for extension extendee
+	0,  // [0:33] is the sub-list for field type_name
 }
 
 func init() { file_meta_admin_proto_init() }
@@ -2570,7 +2836,7 @@ func file_meta_admin_proto_init() {
 		return
 	}
 	file_meta_common_proto_init()
-	file_meta_admin_proto_msgTypes[33].OneofWrappers = []any{
+	file_meta_admin_proto_msgTypes[38].OneofWrappers = []any{
 		(*ScanDeletedObjectResponse_TrashSlices)(nil),
 		(*ScanDeletedObjectResponse_PendingSlice)(nil),
 		(*ScanDeletedObjectResponse_TrashFile)(nil),
@@ -2582,7 +2848,7 @@ func file_meta_admin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meta_admin_proto_rawDesc), len(file_meta_admin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   39,
+			NumMessages:   44,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

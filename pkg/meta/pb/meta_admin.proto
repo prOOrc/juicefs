@@ -136,6 +136,26 @@ message ListSlicesResponse {
   repeated SliceMapEntry slices = 2;
 }
 
+message CleanupSlicesRequest {
+  MetaContext ctx = 1;
+}
+message CleanupSlicesResponse {
+  uint32 errno = 1;
+}
+
+message ScanSlicesRequest {
+  MetaContext ctx = 1;
+  bool scan_pending = 2;
+}
+message ScanSlicesEntry {
+  uint64 inode = 1;
+  ProtoSlice slice = 2;
+}
+message ScanSlicesResponse {
+  uint32 errno = 1;
+  repeated ScanSlicesEntry entries = 2;
+}
+
 message HandleQuotaRequest {
   MetaContext ctx = 1;
   uint32 cmd = 2;

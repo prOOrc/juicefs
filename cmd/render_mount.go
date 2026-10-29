@@ -408,9 +408,10 @@ func renderMount(c *cli.Context) error {
 	if err = rm.NewSession(true); err != nil {
 		logger.Fatalf("new session: %s", err)
 	}
-	rm.OnReload(func(fmt *meta.Format) {
+	rm.OnReload(func(fmt *meta.Format) error {
 		updateFormat(c)(fmt)
 		store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
+		return nil
 	})
 	v := vfs.NewVFS(vfsConf, rm, store, registerer, registry)
 	installHandler(rm, mp, v, blob)

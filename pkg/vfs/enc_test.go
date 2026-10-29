@@ -94,11 +94,11 @@ func (s *recordingStore) NewWriterWithKey(id uint64, tierID uint8, key []byte) c
 }
 
 func (s *recordingStore) Remove(id uint64, length int) error { return nil }
-func (s *recordingStore) FillCache(id uint64, length uint32) error {
+func (s *recordingStore) FillCache(id uint64, size uint32, parts []chunk.Range) error {
 	return nil
 }
-func (s *recordingStore) EvictCache(id uint64, length uint32) error { return nil }
-func (s *recordingStore) CheckCache(id uint64, length uint32, handler func(bool, string, int)) error {
+func (s *recordingStore) EvictCache(id uint64, size uint32, parts []chunk.Range) error { return nil }
+func (s *recordingStore) CheckCache(id uint64, size uint32, parts []chunk.Range, handler func(bool, string, int)) error {
 	return nil
 }
 func (s *recordingStore) UsedMemory() int64                  { return 0 }

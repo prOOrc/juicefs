@@ -38,7 +38,7 @@ func (m *redisMeta) publishEventToPipe(ctx Context, pipe redis.Pipeliner, event 
 	}
 
 	event.Timestamp = time.Now()
-	event.Volume = m.fmt.Name
+	event.Volume = m.fmt.Load().Name
 	if ctx != nil {
 		event.Uid = ctx.Uid()
 		event.Gid = ctx.Gid()

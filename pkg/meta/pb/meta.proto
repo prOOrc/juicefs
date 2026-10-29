@@ -116,6 +116,8 @@ service MetaService {
   rpc CompactAll(CompactAllRequest) returns (CompactAllResponse);
   rpc Compact(CompactRequest) returns (CompactResponse);
   rpc ListSlices(ListSlicesRequest) returns (ListSlicesResponse);
+  rpc CleanupSlices(CleanupSlicesRequest) returns (CleanupSlicesResponse);
+  rpc ScanSlices(ScanSlicesRequest) returns (stream ScanSlicesResponse);
   rpc HandleQuota(HandleQuotaRequest) returns (HandleQuotaResponse);
   rpc ScanUserGroupUsage(ScanUserGroupUsageRequest) returns (ScanUserGroupUsageResponse);
   rpc Chroot(ChrootRequest) returns (ChrootResponse);

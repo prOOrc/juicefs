@@ -326,7 +326,7 @@ func testSubdirOperations(t *testing.T, m Meta) {
 				require.Zero(t, m.Read(ctx, dst, 0, &slices))
 				assert.Equal(t, []Slice{slice}, slices)
 				var count, total uint64
-				require.Zero(t, m.Clone(ctx, parent, src, parent, dir, 0, 0, 1, &count, &total))
+				require.Zero(t, m.Clone(ctx, parent, src, parent, dir, 0, 0, 1, &count, &total, nil))
 				assert.Equal(t, uint64(1), count)
 				assert.Equal(t, count, total)
 				var clone Ino
@@ -342,7 +342,7 @@ func testSubdirOperations(t *testing.T, m Meta) {
 				create(t, src, file)
 				base.doFlushDirStat()
 				var count, total uint64
-				require.Zero(t, m.Clone(ctx, parent, src, parent, link, 0, 0, 1, &count, &total))
+				require.Zero(t, m.Clone(ctx, parent, src, parent, link, 0, 0, 1, &count, &total, nil))
 				assert.Equal(t, uint64(2), count)
 				assert.Equal(t, count, total)
 				var clone, child Ino

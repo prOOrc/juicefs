@@ -204,7 +204,7 @@ func (ai *AuthzInterceptor) requiredPermission(method string) AuthzPermission {
 		// --- Admin: require organization admin ---
 	case "GetFormat", "Remove", "BatchUnlink",
 		"GetSummary", "GetTreeSummary", "Clone", "GetPaths",
-		"Check", "CompactAll", "Compact", "ListSlices",
+		"Check", "CompactAll", "Compact", "ListSlices", "CleanupSlices",
 		"HandleQuota", "ScanUserGroupUsage",
 		"CleanupTrashBefore", "CleanupDetachedNodesBefore",
 		"ScanDeletedObject", "ScanChangelog",

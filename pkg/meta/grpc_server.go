@@ -59,8 +59,8 @@ type MetaProxyServer struct {
 	// POSIX permission checks are skipped (see metaCtx). The client-carried
 	// POSIX uid is untrusted input, so enforcing stored ownership against it
 	// provides no security and only produces false denials.
-	authzMode       bool
-	inodePathCache   *InodePathCache
+	authzMode      bool
+	inodePathCache *InodePathCache
 
 	// Encryption (optional): KeyManager client for per-file FEKs and the volume
 	// name used to resolve the companies prefix on the platform side.

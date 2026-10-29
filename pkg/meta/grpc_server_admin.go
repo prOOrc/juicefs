@@ -68,7 +68,9 @@ func (s *MetaProxyServer) GetSummary(ctx context.Context, req *pb.GetSummaryRequ
 func (s *MetaProxyServer) GetTreeSummary(ctx context.Context, req *pb.GetTreeSummaryRequest) (*pb.GetTreeSummaryResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var tree TreeSummary
-	errno := s.meta.GetTreeSummary(mctx, &tree, uint8(req.Depth), uint8(req.TopN), req.Strict, func(uint64, uint64) {})
+	// SortBySize (zero value) keeps the historical behavior; the sort key is
+	// not plumbed through the proxy protocol yet.
+	errno := s.meta.GetTreeSummary(mctx, &tree, uint8(req.Depth), uint8(req.TopN), req.Strict, SortBySize, func(uint64, uint64) {})
 	return &pb.GetTreeSummaryResponse{
 		Errno: uint32(errno),
 		Tree:  TreeSummaryToProto(&tree),
@@ -211,14 +213,46 @@ func (s *MetaProxyServer) Compact(ctx context.Context, req *pb.CompactRequest) (
 	return &pb.CompactResponse{Errno: uint32(errno)}, nil
 }
 
+// ListSlices is deprecated: the Meta interface replaced it with CleanupSlices
+// (upstream gc rework). The RPC stays registered for wire compatibility with
+// older clients and always reports ENOSYS.
 func (s *MetaProxyServer) ListSlices(ctx context.Context, req *pb.ListSlicesRequest) (*pb.ListSlicesResponse, error) {
+	return &pb.ListSlicesResponse{Errno: uint32(syscall.ENOSYS)}, nil
+}
+
+func (s *MetaProxyServer) CleanupSlices(ctx context.Context, req *pb.CleanupSlicesRequest) (*pb.CleanupSlicesResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
-	slices := ProtoToSliceMap(req.Slices)
-	errno := s.meta.ListSlices(mctx, slices, req.ScanPending, req.Delete, func() {})
-	return &pb.ListSlicesResponse{
-		Errno:  uint32(errno),
-		Slices: SliceMapToProto(slices),
-	}, nil
+	errno := s.meta.CleanupSlices(mctx)
+	return &pb.CleanupSlicesResponse{Errno: uint32(errno)}, nil
+}
+
+func (s *MetaProxyServer) ScanSlices(req *pb.ScanSlicesRequest, stream pb.MetaService_ScanSlicesServer) error {
+	ctx := stream.Context()
+	mctx := s.metaCtx(ctx, req.Ctx)
+	const batchSize = 1024
+	batch := make([]*pb.ScanSlicesEntry, 0, batchSize)
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		err := stream.Send(&pb.ScanSlicesResponse{Entries: batch})
+		batch = make([]*pb.ScanSlicesEntry, 0, batchSize)
+		return err
+	}
+	errno := s.meta.ScanSlices(mctx, &ScanSlicesOption{ScanPending: req.ScanPending}, func(ino Ino, s Slice) error {
+		batch = append(batch, &pb.ScanSlicesEntry{
+			Inode: uint64(ino),
+			Slice: &pb.ProtoSlice{Id: s.Id, Size: s.Size, Off: s.Off, Len: s.Len},
+		})
+		if len(batch) >= batchSize {
+			return flush()
+		}
+		return nil
+	})
+	if err := flush(); err != nil {
+		return err
+	}
+	return stream.Send(&pb.ScanSlicesResponse{Errno: uint32(errno)})
 }
 
 func (s *MetaProxyServer) HandleQuota(ctx context.Context, req *pb.HandleQuotaRequest) (*pb.HandleQuotaResponse, error) {

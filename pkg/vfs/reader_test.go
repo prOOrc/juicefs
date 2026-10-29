@@ -97,8 +97,8 @@ func TestReaderRefreshKeepsSharedSliceUnchanged(t *testing.T) {
 	r := &dataReader{m: m, store: store, files: make(map[Ino]*fileReader),
 		blockSize: uint64(conf.Chunk.BlockSize), bufferSize: int64(conf.Chunk.BufferSize),
 		maxRequests: 1, maxRetries: 3}
-	a := r.Open(10, readerRefreshSize)
-	b := r.Open(11, readerRefreshSize)
+	a := r.Open(10, readerRefreshSize, nil)
+	b := r.Open(11, readerRefreshSize, nil)
 	type result struct {
 		n   int
 		err syscall.Errno
@@ -174,6 +174,8 @@ type readerTestStore struct {
 
 func (s *readerTestStore) NewReader(uint64, int) chunk.Reader { return s }
 
+func (s *readerTestStore) NewReaderWithKey(uint64, int, []byte) chunk.Reader { return s }
+
 func (s *readerTestStore) ReadAt(_ context.Context, p *chunk.Page, off int) (int, error) {
 	return s.read(p, off)
 }
@@ -216,7 +218,7 @@ func newReaderTestFile(t *testing.T, m *readerTestMeta, store chunk.ChunkStore, 
 	t.Helper()
 	r := &dataReader{m: m, store: store, files: make(map[Ino]*fileReader),
 		blockSize: readerTestSize, bufferSize: 64 << 20, maxRequests: 1, maxRetries: 3}
-	f := r.Open(10, length).(*fileReader)
+	f := r.Open(10, length, nil).(*fileReader)
 	var once sync.Once
 	closeFile := func() { once.Do(func() { f.Close(meta.Background()) }) }
 	t.Cleanup(closeFile)

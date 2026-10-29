@@ -99,6 +99,8 @@ const (
 	MetaService_CompactAll_FullMethodName                 = "/pb.MetaService/CompactAll"
 	MetaService_Compact_FullMethodName                    = "/pb.MetaService/Compact"
 	MetaService_ListSlices_FullMethodName                 = "/pb.MetaService/ListSlices"
+	MetaService_CleanupSlices_FullMethodName              = "/pb.MetaService/CleanupSlices"
+	MetaService_ScanSlices_FullMethodName                 = "/pb.MetaService/ScanSlices"
 	MetaService_HandleQuota_FullMethodName                = "/pb.MetaService/HandleQuota"
 	MetaService_ScanUserGroupUsage_FullMethodName         = "/pb.MetaService/ScanUserGroupUsage"
 	MetaService_Chroot_FullMethodName                     = "/pb.MetaService/Chroot"
@@ -195,6 +197,8 @@ type MetaServiceClient interface {
 	CompactAll(ctx context.Context, in *CompactAllRequest, opts ...grpc.CallOption) (*CompactAllResponse, error)
 	Compact(ctx context.Context, in *CompactRequest, opts ...grpc.CallOption) (*CompactResponse, error)
 	ListSlices(ctx context.Context, in *ListSlicesRequest, opts ...grpc.CallOption) (*ListSlicesResponse, error)
+	CleanupSlices(ctx context.Context, in *CleanupSlicesRequest, opts ...grpc.CallOption) (*CleanupSlicesResponse, error)
+	ScanSlices(ctx context.Context, in *ScanSlicesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ScanSlicesResponse], error)
 	HandleQuota(ctx context.Context, in *HandleQuotaRequest, opts ...grpc.CallOption) (*HandleQuotaResponse, error)
 	ScanUserGroupUsage(ctx context.Context, in *ScanUserGroupUsageRequest, opts ...grpc.CallOption) (*ScanUserGroupUsageResponse, error)
 	Chroot(ctx context.Context, in *ChrootRequest, opts ...grpc.CallOption) (*ChrootResponse, error)
@@ -873,6 +877,35 @@ func (c *metaServiceClient) ListSlices(ctx context.Context, in *ListSlicesReques
 	return out, nil
 }
 
+func (c *metaServiceClient) CleanupSlices(ctx context.Context, in *CleanupSlicesRequest, opts ...grpc.CallOption) (*CleanupSlicesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CleanupSlicesResponse)
+	err := c.cc.Invoke(ctx, MetaService_CleanupSlices_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *metaServiceClient) ScanSlices(ctx context.Context, in *ScanSlicesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ScanSlicesResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[0], MetaService_ScanSlices_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ScanSlicesRequest, ScanSlicesResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MetaService_ScanSlicesClient = grpc.ServerStreamingClient[ScanSlicesResponse]
+
 func (c *metaServiceClient) HandleQuota(ctx context.Context, in *HandleQuotaRequest, opts ...grpc.CallOption) (*HandleQuotaResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(HandleQuotaResponse)
@@ -925,7 +958,7 @@ func (c *metaServiceClient) CleanupDetachedNodesBefore(ctx context.Context, in *
 
 func (c *metaServiceClient) ScanDeletedObject(ctx context.Context, in *ScanDeletedObjectRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ScanDeletedObjectResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[0], MetaService_ScanDeletedObject_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[1], MetaService_ScanDeletedObject_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -944,7 +977,7 @@ type MetaService_ScanDeletedObjectClient = grpc.ServerStreamingClient[ScanDelete
 
 func (c *metaServiceClient) ScanChangelog(ctx context.Context, in *ScanChangelogRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ScanChangelogResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[1], MetaService_ScanChangelog_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[2], MetaService_ScanChangelog_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1013,7 +1046,7 @@ func (c *metaServiceClient) DirHandlerClose(ctx context.Context, in *DirHandlerC
 
 func (c *metaServiceClient) DumpMeta(ctx context.Context, in *DumpMetaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DumpMetaChunk], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[2], MetaService_DumpMeta_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[3], MetaService_DumpMeta_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1032,7 +1065,7 @@ type MetaService_DumpMetaClient = grpc.ServerStreamingClient[DumpMetaChunk]
 
 func (c *metaServiceClient) LoadMeta(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[LoadMetaChunk, LoadMetaResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[3], MetaService_LoadMeta_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[4], MetaService_LoadMeta_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1045,7 +1078,7 @@ type MetaService_LoadMetaClient = grpc.ClientStreamingClient[LoadMetaChunk, Load
 
 func (c *metaServiceClient) DumpMetaV2(ctx context.Context, in *DumpMetaV2Request, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DumpMetaV2Chunk], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[4], MetaService_DumpMetaV2_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[5], MetaService_DumpMetaV2_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1064,7 +1097,7 @@ type MetaService_DumpMetaV2Client = grpc.ServerStreamingClient[DumpMetaV2Chunk]
 
 func (c *metaServiceClient) LoadMetaV2(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[LoadMetaV2Chunk, LoadMetaV2Response], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[5], MetaService_LoadMetaV2_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &MetaService_ServiceDesc.Streams[6], MetaService_LoadMetaV2_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1153,6 +1186,8 @@ type MetaServiceServer interface {
 	CompactAll(context.Context, *CompactAllRequest) (*CompactAllResponse, error)
 	Compact(context.Context, *CompactRequest) (*CompactResponse, error)
 	ListSlices(context.Context, *ListSlicesRequest) (*ListSlicesResponse, error)
+	CleanupSlices(context.Context, *CleanupSlicesRequest) (*CleanupSlicesResponse, error)
+	ScanSlices(*ScanSlicesRequest, grpc.ServerStreamingServer[ScanSlicesResponse]) error
 	HandleQuota(context.Context, *HandleQuotaRequest) (*HandleQuotaResponse, error)
 	ScanUserGroupUsage(context.Context, *ScanUserGroupUsageRequest) (*ScanUserGroupUsageResponse, error)
 	Chroot(context.Context, *ChrootRequest) (*ChrootResponse, error)
@@ -1375,6 +1410,12 @@ func (UnimplementedMetaServiceServer) Compact(context.Context, *CompactRequest) 
 }
 func (UnimplementedMetaServiceServer) ListSlices(context.Context, *ListSlicesRequest) (*ListSlicesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSlices not implemented")
+}
+func (UnimplementedMetaServiceServer) CleanupSlices(context.Context, *CleanupSlicesRequest) (*CleanupSlicesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CleanupSlices not implemented")
+}
+func (UnimplementedMetaServiceServer) ScanSlices(*ScanSlicesRequest, grpc.ServerStreamingServer[ScanSlicesResponse]) error {
+	return status.Error(codes.Unimplemented, "method ScanSlices not implemented")
 }
 func (UnimplementedMetaServiceServer) HandleQuota(context.Context, *HandleQuotaRequest) (*HandleQuotaResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method HandleQuota not implemented")
@@ -2615,6 +2656,35 @@ func _MetaService_ListSlices_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MetaService_CleanupSlices_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CleanupSlicesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MetaServiceServer).CleanupSlices(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MetaService_CleanupSlices_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MetaServiceServer).CleanupSlices(ctx, req.(*CleanupSlicesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MetaService_ScanSlices_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ScanSlicesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(MetaServiceServer).ScanSlices(m, &grpc.GenericServerStream[ScanSlicesRequest, ScanSlicesResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MetaService_ScanSlicesServer = grpc.ServerStreamingServer[ScanSlicesResponse]
+
 func _MetaService_HandleQuota_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(HandleQuotaRequest)
 	if err := dec(in); err != nil {
@@ -3121,6 +3191,10 @@ var MetaService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _MetaService_ListSlices_Handler,
 		},
 		{
+			MethodName: "CleanupSlices",
+			Handler:    _MetaService_CleanupSlices_Handler,
+		},
+		{
 			MethodName: "HandleQuota",
 			Handler:    _MetaService_HandleQuota_Handler,
 		},
@@ -3162,6 +3236,11 @@ var MetaService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "ScanSlices",
+			Handler:       _MetaService_ScanSlices_Handler,
+			ServerStreams: true,
+		},
 		{
 			StreamName:    "ScanDeletedObject",
 			Handler:       _MetaService_ScanDeletedObject_Handler,
