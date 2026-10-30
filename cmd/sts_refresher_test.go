@@ -143,6 +143,85 @@ func TestSTSRefresher_FailSafeUntilExpiry(t *testing.T) {
 	require.False(t, expired, "a successful refresh must clear the expiry alarm")
 }
 
+// TestSTSRefresher_StaticCredentialsEndToEnd (task 9.3, ADR-004): the platform
+// hands out static per-company Selectel keys over the same RPC — SessionToken
+// empty, synthetic expiry now+TTL. An empty token must reach SetCredentials
+// unchanged and a pair swap must still install the new keys.
+func TestSTSRefresher_StaticCredentialsEndToEnd(t *testing.T) {
+	holder := newTestStorageHolder(t)
+	now := time.Now()
+	seq := []stsCredentials{
+		{AccessKey: "co-ak-1", SecretKey: "co-sk-1", SessionToken: "", Expiry: now.Add(time.Hour)},
+		{AccessKey: "co-ak-2", SecretKey: "co-sk-2", SessionToken: "", Expiry: now.Add(2 * time.Hour)},
+	}
+	i := 0
+	provider := &fakeSTSProvider{next: func() (stsCredentials, error) {
+		if i < len(seq) {
+			c := seq[i]
+			i++
+			return c, nil
+		}
+		return stsCredentials{}, errors.New("no more queued credentials")
+	}}
+	ref := newSTSRefresher(provider, holder, time.Hour)
+	ref.now = func() time.Time { return now }
+
+	require.NoError(t, ref.Start(context.Background()))
+	defer ref.Stop()
+	require.Equal(t, "co-ak-1", holder.fmt.AccessKey)
+	require.Equal(t, "co-sk-1", holder.fmt.SecretKey)
+	require.Empty(t, holder.fmt.SessionToken, "an empty session token must reach SetCredentials unchanged")
+
+	// refresh at ttl/2 installs the second static pair
+	now = now.Add(30 * time.Minute)
+	ref.refresh()
+	require.Equal(t, "co-ak-2", holder.fmt.AccessKey)
+	require.Equal(t, "co-sk-2", holder.fmt.SecretKey)
+	require.Empty(t, holder.fmt.SessionToken, "the swapped-in pair must keep the empty token")
+
+	ref.mu.Lock()
+	current := ref.current
+	expired := ref.expired
+	ref.mu.Unlock()
+	require.Equal(t, seq[1], current)
+	require.True(t, current.valid(now), "synthetic expiry must stay valid through valid()")
+	require.False(t, expired, "valid static credentials must not raise the expiry alarm")
+}
+
+// TestSTSRefresher_StaticCredentialsSyntheticExpiry (task 9.3, ADR-004): the
+// synthetic expiry (now + TTL) is honored strictly by valid(), and once it
+// passes without a successful refresh the expired alarm fires as with STS.
+func TestSTSRefresher_StaticCredentialsSyntheticExpiry(t *testing.T) {
+	now := time.Now()
+	cred := stsCredentials{AccessKey: "co-ak", SecretKey: "co-sk", SessionToken: "", Expiry: now.Add(60 * time.Minute)}
+	require.True(t, cred.valid(now))
+	require.True(t, cred.valid(now.Add(59*time.Minute+59*time.Second)), "valid up to but excluding the expiry")
+	require.False(t, cred.valid(now.Add(60*time.Minute)), "valid() is strict: the expiry instant itself is expired")
+	require.False(t, cred.valid(now.Add(61*time.Minute)))
+
+	// past the synthetic expiry with a failing refresh: alarm fires
+	holder := newTestStorageHolder(t)
+	var fail bool
+	provider := &fakeSTSProvider{next: func() (stsCredentials, error) {
+		if fail {
+			return stsCredentials{}, errors.New("keymanager unavailable")
+		}
+		fail = true // only the first call succeeds
+		return cred, nil
+	}}
+	ref := newSTSRefresher(provider, holder, time.Hour)
+	ref.now = func() time.Time { return now }
+
+	require.NoError(t, ref.Start(context.Background()))
+	defer ref.Stop()
+	now = now.Add(90 * time.Minute) // past the 60m synthetic expiry
+	ref.refresh()
+	ref.mu.Lock()
+	expired := ref.expired
+	ref.mu.Unlock()
+	require.True(t, expired, "expired static credentials without a successful refresh must be reported")
+}
+
 // TestSTSRefresher_Stop verifies the loop terminates cleanly.
 func TestSTSRefresher_Stop(t *testing.T) {
 	holder := newTestStorageHolder(t)
@@ -184,6 +263,49 @@ func TestPlatformSTSProvider(t *testing.T) {
 	proxy.err = errors.New("proxy down")
 	_, err = p.Credentials(context.Background())
 	require.Error(t, err, "a proxy failure must surface (fail-fast)")
+}
+
+// staticKeyStsProxyServer is a bufconn StsProxyService server returning the
+// platform's static per-company key response (SessionToken empty, ADR-004).
+type staticKeyStsProxyServer struct {
+	pb.UnimplementedStsProxyServiceServer
+	resp *pb.StsCredentialsResponse
+}
+
+func (s *staticKeyStsProxyServer) GetSTSCredentials(ctx context.Context, req *pb.StsCredentialsRequest) (*pb.StsCredentialsResponse, error) {
+	return s.resp, nil
+}
+
+// TestPlatformSTSProvider_StaticKeyResponse (task 9.3, ADR-004) exercises the
+// user-mode provider over a real gRPC transport with the static per-company
+// key shape: SessionToken empty and a synthetic ExpirationUnix — the client
+// contract is unchanged, the empty token must pass through untouched.
+func TestPlatformSTSProvider_StaticKeyResponse(t *testing.T) {
+	expiry := time.Now().Add(3600 * time.Second).Unix()
+	lis := bufconn.Listen(1024 * 1024)
+	defer lis.Close()
+	gs := grpc.NewServer()
+	pb.RegisterStsProxyServiceServer(gs, &staticKeyStsProxyServer{resp: &pb.StsCredentialsResponse{
+		AccessKeyId:     "co-ak-1",
+		SecretAccessKey: "co-sk-1",
+		SessionToken:    "",
+		ExpirationUnix:  expiry,
+	}})
+	go func() { _ = gs.Serve(lis) }()
+	defer gs.Stop()
+
+	dialer := func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) }
+	conn, err := grpc.NewClient("passthrough:///bufnet", grpc.WithContextDialer(dialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	defer func() { require.NoError(t, conn.Close()) }()
+
+	p := &platformSTSProvider{stsProxy: pb.NewStsProxyServiceClient(conn), companyID: "comp-1"}
+	cred, err := p.Credentials(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "co-ak-1", cred.AccessKey)
+	require.Equal(t, "co-sk-1", cred.SecretKey)
+	require.Empty(t, cred.SessionToken, "static per-company keys carry no session token (ADR-004)")
+	require.Equal(t, time.Unix(expiry, 0), cred.Expiry)
 }
 
 // TestPlatformNodeSTSProvider verifies the render-node provider (task 7.11,
