@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | accepted |
+| Статус | accepted (гейт T0.1 пройден 2026-10-30 — [отчёт валидации](ADR-004-T01-selectel-validation-report.md)) |
 | Дата | 2026-10-30 |
 | Контекст | Переезд платформы YC → Selectel (авария YC 2026-10); change `implement-juicefs-mount` (agio-drive v2); решения владельца 2026-10-29/30 (В1–В5) |
 | Связанные | ADR-003 (superseded настоящим ADR), SRS-001, `implement-juicefs-mount`, agio-terraform-selectel, agio-cloud (Selectel-контур) |
@@ -20,9 +20,9 @@ ADR-003 закрыл FR-REV-3 через platform-issued **YC STS** (TTL 60 ми
 Ключевые свойства Selectel Object Storage (docs.selectel.ru, проверено 2026-10-29):
 
 - **Bucket policy** — есть (default-deny; Resource `arn:aws:s3:::bucket/prefix/*`; Condition
-  `s3:prefix`; переменные `${aws:userid}`; одна на бакет, 20 КБ). Доковского примера
-  «ListBucket + s3:prefix для конкретного пользователя» нет — требуется live-валидация (гейт
-  T0.1).
+  `s3:prefix`; одна на бакет, 20 КБ). Principal — **UUID service user** (условия
+  `aws:username`/подстановка `${aws:username}` не работают — проверено T0.1). Доковского
+  примера «ListBucket + s3:prefix» нет — live-валидация проведена, см. T0.1-отчёт.
 - **Роли service users** (project scope): `s3.admin` / `s3.user` / `s3.bucket.user` (без
   политики — ноль доступа). «Пользователь видит только разрешённые ему бакеты» — штатная
   модель. Swift ACL не существуют.
@@ -117,12 +117,14 @@ ADR-003 закрыл FR-REV-3 через platform-issued **YC STS** (TTL 60 ми
 
 ## Гейты и последствия
 
-- **T0.1 — live-валидация Selectel (гейт всей реализации)**: (а) ListBucket + `s3:prefix` под
-  политикой для конкретного пользователя; (б) роль `s3.bucket.user` vs `s3.user`; (в) пустой
-  `SessionToken` доезжает до S3-клиента juicefs; (г) default-deny policy на v2-контейнере не
-  мешает платформенным операциям (PutBucketPolicy от платформенного пользователя — какая роль
-  нужна); (д) фактические лимиты service users/ключей и IAM rate limits (support); (е)
-  поведение клиента при `DELETE credentials` в рантайме (диагностируемая ошибка, не hang).
+- **T0.1 — live-валидация Selectel: ПРОЙДЕНА 2026-10-30** ([полный отчёт](ADR-004-T01-selectel-validation-report.md)):
+  ListBucket+`s3:prefix` работает (Principal = UUID service user; username-условия не работают);
+  роль ключей компаний — `s3.bucket.user` (без политики ноль доступа; `s3.user` не использовать —
+  видит ListAllMyBuckets проекта); `s3.admin` НЕ обходит default-deny → management-statement
+  платформы обязан входить в первый put политики; пустой SessionToken доезжает до S3-клиента
+  juicefs (format + gateway roundtrip против Selectel OK); `DELETE credentials` имеет лаг
+  применения ≤ ~1 мин (мгновенный слой — kill-switch meta proxy); ротация = новая пара тому же
+  service user, политика по UUID не меняется. Открытый пункт: лимиты IAM (запрос в support).
 - Форк: T1 — пустой SessionToken сквозь `sts_refresher`/`NewReloadableStorage` (тесты);
   снятие/пересмотр предусловия «encrypted volume» в ветке STS (`cmd/mount.go:734-763`) — при
   В1 шифрование обязательно, предусловие остаётся и ужесточается смыслом; тест сериализации

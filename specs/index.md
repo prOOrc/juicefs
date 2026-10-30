@@ -32,6 +32,7 @@
 
 | Документ | Роль | Path | Updated |
 |---|---|---|---|
+| T0.1 live-валидация Selectel (приложение к ADR-004) | Отчёт гейта T0.1: Principal=UUID, роли, пустой SessionToken, ревокация/ротация, лаг DELETE ≤1 мин | specs/decisions/ADR-004-T01-selectel-validation-report.md | 2026-10-30 |
 | agio Drive — архитектурный план v13 | Черновик общего плана AGIO Drive v2 (контекст, целевая архитектура, этапы). Не является BRD/SRS; источник для будущих BRD-001 и per-stage changes. | .qwen/plans/agio-drive-full-plan-v13.md | 2026-08 |
 | Stage-планы шифрования 01–10 | Декомпозиция SRS-001 по этапам реализации; каждый stage — кандидат на отдельный OpenSpec change. Для крупных фич допускается единый change со стадийной декомпозицией в tasks.md (см. ADR-001): шифрование реализуется единым change `implement-encrypt`. | .qwen/plans/stage-01-foundation.md … stage-10-production-rollout.md | 2026-08 |
 
