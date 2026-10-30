@@ -2,10 +2,10 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | accepted |
+| Статус | superseded by [ADR-004](ADR-004-static-per-company-s3-keys-selectel.md) (2026-10-30: переезд YC → Selectel, у провайдера нет STS; для v2 — статические per-company ключи Selectel) |
 | Дата | 2026-09-27 |
 | Контекст | change `implement-encrypt` (tasks 7.8–7.12), SRS-001 v2.4 (FR-REV-3), прогон 9.6b (S4 partial) |
-| Связанные | ADR-001, SRS-001 (§7 Отзыв, §15.1, T5, R8) |
+| Связанные | ADR-001, ADR-004, SRS-001 (§7 Отзыв, §15.1, T5, R8) |
 
 ## Контекст
 

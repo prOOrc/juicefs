@@ -25,7 +25,8 @@
 | SRS-001 | SRS | Подсистема шифрования agio Drive (Per-File FEK + Per-Chunk CEK) | review (Final draft v2.4) | specs/srs/SRS-001-agio-drive-encryption.md | - | 2026-09-27 |
 | ADR-001 | ADR | Гибридный spec-driven workflow (BRD/SRS + OpenSpec) | accepted | specs/decisions/ADR-001-hybrid-spec-workflow.md | - | 2026-09-26 |
 | ADR-002 | ADR | Outbox: события по дочерним объектам при move/rename/delete директории | draft | specs/decisions/ADR-002-outbox-child-events.md | - | 2026-08-29 |
-| ADR-003 | ADR | Data-plane креденшелы: platform-issued YC STS (закрытие FR-REV-3) | accepted | specs/decisions/ADR-003-data-plane-sts.md | - | 2026-09-27 |
+| ADR-003 | ADR | Data-plane креденшелы: platform-issued YC STS (закрытие FR-REV-3) | superseded (ADR-004) | specs/decisions/ADR-003-data-plane-sts.md | - | 2026-10-30 |
+| ADR-004 | ADR | Data-plane креденшелы v2: статические per-company ключи Selectel (замена YC STS) | accepted | specs/decisions/ADR-004-static-per-company-s3-keys-selectel.md | ADR-003, implement-juicefs-mount | 2026-10-30 |
 
 ## Рабочие документы (вне жизненного цикла BRD/SRS/ADR)
 
