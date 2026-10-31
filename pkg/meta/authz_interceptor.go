@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	authzpb "github.com/juicedata/juicefs/pkg/meta/authz_pb"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/oidc"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -45,15 +46,19 @@ const (
 	AuthzPermissionDenied                        // unknown method — deny everyone
 )
 
-// AuthzCheck describes a single authorization check (path + required permission).
+// AuthzCheck describes a single authorization check (path + required
+// permission + operation context). Op is the generic operation kind reported to
+// the authz service; the zero value is Operation_OP_OTHER, so checks that don't
+// set it keep the legacy (default) behavior.
 type AuthzCheck struct {
 	Path       string
 	Permission AuthzPermission
+	Op         authzpb.Operation
 }
 
 // AuthzClient is the interface for calling the external authorization service.
 type AuthzClient interface {
-	CheckPermission(ctx context.Context, userID, filePath string, perm AuthzPermission) (bool, error)
+	CheckPermission(ctx context.Context, userID, filePath string, perm AuthzPermission, op authzpb.Operation) (bool, error)
 	CheckBulkPermissions(ctx context.Context, userID string, paths []string, perm AuthzPermission) ([]bool, error)
 	CheckOrganizationAdmin(ctx context.Context, userID string) (bool, error)
 }
@@ -170,9 +175,9 @@ func (ai *AuthzInterceptor) UnaryInterceptor() grpc.UnaryServerInterceptor {
 				continue
 			}
 
-			authzLogger.Tracef("Authz check: method=%s user=%s path=%s perm=%d",
-				info.FullMethod, userID, chk.Path, chk.Permission)
-			allowed, err := ai.client.CheckPermission(ctx, userID, chk.Path, chk.Permission)
+			authzLogger.Tracef("Authz check: method=%s user=%s path=%s perm=%d op=%d",
+				info.FullMethod, userID, chk.Path, chk.Permission, chk.Op)
+			allowed, err := ai.client.CheckPermission(ctx, userID, chk.Path, chk.Permission, chk.Op)
 			if err != nil || !allowed {
 				authzLogger.Debugf("Authz denied: method=%s user=%s path=%s perm=%d err=%v",
 					info.FullMethod, userID, chk.Path, chk.Permission, err)
@@ -318,7 +323,13 @@ func (ai *AuthzInterceptor) resolveChecks(req interface{}, method string) []Auth
 		if p == "" {
 			return nil
 		}
-		return []AuthzCheck{{Path: p, Permission: AuthzPermissionWrite}}
+		// The parent of a Mkdir is definitionally a directory: its authz path is
+		// normalized to the dir convention (trailing slash), matching how
+		// directory entries are cached (withDirSlash). The authz service strips
+		// the volume's companies prefix on this exact form ("/companies/" → ""),
+		// which is what the self-provision mkdir rule allows; a missing slash
+		// would leave a non-empty stripped path and be denied.
+		return []AuthzCheck{{Path: dirAuthzPath(p), Permission: AuthzPermissionWrite, Op: authzpb.Operation_OP_MKDIR}}
 
 	case *pb.MknodRequest:
 		p := ai.cache.Get(Ino(r.Parent))

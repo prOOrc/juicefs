@@ -74,12 +74,61 @@ func (Permission) EnumDescriptor() ([]byte, []int) {
 	return file_authz_proto_rawDescGZIP(), []int{0}
 }
 
+// Operation context of the checked filesystem call. OP_OTHER is the default:
+// callers that do not set the field (older proxies) keep the legacy behavior.
+type Operation int32
+
+const (
+	Operation_OP_OTHER Operation = 0 // any operation other than the ones below
+	Operation_OP_MKDIR Operation = 1 // directory creation (create parent-first chains)
+)
+
+// Enum value maps for Operation.
+var (
+	Operation_name = map[int32]string{
+		0: "OP_OTHER",
+		1: "OP_MKDIR",
+	}
+	Operation_value = map[string]int32{
+		"OP_OTHER": 0,
+		"OP_MKDIR": 1,
+	}
+)
+
+func (x Operation) Enum() *Operation {
+	p := new(Operation)
+	*p = x
+	return p
+}
+
+func (x Operation) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Operation) Descriptor() protoreflect.EnumDescriptor {
+	return file_authz_proto_enumTypes[1].Descriptor()
+}
+
+func (Operation) Type() protoreflect.EnumType {
+	return &file_authz_proto_enumTypes[1]
+}
+
+func (x Operation) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Operation.Descriptor instead.
+func (Operation) EnumDescriptor() ([]byte, []int) {
+	return file_authz_proto_rawDescGZIP(), []int{1}
+}
+
 type CheckPermissionRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                                   // from OIDC token 'sub' claim
 	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`                                                     // full filesystem path, e.g. "/company-abc/projects/render/out/frame.exr"
 	Permission    Permission             `protobuf:"varint,3,opt,name=permission,proto3,enum=agio.platform.authz.v1.Permission" json:"permission,omitempty"` // required permission level
 	VolumeName    string                 `protobuf:"bytes,4,opt,name=volume_name,json=volumeName,proto3" json:"volume_name,omitempty"`                       // JuiceFS volume name, used to resolve the companies prefix
+	Op            Operation              `protobuf:"varint,5,opt,name=op,proto3,enum=agio.platform.authz.v1.Operation" json:"op,omitempty"`                  // operation context; default OP_OTHER (legacy behavior)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -140,6 +189,13 @@ func (x *CheckPermissionRequest) GetVolumeName() string {
 		return x.VolumeName
 	}
 	return ""
+}
+
+func (x *CheckPermissionRequest) GetOp() Operation {
+	if x != nil {
+		return x.Op
+	}
+	return Operation_OP_OTHER
 }
 
 type CheckPermissionResponse struct {
@@ -399,7 +455,7 @@ var File_authz_proto protoreflect.FileDescriptor
 
 const file_authz_proto_rawDesc = "" +
 	"\n" +
-	"\vauthz.proto\x12\x16agio.platform.authz.v1\"\xaa\x01\n" +
+	"\vauthz.proto\x12\x16agio.platform.authz.v1\"\xdd\x01\n" +
 	"\x16CheckPermissionRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12B\n" +
@@ -407,7 +463,8 @@ const file_authz_proto_rawDesc = "" +
 	"permission\x18\x03 \x01(\x0e2\".agio.platform.authz.v1.PermissionR\n" +
 	"permission\x12\x1f\n" +
 	"\vvolume_name\x18\x04 \x01(\tR\n" +
-	"volumeName\"3\n" +
+	"volumeName\x121\n" +
+	"\x02op\x18\x05 \x01(\x0e2!.agio.platform.authz.v1.OperationR\x02op\"3\n" +
 	"\x17CheckPermissionResponse\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\"\xb1\x01\n" +
 	"\x1bCheckBulkPermissionsRequest\x12\x17\n" +
@@ -431,7 +488,10 @@ const file_authz_proto_rawDesc = "" +
 	"\x0fPERMISSION_NONE\x10\x00\x12\x13\n" +
 	"\x0fPERMISSION_VIEW\x10\x01\x12\x13\n" +
 	"\x0fPERMISSION_READ\x10\x02\x12\x13\n" +
-	"\x0fPERMISSION_EDIT\x10\x032\x90\x03\n" +
+	"\x0fPERMISSION_EDIT\x10\x03*'\n" +
+	"\tOperation\x12\f\n" +
+	"\bOP_OTHER\x10\x00\x12\f\n" +
+	"\bOP_MKDIR\x10\x012\x90\x03\n" +
 	"\fAuthzService\x12r\n" +
 	"\x0fCheckPermission\x12..agio.platform.authz.v1.CheckPermissionRequest\x1a/.agio.platform.authz.v1.CheckPermissionResponse\x12\x81\x01\n" +
 	"\x14CheckBulkPermissions\x123.agio.platform.authz.v1.CheckBulkPermissionsRequest\x1a4.agio.platform.authz.v1.CheckBulkPermissionsResponse\x12\x87\x01\n" +
@@ -449,31 +509,33 @@ func file_authz_proto_rawDescGZIP() []byte {
 	return file_authz_proto_rawDescData
 }
 
-var file_authz_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_authz_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_authz_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_authz_proto_goTypes = []any{
 	(Permission)(0),                        // 0: agio.platform.authz.v1.Permission
-	(*CheckPermissionRequest)(nil),         // 1: agio.platform.authz.v1.CheckPermissionRequest
-	(*CheckPermissionResponse)(nil),        // 2: agio.platform.authz.v1.CheckPermissionResponse
-	(*CheckBulkPermissionsRequest)(nil),    // 3: agio.platform.authz.v1.CheckBulkPermissionsRequest
-	(*CheckBulkPermissionsResponse)(nil),   // 4: agio.platform.authz.v1.CheckBulkPermissionsResponse
-	(*CheckOrganizationAdminRequest)(nil),  // 5: agio.platform.authz.v1.CheckOrganizationAdminRequest
-	(*CheckOrganizationAdminResponse)(nil), // 6: agio.platform.authz.v1.CheckOrganizationAdminResponse
+	(Operation)(0),                         // 1: agio.platform.authz.v1.Operation
+	(*CheckPermissionRequest)(nil),         // 2: agio.platform.authz.v1.CheckPermissionRequest
+	(*CheckPermissionResponse)(nil),        // 3: agio.platform.authz.v1.CheckPermissionResponse
+	(*CheckBulkPermissionsRequest)(nil),    // 4: agio.platform.authz.v1.CheckBulkPermissionsRequest
+	(*CheckBulkPermissionsResponse)(nil),   // 5: agio.platform.authz.v1.CheckBulkPermissionsResponse
+	(*CheckOrganizationAdminRequest)(nil),  // 6: agio.platform.authz.v1.CheckOrganizationAdminRequest
+	(*CheckOrganizationAdminResponse)(nil), // 7: agio.platform.authz.v1.CheckOrganizationAdminResponse
 }
 var file_authz_proto_depIdxs = []int32{
 	0, // 0: agio.platform.authz.v1.CheckPermissionRequest.permission:type_name -> agio.platform.authz.v1.Permission
-	0, // 1: agio.platform.authz.v1.CheckBulkPermissionsRequest.permission:type_name -> agio.platform.authz.v1.Permission
-	1, // 2: agio.platform.authz.v1.AuthzService.CheckPermission:input_type -> agio.platform.authz.v1.CheckPermissionRequest
-	3, // 3: agio.platform.authz.v1.AuthzService.CheckBulkPermissions:input_type -> agio.platform.authz.v1.CheckBulkPermissionsRequest
-	5, // 4: agio.platform.authz.v1.AuthzService.CheckOrganizationAdmin:input_type -> agio.platform.authz.v1.CheckOrganizationAdminRequest
-	2, // 5: agio.platform.authz.v1.AuthzService.CheckPermission:output_type -> agio.platform.authz.v1.CheckPermissionResponse
-	4, // 6: agio.platform.authz.v1.AuthzService.CheckBulkPermissions:output_type -> agio.platform.authz.v1.CheckBulkPermissionsResponse
-	6, // 7: agio.platform.authz.v1.AuthzService.CheckOrganizationAdmin:output_type -> agio.platform.authz.v1.CheckOrganizationAdminResponse
-	5, // [5:8] is the sub-list for method output_type
-	2, // [2:5] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	1, // 1: agio.platform.authz.v1.CheckPermissionRequest.op:type_name -> agio.platform.authz.v1.Operation
+	0, // 2: agio.platform.authz.v1.CheckBulkPermissionsRequest.permission:type_name -> agio.platform.authz.v1.Permission
+	2, // 3: agio.platform.authz.v1.AuthzService.CheckPermission:input_type -> agio.platform.authz.v1.CheckPermissionRequest
+	4, // 4: agio.platform.authz.v1.AuthzService.CheckBulkPermissions:input_type -> agio.platform.authz.v1.CheckBulkPermissionsRequest
+	6, // 5: agio.platform.authz.v1.AuthzService.CheckOrganizationAdmin:input_type -> agio.platform.authz.v1.CheckOrganizationAdminRequest
+	3, // 6: agio.platform.authz.v1.AuthzService.CheckPermission:output_type -> agio.platform.authz.v1.CheckPermissionResponse
+	5, // 7: agio.platform.authz.v1.AuthzService.CheckBulkPermissions:output_type -> agio.platform.authz.v1.CheckBulkPermissionsResponse
+	7, // 8: agio.platform.authz.v1.AuthzService.CheckOrganizationAdmin:output_type -> agio.platform.authz.v1.CheckOrganizationAdminResponse
+	6, // [6:9] is the sub-list for method output_type
+	3, // [3:6] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_authz_proto_init() }
@@ -486,7 +548,7 @@ func file_authz_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_authz_proto_rawDesc), len(file_authz_proto_rawDesc)),
-			NumEnums:      1,
+			NumEnums:      2,
 			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,

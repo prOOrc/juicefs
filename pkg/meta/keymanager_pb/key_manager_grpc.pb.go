@@ -79,7 +79,8 @@ type DriveKeyManagerServiceClient interface {
 	// GetPermissionGeneration returns the current per-user permission generation
 	// counter (0 when absent). Clients compare it on heartbeat to detect revocation.
 	GetPermissionGeneration(ctx context.Context, in *GetPermissionGenerationRequest, opts ...grpc.CallOption) (*GetPermissionGenerationResponse, error)
-	// GetSTSCredentials issues short-lived S3 credentials scoped to the company prefix.
+	// GetSTSCredentials issues short-lived S3 credentials scoped to the company's
+	// volume. Called by the Meta Proxy on behalf of an authenticated user session.
 	GetSTSCredentials(ctx context.Context, in *GetSTSCredentialsRequest, opts ...grpc.CallOption) (*GetSTSCredentialsResponse, error)
 	// GetNodeSTSCredentials issues short-lived S3 credentials for a render node,
 	// authenticated by the node's YC IAM token (ADR-003). node_id is an audit
@@ -236,7 +237,8 @@ type DriveKeyManagerServiceServer interface {
 	// GetPermissionGeneration returns the current per-user permission generation
 	// counter (0 when absent). Clients compare it on heartbeat to detect revocation.
 	GetPermissionGeneration(context.Context, *GetPermissionGenerationRequest) (*GetPermissionGenerationResponse, error)
-	// GetSTSCredentials issues short-lived S3 credentials scoped to the company prefix.
+	// GetSTSCredentials issues short-lived S3 credentials scoped to the company's
+	// volume. Called by the Meta Proxy on behalf of an authenticated user session.
 	GetSTSCredentials(context.Context, *GetSTSCredentialsRequest) (*GetSTSCredentialsResponse, error)
 	// GetNodeSTSCredentials issues short-lived S3 credentials for a render node,
 	// authenticated by the node's YC IAM token (ADR-003). node_id is an audit

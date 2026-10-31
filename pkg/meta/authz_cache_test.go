@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	authzpb "github.com/juicedata/juicefs/pkg/meta/authz_pb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -42,18 +43,18 @@ func TestCachingAuthzClient_CachesResult(t *testing.T) {
 	mockClient := new(mockAuthzClient)
 	cached := NewCachingAuthzClient(mockClient, time.Hour, 0)
 
-	mockClient.On("CheckPermission", mock.Anything, "user1", "/path/", AuthzPermissionView).
+	mockClient.On("CheckPermission", mock.Anything, "user1", "/path/", AuthzPermissionView, authzpb.Operation_OP_OTHER).
 		Return(true, nil).Once()
 
 	ctx := context.Background()
 
 	// First call — hits the network
-	allowed, err := cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionView)
+	allowed, err := cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionView, authzpb.Operation_OP_OTHER)
 	assert.NoError(t, err)
 	assert.True(t, allowed)
 
 	// Second call — served from cache (mock expects only 1 call total)
-	allowed, err = cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionView)
+	allowed, err = cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionView, authzpb.Operation_OP_OTHER)
 	assert.NoError(t, err)
 	assert.True(t, allowed)
 
@@ -64,15 +65,15 @@ func TestCachingAuthzClient_DifferentUsers(t *testing.T) {
 	mockClient := new(mockAuthzClient)
 	cached := NewCachingAuthzClient(mockClient, time.Hour, 0)
 
-	mockClient.On("CheckPermission", mock.Anything, "user1", "/path/", AuthzPermissionView).
+	mockClient.On("CheckPermission", mock.Anything, "user1", "/path/", AuthzPermissionView, authzpb.Operation_OP_OTHER).
 		Return(true, nil).Once()
-	mockClient.On("CheckPermission", mock.Anything, "user2", "/path/", AuthzPermissionView).
+	mockClient.On("CheckPermission", mock.Anything, "user2", "/path/", AuthzPermissionView, authzpb.Operation_OP_OTHER).
 		Return(false, nil).Once()
 
 	ctx := context.Background()
 
-	allowed1, _ := cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionView)
-	allowed2, _ := cached.CheckPermission(ctx, "user2", "/path/", AuthzPermissionView)
+	allowed1, _ := cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionView, authzpb.Operation_OP_OTHER)
+	allowed2, _ := cached.CheckPermission(ctx, "user2", "/path/", AuthzPermissionView, authzpb.Operation_OP_OTHER)
 
 	assert.True(t, allowed1)
 	assert.False(t, allowed2)
@@ -83,18 +84,42 @@ func TestCachingAuthzClient_DifferentPermissions(t *testing.T) {
 	mockClient := new(mockAuthzClient)
 	cached := NewCachingAuthzClient(mockClient, time.Hour, 0)
 
-	mockClient.On("CheckPermission", mock.Anything, "user1", "/path/", AuthzPermissionView).
+	mockClient.On("CheckPermission", mock.Anything, "user1", "/path/", AuthzPermissionView, authzpb.Operation_OP_OTHER).
 		Return(true, nil).Once()
-	mockClient.On("CheckPermission", mock.Anything, "user1", "/path/", AuthzPermissionWrite).
+	mockClient.On("CheckPermission", mock.Anything, "user1", "/path/", AuthzPermissionWrite, authzpb.Operation_OP_OTHER).
 		Return(false, nil).Once()
 
 	ctx := context.Background()
 
-	viewAllowed, _ := cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionView)
-	writeAllowed, _ := cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionWrite)
+	viewAllowed, _ := cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionView, authzpb.Operation_OP_OTHER)
+	writeAllowed, _ := cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionWrite, authzpb.Operation_OP_OTHER)
 
 	assert.True(t, viewAllowed)
 	assert.False(t, writeAllowed)
+	mockClient.AssertExpectations(t)
+}
+
+func TestCachingAuthzClient_DifferentOps(t *testing.T) {
+	mockClient := new(mockAuthzClient)
+	cached := NewCachingAuthzClient(mockClient, time.Hour, 0)
+
+	// The operation context is part of the cache identity: the same
+	// (user, path, perm) tuple under OP_MKDIR (self-provision mkdir rule) and
+	// OP_OTHER (any other write) can legitimately get different decisions.
+	mockClient.On("CheckPermission", mock.Anything, "user1", "/path/", AuthzPermissionWrite, authzpb.Operation_OP_MKDIR).
+		Return(true, nil).Once()
+	mockClient.On("CheckPermission", mock.Anything, "user1", "/path/", AuthzPermissionWrite, authzpb.Operation_OP_OTHER).
+		Return(false, nil).Once()
+
+	ctx := context.Background()
+
+	mkdirAllowed, err := cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionWrite, authzpb.Operation_OP_MKDIR)
+	assert.NoError(t, err)
+	otherAllowed, err := cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionWrite, authzpb.Operation_OP_OTHER)
+	assert.NoError(t, err)
+
+	assert.True(t, mkdirAllowed)
+	assert.False(t, otherAllowed)
 	mockClient.AssertExpectations(t)
 }
 
@@ -103,19 +128,19 @@ func TestCachingAuthzClient_TTLExpiry(t *testing.T) {
 	// Very short TTL — 1ms
 	cached := NewCachingAuthzClient(mockClient, time.Millisecond, 0)
 
-	mockClient.On("CheckPermission", mock.Anything, "user1", "/path/", AuthzPermissionView).
+	mockClient.On("CheckPermission", mock.Anything, "user1", "/path/", AuthzPermissionView, authzpb.Operation_OP_OTHER).
 		Return(true, nil).Times(2)
 
 	ctx := context.Background()
 
 	// First call
-	_, _ = cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionView)
+	_, _ = cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionView, authzpb.Operation_OP_OTHER)
 
 	// Wait for TTL to expire
 	time.Sleep(5 * time.Millisecond)
 
 	// Second call — should hit network again
-	allowed, err := cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionView)
+	allowed, err := cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionView, authzpb.Operation_OP_OTHER)
 	assert.NoError(t, err)
 	assert.True(t, allowed)
 
@@ -127,17 +152,17 @@ func TestCachingAuthzClient_ErrorNotCached(t *testing.T) {
 	cached := NewCachingAuthzClient(mockClient, time.Hour, 0)
 
 	testErr := errors.New("service unavailable")
-	mockClient.On("CheckPermission", mock.Anything, "user1", "/path/", AuthzPermissionView).
+	mockClient.On("CheckPermission", mock.Anything, "user1", "/path/", AuthzPermissionView, authzpb.Operation_OP_OTHER).
 		Return(false, testErr).Times(2)
 
 	ctx := context.Background()
 
 	// First call — error
-	_, err := cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionView)
+	_, err := cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionView, authzpb.Operation_OP_OTHER)
 	assert.Error(t, err)
 
 	// Second call — should hit network again (error not cached)
-	_, err = cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionView)
+	_, err = cached.CheckPermission(ctx, "user1", "/path/", AuthzPermissionView, authzpb.Operation_OP_OTHER)
 	assert.Error(t, err)
 
 	mockClient.AssertExpectations(t)
@@ -175,9 +200,9 @@ func TestCachingAuthzClient_BulkPartialCache(t *testing.T) {
 	ctx := context.Background()
 
 	// Pre-cache /a/
-	mockClient.On("CheckPermission", mock.Anything, "user1", "/a/", AuthzPermissionView).
+	mockClient.On("CheckPermission", mock.Anything, "user1", "/a/", AuthzPermissionView, authzpb.Operation_OP_OTHER).
 		Return(true, nil).Once()
-	_, _ = cached.CheckPermission(ctx, "user1", "/a/", AuthzPermissionView)
+	_, _ = cached.CheckPermission(ctx, "user1", "/a/", AuthzPermissionView, authzpb.Operation_OP_OTHER)
 
 	// Bulk request: /a/ is cached, /b/ and /c/ need network
 	mockClient.On("CheckBulkPermissions", mock.Anything, "user1", []string{"/b/", "/c/"}, AuthzPermissionView).
@@ -220,22 +245,22 @@ func TestCachingAuthzClient_MaxSizeEviction(t *testing.T) {
 
 	// Fill cache to capacity
 	for i, p := range []string{"/a/", "/b/"} {
-		mockClient.On("CheckPermission", mock.Anything, "user1", p, AuthzPermissionView).
+		mockClient.On("CheckPermission", mock.Anything, "user1", p, AuthzPermissionView, authzpb.Operation_OP_OTHER).
 			Return(i == 0, nil).Once()
-		_, _ = cached.CheckPermission(ctx, "user1", p, AuthzPermissionView)
+		_, _ = cached.CheckPermission(ctx, "user1", p, AuthzPermissionView, authzpb.Operation_OP_OTHER)
 	}
 
 	// Third entry — cache is full, no expired entries to evict.
 	// Should still work (just not cached).
-	mockClient.On("CheckPermission", mock.Anything, "user1", "/c/", AuthzPermissionView).
+	mockClient.On("CheckPermission", mock.Anything, "user1", "/c/", AuthzPermissionView, authzpb.Operation_OP_OTHER).
 		Return(true, nil).Times(2)
 
-	allowed, err := cached.CheckPermission(ctx, "user1", "/c/", AuthzPermissionView)
+	allowed, err := cached.CheckPermission(ctx, "user1", "/c/", AuthzPermissionView, authzpb.Operation_OP_OTHER)
 	assert.NoError(t, err)
 	assert.True(t, allowed)
 
 	// Call again — still not cached (cache full), hits network
-	allowed, err = cached.CheckPermission(ctx, "user1", "/c/", AuthzPermissionView)
+	allowed, err = cached.CheckPermission(ctx, "user1", "/c/", AuthzPermissionView, authzpb.Operation_OP_OTHER)
 	assert.NoError(t, err)
 	assert.True(t, allowed)
 

@@ -1034,8 +1034,12 @@ type GetSTSCredentialsResponse struct {
 	SecretAccessKey string                 `protobuf:"bytes,2,opt,name=secret_access_key,json=secretAccessKey,proto3" json:"secret_access_key,omitempty"`
 	SessionToken    string                 `protobuf:"bytes,3,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
 	ExpirationUnix  int64                  `protobuf:"varint,4,opt,name=expiration_unix,json=expirationUnix,proto3" json:"expiration_unix,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// The caller's working directory relative to the volume root (the resolved
+	// companies prefix plus the company code, e.g. "companies/<companyCode>").
+	// Optional on the wire: absence keeps current client behavior.
+	WorkingDir    string `protobuf:"bytes,5,opt,name=working_dir,json=workingDir,proto3" json:"working_dir,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetSTSCredentialsResponse) Reset() {
@@ -1094,6 +1098,13 @@ func (x *GetSTSCredentialsResponse) GetExpirationUnix() int64 {
 		return x.ExpirationUnix
 	}
 	return 0
+}
+
+func (x *GetSTSCredentialsResponse) GetWorkingDir() string {
+	if x != nil {
+		return x.WorkingDir
+	}
+	return ""
 }
 
 // GetNodeSTSCredentialsRequest identifies the calling render node; the YC IAM
@@ -1526,12 +1537,14 @@ const file_key_manager_proto_rawDesc = "" +
 	"\x18GetSTSCredentialsRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1d\n" +
 	"\n" +
-	"company_id\x18\x02 \x01(\tR\tcompanyId\"\xb9\x01\n" +
+	"company_id\x18\x02 \x01(\tR\tcompanyId\"\xda\x01\n" +
 	"\x19GetSTSCredentialsResponse\x12\"\n" +
 	"\raccess_key_id\x18\x01 \x01(\tR\vaccessKeyId\x12*\n" +
 	"\x11secret_access_key\x18\x02 \x01(\tR\x0fsecretAccessKey\x12#\n" +
 	"\rsession_token\x18\x03 \x01(\tR\fsessionToken\x12'\n" +
-	"\x0fexpiration_unix\x18\x04 \x01(\x03R\x0eexpirationUnix\"V\n" +
+	"\x0fexpiration_unix\x18\x04 \x01(\x03R\x0eexpirationUnix\x12\x1f\n" +
+	"\vworking_dir\x18\x05 \x01(\tR\n" +
+	"workingDir\"V\n" +
 	"\x1cGetNodeSTSCredentialsRequest\x12\x1d\n" +
 	"\n" +
 	"company_id\x18\x01 \x01(\tR\tcompanyId\x12\x17\n" +

@@ -217,6 +217,7 @@ func (f *fakeKeyManager) GetSTSCredentials(ctx context.Context, req *kmpb.GetSTS
 		SecretAccessKey: "fake-secret",
 		SessionToken:    "fake-token",
 		ExpirationUnix:  time.Now().Add(time.Hour).Unix(),
+		WorkingDir:      "companies/test-company",
 	}, nil
 }
 

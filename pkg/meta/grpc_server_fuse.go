@@ -22,6 +22,7 @@ import (
 	"syscall"
 	"time"
 
+	authzpb "github.com/juicedata/juicefs/pkg/meta/authz_pb"
 	kmpb "github.com/juicedata/juicefs/pkg/meta/keymanager_pb"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/utils"
@@ -702,7 +703,7 @@ func (s *MetaProxyServer) filterEntriesByAuthz(ctx context.Context, parentInode 
 
 	// Root is always viewable (same as isAlwaysAllowed in the interceptor).
 	if parentPath != "/" {
-		allowedParent, err := s.authzInterceptor.client.CheckPermission(ctx, userID, parentPath, AuthzPermissionView)
+		allowedParent, err := s.authzInterceptor.client.CheckPermission(ctx, userID, parentPath, AuthzPermissionView, authzpb.Operation_OP_OTHER)
 		if err != nil || !allowedParent {
 			authzLogger.Debugf("Readdir: parent check denied for user=%s path=%s err=%v", userID, parentPath, err)
 			return nil // fail-closed: can't list this directory

@@ -37,4 +37,8 @@ message StsCredentialsResponse {
   string secret_access_key = 2;
   string session_token = 3;
   int64 expiration_unix = 4;
+  // The caller's working directory relative to the volume root, delivered by
+  // the platform KeyManager (e.g. "companies/<code>"); optional — absence
+  // keeps current client behavior.
+  string working_dir = 5;
 }

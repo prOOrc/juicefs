@@ -34,10 +34,18 @@ authz-сервису контекст операции (это mkdir?) и уме
 - `drive-sts-client`: расширение контракта клиента — ensure доставленного
   рабочего пути при маунте с company-id (дополняет капабилити, введённую
   change'ом configure-sts-refresh-ttl).
-- `domain-meta-proxy` (modified → ADDED-требование): pass-through op-контекста
-  в authz-вызовы (требование «Authz operation context pass-through»).
+- `domain-meta-proxy` (modified): ADDED-требование «Authz operation context
+  pass-through» + MODIFIED «Authz decision cache» (op-контекст в ключе кэша).
 
 ### Modified Capabilities
+
+## Related Requirements
+
+- ADR-004 (`specs/decisions/ADR-004-static-per-company-s3-keys-selectel.md`) —
+  клиентский контракт data plane; самопровижининг закрывает приёмочный
+  критерий «запись файла через v2 маунт».
+- SRS-001 (`specs/srs/SRS-001-agio-drive-encryption.md`) — требования маунта
+  v2 (`--sts-enabled --company-id`), к которым добавляется ensure.
 
 ## Impact
 

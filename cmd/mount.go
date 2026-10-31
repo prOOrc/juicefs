@@ -33,6 +33,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/object"
@@ -752,14 +753,23 @@ func mount(c *cli.Context) error {
 		if !ok {
 			return fmt.Errorf("sts: storage is not reloadable")
 		}
-		refresher := newSTSRefresher(&platformSTSProvider{
+		provider := &platformSTSProvider{
 			stsProxy:  stsProxy.StsProxyClient(),
 			companyID: companyID,
-		}, holder, defaultSTSTTL)
+		}
+		refresher := newSTSRefresher(provider, holder, defaultSTSTTL)
 		if err := refresher.Start(context.Background()); err != nil {
 			return fmt.Errorf("sts: %w", err)
 		}
 		defer refresher.Stop()
+		// Self-provision (implement-company-dir-self-provision): the initial
+		// credentials fetched above may carry the platform-delivered working
+		// directory. Ensure it exists before serving — a one-time, best-effort
+		// operation that never aborts the mount; without --company-id or an
+		// empty working_dir this is a no-op (previous behavior).
+		// Must run before Chroot below: working_dir is volume-root-relative,
+		// after Chroot the root inode maps onto the --subdir instead.
+		ensureCompanyWorkingDir(metaCli, provider.WorkingDir())
 	}
 
 	logger.Infof("JuiceFS version %s", version.Version())
@@ -809,4 +819,103 @@ func mount(c *cli.Context) error {
 	object.Shutdown(blob)
 	logger.Infof("The juicefs mount process exit successfully, mountpoint: %q", metaConf.MountPoint)
 	return err
+}
+
+// workingDirEnsurer is the minimal meta surface ensureWorkingDir needs (any
+// meta.Meta satisfies it; the narrow interface keeps the ensure unit-testable).
+type workingDirEnsurer interface {
+	Lookup(ctx meta.Context, parent meta.Ino, name string, inode *meta.Ino, attr *meta.Attr, checkPerm bool) syscall.Errno
+	Mkdir(ctx meta.Context, parent meta.Ino, name string, mode uint16, cumask uint16, copysgid uint8, inode *meta.Ino, attr *meta.Attr) syscall.Errno
+}
+
+// workingDirMode is the mode for ensured directories; cumask is 0 so the result
+// is deterministic regardless of the daemon's umask.
+const workingDirMode = 0755
+
+// ensureCompanyWorkingDir ensures the platform-delivered working directory
+// exists inside the mounted volume (implement-company-dir-self-provision,
+// design D4): a denied or failed ensure is a warning — it must never abort the
+// mount. An empty workingDir is a no-op (the platform did not deliver a path).
+func ensureCompanyWorkingDir(m workingDirEnsurer, workingDir string) {
+	if workingDir == "" {
+		return
+	}
+	if err := ensureWorkingDir(m, workingDir); err != nil {
+		logger.Warnf("ensure working directory %q: %s (continuing; the mount is not affected)", workingDir, err)
+		return
+	}
+	if ensureWorkingDirHasComponents(workingDir) {
+		logger.Infof("Working directory %q is ready", workingDir)
+	} else {
+		logger.Debugf("ensure working directory %q: nothing to create", workingDir)
+	}
+}
+
+// ensureWorkingDirHasComponents reports whether workingDir names at least one
+// path segment ("." and bare slashes carry no work).
+func ensureWorkingDirHasComponents(workingDir string) bool {
+	for _, p := range strings.Split(workingDir, "/") {
+		switch p {
+		case "", ".":
+			continue
+		default:
+			return true
+		}
+	}
+	return false
+}
+
+// ensureWorkingDir creates workingDir (relative to the volume root) with
+// mkdir -p semantics: missing levels are created, an already existing directory
+// is success (EEXIST). The path comes exclusively from the platform response —
+// nothing is derived or hardcoded here.
+func ensureWorkingDir(m workingDirEnsurer, workingDir string) error {
+	var comps []string
+	for _, p := range strings.Split(workingDir, "/") {
+		switch p {
+		case "", ".":
+			continue // tolerate leading/trailing slashes and "." segments
+		case "..":
+			return fmt.Errorf("invalid working directory %q: \"..\" is not allowed", workingDir)
+		default:
+			comps = append(comps, p)
+		}
+	}
+	if len(comps) == 0 {
+		return nil
+	}
+	ctx := meta.Background()
+	parent := meta.RootInode
+	for _, name := range comps {
+		ino, err := ensureWorkingDirLevel(ctx, m, parent, name)
+		if err != nil {
+			return err
+		}
+		parent = ino
+	}
+	return nil
+}
+
+// ensureWorkingDirLevel ensures one directory level exists and returns its inode.
+func ensureWorkingDirLevel(ctx meta.Context, m workingDirEnsurer, parent meta.Ino, name string) (meta.Ino, error) {
+	var ino meta.Ino
+	var attr meta.Attr
+	if eno := m.Lookup(ctx, parent, name, &ino, &attr, true); eno == 0 {
+		if attr.Typ != meta.TypeDirectory {
+			return 0, fmt.Errorf("%s exists and is not a directory", name)
+		}
+		return ino, nil
+	} else if eno != syscall.ENOENT {
+		return 0, eno
+	}
+	if eno := m.Mkdir(ctx, parent, name, workingDirMode, 0, 0, &ino, &attr); eno != 0 {
+		if eno != syscall.EEXIST {
+			return 0, eno // denied or failed — reported, not fatal (D4)
+		}
+		// Lost a creation race — resolve the winner's inode.
+		if eno := m.Lookup(ctx, parent, name, &ino, &attr, true); eno != 0 {
+			return 0, eno
+		}
+	}
+	return ino, nil
 }

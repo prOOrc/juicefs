@@ -52,5 +52,6 @@ func (s *MetaProxyServer) GetSTSCredentials(ctx context.Context, req *pb.StsCred
 		SecretAccessKey: resp.GetSecretAccessKey(),
 		SessionToken:    resp.GetSessionToken(),
 		ExpirationUnix:  resp.GetExpirationUnix(),
+		WorkingDir:      resp.GetWorkingDir(),
 	}, nil
 }

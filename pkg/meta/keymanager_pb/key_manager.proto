@@ -55,7 +55,8 @@ service DriveKeyManagerService {
   // counter (0 when absent). Clients compare it on heartbeat to detect revocation.
   rpc GetPermissionGeneration(GetPermissionGenerationRequest) returns (GetPermissionGenerationResponse);
 
-  // GetSTSCredentials issues short-lived S3 credentials scoped to the company prefix.
+  // GetSTSCredentials issues short-lived S3 credentials scoped to the company's
+  // volume. Called by the Meta Proxy on behalf of an authenticated user session.
   rpc GetSTSCredentials(GetSTSCredentialsRequest) returns (GetSTSCredentialsResponse);
 
   // GetNodeSTSCredentials issues short-lived S3 credentials for a render node,
@@ -201,6 +202,10 @@ message GetSTSCredentialsResponse {
   string secret_access_key = 2;
   string session_token = 3;
   int64 expiration_unix = 4;
+  // The caller's working directory relative to the volume root (the resolved
+  // companies prefix plus the company code, e.g. "companies/<companyCode>").
+  // Optional on the wire: absence keeps current client behavior.
+  string working_dir = 5;
 }
 
 // GetNodeSTSCredentialsRequest identifies the calling render node; the YC IAM

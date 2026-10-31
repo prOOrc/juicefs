@@ -63,6 +63,9 @@ type stsProxyClient interface {
 type platformSTSProvider struct {
 	stsProxy  stsProxyClient
 	companyID string
+
+	mu         sync.Mutex
+	workingDir string // the platform-delivered working_dir from the last successful response
 }
 
 func (p *platformSTSProvider) Credentials(ctx context.Context) (stsCredentials, error) {
@@ -72,12 +75,26 @@ func (p *platformSTSProvider) Credentials(ctx context.Context) (stsCredentials, 
 	if err != nil {
 		return stsCredentials{}, fmt.Errorf("sts: GetSTSCredentials: %w", err)
 	}
+	p.mu.Lock()
+	p.workingDir = resp.GetWorkingDir()
+	p.mu.Unlock()
 	return stsCredentials{
 		AccessKey:    resp.GetAccessKeyId(),
 		SecretKey:    resp.GetSecretAccessKey(),
 		SessionToken: resp.GetSessionToken(),
 		Expiry:       time.Unix(resp.GetExpirationUnix(), 0),
 	}, nil
+}
+
+// WorkingDir returns the platform-delivered working directory from the last
+// successful GetSTSCredentials response ("implement-company-dir-self-provision").
+// Empty when the platform did not deliver one (older platforms keep the field
+// optional on the wire) — mounts must then keep the current behavior and
+// ensure nothing.
+func (p *platformSTSProvider) WorkingDir() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.workingDir
 }
 
 // awsAssumeRoleProvider obtains render-node credentials by assuming an IAM role

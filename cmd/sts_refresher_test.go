@@ -163,14 +163,16 @@ func TestSTSRefresher_Stop(t *testing.T) {
 // TestPlatformSTSProvider verifies the user-mode provider (task 7.12, ADR-003):
 // the request goes through the proxy's StsProxyService carrying only the
 // company ID — the proxy fills user_id from the authenticated session itself —
-// and the response fields are mapped into stsCredentials. Proxy errors are
-// propagated (fail-fast).
+// and the response fields are mapped into stsCredentials; the delivered
+// working_dir is kept for the mount-time ensure. Proxy errors are propagated
+// (fail-fast).
 func TestPlatformSTSProvider(t *testing.T) {
 	proxy := &fakeStsProxyClient{resp: &pb.StsCredentialsResponse{
 		AccessKeyId:     "AK-P",
 		SecretAccessKey: "SK-P",
 		SessionToken:    "TOK-P",
 		ExpirationUnix:  time.Now().Add(time.Hour).Unix(),
+		WorkingDir:      "companies/acme",
 	}}
 	p := &platformSTSProvider{stsProxy: proxy, companyID: "comp-1"}
 	cred, err := p.Credentials(context.Background())
@@ -180,6 +182,15 @@ func TestPlatformSTSProvider(t *testing.T) {
 	require.Equal(t, "TOK-P", cred.SessionToken)
 	require.True(t, cred.Expiry.After(time.Now()))
 	require.Equal(t, "comp-1", proxy.lastCompanyID)
+	require.Equal(t, "companies/acme", p.WorkingDir(), "the delivered working_dir must be available for the ensure")
+
+	// An older platform that does not send the field keeps the mount behavior.
+	p2 := &platformSTSProvider{stsProxy: &fakeStsProxyClient{resp: &pb.StsCredentialsResponse{
+		ExpirationUnix: time.Now().Add(time.Hour).Unix(),
+	}}, companyID: "comp-1"}
+	_, err = p2.Credentials(context.Background())
+	require.NoError(t, err)
+	require.Empty(t, p2.WorkingDir(), "no delivered working_dir means no ensure")
 
 	proxy.err = errors.New("proxy down")
 	_, err = p.Credentials(context.Background())

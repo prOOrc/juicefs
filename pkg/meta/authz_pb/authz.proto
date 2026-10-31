@@ -25,11 +25,19 @@ enum Permission {
 	PERMISSION_EDIT = 3; // create, write, delete, rename
 }
 
+// Operation context of the checked filesystem call. OP_OTHER is the default:
+// callers that do not set the field (older proxies) keep the legacy behavior.
+enum Operation {
+	OP_OTHER = 0; // any operation other than the ones below
+	OP_MKDIR = 1; // directory creation (create parent-first chains)
+}
+
 message CheckPermissionRequest {
 	string user_id = 1;        // from OIDC token 'sub' claim
 	string path = 2;           // full filesystem path, e.g. "/company-abc/projects/render/out/frame.exr"
 	Permission permission = 3; // required permission level
 	string volume_name = 4;    // JuiceFS volume name, used to resolve the companies prefix
+	Operation op = 5;          // operation context; default OP_OTHER (legacy behavior)
 }
 
 message CheckPermissionResponse {

@@ -36,12 +36,15 @@ type platformAuthzClient struct {
 }
 
 // CheckPermission calls the authz service to check a single path permission.
-func (c *platformAuthzClient) CheckPermission(ctx context.Context, userID, filePath string, perm AuthzPermission) (bool, error) {
+// op carries the operation context (default OP_OTHER keeps the legacy service
+// behavior for callers that don't classify operations).
+func (c *platformAuthzClient) CheckPermission(ctx context.Context, userID, filePath string, perm AuthzPermission, op authzpb.Operation) (bool, error) {
 	resp, err := c.client.CheckPermission(ctx, &authzpb.CheckPermissionRequest{
 		UserId:     userID,
 		Path:       filePath,
 		Permission: toPBPermission(perm),
 		VolumeName: c.volumeName,
+		Op:         op,
 	})
 	if err != nil {
 		return false, err

@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	authzpb "github.com/juicedata/juicefs/pkg/meta/authz_pb"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/oidc"
 	"github.com/stretchr/testify/assert"
@@ -35,8 +36,8 @@ type mockAuthzClient struct {
 	mock.Mock
 }
 
-func (m *mockAuthzClient) CheckPermission(ctx context.Context, userID, path string, perm AuthzPermission) (bool, error) {
-	args := m.Called(ctx, userID, path, perm)
+func (m *mockAuthzClient) CheckPermission(ctx context.Context, userID, path string, perm AuthzPermission, op authzpb.Operation) (bool, error) {
+	args := m.Called(ctx, userID, path, perm, op)
 	return args.Bool(0), args.Error(1)
 }
 
@@ -149,7 +150,7 @@ func TestInterceptor_DeniesUnauthorizedAccess(t *testing.T) {
 	cache.Set(100, "/company-abc/secret/file.exr")
 
 	mockClient.On("CheckPermission", mock.Anything, "user-123",
-		"/company-abc/secret/file.exr", AuthzPermissionRead).Return(false, nil)
+		"/company-abc/secret/file.exr", AuthzPermissionRead, authzpb.Operation_OP_OTHER).Return(false, nil)
 
 	ai := newTestInterceptor(mockClient, cache, "user-123")
 	interceptor := ai.UnaryInterceptor()
@@ -173,7 +174,7 @@ func TestInterceptor_AllowsAuthorizedAccess(t *testing.T) {
 	cache.Set(100, "/company-abc/projects/file.exr")
 
 	mockClient.On("CheckPermission", mock.Anything, "user-123",
-		"/company-abc/projects/file.exr", AuthzPermissionRead).Return(true, nil)
+		"/company-abc/projects/file.exr", AuthzPermissionRead, authzpb.Operation_OP_OTHER).Return(true, nil)
 
 	ai := newTestInterceptor(mockClient, cache, "user-123")
 	interceptor := ai.UnaryInterceptor()
@@ -218,7 +219,7 @@ func TestInterceptor_DenyOnAuthzError(t *testing.T) {
 	cache.Set(100, "/file")
 
 	mockClient.On("CheckPermission", mock.Anything, "user-123",
-		"/file", AuthzPermissionRead).Return(false, assert.AnError)
+		"/file", AuthzPermissionRead, authzpb.Operation_OP_OTHER).Return(false, assert.AnError)
 
 	ai := newTestInterceptor(mockClient, cache, "user-123")
 	interceptor := ai.UnaryInterceptor()
@@ -471,7 +472,7 @@ func TestInterceptor_NewSlice_Allowed(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.True(t, called, "handler should be called for NewSlice (nothing to path-check)")
-	mockClient.AssertNotCalled(t, "CheckPermission", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	mockClient.AssertNotCalled(t, "CheckPermission", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestInterceptor_OpenWriteFlagsRequiresWrite(t *testing.T) {
@@ -481,7 +482,7 @@ func TestInterceptor_OpenWriteFlagsRequiresWrite(t *testing.T) {
 
 	// O_WRONLY=1 → requires Write permission
 	mockClient.On("CheckPermission", mock.Anything, "user-123",
-		"/file", AuthzPermissionWrite).Return(true, nil)
+		"/file", AuthzPermissionWrite, authzpb.Operation_OP_OTHER).Return(true, nil)
 
 	ai := newTestInterceptor(mockClient, cache, "user-123")
 	interceptor := ai.UnaryInterceptor()
@@ -507,7 +508,7 @@ func TestInterceptor_AccessR_OKRequiresRead(t *testing.T) {
 
 	// R_OK=4 → requires Read permission
 	mockClient.On("CheckPermission", mock.Anything, "user-123",
-		"/file", AuthzPermissionRead).Return(true, nil)
+		"/file", AuthzPermissionRead, authzpb.Operation_OP_OTHER).Return(true, nil)
 
 	ai := newTestInterceptor(mockClient, cache, "user-123")
 	interceptor := ai.UnaryInterceptor()
@@ -566,7 +567,7 @@ func TestAuthzInterceptor_RootPathViewAlwaysAllowed(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, called, "handler should be called for root GetAttr (View always allowed)")
 	// CheckPermission must NOT have been called
-	mockClient.AssertNotCalled(t, "CheckPermission", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	mockClient.AssertNotCalled(t, "CheckPermission", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestAuthzInterceptor_RootPathWriteStillChecked(t *testing.T) {
@@ -574,9 +575,10 @@ func TestAuthzInterceptor_RootPathWriteStillChecked(t *testing.T) {
 	cache := NewInodePathCache(0)
 	// Root inode (1) is pre-populated with "/"
 
-	// Write on root should still go through authz service (not always-allowed)
+	// Write on root should still go through authz service (not always-allowed);
+	// the Mkdir RPC is reported with the OP_MKDIR operation context
 	mockClient.On("CheckPermission", mock.Anything, "user-123",
-		"/", AuthzPermissionWrite).Return(false, nil)
+		"/", AuthzPermissionWrite, authzpb.Operation_OP_MKDIR).Return(false, nil)
 
 	ai := newTestInterceptor(mockClient, cache, "user-123")
 	interceptor := ai.UnaryInterceptor()
@@ -682,7 +684,7 @@ func TestInterceptor_StsProxyService(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.True(t, called, "an authenticated session must reach the handler")
-		mockClient.AssertNotCalled(t, "CheckPermission", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		mockClient.AssertNotCalled(t, "CheckPermission", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("no identity is unauthenticated", func(t *testing.T) {

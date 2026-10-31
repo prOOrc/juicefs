@@ -1,5 +1,28 @@
 # Delta: domain-meta-proxy
 
+## MODIFIED Requirements
+
+### Requirement: Authz decision cache
+
+Authz decisions SHALL be cached per (user id, path, permission, operation context) key with a configurable TTL (`--authz-cache-ttl`, default 30s; TTL ≤ 0 disables caching) and a bounded size (default 10000 entries). Only successful decisions SHALL be cached; authz errors SHALL always trigger a live call. Bulk checks SHALL use partial caching (only cache misses are sent to the service in one batch). Organization-admin status SHALL be cached under a dedicated key with the same TTL. When the cache is full, expired entries SHALL be evicted first; if it remains full, new decisions SHALL not be cached.
+
+The operation context (see "Authz operation context pass-through") SHALL be part of the cache key, so a decision granted for a directory creation on one path can never be served for a different operation on the same path.
+
+Verified-by: pkg/meta/authz_cache_test.go::TestCachingAuthzClient_CachesResult
+Verified-by: pkg/meta/authz_cache_test.go::TestCachingAuthzClient_TTLExpiry
+Verified-by: pkg/meta/authz_cache_test.go::TestCachingAuthzClient_ErrorNotCached
+Verified-by: pkg/meta/authz_cache_test.go::TestCachingAuthzClient_DifferentOps
+
+#### Scenario: A mkdir grant is not served for another operation
+
+- **WHEN** a directory creation on the companies namespace root was allowed and cached, and the same user then attempts a different operation on the same path within the cache TTL
+- **THEN** the cached mkdir decision is not reused — the check goes live and the other operation is denied per its own rule
+
+#### Scenario: Expired decision triggers a live call
+
+- **WHEN** a cached decision older than the TTL is requested
+- **THEN** the authz service SHALL be called again and the cache entry refreshed on success
+
 ## ADDED Requirements
 
 ### Requirement: Authz operation context pass-through

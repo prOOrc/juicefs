@@ -359,3 +359,146 @@ func TestParseUIDGID(t *testing.T) {
 		}
 	}
 }
+
+// fakeDirTree is an in-memory directory tree implementing workingDirEnsurer for
+// the ensureWorkingDir tests (drive-sts-client: Working directory ensure on
+// company mounts). Lookup/Mkdir follow meta semantics: ENOENT for missing
+// entries, EEXIST when Mkdir hits an existing name.
+type fakeDirTree struct {
+	next meta.Ino
+	// children maps a parent inode to its name→inode directory entries.
+	children map[meta.Ino]map[string]meta.Ino
+
+	lookupCalls int
+	mkdirCalls  int
+	mkdirErr    syscall.Errno // when set, every Mkdir fails with it
+	mkdirErrFor string        // when set, only Mkdir of this component name fails
+}
+
+var _ workingDirEnsurer = (*fakeDirTree)(nil)
+
+func newFakeDirTree() *fakeDirTree {
+	return &fakeDirTree{
+		next:     meta.RootInode + 1,
+		children: map[meta.Ino]map[string]meta.Ino{meta.RootInode: {}},
+	}
+}
+
+func (f *fakeDirTree) mkdir(parent meta.Ino, name string) meta.Ino {
+	ino := f.next
+	f.next++
+	f.children[parent][name] = ino
+	f.children[ino] = map[string]meta.Ino{}
+	return ino
+}
+
+func (f *fakeDirTree) Lookup(_ meta.Context, parent meta.Ino, name string, inode *meta.Ino, attr *meta.Attr, _ bool) syscall.Errno {
+	f.lookupCalls++
+	child, ok := f.children[parent][name]
+	if !ok {
+		return syscall.ENOENT
+	}
+	*inode = child
+	*attr = meta.Attr{Typ: meta.TypeDirectory, Mode: workingDirMode}
+	return 0
+}
+
+func (f *fakeDirTree) Mkdir(_ meta.Context, parent meta.Ino, name string, _ uint16, _ uint16, _ uint8, inode *meta.Ino, attr *meta.Attr) syscall.Errno {
+	f.mkdirCalls++
+	if f.mkdirErr != 0 || (f.mkdirErrFor != "" && f.mkdirErrFor == name) {
+		return syscall.EACCES
+	}
+	if _, ok := f.children[parent][name]; ok {
+		return syscall.EEXIST
+	}
+	*inode = f.mkdir(parent, name)
+	*attr = meta.Attr{Typ: meta.TypeDirectory, Mode: workingDirMode}
+	return 0
+}
+
+// mustExist walks the delivered path and asserts every level exists.
+func mustExist(t *testing.T, f *fakeDirTree, workingDir string) {
+	t.Helper()
+	parent := meta.RootInode
+	for _, name := range strings.Split(workingDir, "/") {
+		if name == "" {
+			continue
+		}
+		child, ok := f.children[parent][name]
+		require.True(t, ok, "level %q must exist under inode %d", name, parent)
+		parent = child
+	}
+}
+
+// TestEnsureWorkingDir_CreatesDeliveredPath (drive-sts-client): a fresh volume
+// self-provisions on first mount — the delivered directory tree (both levels)
+// is created under the root.
+func TestEnsureWorkingDir_CreatesDeliveredPath(t *testing.T) {
+	f := newFakeDirTree()
+
+	require.NoError(t, ensureWorkingDir(f, "companies/acme"))
+	mustExist(t, f, "companies/acme")
+	require.Equal(t, 2, f.mkdirCalls, "both levels must be created")
+
+	// A trailing slash in the delivered path must behave the same.
+	f = newFakeDirTree()
+	require.NoError(t, ensureWorkingDir(f, "companies/acme/"))
+	mustExist(t, f, "companies/acme")
+	require.Equal(t, 2, f.mkdirCalls)
+}
+
+// TestEnsureWorkingDir_ExistingDirIsSuccess (drive-sts-client): mkdir -p
+// semantics — an already existing directory tree is a success with no Mkdir
+// issued.
+func TestEnsureWorkingDir_ExistingDirIsSuccess(t *testing.T) {
+	f := newFakeDirTree()
+	require.NoError(t, ensureWorkingDir(f, "companies/acme")) // first mount creates it
+
+	f.mkdirCalls = 0
+	require.NoError(t, ensureWorkingDir(f, "companies/acme")) // remount: already there
+	require.Equal(t, 0, f.mkdirCalls, "existing directories must not be recreated")
+	mustExist(t, f, "companies/acme")
+}
+
+// TestEnsureWorkingDir_DeniedIsWarningOnly (drive-sts-client): a denied ensure
+// surfaces as an error to the warn-only wrapper and must not abort anything —
+// ensureCompanyWorkingDir swallows it (D4: ensure failure never blocks the
+// mount), and the ensure stops at the failed level.
+func TestEnsureWorkingDir_DeniedIsWarningOnly(t *testing.T) {
+	f := newFakeDirTree()
+	f.mkdirErr = syscall.EACCES
+
+	err := ensureWorkingDir(f, "companies/acme")
+	require.Error(t, err, "the denial must surface to the warn-only wrapper")
+	require.Equal(t, 1, f.mkdirCalls, "no further calls after the denial")
+
+	// The mount-path wrapper logs a warning and returns — the mount goes on.
+	f2 := newFakeDirTree()
+	f2.mkdirErr = syscall.EACCES
+	assert.NotPanics(t, func() {
+		ensureCompanyWorkingDir(f2, "companies/acme")
+	})
+
+	// A partial failure (second level denied) is reported the same way.
+	f3 := newFakeDirTree()
+	f3.mkdirErrFor = "acme"
+	require.Error(t, ensureWorkingDir(f3, "companies/acme"))
+	mustExist(t, f3, "companies") // the created prefix stays
+}
+
+// TestEnsureWorkingDir_NoFieldNoBehavior (drive-sts-client): absence of the
+// field preserves the current behavior — no metadata calls at all.
+func TestEnsureWorkingDir_NoFieldNoBehavior(t *testing.T) {
+	f := newFakeDirTree()
+
+	assert.NotPanics(t, func() {
+		ensureCompanyWorkingDir(f, "") // empty working_dir → no-op
+	})
+	require.Equal(t, 0, f.lookupCalls)
+	require.Equal(t, 0, f.mkdirCalls)
+
+	require.NoError(t, ensureWorkingDir(f, ""))
+	require.NoError(t, ensureWorkingDir(f, "/"))
+	require.Equal(t, 0, f.lookupCalls, "empty/root-only paths must issue no calls")
+	require.Equal(t, 0, f.mkdirCalls)
+}

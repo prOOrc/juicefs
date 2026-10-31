@@ -20,6 +20,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	authzpb "github.com/juicedata/juicefs/pkg/meta/authz_pb"
 )
 
 const defaultAuthzCacheSize = 10_000
@@ -60,12 +62,12 @@ func NewCachingAuthzClient(inner AuthzClient, ttl time.Duration, maxSize int) Au
 	}
 }
 
-func (c *cachingAuthzClient) cacheKey(userID, path string, perm AuthzPermission) string {
-	return userID + "\x00" + path + "\x00" + string(rune(perm))
+func (c *cachingAuthzClient) cacheKey(userID, path string, perm AuthzPermission, op authzpb.Operation) string {
+	return userID + "\x00" + path + "\x00" + string(rune(perm)) + "\x00" + string(rune(op))
 }
 
-func (c *cachingAuthzClient) CheckPermission(ctx context.Context, userID, filePath string, perm AuthzPermission) (bool, error) {
-	key := c.cacheKey(userID, filePath, perm)
+func (c *cachingAuthzClient) CheckPermission(ctx context.Context, userID, filePath string, perm AuthzPermission, op authzpb.Operation) (bool, error) {
+	key := c.cacheKey(userID, filePath, perm, op)
 
 	// Fast path: check cache
 	c.mu.Lock()
@@ -82,7 +84,7 @@ func (c *cachingAuthzClient) CheckPermission(ctx context.Context, userID, filePa
 	c.mu.Unlock()
 
 	// Slow path: call the underlying client
-	allowed, err := c.inner.CheckPermission(ctx, userID, filePath, perm)
+	allowed, err := c.inner.CheckPermission(ctx, userID, filePath, perm, op)
 	if err != nil {
 		return false, err
 	}
@@ -115,7 +117,7 @@ func (c *cachingAuthzClient) CheckBulkPermissions(ctx context.Context, userID st
 	now := time.Now()
 	c.mu.Lock()
 	for i, p := range paths {
-		key := c.cacheKey(userID, p, perm)
+		key := c.cacheKey(userID, p, perm, authzpb.Operation_OP_OTHER)
 		if entry, ok := c.entries[key]; ok && now.Before(entry.expiresAt) {
 			results[i] = entry.allowed
 		} else {
@@ -142,7 +144,7 @@ func (c *cachingAuthzClient) CheckBulkPermissions(ctx context.Context, userID st
 	c.mu.Lock()
 	for j, idx := range missIdx {
 		results[idx] = fetched[j]
-		key := c.cacheKey(userID, missPaths[j], perm)
+		key := c.cacheKey(userID, missPaths[j], perm, authzpb.Operation_OP_OTHER)
 		if len(c.entries) < c.maxSize {
 			c.entries[key] = authzCacheEntry{
 				allowed:   fetched[j],
@@ -157,7 +159,7 @@ func (c *cachingAuthzClient) CheckBulkPermissions(ctx context.Context, userID st
 
 func (c *cachingAuthzClient) CheckOrganizationAdmin(ctx context.Context, userID string) (bool, error) {
 	// Admin status is less frequent; use a shorter-lived cache entry
-	key := c.cacheKey(userID, "__admin__", AuthzPermissionAdmin)
+	key := c.cacheKey(userID, "__admin__", AuthzPermissionAdmin, authzpb.Operation_OP_OTHER)
 
 	c.mu.Lock()
 	if entry, ok := c.entries[key]; ok {

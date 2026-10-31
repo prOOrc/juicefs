@@ -86,8 +86,12 @@ type StsCredentialsResponse struct {
 	SecretAccessKey string                 `protobuf:"bytes,2,opt,name=secret_access_key,json=secretAccessKey,proto3" json:"secret_access_key,omitempty"`
 	SessionToken    string                 `protobuf:"bytes,3,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
 	ExpirationUnix  int64                  `protobuf:"varint,4,opt,name=expiration_unix,json=expirationUnix,proto3" json:"expiration_unix,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// The caller's working directory relative to the volume root, delivered by
+	// the platform KeyManager (e.g. "companies/<code>"); optional — absence
+	// keeps current client behavior.
+	WorkingDir    string `protobuf:"bytes,5,opt,name=working_dir,json=workingDir,proto3" json:"working_dir,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *StsCredentialsResponse) Reset() {
@@ -148,6 +152,13 @@ func (x *StsCredentialsResponse) GetExpirationUnix() int64 {
 	return 0
 }
 
+func (x *StsCredentialsResponse) GetWorkingDir() string {
+	if x != nil {
+		return x.WorkingDir
+	}
+	return ""
+}
+
 var File_sts_proxy_proto protoreflect.FileDescriptor
 
 const file_sts_proxy_proto_rawDesc = "" +
@@ -155,12 +166,14 @@ const file_sts_proxy_proto_rawDesc = "" +
 	"\x0fsts_proxy.proto\x12\x02pb\"6\n" +
 	"\x15StsCredentialsRequest\x12\x1d\n" +
 	"\n" +
-	"company_id\x18\x01 \x01(\tR\tcompanyId\"\xb6\x01\n" +
+	"company_id\x18\x01 \x01(\tR\tcompanyId\"\xd7\x01\n" +
 	"\x16StsCredentialsResponse\x12\"\n" +
 	"\raccess_key_id\x18\x01 \x01(\tR\vaccessKeyId\x12*\n" +
 	"\x11secret_access_key\x18\x02 \x01(\tR\x0fsecretAccessKey\x12#\n" +
 	"\rsession_token\x18\x03 \x01(\tR\fsessionToken\x12'\n" +
-	"\x0fexpiration_unix\x18\x04 \x01(\x03R\x0eexpirationUnix2]\n" +
+	"\x0fexpiration_unix\x18\x04 \x01(\x03R\x0eexpirationUnix\x12\x1f\n" +
+	"\vworking_dir\x18\x05 \x01(\tR\n" +
+	"workingDir2]\n" +
 	"\x0fStsProxyService\x12J\n" +
 	"\x11GetSTSCredentials\x12\x19.pb.StsCredentialsRequest\x1a\x1a.pb.StsCredentialsResponseB\x06Z\x04./pbb\x06proto3"
 

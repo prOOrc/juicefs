@@ -31,7 +31,8 @@ import (
 // TestStsProxyPassThrough (task 7.12, ADR-003): the proxy must fill user_id in
 // the KeyManager request from the authenticated OIDC session — the request
 // message carries no identity field, so a client can never name one — and map
-// the platform response fields verbatim.
+// the platform response fields verbatim, including working_dir (self-provision:
+// the client-side ensure has no other source for the path).
 func TestStsProxyPassThrough(t *testing.T) {
 	km := newFakeKeyManager()
 	s := NewMetaProxyServer(nil, 0)
@@ -46,6 +47,7 @@ func TestStsProxyPassThrough(t *testing.T) {
 	require.Equal(t, "fake-secret", resp.GetSecretAccessKey())
 	require.Equal(t, "fake-token", resp.GetSessionToken())
 	require.NotZero(t, resp.GetExpirationUnix())
+	require.Equal(t, "companies/test-company", resp.GetWorkingDir(), "working_dir must be passed through verbatim")
 }
 
 // TestStsProxyRequiresSession: without an authenticated OIDC session the proxy

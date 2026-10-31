@@ -284,6 +284,16 @@ func withDirSlash(p string, attr *Attr) string {
 	return p
 }
 
+// dirAuthzPath returns p in the directory path convention: non-empty paths get
+// a trailing slash unless they already have one. Use it when the path is known
+// to denote a directory regardless of how it was cached.
+func dirAuthzPath(p string) string {
+	if p != "" && !strings.HasSuffix(p, "/") {
+		return p + "/"
+	}
+	return p
+}
+
 // evictOldest removes the oldest entry (must be called with lock held).
 func (c *InodePathCache) evictOldestLocked() {
 	for len(c.order) > 0 {
