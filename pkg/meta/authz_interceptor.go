@@ -319,17 +319,16 @@ func (ai *AuthzInterceptor) resolveChecks(req interface{}, method string) []Auth
 		return []AuthzCheck{{Path: p, Permission: AuthzPermissionWrite}}
 
 	case *pb.MkdirRequest:
-		p := ai.cache.Get(Ino(r.Parent))
-		if p == "" {
+		// Check the CREATED DIRECTORY's path (parent + name, dir convention),
+		// not the parent's: the platform's self-provision rule allows MKDIR only
+		// on the stripped companies-namespace root ("/companies/" → "") and on
+		// the caller's own company dir — a parent-path check would reduce every
+		// root-level mkdir to "edit on /" and let arbitrary root dirs through.
+		child := ai.cache.BuildChildPath(Ino(r.Parent), r.Name)
+		if child == "" {
 			return nil
 		}
-		// The parent of a Mkdir is definitionally a directory: its authz path is
-		// normalized to the dir convention (trailing slash), matching how
-		// directory entries are cached (withDirSlash). The authz service strips
-		// the volume's companies prefix on this exact form ("/companies/" → ""),
-		// which is what the self-provision mkdir rule allows; a missing slash
-		// would leave a non-empty stripped path and be denied.
-		return []AuthzCheck{{Path: dirAuthzPath(p), Permission: AuthzPermissionWrite, Op: authzpb.Operation_OP_MKDIR}}
+		return []AuthzCheck{{Path: dirAuthzPath(child), Permission: AuthzPermissionWrite, Op: authzpb.Operation_OP_MKDIR}}
 
 	case *pb.MknodRequest:
 		p := ai.cache.Get(Ino(r.Parent))

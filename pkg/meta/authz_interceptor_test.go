@@ -576,9 +576,11 @@ func TestAuthzInterceptor_RootPathWriteStillChecked(t *testing.T) {
 	// Root inode (1) is pre-populated with "/"
 
 	// Write on root should still go through authz service (not always-allowed);
-	// the Mkdir RPC is reported with the OP_MKDIR operation context
+	// the Mkdir RPC is reported with the OP_MKDIR operation context and the
+	// CHILD path ("/new-company/" — stripped to "new-company", not a known
+	// company → denied)
 	mockClient.On("CheckPermission", mock.Anything, "user-123",
-		"/", AuthzPermissionWrite, authzpb.Operation_OP_MKDIR).Return(false, nil)
+		"/new-company/", AuthzPermissionWrite, authzpb.Operation_OP_MKDIR).Return(false, nil)
 
 	ai := newTestInterceptor(mockClient, cache, "user-123")
 	interceptor := ai.UnaryInterceptor()

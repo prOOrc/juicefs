@@ -38,10 +38,15 @@ func TestAuthzOpContext_MkdirClassified(t *testing.T) {
 	cache := NewInodePathCache(0)
 	// "companies" dir cached the way handlers cache directory entries
 	// (withDirSlash) — e.g. after the client looked it up in the root.
+	cache.Set(RootInode, "/")
 	cache.Set(100, "/companies/")
 
+	// The check targets the CREATED DIRECTORY ("/companies/acme/", not the
+	// parent): the platform allows MKDIR on the stripped namespace root
+	// ("/companies/" → "") and on the caller's own company dir — anything else
+	// (arbitrary root names) must be denied.
 	mockClient.On("CheckPermission", mock.Anything, "user-123",
-		"/companies/", AuthzPermissionWrite, authzpb.Operation_OP_MKDIR).Return(true, nil)
+		"/companies/acme/", AuthzPermissionWrite, authzpb.Operation_OP_MKDIR).Return(true, nil)
 
 	ai := newTestInterceptor(mockClient, cache, "user-123")
 	interceptor := ai.UnaryInterceptor()
@@ -60,17 +65,18 @@ func TestAuthzOpContext_MkdirClassified(t *testing.T) {
 	mockClient.AssertExpectations(t)
 }
 
-// TestAuthzOpContext_MkdirClassified_SlashlessCacheEntry: even when the parent
-// directory lost its trailing slash in the path cache, the mkdir check path is
-// normalized back to the dir convention — a slashless "/companies" would be
-// stripped to a non-empty path and wrongly denied.
-func TestAuthzOpContext_MkdirClassified_SlashlessCacheEntry(t *testing.T) {
+// TestAuthzOpContext_Mkdir_SlashlessParentStillNormalized: even when the
+// parent directory lost its trailing slash in the path cache, the checked
+// CHILD path is normalized back to the dir convention — a slashless
+// "/companies" parent must still yield "/companies/acme/" (stripped to
+// "acme" on the platform, resolved by the company-scoped rule).
+func TestAuthzOpContext_Mkdir_SlashlessParentStillNormalized(t *testing.T) {
 	mockClient := &mockAuthzClient{}
 	cache := NewInodePathCache(0)
 	cache.Set(100, "/companies")
 
 	mockClient.On("CheckPermission", mock.Anything, "user-123",
-		"/companies/", AuthzPermissionWrite, authzpb.Operation_OP_MKDIR).Return(true, nil)
+		"/companies/acme/", AuthzPermissionWrite, authzpb.Operation_OP_MKDIR).Return(true, nil)
 
 	ai := newTestInterceptor(mockClient, cache, "user-123")
 	interceptor := ai.UnaryInterceptor()
@@ -130,4 +136,32 @@ func TestAuthzOpContext_OtherOpsDefault(t *testing.T) {
 		assert.NoError(t, err)
 		mockClient.AssertExpectations(t)
 	})
+}
+
+// TestAuthzOpContext_MkdirArbitraryRootNameDenied: a root-level mkdir of an
+// arbitrary name checks the child path ("/xyz/" → stripped "xyz", no such
+// company) — the platform denies it, and the proxy must not reach the handler.
+func TestAuthzOpContext_MkdirArbitraryRootNameDenied(t *testing.T) {
+	mockClient := &mockAuthzClient{}
+	cache := NewInodePathCache(0)
+	cache.Set(RootInode, "/")
+
+	mockClient.On("CheckPermission", mock.Anything, "user-123",
+		"/xyz-security-probe/", AuthzPermissionWrite, authzpb.Operation_OP_MKDIR).Return(false, nil)
+
+	ai := newTestInterceptor(mockClient, cache, "user-123")
+	interceptor := ai.UnaryInterceptor()
+
+	called := false
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		called = true
+		return &pb.MkdirResponse{}, nil
+	}
+
+	_, err := interceptor(context.Background(), &pb.MkdirRequest{Parent: uint64(RootInode), Name: "xyz-security-probe"},
+		&grpc.UnaryServerInfo{FullMethod: "/pb.MetaService/Mkdir"}, handler)
+
+	assert.Error(t, err, "denied mkdir must not reach the handler")
+	assert.False(t, called)
+	mockClient.AssertExpectations(t)
 }
