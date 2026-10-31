@@ -80,7 +80,7 @@ func TestSTSRefresher_StartAndRefresh(t *testing.T) {
 		}
 		return stsCredentials{}, errors.New("no more queued credentials")
 	}}
-	ref := newSTSRefresher(provider, holder, time.Hour)
+	ref := newSTSRefresher(provider, holder, defaultSTSRefreshMargin)
 	ref.now = func() time.Time { return now }
 
 	require.NoError(t, ref.Start(context.Background()))
@@ -88,7 +88,7 @@ func TestSTSRefresher_StartAndRefresh(t *testing.T) {
 	require.Equal(t, "AK-1", holder.fmt.AccessKey, "initial fetch must swap credentials")
 	require.Equal(t, "TOK-1", holder.fmt.SessionToken)
 
-	// refresh at ttl/2 installs the next set
+	// refresh at margin × TTL (30m for a 1h expiry at margin 0.5) installs the next set
 	now = now.Add(30 * time.Minute)
 	ref.refresh()
 	require.Equal(t, "AK-2", holder.fmt.AccessKey)
@@ -109,7 +109,7 @@ func TestSTSRefresher_FailSafeUntilExpiry(t *testing.T) {
 		fail = true // only the first call succeeds
 		return stsCredentials{AccessKey: "AK-1", Expiry: now.Add(time.Hour)}, nil
 	}}
-	ref := newSTSRefresher(provider, holder, time.Hour)
+	ref := newSTSRefresher(provider, holder, defaultSTSRefreshMargin)
 	ref.now = func() time.Time { return now }
 
 	require.NoError(t, ref.Start(context.Background()))
@@ -143,13 +143,29 @@ func TestSTSRefresher_FailSafeUntilExpiry(t *testing.T) {
 	require.False(t, expired, "a successful refresh must clear the expiry alarm")
 }
 
+// TestSTSRefresher_FailFastOnInitialError (spec drive-sts-client): a failure
+// to obtain the initial credential set aborts the mount — no silent fallback
+// to static credentials, no refresh loop.
+func TestSTSRefresher_FailFastOnInitialError(t *testing.T) {
+	holder := newTestStorageHolder(t)
+	provider := &fakeSTSProvider{next: func() (stsCredentials, error) {
+		return stsCredentials{}, errors.New("platform unreachable")
+	}}
+	ref := newSTSRefresher(provider, holder, defaultSTSRefreshMargin)
+	err := ref.Start(context.Background())
+	require.Error(t, err, "the initial fetch failure must surface (fail-fast)")
+	require.Contains(t, err.Error(), "initial credentials")
+	require.Equal(t, "static-ak", holder.fmt.AccessKey, "no silent fallback to static credentials")
+	require.Equal(t, 1, provider.calls, "the loop must not start and retry")
+}
+
 // TestSTSRefresher_Stop verifies the loop terminates cleanly.
 func TestSTSRefresher_Stop(t *testing.T) {
 	holder := newTestStorageHolder(t)
 	provider := &fakeSTSProvider{next: func() (stsCredentials, error) {
 		return stsCredentials{AccessKey: "AK-1", Expiry: time.Now().Add(time.Hour)}, nil
 	}}
-	ref := newSTSRefresher(provider, holder, time.Hour)
+	ref := newSTSRefresher(provider, holder, defaultSTSRefreshMargin)
 	require.NoError(t, ref.Start(context.Background()))
 	done := make(chan struct{})
 	go func() { ref.Stop(); close(done) }()
@@ -157,6 +173,105 @@ func TestSTSRefresher_Stop(t *testing.T) {
 	case <-done:
 	case <-time.After(3 * time.Second):
 		t.Fatal("Stop did not return")
+	}
+}
+
+// recordTicks replaces the refresher's ticker factory with one that forwards
+// every created ticker's duration to the returned channel — the observable
+// trace of the loop re-creating the ticker after each delivery (design D2).
+func recordTicks(ref *stsRefresher) chan time.Duration {
+	ticks := make(chan time.Duration, 16)
+	ref.newTicker = func(d time.Duration) *time.Ticker {
+		ticks <- d
+		return time.NewTicker(d)
+	}
+	return ticks
+}
+
+// TestSTSRefresher_IntervalFollowsDeliveredTTL (spec drive-sts-client): the
+// built-in default applies only until the first delivery; a platform TTL of 6m
+// with the default margin polls every 3m.
+func TestSTSRefresher_IntervalFollowsDeliveredTTL(t *testing.T) {
+	holder := newTestStorageHolder(t)
+	now := time.Now()
+	provider := &fakeSTSProvider{next: func() (stsCredentials, error) {
+		return stsCredentials{AccessKey: "AK-1", Expiry: now.Add(6 * time.Minute)}, nil
+	}}
+	ref := newSTSRefresher(provider, holder, defaultSTSRefreshMargin)
+	ref.now = func() time.Time { return now }
+	ticks := recordTicks(ref)
+
+	require.NoError(t, ref.Start(context.Background()))
+	defer ref.Stop()
+	select {
+	case d := <-ticks:
+		require.Equal(t, defaultSTSTTL/2, d, "the initial ticker must use the built-in default")
+	case <-time.After(3 * time.Second):
+		t.Fatal("the loop did not create the initial ticker")
+	}
+	select {
+	case d := <-ticks:
+		require.Equal(t, 3*time.Minute, d, "the ticker must follow the delivered TTL (6m × 0.5)")
+	case <-time.After(3 * time.Second):
+		t.Fatal("the first delivery must re-create the ticker")
+	}
+}
+
+// TestSTSRefresher_IntervalRecomputedAfterSwap (spec drive-sts-client): two
+// consecutive deliveries with different TTLs — the interval after the second
+// delivery is derived from the second TTL.
+func TestSTSRefresher_IntervalRecomputedAfterSwap(t *testing.T) {
+	holder := newTestStorageHolder(t)
+	now := time.Now()
+	var ttl time.Duration = 6 * time.Minute
+	provider := &fakeSTSProvider{next: func() (stsCredentials, error) {
+		return stsCredentials{AccessKey: "AK-1", Expiry: now.Add(ttl)}, nil
+	}}
+	ref := newSTSRefresher(provider, holder, defaultSTSRefreshMargin)
+	ref.now = func() time.Time { return now }
+	ticks := recordTicks(ref)
+
+	require.NoError(t, ref.Start(context.Background()))
+	defer ref.Stop()
+	require.Equal(t, defaultSTSTTL/2, <-ticks, "the initial ticker must use the built-in default")
+	require.Equal(t, 3*time.Minute, <-ticks, "first delivery: 6m × 0.5")
+
+	ttl = 12 * time.Minute
+	ref.refresh()
+	select {
+	case d := <-ticks:
+		require.Equal(t, 6*time.Minute, d, "the second delivery must recompute the interval from its own TTL")
+	case <-time.After(3 * time.Second):
+		t.Fatal("the second delivery must re-create the ticker")
+	}
+}
+
+// TestSTSRefresher_IntervalClampedBeforeExpiry (spec drive-sts-client, design
+// D3): the computed interval never exceeds Expiry−5s and never drops below 5s,
+// including an already expired delivery.
+func TestSTSRefresher_IntervalClampedBeforeExpiry(t *testing.T) {
+	now := time.Now()
+	ref := newSTSRefresher(&fakeSTSProvider{next: func() (stsCredentials, error) {
+		return stsCredentials{}, errors.New("not used")
+	}}, nil, defaultSTSRefreshMargin)
+	ref.now = func() time.Time { return now }
+
+	cases := []struct {
+		name   string
+		ttl    time.Duration
+		margin float64
+		want   time.Duration
+	}{
+		{"computed interval inside the clamp is kept", 20 * time.Minute, 0.9, 18 * time.Minute},
+		{"tick is scheduled strictly before expiry", time.Minute, 1.0, time.Minute - stsExpiryMargin},
+		{"degenerate TTL falls back to the lower bound", 6 * time.Second, defaultSTSRefreshMargin, minSTSRefreshInterval},
+		{"already expired delivery ticks at the lower bound", -time.Minute, defaultSTSRefreshMargin, minSTSRefreshInterval},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ref.margin = c.margin
+			require.Equal(t, c.want, ref.intervalFor(stsCredentials{Expiry: now.Add(c.ttl)}))
+		})
 	}
 }
 

@@ -372,7 +372,7 @@ func renderMount(c *cli.Context) error {
 				companyID:  companyID,
 			}
 		}
-		refresher := newSTSRefresher(provider, holder, defaultSTSTTL)
+		refresher := newSTSRefresher(provider, holder, meta.DefaultSTSRefreshMargin)
 		if err := refresher.Start(context.Background()); err != nil {
 			_ = km.Close()
 			return fmt.Errorf("sts: %w", err)

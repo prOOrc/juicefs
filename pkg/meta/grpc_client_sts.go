@@ -23,6 +23,11 @@ import (
 	"google.golang.org/grpc"
 )
 
+// DefaultSTSRefreshMargin is the default fraction of the delivered STS
+// credential TTL the client polls at (ADR-004: "half of the TTL"); overridden
+// per meta connection with the sts-refresh-margin parameter, bound to (0,1].
+const DefaultSTSRefreshMargin = 0.5
+
 // StsProxyClient returns a client for the meta proxy's StsProxyService
 // (task 7.12, ADR-003): the user-path pass-through for short-lived storage
 // credentials. It shares the meta client's gRPC connection, and every call is
@@ -41,4 +46,12 @@ type stsProxyClient struct {
 
 func (c *stsProxyClient) GetSTSCredentials(ctx context.Context, in *pb.StsCredentialsRequest, opts ...grpc.CallOption) (*pb.StsCredentialsResponse, error) {
 	return pb.NewStsProxyServiceClient(c.m.conn).GetSTSCredentials(c.m.withAuth(ctx), in, opts...)
+}
+
+// STSRefreshMargin returns the sts-refresh-margin parsed from the meta URL
+// (design configure-sts-refresh-ttl D4): the fraction of the delivered STS
+// credential TTL the mount's refresher polls at. Only gRPC (proxy) meta
+// clients implement it; mounts fall back to DefaultSTSRefreshMargin otherwise.
+func (m *grpcMeta) STSRefreshMargin() float64 {
+	return m.stsRefreshMargin
 }

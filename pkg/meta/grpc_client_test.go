@@ -124,6 +124,48 @@ func TestGRPCMetaTLSQueryParsing(t *testing.T) {
 	})
 }
 
+// TestGRPCMetaSTSRefreshMarginParsing (task 2.1, design configure-sts-refresh-ttl
+// D4): the sts-refresh-margin parameter parses in both spellings, defaults to
+// half of the TTL when absent, and any value outside (0,1] fails client
+// creation (fail-fast).
+func TestGRPCMetaSTSRefreshMarginParsing(t *testing.T) {
+	t.Run("absent defaults to half of the TTL", func(t *testing.T) {
+		m, err := newGRPCMeta("grpc", "localhost:9561", DefaultConf())
+		require.NoError(t, err)
+		defer m.Shutdown()
+		assert.Equal(t, DefaultSTSRefreshMargin, m.(*grpcMeta).stsRefreshMargin)
+	})
+
+	t.Run("kebab-case value is kept", func(t *testing.T) {
+		m, err := newGRPCMeta("grpc", "localhost:9561?sts-refresh-margin=0.25", DefaultConf())
+		require.NoError(t, err)
+		defer m.Shutdown()
+		assert.Equal(t, 0.25, m.(*grpcMeta).stsRefreshMargin)
+	})
+
+	t.Run("snake_case alias is accepted", func(t *testing.T) {
+		m, err := newGRPCMeta("grpc", "localhost:9561?sts_refresh_margin=0.75", DefaultConf())
+		require.NoError(t, err)
+		defer m.Shutdown()
+		assert.Equal(t, 0.75, m.(*grpcMeta).stsRefreshMargin)
+	})
+
+	t.Run("upper bound 1 is accepted", func(t *testing.T) {
+		m, err := newGRPCMeta("grpc", "localhost:9561?sts-refresh-margin=1", DefaultConf())
+		require.NoError(t, err)
+		defer m.Shutdown()
+		assert.Equal(t, 1.0, m.(*grpcMeta).stsRefreshMargin)
+	})
+
+	for _, v := range []string{"0", "-0.5", "1.5", "half", "NaN"} {
+		t.Run("out of range "+v+" fails client creation", func(t *testing.T) {
+			_, err := newGRPCMeta("grpc", "localhost:9561?sts-refresh-margin="+v, DefaultConf())
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "sts-refresh-margin")
+		})
+	}
+}
+
 // TestGRPCMetaName tests that grpcMeta returns correct name
 func TestGRPCMetaName(t *testing.T) {
 	// This is a simple test - actual connection tests require a running server

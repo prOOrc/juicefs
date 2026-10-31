@@ -480,7 +480,8 @@ func (h *storageHolder) Shutdown() {
 // rebuilds the object storage from the holder's format with the new STS
 // credentials and replaces both atomically. The Redis Format is NOT updated —
 // STS credentials are ephemeral by design; if a later OnReload installs stale
-// static credentials, the next refresh (within ttl/2) swaps them back.
+// static credentials, the next refresh (within margin × delivered TTL) swaps
+// them back.
 func (h *storageHolder) SetCredentials(accessKey, secretKey, sessionToken string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -728,10 +729,11 @@ func mount(c *cli.Context) error {
 
 	// STS credentials (tasks 7.4/7.12, ADR-003): replace the static storage
 	// credentials with short-lived ones obtained through the meta proxy's
-	// StsProxyService pass-through and refresh them every ttl/2. The proxy fills
-	// user_id from the authenticated OIDC session; authorization (Read on the
-	// company) happens on the platform. Fail-fast: without initial credentials
-	// the mount does not start — there is no silent fallback to static keys.
+	// StsProxyService pass-through and refresh them at sts-refresh-margin × the
+	// delivered TTL. The proxy fills user_id from the authenticated OIDC
+	// session; authorization (Read on the company) happens on the platform.
+	// Fail-fast: without initial credentials the mount does not start — there
+	// is no silent fallback to static keys.
 	if c.Bool("sts-enabled") {
 		if !format.EncryptionEnabled {
 			return fmt.Errorf("--sts-enabled requires an encrypted volume")
@@ -757,7 +759,15 @@ func mount(c *cli.Context) error {
 			stsProxy:  stsProxy.StsProxyClient(),
 			companyID: companyID,
 		}
-		refresher := newSTSRefresher(provider, holder, defaultSTSTTL)
+		// The poll margin is bound to the meta connection (design
+		// configure-sts-refresh-ttl D4); non-gRPC meta clients keep the default.
+		margin := meta.DefaultSTSRefreshMargin
+		if g, ok := metaCli.(interface {
+			STSRefreshMargin() float64
+		}); ok {
+			margin = g.STSRefreshMargin()
+		}
+		refresher := newSTSRefresher(provider, holder, margin)
 		if err := refresher.Start(context.Background()); err != nil {
 			return fmt.Errorf("sts: %w", err)
 		}

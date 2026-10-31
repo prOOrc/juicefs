@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -127,6 +128,10 @@ type grpcMeta struct {
 	oidcConfig   *oidc.Config
 	tokenManager tokenProvider      // interface for testability
 	authGroup    singleflight.Group // coalesces concurrent token requests
+
+	// stsRefreshMargin is the sts-refresh-margin from the meta URL (design
+	// configure-sts-refresh-ttl D4); see STSRefreshMargin.
+	stsRefreshMargin float64
 }
 
 // tokenProvider is the minimal interface needed by withAuth, the heartbeat
@@ -188,6 +193,18 @@ func newGRPCMeta(driver, addr string, conf *Config) (Meta, error) {
 	dirCacheTTL := query.duration("dir-cache-ttl", "dir_cache_ttl", defaultDirCacheTTL)
 	heartbeatInterval := query.duration("heartbeat-interval", "heartbeat_interval", defaultHeartbeatInterval)
 	offlineTimeout := query.duration("offline-timeout", "offline_timeout", defaultOfflineTimeout)
+
+	// STS refresh margin (design configure-sts-refresh-ttl D4): bound to (0,1];
+	// anything else is a meta URL parsing error (fail-fast — a silently
+	// clamped value would hide a misconfigured deployment).
+	stsRefreshMargin := DefaultSTSRefreshMargin
+	if v := query.get("sts-refresh-margin", "sts_refresh_margin"); v != "" {
+		margin, err := strconv.ParseFloat(v, 64)
+		if err != nil || !(margin > 0 && margin <= 1) { // NaN fails the range check too
+			return nil, fmt.Errorf("invalid sts-refresh-margin %q: must be a number in (0,1]", v)
+		}
+		stsRefreshMargin = margin
+	}
 
 	// OIDC configuration (optional)
 	var oidcCfg *oidc.Config
@@ -272,6 +289,7 @@ func newGRPCMeta(driver, addr string, conf *Config) (Meta, error) {
 		dirCacheTTL:       dirCacheTTL,
 		heartbeatInterval: heartbeatInterval,
 		offlineTimeout:    offlineTimeout,
+		stsRefreshMargin:  stsRefreshMargin,
 		lastPermGen:       -1, // unset until the first successful heartbeat (task 7.3)
 		oidcConfig:        oidcCfg,
 	}
