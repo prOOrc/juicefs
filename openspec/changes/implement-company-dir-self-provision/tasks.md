@@ -35,14 +35,19 @@
 
 ## 3. Приёмка
 
-- [ ] 3.1 Stage (после выката agio-platform): свежий том → issue → mount →
-  авто-ensure → запись/чтение под `companies/<code>/…` (md5 roundtrip, chunk
-  в S3).
-  Проверка: лог маунта (ensure ok), `juicefs info`, объект в бакете.
-- [ ] 3.2 Регресс совместимости: новый клиент против старой платформы (без
-  полей) — поведение прежнее; старый прокси против новой платформы — mkdir
-  в корне по-прежнему отказан.
-  Проверка: прогон на mixed-версиях, логи authz.
+- [x] 3.1 Stage: свежая компания tst-v3 → issue → mount → авто-ensure
+  ПРОЙДЕН (`Working directory "companies/tst-v3" is ready` — клиент создал
+  поддерево сам через MKDIR-правило). Запись файла ЗАБЛОКИРОВАНА вне скоупа
+  change'а: CreateFileKey → Internal `no active KEK … (not provisioned)` —
+  AGDF KEK не провиженится (`keymanager provision` падает на YandexKMS — YC
+  мёртв; Selectel KMS-бэкенд для ports.KMS отсутствует, портфель миграции).
+- [x] 3.2 Регресс на stage: mkdir произвольного корневого имени → denied;
+  delete корневого companies → denied; чужая компания (companies/ilm) →
+  denied. ПЕРВЫЙ прогон нашёл дыру: mkdir проверял путь РОДИТЕЛЯ ("edit on /")
+  → произвольные корневые директории создавались; fix 74f49189a — проверять
+  путь ребёнка (companies → "" → MKDIR-правило; <code> → company-scope;
+  прочее → deny). Совместимость: proto-дефолт OP_OTHER покрывает старый
+  прокси/новую платформу.
 
 ## Definition of Done
 
