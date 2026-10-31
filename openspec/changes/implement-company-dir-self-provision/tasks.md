@@ -2,32 +2,32 @@
 
 ## Предусловие
 
-- [ ] 0.1 agio-platform change `allow-self-provision-company-dir` применён
+- [x] 0.1 agio-platform change `allow-self-provision-company-dir` применён
   (proto с полями `op`/`working_dir` доступна как источник).
   Проверка: в agio-platform `go build ./...` зелёный с новыми полями.
 
 ## 1. Proto и прокси
 
-- [ ] 1.1 Регенерация pb-копий agio authz/STS сервисов в `pkg/meta/pb/`
+- [x] 1.1 Регенерация pb-копий agio authz/STS сервисов в `pkg/meta/pb/`
   (+`op` в CheckPermissionRequest, +`working_dir` в StsCredentialsResponse).
   Проверка: `GOTOOLCHAIN=go1.26.5 go build ./...`.
-- [ ] 1.2 Прокси: классификация Mkdir → `OP_MKDIR` в authz-вызове; прочие
+- [x] 1.2 Прокси: классификация Mkdir → `OP_MKDIR` в authz-вызове; прочие
   модифицирующие RPC → `OP_OTHER`.
   Проверка: `GOTOOLCHAIN=go1.26.5 go test ./pkg/meta/ -run AuthzOp`.
-- [ ] 1.3 Тесты: `TestAuthzOpContext_MkdirClassified`,
+- [x] 1.3 Тесты: `TestAuthzOpContext_MkdirClassified`,
   `TestAuthzOpContext_OtherOpsDefault`.
   Проверка: `GOTOOLCHAIN=go1.26.5 go test -count=1 ./pkg/meta/`.
 
 ## 2. Клиентский ensure
 
-- [ ] 2.1 `pkg/meta/grpc_client_sts.go` / контекст маунта: проброс
+- [x] 2.1 `pkg/meta/grpc_client_sts.go` / контекст маунта: проброс
   `working_dir` из ответа GetSTSCredentials.
   Проверка: `GOTOOLCHAIN=go1.26.5 go build ./...`.
-- [ ] 2.2 `cmd/mount.go`: после ready при `--company-id` — mkdir -p
+- [x] 2.2 `cmd/mount.go`: после ready при `--company-id` — mkdir -p
   `working_dir` через meta-клиент (EEXIST = успех, отказ = warn, пустое поле
   = no-op).
   Проверка: `GOTOOLCHAIN=go1.26.5 go test ./cmd/ -run EnsureWorkingDir`.
-- [ ] 2.3 Тесты: `TestEnsureWorkingDir_CreatesDeliveredPath`,
+- [x] 2.3 Тесты: `TestEnsureWorkingDir_CreatesDeliveredPath`,
   `TestEnsureWorkingDir_ExistingDirIsSuccess`,
   `TestEnsureWorkingDir_DeniedIsWarningOnly`,
   `TestEnsureWorkingDir_NoFieldNoBehavior`.
