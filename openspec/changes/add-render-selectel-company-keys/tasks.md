@@ -24,16 +24,16 @@
 
 ## 2. Fork (этот репозиторий, worktree)
 
-- [ ] 2.1 `pkg/meta/keymanager_pb`: regen под новый RPC; `keymanager_client.go`
+- [x] 2.1 `pkg/meta/keymanager_pb`: regen под новый RPC; `keymanager_client.go`
   — `GetNodeStorageCredentials` (+ юнит-тест на моке).
   Проверка: `GOTOOLCHAIN=go1.26.5 go build ./... && go test ./pkg/meta/ -run KeyManager`.
-- [ ] 2.2 `cmd/render_mount.go`: флаг `--node-credential-file`; bootstrap =
+- [x] 2.2 `cmd/render_mount.go`: флаг `--node-credential-file`; bootstrap =
   `ctxWithNodeCredential` → `FetchCompanyKEK` → `GetNodeStorageCredentials`;
   полученная пара → static storage-провайдер, volume/bucket из ответа
   (приоритет над Format); `--iam-token-file`/STS-провайдеры сохраняются для
   yc/aws-режимов (выбор по флагам, без автодетекта).
   Проверка: `go test ./cmd/ -run RenderMount`.
-- [ ] 2.3 Интеграция `TestRenderSelectelBootstrap` (fake KeyManager: KEK +
+- [x] 2.3 Интеграция `TestRenderSelectelBootstrap` (fake KeyManager: KEK +
   пара → render-mount пишет и читает файл компании, chroot-граница держится).
   Проверка: `GOTOOLCHAIN=go1.26.5 go test ./pkg/meta/ -run TestRenderSelectelBootstrap` (локальный Redis).
 
