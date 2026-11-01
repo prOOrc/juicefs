@@ -325,9 +325,12 @@ func getNodeStorageCredentials(ctx context.Context, km meta.KeyManagerClient, p 
 // applyNodeStorageCredentials writes the platform-delivered static pair into a
 // format copy feeding the storage config (the same path volume-format keys use,
 // but sourced from the platform), with the delivered volume/bucket taking
-// priority over the Format (the client does not name volume/bucket). It runs on
-// every format reload so a refresh from Redis never clobbers the
-// platform-delivered credentials.
+// priority over the Format (the client does not name volume/bucket). The
+// platform credentials replace the volume's legacy encrypted storage
+// credentials entirely: the render node never holds the format secret, so the
+// legacy cipher state (KeyEncrypted/EncryptKey/EncryptAlgo) is sanitized away
+// and createStorage takes the plain pair. It runs on every format reload so a
+// refresh from Redis never clobbers the platform-delivered credentials.
 func applyNodeStorageCredentials(f *meta.Format, n *nodeStorageCredentials) {
 	if n == nil {
 		return
@@ -337,6 +340,14 @@ func applyNodeStorageCredentials(f *meta.Format, n *nodeStorageCredentials) {
 	f.AccessKey = n.accessKey
 	f.SecretKey = n.secretKey
 	f.SessionToken = ""
+	// Legacy encrypted storage credentials (created by juicefs format with
+	// --encrypt-algo): createStorage calls Format.Decrypt whenever KeyEncrypted
+	// is set, which is a guaranteed FATAL on a render node (no format secret),
+	// and a leftover EncryptKey would silently enable the legacy RSA data
+	// encryptor on top of the AGIO FEK/CEK data path.
+	f.EncryptKey = ""
+	f.EncryptAlgo = ""
+	f.KeyEncrypted = false
 	if n.volumeName != "" && f.Name != n.volumeName {
 		logger.Warnf("render-mount: platform volume %q overrides format volume %q", n.volumeName, f.Name)
 		f.Name = n.volumeName
@@ -348,10 +359,12 @@ func applyNodeStorageCredentials(f *meta.Format, n *nodeStorageCredentials) {
 }
 
 // staticCredentialsPatch wraps the CLI format patch with the platform-delivered
-// static pair. render-mount hands the composed patch to NewReloadableStorage,
-// which applies it both at bootstrap and inside OnReload before the holder
-// comparison — so a format reloaded from Redis (which carries no platform keys)
-// is re-stamped with them instead of clobbering the mount credentials.
+// static pair, which replaces the volume's legacy encrypted storage credentials
+// entirely (render nodes never hold the format secret). render-mount hands the
+// composed patch to NewReloadableStorage, which applies it both at bootstrap and
+// inside OnReload before the holder comparison — so a format reloaded from
+// Redis (which carries no platform keys) is re-stamped with them instead of
+// clobbering the mount credentials.
 func staticCredentialsPatch(base func(*meta.Format), n *nodeStorageCredentials) func(*meta.Format) {
 	if n == nil {
 		return base

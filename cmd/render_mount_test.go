@@ -281,10 +281,38 @@ func TestRenderStaticKeysFromPlatform(t *testing.T) {
 			want:   meta.Format{Name: "plat-vol", Bucket: "plat-bucket", AccessKey: "plat-ak", SecretKey: "plat-sk"},
 		},
 		{
-			name:   "nil credentials keep the format untouched",
-			format: &meta.Format{Name: "fmt-vol", Bucket: "fmt-bucket", AccessKey: "fmt-ak", SecretKey: "fmt-sk"},
-			creds:  nil,
-			want:   meta.Format{Name: "fmt-vol", Bucket: "fmt-bucket", AccessKey: "fmt-ak", SecretKey: "fmt-sk"},
+			// stage acceptance: legacy encrypted storage creds (created by
+			// juicefs format with --encrypt-algo) must be sanitized away —
+			// Format.Decrypt would FATAL on a render node (no format secret)
+			// and a leftover EncryptKey would enable the legacy RSA data
+			// encryptor on top of the AGIO FEK/CEK data path
+			name: "format with legacy encrypted storage creds is sanitized",
+			format: &meta.Format{
+				Name: "fmt-vol", Bucket: "fmt-bucket",
+				AccessKey: "enc-ak-ciphertext", SecretKey: "enc-sk-ciphertext", SessionToken: "enc-token-ciphertext",
+				EncryptKey: "encrypted-format-secret", EncryptAlgo: "aes-256-gcm", KeyEncrypted: true,
+			},
+			creds: &nodeStorageCredentials{accessKey: "plat-ak", secretKey: "plat-sk", volumeName: "fmt-vol", bucket: "fmt-bucket"},
+			want: meta.Format{
+				Name: "fmt-vol", Bucket: "fmt-bucket",
+				AccessKey: "plat-ak", SecretKey: "plat-sk",
+			},
+		},
+		{
+			// negative: without platform credentials the legacy fields must not
+			// be touched (the guard only fires when the pair is delivered)
+			name: "nil credentials keep the format untouched",
+			format: &meta.Format{
+				Name: "fmt-vol", Bucket: "fmt-bucket",
+				AccessKey: "enc-ak-ciphertext", SecretKey: "enc-sk-ciphertext", SessionToken: "enc-token-ciphertext",
+				EncryptKey: "encrypted-format-secret", EncryptAlgo: "aes-256-gcm", KeyEncrypted: true,
+			},
+			creds: nil,
+			want: meta.Format{
+				Name: "fmt-vol", Bucket: "fmt-bucket",
+				AccessKey: "enc-ak-ciphertext", SecretKey: "enc-sk-ciphertext", SessionToken: "enc-token-ciphertext",
+				EncryptKey: "encrypted-format-secret", EncryptAlgo: "aes-256-gcm", KeyEncrypted: true,
+			},
 		},
 	}
 	for _, c := range cases {
@@ -304,10 +332,15 @@ func TestRenderStaticKeysFromPlatform(t *testing.T) {
 		creds := &nodeStorageCredentials{accessKey: "plat-ak", secretKey: "plat-sk", volumeName: "plat-vol", bucket: "plat-bucket"}
 		patch := staticCredentialsPatch(updateFormat(c), creds)
 
-		// a format as Load(true) delivers it: identity and scope, no platform
-		// keys; Tiers non-nil like a real volume format
+		// a format as Load(true) delivers it on the stage: identity and scope,
+		// legacy encrypted storage credentials from the platform-side format,
+		// no plain keys; Tiers non-nil like a real volume format
 		redisFormat := func() *meta.Format {
-			return (&meta.Format{Name: "redis-vol", Bucket: "redis-bucket", Tiers: object.Tiers{}}).Clone()
+			return (&meta.Format{
+				Name: "redis-vol", Bucket: "redis-bucket", Tiers: object.Tiers{},
+				AccessKey: "enc-ak-ciphertext", SecretKey: "enc-sk-ciphertext",
+				EncryptKey: "encrypted-format-secret", EncryptAlgo: "aes-256-gcm", KeyEncrypted: true,
+			}).Clone()
 		}
 
 		bootstrap := redisFormat()
@@ -321,12 +354,18 @@ func TestRenderStaticKeysFromPlatform(t *testing.T) {
 		require.Empty(t, reload.SessionToken)
 		require.Equal(t, "plat-vol", reload.Name)
 		require.Equal(t, "plat-bucket", reload.Bucket)
+		require.False(t, reload.KeyEncrypted, "Format.Decrypt must never trigger on a render node (no format secret)")
+		require.Empty(t, reload.EncryptKey, "no legacy data encryptor on top of the AGIO FEK/CEK data path")
+		require.Empty(t, reload.EncryptAlgo)
 
-		// Without the platform patch the same reload would deliver empty keys —
-		// exactly the clobber the composition prevents.
+		// Without the platform patch the same reload keeps the legacy encrypted
+		// state (the stage FATAL: Format.Decrypt with no format secret on the
+		// node) and never delivers plain credentials.
 		plain := redisFormat()
 		updateFormat(c)(plain)
-		require.Empty(t, plain.AccessKey)
+		require.True(t, plain.KeyEncrypted)
+		require.Equal(t, "enc-ak-ciphertext", plain.AccessKey)
+		require.Equal(t, "encrypted-format-secret", plain.EncryptKey)
 	})
 }
 
