@@ -285,7 +285,7 @@ FEK → wrapped_cek (slice metadata) → CEK (RAM) → AES-256-GCM чанк в S
 | # | Решение | Обоснование |
 |---|---|---|
 | 3.2 | `SetFileCrypto` — отдельный метод `redisMeta`, НЕ в интерфейсе `Meta`; proxy делает type-assertion (`fileCryptoSetter`) | Не ломаем реализации dbMeta/kvMeta/grpcMeta; целевой бэкенд — Redis |
-| 3.4 | Plaintext FEK возвращается ТОЛЬКО в `OpenResponse` (TLS); `GetAttr`/`Readdir`/`Lookup` несут только `wrapped_fek` (ciphertext) | T6; wrapped_fek без KEK бесполезен, а authz на листинг уже есть |
+| 3.4 | Plaintext FEK возвращается в `CreateResponse` и `OpenResponse` (оба TLS; Create — чтобы первый сеанс записи шифровался, см. Addendum 2026-11-01); `GetAttr`/`Readdir`/`Lookup` несут только `wrapped_fek` (ciphertext) | T6; wrapped_fek без KEK бесполезен, а authz на листинг уже есть; Execution Flow шаг 1 («клиент получает FEK в ответе») без Create-выдачи не выполнялся — противоречие разрешено в пользу шага 1 (Stage 11) |
 | 3.5 | `drive_file_id` генерируется в `grpcMeta.Create` (`uuid.New()`) и передаётся в `CreateRequest`; при `EncryptionEnabled=false` сервер игнорирует поле | FR-USR-3; просто и единообразно |
 | 3.6 | KeyManager-клиент форка: `pkg/meta/keymanager_pb/` (копия proto platform + generated code, паттерн `authz_pb/`) + `keymanager_client.go`; флаги proxy `--keymanager-service`, `--keymanager-tls-*` | Паттерн authz_pb; sync между репозиториями контролируется known-answer тестами (этап 9) |
 | 3.7 | **Валидация identity на Meta Proxy (FR-ID-3):** `extractUserIDFromOIDC` возвращает `(string, error)` и проверяет формат UUID; interceptor при ошибке → `codes.Unauthenticated`. Инвариант A6: `sub` ≡ `user.id`, маппинга нет — в KeyManager-запросы уходит `sub` как есть. В Create/Open проверка дублируется (defense in depth) → EACCES | FR-ID-2/3, AC-16; неверный формат = ошибка конфигурации идентичности, fail-closed на границе доверия |
@@ -523,3 +523,73 @@ FEK → wrapped_cek (slice metadata) → CEK (RAM) → AES-256-GCM чанк в S
 | Гейт приёмки | перепрогон S4 (`tests/stage-runbook.md`) после деплоя: позитивная ветка (креды выдаются, mount `--sts-enabled` читает/пишет чанки) + deny после отзыва; ops: SA render-нод без ролей на S3-бакет, mount под отдельным системным uid; ACL бакета рекомендуется отключить |
 
 Оценка threat-модели: креды существуют только в mount-процессе (SigV4-креды проходят через существующий static-провайдер `pkg/object/s3.go:616-619` и рефрешер `sts_refresher.go:352`); граница «компрометация пользовательского процесса на ноде» закрыта отделением uid; «root ВМ» — принятая граница (T5), окно ограничено TTL.
+
+## Addendum 2026-11-01 (CEK completeness: create-path; source-инвестигация)
+
+Пробел, подтверждённый кодом: `CreateResponse` (pb/meta.proto:276-279) не несёт
+plaintext FEK — Execution Flow шаг 1 («клиент получает FEK в ответе и шифрует
+блоки CEK-ами») в user-режиме не выполнялся. `grpcMeta.Create` оставляет
+`attr.Fek = nil` → `fileWriter.fek == nil` → первый сеанс записи (Create →
+Write → commit) коммитит slices с `WrappedCEK=nil, FekVersion=0`: блоки в S3
+и disk-cache лежат plaintext'ом при `attr.Encrypted=true`; чтение проходит
+тихо (per-slice passthrough, reader.go:890-905). После close+re-open шифрование
+работает — файл «смешанный». Решение 3.4 в исходной редакции прямо запрещало
+Create-выдачу — противоречие разрешено в пользу Execution Flow (правка 3.4
+выше).
+
+### B1. CreateResponse.fek + fek_version (TLS-only, как в Open)
+
+pb-поля 4/5 в `CreateResponse` (аддитивно, proto3 — старые клиенты поле
+игнорируют; CreateResponse — только RPC-тип, в dump/backup не сериализуется).
+Сервер: после `CreateFileKey` достаёт plaintext через уже используемый
+`GetFileFEK` (контракт platform не меняется) и кладёт в ответ только при TLS
+(гейт по образцу Open, grpc_server_fuse.go:245-248). Стоимость: +1 вызов
+KeyManager на Create — Create и так тяжёлый (Mknod+CreateFileKey+
+SetFileCrypto). Mixed «новый клиент + старый прокси» закрывается клиентским
+fallback (B3).
+
+### B2. Идемпотентность крипто-биндинга при overwrite
+
+Серверный Create не отличал новый файл от существующего (base.go:1786-1796:
+Create = Mknod → EEXIST → ok) и безусловно вызывал `CreateFileKey` с НОВЫМ
+`drive_file_id` → `SetFileCrypto` перебинди́л биндинг → старые AGCK
+разворачиваются со старым AAD (cek_encrypt.go:143-149: AAD =
+drive_file_id‖slice_id‖fek_version) → EIO на чтение старых данных. Правило:
+у существующего файла с биндингом (`len(WrappedFek)>0`) CreateFileKey/
+SetFileCrypto НЕ вызываются; FEK в ответ — через `GetFileFEK` существующего
+биндинга (нужен клиенту для CEK overwrite-записи). Легаси-незашифрованный
+файл в зашифрованном томе получает первый биндинг (ломать нечего). Fail-closed
+(EEXIST) недопустим: POSIX обязывает O_CREAT-без-O_EXCL succeed.
+
+### B3. Клиент: resp.Fek + fallback ResolveFileKey
+
+`grpcMeta.Create` при `resp.Fek` непустом — `cacheFek` + `attr.Fek` (writer
+сразу с FEK). Fallback: fek пуст, а `attr.Encrypted` и TLS → клиент сам
+`ResolveFileKey` (хелпер grpc_client_fuse.go:341-365). Цена fallback —
+только в mixed-окне апгрейда.
+
+### B4. Writer fail-closed (defense in depth)
+
+`pkg/vfs/writer.go`: файл с `Encrypted=true` и `fek==nil` → EIO на write
+(writeChunk, :428-437) и запрет коммита slice с `WrappedCEK==nil` для
+Encrypted-файла (commitThread, :244-253). Превращает любую будущую дыру
+«создание без FEK» из тихой порчи в явную ошибку. Изменение отказоустойчивости:
+EIO вместо молчаливого plaintext — зафиксировано как намеренное.
+
+### B5. Mknod: биндинг для S_IFREG
+
+`grpc_server_fuse.go` Mknod (:128-151) не вызывал CreateFileKey/SetFileCrypto
+— mknod-файл оставался plaintext навсегда (Open не выдаст FEK:
+`resp.Encrypted=false`). Правка: S_IFREG на зашифрованном томе → CreateFileKey
++ SetFileCrypto; FEK в ответ не кладём (mknod без fd; первая запись через
+Open, который уже доставляет FEK). S_IFIFO/S_IFCHR/S_IFBLK не трогаются.
+
+### B6. Upgrade-порядок и follow-up
+
+Порядок апгрейда: прокси первым (старые клиенты в этом окне продолжают
+писать plaintext первой сессии — клиентски неразрешимо; окно минимально,
+документируется). Follow-up (вне Stage 11): fsck-детектор записанных
+plaintext-slices в зашифрованных томах (slice с WrappedCEK==nil при
+attr.Encrypted) — отдельная задача диагностики; уже созданные «смешанные»
+файлы валидны по формату (legacy passthrough) и читаемы.
+

@@ -2947,6 +2947,44 @@ bash tests/security/redis-restore-test.sh
 - [ ] Audit package: traceability полная.
 - [ ] Rollout: пилотная компания работает с шифрованием; алерты не стреляют 72 часа; все 16 AC закрыты.
 
+## 11. Stage 11 — CEK completeness: create-path (форк, ветка agio-drive-v2)
+
+**Контекст.** Addendum 2026-11-01 design.md: `CreateResponse` не нёс plaintext FEK — первый сеанс записи коммитил slices без per-file CEK (`WrappedCEK=nil`) при `Encrypted=true` (тихий plaintext в S3); Mknod не бинди́л ключ вовсе; O_CREAT-overwrite перебинди́л `drive_file_id` (ломал AAD старых slices). Решение 3.4 переформулировано (FEK в CreateResponse + OpenResponse, оба TLS).
+
+- [ ] 11.1 pb: поля `fek`/`fek_version` (4/5) в `CreateResponse` (symmetрично
+  OpenResponse, TLS-only комментарии); регенерация `pkg/meta/pb/`. Файл:
+  `pkg/meta/pb/meta.proto`.
+  Проверка: `GOTOOLCHAIN=go1.26.5 go build ./...`.
+- [ ] 11.2 Сервер Create: TLS-гейт → после `CreateFileKey` plaintext через
+  `GetFileFEK` → `resp.Fek/FekVersion`; идемпотентность — существующий
+  биндинг (`len(WrappedFek)>0`) → CreateFileKey/SetFileCrypto НЕ вызывать,
+  FEK существующего биндинга через `GetFileFEK`; легаси-файл → первый
+  биндинг. Файл: `pkg/meta/grpc_server_fuse.go` (Create :170-233).
+  Проверка: `go test ./pkg/meta/ -run 'TestCreate'` — новый файл fek
+  присутствует; overwrite зашифрованного — drive_file_id не изменился;
+  легаси — биндинг выдан.
+- [ ] 11.3 Клиент Create: `resp.Fek` → `cacheFek` + `attr.Fek`; fallback —
+  fek пуст + `attr.Encrypted` + TLS → `ResolveFileKey`. Файл:
+  `pkg/meta/grpc_client_fuse.go` (:264-295).
+  Проверка: `go test ./pkg/meta/ -run 'TestCreateUsesResponseFek|TestCreateFallback'`.
+- [ ] 11.4 Writer fail-closed: `Encrypted && fek==nil` → EIO в writeChunk
+  (:428-437); запрет коммита slice с `WrappedCEK==nil` у Encrypted-файла в
+  commitThread (:244-253). Файл: `pkg/vfs/writer.go`.
+  Проверка: `go test ./pkg/vfs/ -run 'TestEncryptedWrite|TestEncryptedCommit'`.
+- [ ] 11.5 Mknod: S_IFREG на зашифрованном томе → CreateFileKey +
+  SetFileCrypto (без FEK в ответе). Файл: `pkg/meta/grpc_server_fuse.go`
+  (Mknod :128-151).
+  Проверка: `go test ./pkg/meta/ -run TestMknodRegularFile`.
+- [ ] 11.6 Регрессия first-session: create → write → read в одной сессии →
+  slices с WrappedCEK, блоки шифротекст; overwrite-стабильность: create →
+  write → close → open(O_CREAT без O_TRUNC) → старые данные читаются.
+  Расширить существующие encrypt-тесты (`pkg/meta/encrypt_integration_test.go`).
+  Проверка: `make test.meta.core`.
+- [ ] 11.7 Stage-приёмка: пересобрать proxy-образ, на tst-v3 создать файл и
+  записать в одном сеансе → проверить объект в S3 (AGDF-magic / ciphertext),
+  чтение ок. Follow-up вне этой стадии: fsck-детектор plaintext-slices
+  (design B6).
+
 ## Definition of Done
 
 - [ ] D.1 Форк: `go build ./...` и `go vet ./pkg/... cmd/...` — без ошибок.
