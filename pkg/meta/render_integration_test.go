@@ -17,12 +17,22 @@
 package meta
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+	kmpb "github.com/juicedata/juicefs/pkg/meta/keymanager_pb"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/test/bufconn"
 )
 
 // newRenderNode creates a direct redisMeta on the given DB (no proxy, no OIDC —
@@ -144,4 +154,190 @@ func TestRenderCrossCompany(t *testing.T) {
 	var bOpen Attr
 	require.Equal(t, syscall.EIO, renderB.Open(ctx, secretInode, syscall.O_RDONLY, &bOpen))
 	require.Nil(t, bOpen.Fek)
+}
+
+// TestRenderSelectelBootstrap (add-render-selectel-company-keys, task 2.3): a
+// render node in the node-token mode bootstraps over a real gRPC transport —
+// FetchCompanyKEK then GetNodeStorageCredentials with the node credential in
+// the x-node-credential metadata — and mounts with the delivered KEK while the
+// delivered static pair/volume/bucket are the company's. The mount stays
+// bidirectional with the user path, the chroot boundary holds, and an invalid
+// credential fails the bootstrap with an Unauthenticated-class error.
+func TestRenderSelectelBootstrap(t *testing.T) {
+	// DB 2 is shared with TestRenderFullCycle (the Redis default allows only
+	// 16 DBs and every encrypt/render test reuses one); the env flushes it at
+	// setup and tests of this package run sequentially.
+	env := newEncryptTestEnv(t, 2, true)
+	kekA := randomBytes(t, kekSize)
+	kekB := randomBytes(t, kekSize)
+	nodeToken := "test-node-token" // fixed dummy: the fake stores it verbatim, the platform stores only a hash
+	const testBucket = "selectel-test-bucket"
+
+	env.keyMgr.mu.Lock()
+	env.keyMgr.kek = kekA
+	env.keyMgr.nodeToken = nodeToken
+	env.keyMgr.nodeCreds = &kmpb.GetNodeStorageCredentialsResponse{
+		AccessKeyId:     "SELECTEL-TEST-AK",
+		SecretAccessKey: "SELECTEL-TEST-SK",
+		VolumeName:      "selectel-test-volume",
+		Bucket:          testBucket,
+	}
+	env.keyMgr.mu.Unlock()
+
+	ctx := Background()
+	user := uuid.New().String()
+	cctx := userCtx(t, ctx, user)
+
+	// Company trees through the user path: companies/sel (mounted company) and
+	// companies/other (foreign prefix for the chroot check).
+	var companiesInode, selInode, otherInode Ino
+	var dattr Attr
+	require.Equal(t, syscall.Errno(0), env.client.Mkdir(cctx, RootInode, "companies", 0755, 022, 0, &companiesInode, &dattr))
+	require.Equal(t, syscall.Errno(0), env.client.Mkdir(cctx, companiesInode, "sel", 0755, 022, 0, &selInode, &dattr))
+	require.Equal(t, syscall.Errno(0), env.client.Mkdir(cctx, companiesInode, "other", 0755, 022, 0, &otherInode, &dattr))
+
+	// The fake KeyManager must be served over a real transport so the node
+	// credential metadata flows exactly as in production (the interceptor
+	// semantics live inside the fake).
+	km := dialFakeKeyManager(t, env.keyMgr)
+
+	// Bootstrap with the valid node credential: KEK first, then the static pair.
+	bctx, cancel := context.WithTimeout(
+		metadata.AppendToOutgoingContext(Background(), NodeCredentialMetadataKey, nodeToken),
+		10*time.Second)
+	kekResp, err := km.FetchCompanyKEK(bctx, &kmpb.FetchCompanyKEKRequest{CompanyId: testCompanyID, NodeId: "render-node-1"})
+	require.NoError(t, err)
+	require.Equal(t, kekA, kekResp.Kek, "the delivered KEK must be the company KEK")
+	credResp, err := km.GetNodeStorageCredentials(bctx, &kmpb.GetNodeStorageCredentialsRequest{CompanyId: testCompanyID, NodeId: "render-node-1"})
+	cancel()
+	require.NoError(t, err)
+	env.keyMgr.mu.Lock()
+	require.Equal(t, 1, env.keyMgr.nodeCredCalls, "exactly one GetNodeStorageCredentials per bootstrap")
+	require.Equal(t, "render-node-1", env.keyMgr.lastNodeCredID)
+	env.keyMgr.mu.Unlock()
+
+	format := env.meta.GetFormat()
+	require.Equal(t, "SELECTEL-TEST-AK", credResp.AccessKeyId)
+	require.Equal(t, "SELECTEL-TEST-SK", credResp.SecretAccessKey)
+	require.Equal(t, "selectel-test-volume", credResp.VolumeName, "volume comes from the platform facility config, not from the client")
+	require.Equal(t, testBucket, credResp.Bucket)
+
+	// The node mounts with the delivered KEK, chrooted to its company prefix.
+	render := newRenderNode(t, 2, "companies/sel", kekResp.Kek, kekResp.KekVersion, format.UUID, testCompanyID)
+
+	// Bidirectional like TestRenderFullCycle: the user path creates inside the
+	// company tree; the render node (chrooted to companies/sel) opens it and
+	// must resolve exactly the FEK the proxy path delivers.
+	var inode Ino
+	var attr Attr
+	require.Equal(t, syscall.Errno(0), env.client.Create(cctx, selInode, "scene.exr", 0644, 022, 0, &inode, &attr))
+	require.True(t, attr.Encrypted)
+
+	var renderAttr Attr
+	require.Equal(t, syscall.Errno(0), render.Open(ctx, inode, syscall.O_RDONLY, &renderAttr))
+	require.Equal(t, attr.Fek, renderAttr.Fek, "render node must resolve the same FEK as the user client")
+
+	// Reverse direction: the render node creates in its chroot root; the user
+	// client discovers and opens it via the proxy.
+	var rinode Ino
+	var rcreate Attr
+	require.Equal(t, syscall.Errno(0), render.Create(ctx, RootInode, "render.exr", 0644, 022, 0, &rinode, &rcreate))
+	require.True(t, rcreate.Encrypted)
+
+	var uinode Ino
+	var userAttr Attr
+	require.Equal(t, syscall.Errno(0), env.client.Lookup(cctx, selInode, "render.exr", &uinode, &userAttr, false))
+	require.Equal(t, rinode, uinode)
+	require.Equal(t, syscall.Errno(0), env.client.Open(cctx, uinode, syscall.O_RDONLY, &userAttr))
+	require.Equal(t, rcreate.Fek, userAttr.Fek, "user client must resolve the FEK generated by the render node")
+
+	// Chroot boundary holds: another company's render node (different KEK,
+	// chrooted to companies/other) sees neither the name (ENOENT) nor the
+	// content (EIO on direct inode).
+	renderOther := newRenderNode(t, 2, "companies/other", kekB, 1, format.UUID, testCompanyID)
+	var foreignIno Ino
+	var foreignAttr Attr
+	require.Equal(t, syscall.ENOENT, renderOther.Lookup(ctx, RootInode, "scene.exr", &foreignIno, &foreignAttr, false))
+	require.Equal(t, syscall.EIO, renderOther.Open(ctx, inode, syscall.O_RDONLY, &foreignAttr))
+	require.Nil(t, foreignAttr.Fek)
+
+	// Invalid credential: the bootstrap fails closed with the Unauthenticated
+	// class (the platform does not distinguish unknown from revoked).
+	badCtx, badCancel := context.WithTimeout(
+		metadata.AppendToOutgoingContext(Background(), NodeCredentialMetadataKey, "revoked-token"),
+		10*time.Second)
+	_, err = km.FetchCompanyKEK(badCtx, &kmpb.FetchCompanyKEKRequest{CompanyId: testCompanyID, NodeId: "render-node-1"})
+	require.Error(t, err)
+	require.Equal(t, codes.Unauthenticated, status.Code(err), "KEK bootstrap must be Unauthenticated for an invalid credential")
+	_, err = km.GetNodeStorageCredentials(badCtx, &kmpb.GetNodeStorageCredentialsRequest{CompanyId: testCompanyID, NodeId: "render-node-1"})
+	badCancel()
+	require.Error(t, err)
+	require.Equal(t, codes.Unauthenticated, status.Code(err), "credentials bootstrap must be Unauthenticated for an invalid credential")
+	env.keyMgr.mu.Lock()
+	require.Equal(t, 1, env.keyMgr.nodeCredCalls, "a rejected bootstrap must not reach the handler")
+	env.keyMgr.mu.Unlock()
+}
+
+// fakeKeyManagerServer adapts fakeKeyManager to the generated gRPC server
+// interface. The forwarding methods resolve the selector ambiguity with the
+// embedded Unimplemented type; GetBulkFileFEK stays unimplemented (the fake
+// has no batch API).
+type fakeKeyManagerServer struct {
+	kmpb.UnimplementedDriveKeyManagerServiceServer
+	km *fakeKeyManager
+}
+
+func (s *fakeKeyManagerServer) CreateFileKey(ctx context.Context, req *kmpb.CreateFileKeyRequest) (*kmpb.CreateFileKeyResponse, error) {
+	return s.km.CreateFileKey(ctx, req)
+}
+
+func (s *fakeKeyManagerServer) GetFileFEK(ctx context.Context, req *kmpb.GetFileFEKRequest) (*kmpb.GetFileFEKResponse, error) {
+	return s.km.GetFileFEK(ctx, req)
+}
+
+func (s *fakeKeyManagerServer) FetchCompanyKEK(ctx context.Context, req *kmpb.FetchCompanyKEKRequest) (*kmpb.FetchCompanyKEKResponse, error) {
+	return s.km.FetchCompanyKEK(ctx, req)
+}
+
+func (s *fakeKeyManagerServer) ProvisionCompanyKEK(ctx context.Context, req *kmpb.ProvisionCompanyKEKRequest) (*kmpb.ProvisionCompanyKEKResponse, error) {
+	return s.km.ProvisionCompanyKEK(ctx, req)
+}
+
+func (s *fakeKeyManagerServer) GetPermissionGeneration(ctx context.Context, req *kmpb.GetPermissionGenerationRequest) (*kmpb.GetPermissionGenerationResponse, error) {
+	return s.km.GetPermissionGeneration(ctx, req)
+}
+
+func (s *fakeKeyManagerServer) GetSTSCredentials(ctx context.Context, req *kmpb.GetSTSCredentialsRequest) (*kmpb.GetSTSCredentialsResponse, error) {
+	return s.km.GetSTSCredentials(ctx, req)
+}
+
+func (s *fakeKeyManagerServer) GetNodeSTSCredentials(ctx context.Context, req *kmpb.GetNodeSTSCredentialsRequest) (*kmpb.GetSTSCredentialsResponse, error) {
+	return s.km.GetNodeSTSCredentials(ctx, req)
+}
+
+func (s *fakeKeyManagerServer) GetNodeStorageCredentials(ctx context.Context, req *kmpb.GetNodeStorageCredentialsRequest) (*kmpb.GetNodeStorageCredentialsResponse, error) {
+	return s.km.GetNodeStorageCredentials(ctx, req)
+}
+
+func (s *fakeKeyManagerServer) RotateFileFEK(ctx context.Context, req *kmpb.RotateFileFEKRequest) (*kmpb.RotateFileFEKResponse, error) {
+	return s.km.RotateFileFEK(ctx, req)
+}
+
+// dialFakeKeyManager serves the fake KeyManager over a bufconn gRPC transport
+// and returns the production platformKeyManager adapter talking to it, so the
+// node credential metadata is verified over the wire like in production.
+func dialFakeKeyManager(t *testing.T, km *fakeKeyManager) *platformKeyManager {
+	t.Helper()
+	lis := bufconn.Listen(1024 * 1024)
+	t.Cleanup(func() { _ = lis.Close() })
+	gs := grpc.NewServer()
+	kmpb.RegisterDriveKeyManagerServiceServer(gs, &fakeKeyManagerServer{km: km})
+	go func() { _ = gs.Serve(lis) }()
+	t.Cleanup(gs.Stop)
+
+	dialer := func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) }
+	conn, err := grpc.NewClient("passthrough:///bufnet", grpc.WithContextDialer(dialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	return &platformKeyManager{client: kmpb.NewDriveKeyManagerServiceClient(conn), conn: conn}
 }

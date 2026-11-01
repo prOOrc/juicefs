@@ -64,6 +64,12 @@ is the node's only trust anchor (FR-RND-2). The mount is chrooted to
 companies/{--company-code} as defense in depth on top of the cryptographic
 isolation (decision 4.2).
 
+On Selectel deployments (--node-credential-file) the node authenticates with a
+platform-issued node credential (the "x-node-credential" gRPC metadata) and
+bootstraps both the Company KEK and the company's static storage key pair via
+GetNodeStorageCredentials; the delivered volume/bucket and keys override the
+volume format. The two modes are selected solely by the flags — no autodetect.
+
 The command runs in the foreground; a supervisor (e.g. Kubernetes) should
 restart it. The Company KEK is never accepted via CLI or environment — only
 over the TLS 1.3 KeyManager channel (NFR-SEC-2).
@@ -72,7 +78,13 @@ Examples:
 # Mount company "acme" data on a render node (IAM token from instance metadata)
 $ juicefs render-mount redis://localhost /mnt/render \
     --company-id 6f1e... --company-code acme \
-    --keymanager-service keymanager.agio.svc:9000 --keymanager-tls-ca /etc/ssl/agio/ca.pem`,
+    --keymanager-service keymanager.agio.svc:9000 --keymanager-tls-ca /etc/ssl/agio/ca.pem
+
+# Selectel (node-token mode: static keys delivered by the platform)
+$ juicefs render-mount redis://localhost /mnt/render \
+    --company-id 6f1e... --company-code acme \
+    --keymanager-service keymanager.agio.svc:9000 --keymanager-tls-ca /etc/ssl/agio/ca.pem \
+    --node-credential-file /etc/agio/node-credential`,
 		Flags: expandFlags(renderMountFlags(), clientFlags(1.0), shareInfoFlags()),
 	}
 }
@@ -102,6 +114,10 @@ func renderMountFlags() []cli.Flag {
 		&cli.StringFlag{
 			Name:  "iam-token-file",
 			Usage: "file containing the YC IAM token; when empty the token is fetched from the instance metadata service (169.254.169.254)",
+		},
+		&cli.StringFlag{
+			Name:  "node-credential-file",
+			Usage: "file containing the platform-issued node credential (Selectel node-token mode); the file must be owner-readable only (0600); enables node-token bootstrap (FetchCompanyKEK + GetNodeStorageCredentials) instead of YC IAM/STS",
 		},
 		&cli.StringFlag{
 			Name:  "node-id",
@@ -202,6 +218,150 @@ func fetchCompanyKEK(ctx context.Context, km meta.KeyManagerClient, tp iamTokenP
 	return resp.Kek, resp.KekVersion, nil
 }
 
+// nodeCredentialProvider yields the platform-issued node credential that
+// authenticates the render node in the node-token mode (Selectel deployments,
+// add-render-selectel-company-keys): the platform stores only the token's
+// SHA-256 hash and matches the raw value from the "x-node-credential" metadata.
+type nodeCredentialProvider interface {
+	Token(ctx context.Context) (string, error)
+}
+
+// nodeCredentialFileProvider reads the node credential from a file
+// (--node-credential-file) — the Selectel production path.
+type nodeCredentialFileProvider struct {
+	path string
+}
+
+// newNodeCredentialFileProvider validates the file before use: a leaked node
+// credential grants KEK and company key access, so the file must be
+// owner-readable only (0600).
+func newNodeCredentialFileProvider(path string) (*nodeCredentialFileProvider, error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("stat node credential file: %w", err)
+	}
+	if fi.Mode().Perm()&0o077 != 0 {
+		return nil, fmt.Errorf("node credential file %s must be accessible only by its owner (chmod 600)", path)
+	}
+	return &nodeCredentialFileProvider{path: path}, nil
+}
+
+func (p *nodeCredentialFileProvider) Token(ctx context.Context) (string, error) {
+	body, err := os.ReadFile(p.path)
+	if err != nil {
+		return "", fmt.Errorf("read node credential file: %w", err)
+	}
+	token := strings.TrimSpace(string(body))
+	if token == "" {
+		return "", errors.New("empty node credential file")
+	}
+	return token, nil
+}
+
+// ctxWithNodeCredential attaches the platform-issued node credential to ctx in
+// the NodeCredentialMetadataKey gRPC metadata (raw value, no scheme) — the
+// authentication mechanism of the node-token-guarded KeyManager RPCs
+// (FetchCompanyKEK, GetNodeStorageCredentials). The platform interceptor reads
+// exactly this key.
+func ctxWithNodeCredential(ctx context.Context, p nodeCredentialProvider) (context.Context, error) {
+	token, err := p.Token(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return metadata.AppendToOutgoingContext(ctx, meta.NodeCredentialMetadataKey, token), nil
+}
+
+// fetchCompanyKEKNodeToken is fetchCompanyKEK for the node-token mode: the node
+// authenticates with its platform-issued credential instead of the YC IAM token.
+func fetchCompanyKEKNodeToken(ctx context.Context, km meta.KeyManagerClient, p nodeCredentialProvider, companyID, nodeID string) ([]byte, uint32, error) {
+	ctx, err := ctxWithNodeCredential(ctx, p)
+	if err != nil {
+		return nil, 0, err
+	}
+	resp, err := km.FetchCompanyKEK(ctx, &kmpb.FetchCompanyKEKRequest{CompanyId: companyID, NodeId: nodeID})
+	if err != nil {
+		return nil, 0, fmt.Errorf("FetchCompanyKEK: %w", err)
+	}
+	if len(resp.Kek) != renderKEKSize {
+		return nil, 0, fmt.Errorf("unexpected Company KEK size %d (want %d)", len(resp.Kek), renderKEKSize)
+	}
+	return resp.Kek, resp.KekVersion, nil
+}
+
+// nodeStorageCredentials is the company's active static S3 key pair delivered by
+// GetNodeStorageCredentials, together with the volume/bucket scope resolved
+// server-side from the facility config.
+type nodeStorageCredentials struct {
+	accessKey  string
+	secretKey  string
+	volumeName string
+	bucket     string
+}
+
+// getNodeStorageCredentials fetches the company's static S3 key pair
+// (GetNodeStorageCredentials, ADR-004 delivery channel): the node authenticates
+// with its platform-issued credential; volume/bucket come from the platform,
+// never from the request.
+func getNodeStorageCredentials(ctx context.Context, km meta.KeyManagerClient, p nodeCredentialProvider, companyID, nodeID string) (*nodeStorageCredentials, error) {
+	ctx, err := ctxWithNodeCredential(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := km.GetNodeStorageCredentials(ctx, &kmpb.GetNodeStorageCredentialsRequest{CompanyId: companyID, NodeId: nodeID})
+	if err != nil {
+		return nil, fmt.Errorf("GetNodeStorageCredentials: %w", err)
+	}
+	if resp.GetAccessKeyId() == "" || resp.GetSecretAccessKey() == "" {
+		return nil, errors.New("GetNodeStorageCredentials: empty key pair in response")
+	}
+	return &nodeStorageCredentials{
+		accessKey:  resp.GetAccessKeyId(),
+		secretKey:  resp.GetSecretAccessKey(),
+		volumeName: resp.GetVolumeName(),
+		bucket:     resp.GetBucket(),
+	}, nil
+}
+
+// applyNodeStorageCredentials writes the platform-delivered static pair into a
+// format copy feeding the storage config (the same path volume-format keys use,
+// but sourced from the platform), with the delivered volume/bucket taking
+// priority over the Format (the client does not name volume/bucket). It runs on
+// every format reload so a refresh from Redis never clobbers the
+// platform-delivered credentials.
+func applyNodeStorageCredentials(f *meta.Format, n *nodeStorageCredentials) {
+	if n == nil {
+		return
+	}
+	// The platform pair is the complete credential set: a stale session token
+	// from the volume format must not survive it.
+	f.AccessKey = n.accessKey
+	f.SecretKey = n.secretKey
+	f.SessionToken = ""
+	if n.volumeName != "" && f.Name != n.volumeName {
+		logger.Warnf("render-mount: platform volume %q overrides format volume %q", n.volumeName, f.Name)
+		f.Name = n.volumeName
+	}
+	if n.bucket != "" && f.Bucket != n.bucket {
+		logger.Warnf("render-mount: platform bucket %q overrides format bucket %q", n.bucket, f.Bucket)
+		f.Bucket = n.bucket
+	}
+}
+
+// staticCredentialsPatch wraps the CLI format patch with the platform-delivered
+// static pair. render-mount hands the composed patch to NewReloadableStorage,
+// which applies it both at bootstrap and inside OnReload before the holder
+// comparison — so a format reloaded from Redis (which carries no platform keys)
+// is re-stamped with them instead of clobbering the mount credentials.
+func staticCredentialsPatch(base func(*meta.Format), n *nodeStorageCredentials) func(*meta.Format) {
+	if n == nil {
+		return base
+	}
+	return func(f *meta.Format) {
+		base(f)
+		applyNodeStorageCredentials(f, n)
+	}
+}
+
 // platformNodeSTSProvider obtains render-node STS credentials from the platform
 // KeyManager (GetNodeSTSCredentials, ADR-003): the node authenticates with its YC
 // IAM token, the platform scopes the session policy to the mounted volume.
@@ -210,6 +370,21 @@ type platformNodeSTSProvider struct {
 	token      iamTokenProvider
 	nodeID     string
 	companyID  string
+}
+
+// validateRenderModeFlags rejects contradictory mode flags (design D3: the mode
+// is selected by flags only, no mixing, no fallback between node-token, YC IAM
+// and STS).
+func validateRenderModeFlags(c *cli.Context) error {
+	if c.String("node-credential-file") != "" {
+		if c.Bool("sts-enabled") {
+			return errors.New("--node-credential-file cannot be combined with --sts-enabled")
+		}
+		if c.String("iam-token-file") != "" {
+			return errors.New("--node-credential-file cannot be combined with --iam-token-file")
+		}
+	}
+	return nil
 }
 
 func (p *platformNodeSTSProvider) Credentials(ctx context.Context) (stsCredentials, error) {
@@ -265,6 +440,22 @@ func renderMount(c *cli.Context) error {
 	if companyID == "" || companyCode == "" || kmsAddr == "" {
 		logger.Fatalf("render-mount requires --company-id, --company-code and --keymanager-service")
 	}
+	// Mode selection is by flags only, no autodetect (design D3):
+	// --node-credential-file -> node-token (Selectel); otherwise the existing
+	// YC IAM / STS paths. The modes never mix.
+	nodeCredFile := c.String("node-credential-file")
+	stsEnabled := c.Bool("sts-enabled")
+	if err := validateRenderModeFlags(c); err != nil {
+		logger.Fatalf("%s", err)
+	}
+	var ncp nodeCredentialProvider
+	if nodeCredFile != "" {
+		p, err := newNodeCredentialFileProvider(nodeCredFile)
+		if err != nil {
+			return err
+		}
+		ncp = p
+	}
 
 	mp, err := filepath.Abs(mp)
 	if err != nil {
@@ -276,13 +467,16 @@ func renderMount(c *cli.Context) error {
 	prepareMp(mp)
 
 	// 1. Fetch the Company KEK — the node's only trust anchor (FR-RND-2). It is
-	//    never passed via CLI: the node authenticates with its IAM identity and
-	//    receives the KEK over TLS 1.3 (NFR-SEC-2).
+	//    never passed via CLI: the node authenticates with its IAM identity
+	//    (or node credential in the node-token mode) and receives the KEK over
+	//    TLS 1.3 (NFR-SEC-2).
 	var tp iamTokenProvider
-	if f := c.String("iam-token-file"); f != "" {
-		tp = &fileTokenProvider{path: f}
-	} else {
-		tp = &ycMetadataTokenProvider{audience: kmsAddr}
+	if ncp == nil {
+		if f := c.String("iam-token-file"); f != "" {
+			tp = &fileTokenProvider{path: f}
+		} else {
+			tp = &ycMetadataTokenProvider{audience: kmsAddr}
+		}
 	}
 	nodeID := c.String("node-id")
 	if nodeID == "" {
@@ -293,15 +487,30 @@ func renderMount(c *cli.Context) error {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	kek, kekVersion, err := fetchCompanyKEK(ctx, km, tp, companyID, nodeID)
+	var (
+		kek        []byte
+		kekVersion uint32
+		nodeCreds  *nodeStorageCredentials
+	)
+	if ncp != nil {
+		// node-token bootstrap (Selectel): KEK first, then the company's static
+		// storage pair from the same authenticated channel.
+		kek, kekVersion, err = fetchCompanyKEKNodeToken(ctx, km, ncp, companyID, nodeID)
+		if err == nil {
+			nodeCreds, err = getNodeStorageCredentials(ctx, km, ncp, companyID, nodeID)
+		}
+	} else {
+		kek, kekVersion, err = fetchCompanyKEK(ctx, km, tp, companyID, nodeID)
+	}
 	cancel()
 	if err != nil {
 		_ = km.Close()
-		return fmt.Errorf("fetch company KEK: %s", err)
+		return fmt.Errorf("bootstrap render mount: %w", err)
 	}
-	// The KeyManager connection is closed right after the one-shot KEK fetch,
-	// unless --sts-enabled keeps it for periodic GetNodeSTSCredentials refreshes.
-	if !c.Bool("sts-enabled") {
+	// The KeyManager connection is closed right after the one-shot bootstrap
+	// fetches, unless --sts-enabled keeps it for periodic GetNodeSTSCredentials
+	// refreshes (node-token mode has no STS and closes here too).
+	if !stsEnabled {
 		if cerr := km.Close(); cerr != nil {
 			logger.Warnf("close keymanager client: %s", cerr)
 		}
@@ -331,7 +540,12 @@ func renderMount(c *cli.Context) error {
 	setFuseOption(c, format, vfsConf)
 	forceRenderCacheTimeouts(c)
 
-	blob, err := NewReloadableStorage(format, metaCli, updateFormat(c))
+	// Static keys in the node-token mode: the platform-delivered pair replaces
+	// the volume-format keys (and the delivered volume/bucket win over the
+	// Format). The patch is applied to every format reload so a refresh from
+	// Redis never restores stale credentials.
+	patch := staticCredentialsPatch(updateFormat(c), nodeCreds)
+	blob, err := NewReloadableStorage(format, metaCli, patch)
 	if err != nil {
 		return fmt.Errorf("object storage: %s", err)
 	}
@@ -343,7 +557,7 @@ func renderMount(c *cli.Context) error {
 	// platform-issued STS via GetNodeSTSCredentials — the node authenticates
 	// with its IAM token, the platform derives volume and bucket itself.
 	// Fail-fast on the initial fetch.
-	if c.Bool("sts-enabled") {
+	if stsEnabled {
 		holder, ok := blob.(*storageHolder)
 		if !ok {
 			_ = km.Close()

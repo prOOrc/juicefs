@@ -8,7 +8,7 @@ The render client SHALL mount the volume directly against Redis and S3 without M
 
 Storage credentials for the render node SHALL be the company's active static key pair delivered by the platform: `GetNodeStorageCredentials` SHALL return the decrypted active pair (plus the volume name and bucket derived from the facility config), and the render client SHALL install them as its static S3 credentials. STS providers (YC node STS, AWS AssumeRole) SHALL remain only for deployments configured with those providers. The node SHALL authenticate the bootstrap RPCs (`FetchCompanyKEK`, `GetNodeStorageCredentials`) with the platform node credential per the deployment's `node_auth` mode (`yc-iam` — legacy YC IAM token; `node-token` — platform-issued per-node static token); a revoked or unknown credential SHALL fail closed with no KEK and no key material.
 
-Verified-by: pkg/meta/render_meta_test.go::TestRenderStaticKeysFromPlatform
+Verified-by: cmd/render_mount_test.go::TestRenderStaticKeysFromPlatform
 Verified-by: pkg/meta/render_integration_test.go::TestRenderSelectelBootstrap
 
 #### Scenario: Cross-company file is unreadable

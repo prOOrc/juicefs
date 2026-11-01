@@ -117,6 +117,10 @@ func (k *countingKeyManager) GetNodeSTSCredentials(ctx context.Context, req *kmp
 	return &kmpb.GetSTSCredentialsResponse{}, nil
 }
 
+func (k *countingKeyManager) GetNodeStorageCredentials(ctx context.Context, req *kmpb.GetNodeStorageCredentialsRequest) (*kmpb.GetNodeStorageCredentialsResponse, error) {
+	return &kmpb.GetNodeStorageCredentialsResponse{}, nil
+}
+
 func (k *countingKeyManager) RotateFileFEK(ctx context.Context, req *kmpb.RotateFileFEKRequest) (*kmpb.RotateFileFEKResponse, error) {
 	return nil, fmt.Errorf("not implemented in load harness")
 }

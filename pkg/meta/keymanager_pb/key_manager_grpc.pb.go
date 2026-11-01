@@ -32,16 +32,17 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DriveKeyManagerService_CreateFileKey_FullMethodName           = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/CreateFileKey"
-	DriveKeyManagerService_GetFileFEK_FullMethodName              = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/GetFileFEK"
-	DriveKeyManagerService_GetBulkFileFEK_FullMethodName          = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/GetBulkFileFEK"
-	DriveKeyManagerService_FetchCompanyKEK_FullMethodName         = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/FetchCompanyKEK"
-	DriveKeyManagerService_ProvisionCompanyKEK_FullMethodName     = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/ProvisionCompanyKEK"
-	DriveKeyManagerService_GetPermissionGeneration_FullMethodName = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/GetPermissionGeneration"
-	DriveKeyManagerService_GetSTSCredentials_FullMethodName       = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/GetSTSCredentials"
-	DriveKeyManagerService_GetNodeSTSCredentials_FullMethodName   = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/GetNodeSTSCredentials"
-	DriveKeyManagerService_RotateFileFEK_FullMethodName           = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/RotateFileFEK"
-	DriveKeyManagerService_RotateCompanyKEK_FullMethodName        = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/RotateCompanyKEK"
+	DriveKeyManagerService_CreateFileKey_FullMethodName             = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/CreateFileKey"
+	DriveKeyManagerService_GetFileFEK_FullMethodName                = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/GetFileFEK"
+	DriveKeyManagerService_GetBulkFileFEK_FullMethodName            = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/GetBulkFileFEK"
+	DriveKeyManagerService_FetchCompanyKEK_FullMethodName           = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/FetchCompanyKEK"
+	DriveKeyManagerService_ProvisionCompanyKEK_FullMethodName       = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/ProvisionCompanyKEK"
+	DriveKeyManagerService_GetPermissionGeneration_FullMethodName   = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/GetPermissionGeneration"
+	DriveKeyManagerService_GetSTSCredentials_FullMethodName         = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/GetSTSCredentials"
+	DriveKeyManagerService_GetNodeSTSCredentials_FullMethodName     = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/GetNodeSTSCredentials"
+	DriveKeyManagerService_GetNodeStorageCredentials_FullMethodName = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/GetNodeStorageCredentials"
+	DriveKeyManagerService_RotateFileFEK_FullMethodName             = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/RotateFileFEK"
+	DriveKeyManagerService_RotateCompanyKEK_FullMethodName          = "/agio.platform.drive.crypto.v1.DriveKeyManagerService/RotateCompanyKEK"
 )
 
 // DriveKeyManagerServiceClient is the client API for DriveKeyManagerService service.
@@ -51,7 +52,7 @@ const (
 // DriveKeyManagerService manages the agio Drive encryption key hierarchy
 // (Per-File FEK + Company KEK). It is served on the same gRPC server as
 // AuthzService. Consumers: the JuiceFS Meta Proxy (user clients) and render nodes
-// (FetchCompanyKEK only).
+// (FetchCompanyKEK, GetNodeSTSCredentials and GetNodeStorageCredentials).
 //
 // Path contract: file-scoped RPCs (CreateFileKey, GetFileFEK, GetBulkFileFEK,
 // RotateFileFEK) receive the FULL client path (e.g. "/company-abc/projects/file.exr")
@@ -86,6 +87,13 @@ type DriveKeyManagerServiceClient interface {
 	// authenticated by the node's YC IAM token (ADR-003). node_id is an audit
 	// fallback only (mirrors FetchCompanyKEKRequest.node_id).
 	GetNodeSTSCredentials(ctx context.Context, in *GetNodeSTSCredentialsRequest, opts ...grpc.CallOption) (*GetSTSCredentialsResponse, error)
+	// GetNodeStorageCredentials returns the company's active static S3 key pair
+	// (ADR-004) to a render node — the Selectel delivery channel of the
+	// user-path credentials (add-render-selectel-company-keys). Authenticated by
+	// the node credential (platform-issued token) like FetchCompanyKEK, but only
+	// when the server runs in the node-token mode; volume/bucket are resolved
+	// from the facility config, never taken from the request.
+	GetNodeStorageCredentials(ctx context.Context, in *GetNodeStorageCredentialsRequest, opts ...grpc.CallOption) (*GetNodeStorageCredentialsResponse, error)
 	// RotateFileFEK generates a new FEK version for an existing file. Requires an
 	// organization admin (SpiceDB manage permission on the organization).
 	RotateFileFEK(ctx context.Context, in *RotateFileFEKRequest, opts ...grpc.CallOption) (*RotateFileFEKResponse, error)
@@ -182,6 +190,16 @@ func (c *driveKeyManagerServiceClient) GetNodeSTSCredentials(ctx context.Context
 	return out, nil
 }
 
+func (c *driveKeyManagerServiceClient) GetNodeStorageCredentials(ctx context.Context, in *GetNodeStorageCredentialsRequest, opts ...grpc.CallOption) (*GetNodeStorageCredentialsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetNodeStorageCredentialsResponse)
+	err := c.cc.Invoke(ctx, DriveKeyManagerService_GetNodeStorageCredentials_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *driveKeyManagerServiceClient) RotateFileFEK(ctx context.Context, in *RotateFileFEKRequest, opts ...grpc.CallOption) (*RotateFileFEKResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RotateFileFEKResponse)
@@ -209,7 +227,7 @@ func (c *driveKeyManagerServiceClient) RotateCompanyKEK(ctx context.Context, in 
 // DriveKeyManagerService manages the agio Drive encryption key hierarchy
 // (Per-File FEK + Company KEK). It is served on the same gRPC server as
 // AuthzService. Consumers: the JuiceFS Meta Proxy (user clients) and render nodes
-// (FetchCompanyKEK only).
+// (FetchCompanyKEK, GetNodeSTSCredentials and GetNodeStorageCredentials).
 //
 // Path contract: file-scoped RPCs (CreateFileKey, GetFileFEK, GetBulkFileFEK,
 // RotateFileFEK) receive the FULL client path (e.g. "/company-abc/projects/file.exr")
@@ -244,6 +262,13 @@ type DriveKeyManagerServiceServer interface {
 	// authenticated by the node's YC IAM token (ADR-003). node_id is an audit
 	// fallback only (mirrors FetchCompanyKEKRequest.node_id).
 	GetNodeSTSCredentials(context.Context, *GetNodeSTSCredentialsRequest) (*GetSTSCredentialsResponse, error)
+	// GetNodeStorageCredentials returns the company's active static S3 key pair
+	// (ADR-004) to a render node — the Selectel delivery channel of the
+	// user-path credentials (add-render-selectel-company-keys). Authenticated by
+	// the node credential (platform-issued token) like FetchCompanyKEK, but only
+	// when the server runs in the node-token mode; volume/bucket are resolved
+	// from the facility config, never taken from the request.
+	GetNodeStorageCredentials(context.Context, *GetNodeStorageCredentialsRequest) (*GetNodeStorageCredentialsResponse, error)
 	// RotateFileFEK generates a new FEK version for an existing file. Requires an
 	// organization admin (SpiceDB manage permission on the organization).
 	RotateFileFEK(context.Context, *RotateFileFEKRequest) (*RotateFileFEKResponse, error)
@@ -283,6 +308,9 @@ func (UnimplementedDriveKeyManagerServiceServer) GetSTSCredentials(context.Conte
 }
 func (UnimplementedDriveKeyManagerServiceServer) GetNodeSTSCredentials(context.Context, *GetNodeSTSCredentialsRequest) (*GetSTSCredentialsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetNodeSTSCredentials not implemented")
+}
+func (UnimplementedDriveKeyManagerServiceServer) GetNodeStorageCredentials(context.Context, *GetNodeStorageCredentialsRequest) (*GetNodeStorageCredentialsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetNodeStorageCredentials not implemented")
 }
 func (UnimplementedDriveKeyManagerServiceServer) RotateFileFEK(context.Context, *RotateFileFEKRequest) (*RotateFileFEKResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RotateFileFEK not implemented")
@@ -456,6 +484,24 @@ func _DriveKeyManagerService_GetNodeSTSCredentials_Handler(srv interface{}, ctx 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DriveKeyManagerService_GetNodeStorageCredentials_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetNodeStorageCredentialsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DriveKeyManagerServiceServer).GetNodeStorageCredentials(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DriveKeyManagerService_GetNodeStorageCredentials_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DriveKeyManagerServiceServer).GetNodeStorageCredentials(ctx, req.(*GetNodeStorageCredentialsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _DriveKeyManagerService_RotateFileFEK_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RotateFileFEKRequest)
 	if err := dec(in); err != nil {
@@ -530,6 +576,10 @@ var DriveKeyManagerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetNodeSTSCredentials",
 			Handler:    _DriveKeyManagerService_GetNodeSTSCredentials_Handler,
+		},
+		{
+			MethodName: "GetNodeStorageCredentials",
+			Handler:    _DriveKeyManagerService_GetNodeStorageCredentials_Handler,
 		},
 		{
 			MethodName: "RotateFileFEK",

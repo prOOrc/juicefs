@@ -29,6 +29,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -88,6 +89,17 @@ type fakeKeyManager struct {
 	// Stage 7.12: the user_id the last GetSTSCredentials saw (STS pass-through
 	// test: the proxy must fill it from the authenticated session).
 	lastSTSUser string
+
+	// add-render-selectel-company-keys: node-token mode (Selectel). When
+	// nodeToken is non-empty, the guarded RPCs (FetchCompanyKEK,
+	// GetNodeStorageCredentials) require the raw token in the
+	// NodeCredentialMetadataKey metadata — mirroring the platform interceptor
+	// (design D3); anything else is Unauthenticated. nodeCreds is the static
+	// pair the fake delivers.
+	nodeToken      string
+	nodeCreds      *kmpb.GetNodeStorageCredentialsResponse
+	nodeCredCalls  int
+	lastNodeCredID string
 }
 
 var _ KeyManagerClient = (*fakeKeyManager)(nil)
@@ -173,6 +185,9 @@ func (f *fakeKeyManager) GetFileFEK(ctx context.Context, req *kmpb.GetFileFEKReq
 func (f *fakeKeyManager) FetchCompanyKEK(ctx context.Context, req *kmpb.FetchCompanyKEKRequest) (*kmpb.FetchCompanyKEKResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if err := f.checkNodeCredential(ctx); err != nil {
+		return nil, err
+	}
 	if req.CompanyId != testCompanyID {
 		return nil, status.Error(codes.NotFound, "unknown company")
 	}
@@ -227,6 +242,43 @@ func (f *fakeKeyManager) GetNodeSTSCredentials(ctx context.Context, req *kmpb.Ge
 		return nil, status.Error(codes.NotFound, "unknown company")
 	}
 	return f.GetSTSCredentials(ctx, &kmpb.GetSTSCredentialsRequest{UserId: req.NodeId, CompanyId: req.CompanyId})
+}
+
+// checkNodeCredential mirrors the platform node-token interceptor (design D3):
+// in node-token mode (nodeToken set) the guarded RPCs require the raw token in
+// the NodeCredentialMetadataKey metadata; a missing, unknown or revoked
+// credential is Unauthenticated and the handler must not be called. With no
+// nodeToken the fake stays in the IAM mode and accepts the call.
+func (f *fakeKeyManager) checkNodeCredential(ctx context.Context) error {
+	if f.nodeToken == "" {
+		return nil
+	}
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return status.Error(codes.Unauthenticated, "missing node credential")
+	}
+	vals := md.Get(NodeCredentialMetadataKey)
+	if len(vals) == 0 || strings.TrimSpace(vals[0]) != f.nodeToken {
+		return status.Error(codes.Unauthenticated, "invalid or revoked node credential")
+	}
+	return nil
+}
+
+func (f *fakeKeyManager) GetNodeStorageCredentials(ctx context.Context, req *kmpb.GetNodeStorageCredentialsRequest) (*kmpb.GetNodeStorageCredentialsResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.checkNodeCredential(ctx); err != nil {
+		return nil, err
+	}
+	if req.CompanyId != testCompanyID {
+		return nil, status.Error(codes.NotFound, "unknown company")
+	}
+	f.nodeCredCalls++
+	f.lastNodeCredID = req.NodeId
+	if f.nodeCreds == nil {
+		return nil, status.Error(codes.NotFound, "no active storage credentials for company")
+	}
+	return f.nodeCreds, nil
 }
 
 // RotateFileFEK simulates the platform handler (task 7.5): a fresh FEK wrapped

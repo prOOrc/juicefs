@@ -426,6 +426,10 @@ func (s *stubKeyManager) GetNodeSTSCredentials(ctx context.Context, req *kmpb.Ge
 	return s.stsResp, nil
 }
 
+func (s *stubKeyManager) GetNodeStorageCredentials(ctx context.Context, req *kmpb.GetNodeStorageCredentialsRequest) (*kmpb.GetNodeStorageCredentialsResponse, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
 func (s *stubKeyManager) RotateFileFEK(ctx context.Context, req *kmpb.RotateFileFEKRequest) (*kmpb.RotateFileFEKResponse, error) {
 	return nil, fmt.Errorf("not implemented")
 }
@@ -485,6 +489,10 @@ func (b *bufconnKeyManager) GetSTSCredentials(ctx context.Context, req *kmpb.Get
 
 func (b *bufconnKeyManager) GetNodeSTSCredentials(ctx context.Context, req *kmpb.GetNodeSTSCredentialsRequest) (*kmpb.GetSTSCredentialsResponse, error) {
 	return b.client.GetNodeSTSCredentials(ctx, req)
+}
+
+func (b *bufconnKeyManager) GetNodeStorageCredentials(ctx context.Context, req *kmpb.GetNodeStorageCredentialsRequest) (*kmpb.GetNodeStorageCredentialsResponse, error) {
+	return b.client.GetNodeStorageCredentials(ctx, req)
 }
 
 func (b *bufconnKeyManager) RotateFileFEK(ctx context.Context, req *kmpb.RotateFileFEKRequest) (*kmpb.RotateFileFEKResponse, error) {

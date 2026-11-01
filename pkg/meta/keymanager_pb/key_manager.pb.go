@@ -1162,6 +1162,135 @@ func (x *GetNodeSTSCredentialsRequest) GetNodeId() string {
 	return ""
 }
 
+// GetNodeStorageCredentialsRequest identifies the calling render node and the
+// company whose static pair it mounts. The node credential (platform-issued
+// token) is carried in the gRPC metadata and verified by the interceptor, not
+// here.
+type GetNodeStorageCredentialsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CompanyId     string                 `protobuf:"bytes,1,opt,name=company_id,json=companyId,proto3" json:"company_id,omitempty"`
+	NodeId        string                 `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // render node identity (audit fallback from the verified node credential)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetNodeStorageCredentialsRequest) Reset() {
+	*x = GetNodeStorageCredentialsRequest{}
+	mi := &file_key_manager_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNodeStorageCredentialsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNodeStorageCredentialsRequest) ProtoMessage() {}
+
+func (x *GetNodeStorageCredentialsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_key_manager_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNodeStorageCredentialsRequest.ProtoReflect.Descriptor instead.
+func (*GetNodeStorageCredentialsRequest) Descriptor() ([]byte, []int) {
+	return file_key_manager_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *GetNodeStorageCredentialsRequest) GetCompanyId() string {
+	if x != nil {
+		return x.CompanyId
+	}
+	return ""
+}
+
+func (x *GetNodeStorageCredentialsRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+// GetNodeStorageCredentialsResponse carries the company's active static S3 key
+// pair (over TLS) plus the volume/bucket scope resolved from the facility
+// config. The pair lives until rotated or revoked; the node re-fetches it at
+// every bootstrap and must not persist it beyond the mount session. It is
+// never logged by the platform.
+type GetNodeStorageCredentialsResponse struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	AccessKeyId     string                 `protobuf:"bytes,1,opt,name=access_key_id,json=accessKeyId,proto3" json:"access_key_id,omitempty"`
+	SecretAccessKey string                 `protobuf:"bytes,2,opt,name=secret_access_key,json=secretAccessKey,proto3" json:"secret_access_key,omitempty"`
+	VolumeName      string                 `protobuf:"bytes,3,opt,name=volume_name,json=volumeName,proto3" json:"volume_name,omitempty"`
+	Bucket          string                 `protobuf:"bytes,4,opt,name=bucket,proto3" json:"bucket,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *GetNodeStorageCredentialsResponse) Reset() {
+	*x = GetNodeStorageCredentialsResponse{}
+	mi := &file_key_manager_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNodeStorageCredentialsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNodeStorageCredentialsResponse) ProtoMessage() {}
+
+func (x *GetNodeStorageCredentialsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_key_manager_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNodeStorageCredentialsResponse.ProtoReflect.Descriptor instead.
+func (*GetNodeStorageCredentialsResponse) Descriptor() ([]byte, []int) {
+	return file_key_manager_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *GetNodeStorageCredentialsResponse) GetAccessKeyId() string {
+	if x != nil {
+		return x.AccessKeyId
+	}
+	return ""
+}
+
+func (x *GetNodeStorageCredentialsResponse) GetSecretAccessKey() string {
+	if x != nil {
+		return x.SecretAccessKey
+	}
+	return ""
+}
+
+func (x *GetNodeStorageCredentialsResponse) GetVolumeName() string {
+	if x != nil {
+		return x.VolumeName
+	}
+	return ""
+}
+
+func (x *GetNodeStorageCredentialsResponse) GetBucket() string {
+	if x != nil {
+		return x.Bucket
+	}
+	return ""
+}
+
 // RotateFileFEKRequest: the company is derived server-side from the path (the caller
 // is an org admin acting on a file, not on a company).
 type RotateFileFEKRequest struct {
@@ -1179,7 +1308,7 @@ type RotateFileFEKRequest struct {
 
 func (x *RotateFileFEKRequest) Reset() {
 	*x = RotateFileFEKRequest{}
-	mi := &file_key_manager_proto_msgTypes[17]
+	mi := &file_key_manager_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1191,7 +1320,7 @@ func (x *RotateFileFEKRequest) String() string {
 func (*RotateFileFEKRequest) ProtoMessage() {}
 
 func (x *RotateFileFEKRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_key_manager_proto_msgTypes[17]
+	mi := &file_key_manager_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1204,7 +1333,7 @@ func (x *RotateFileFEKRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RotateFileFEKRequest.ProtoReflect.Descriptor instead.
 func (*RotateFileFEKRequest) Descriptor() ([]byte, []int) {
-	return file_key_manager_proto_rawDescGZIP(), []int{17}
+	return file_key_manager_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *RotateFileFEKRequest) GetUserId() string {
@@ -1269,7 +1398,7 @@ type RotateFileFEKResponse struct {
 
 func (x *RotateFileFEKResponse) Reset() {
 	*x = RotateFileFEKResponse{}
-	mi := &file_key_manager_proto_msgTypes[18]
+	mi := &file_key_manager_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1281,7 +1410,7 @@ func (x *RotateFileFEKResponse) String() string {
 func (*RotateFileFEKResponse) ProtoMessage() {}
 
 func (x *RotateFileFEKResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_key_manager_proto_msgTypes[18]
+	mi := &file_key_manager_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1294,7 +1423,7 @@ func (x *RotateFileFEKResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RotateFileFEKResponse.ProtoReflect.Descriptor instead.
 func (*RotateFileFEKResponse) Descriptor() ([]byte, []int) {
-	return file_key_manager_proto_rawDescGZIP(), []int{18}
+	return file_key_manager_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *RotateFileFEKResponse) GetWrappedFek() []byte {
@@ -1342,7 +1471,7 @@ type RotateCompanyKEKRequest struct {
 
 func (x *RotateCompanyKEKRequest) Reset() {
 	*x = RotateCompanyKEKRequest{}
-	mi := &file_key_manager_proto_msgTypes[19]
+	mi := &file_key_manager_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1354,7 +1483,7 @@ func (x *RotateCompanyKEKRequest) String() string {
 func (*RotateCompanyKEKRequest) ProtoMessage() {}
 
 func (x *RotateCompanyKEKRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_key_manager_proto_msgTypes[19]
+	mi := &file_key_manager_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1367,7 +1496,7 @@ func (x *RotateCompanyKEKRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RotateCompanyKEKRequest.ProtoReflect.Descriptor instead.
 func (*RotateCompanyKEKRequest) Descriptor() ([]byte, []int) {
-	return file_key_manager_proto_rawDescGZIP(), []int{19}
+	return file_key_manager_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *RotateCompanyKEKRequest) GetCompanyId() string {
@@ -1394,7 +1523,7 @@ type RotateCompanyKEKResponse struct {
 
 func (x *RotateCompanyKEKResponse) Reset() {
 	*x = RotateCompanyKEKResponse{}
-	mi := &file_key_manager_proto_msgTypes[20]
+	mi := &file_key_manager_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1406,7 +1535,7 @@ func (x *RotateCompanyKEKResponse) String() string {
 func (*RotateCompanyKEKResponse) ProtoMessage() {}
 
 func (x *RotateCompanyKEKResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_key_manager_proto_msgTypes[20]
+	mi := &file_key_manager_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1419,7 +1548,7 @@ func (x *RotateCompanyKEKResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RotateCompanyKEKResponse.ProtoReflect.Descriptor instead.
 func (*RotateCompanyKEKResponse) Descriptor() ([]byte, []int) {
-	return file_key_manager_proto_rawDescGZIP(), []int{20}
+	return file_key_manager_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *RotateCompanyKEKResponse) GetNewKekVersion() uint32 {
@@ -1548,7 +1677,17 @@ const file_key_manager_proto_rawDesc = "" +
 	"\x1cGetNodeSTSCredentialsRequest\x12\x1d\n" +
 	"\n" +
 	"company_id\x18\x01 \x01(\tR\tcompanyId\x12\x17\n" +
-	"\anode_id\x18\x02 \x01(\tR\x06nodeId\"\xf5\x01\n" +
+	"\anode_id\x18\x02 \x01(\tR\x06nodeId\"Z\n" +
+	" GetNodeStorageCredentialsRequest\x12\x1d\n" +
+	"\n" +
+	"company_id\x18\x01 \x01(\tR\tcompanyId\x12\x17\n" +
+	"\anode_id\x18\x02 \x01(\tR\x06nodeId\"\xac\x01\n" +
+	"!GetNodeStorageCredentialsResponse\x12\"\n" +
+	"\raccess_key_id\x18\x01 \x01(\tR\vaccessKeyId\x12*\n" +
+	"\x11secret_access_key\x18\x02 \x01(\tR\x0fsecretAccessKey\x12\x1f\n" +
+	"\vvolume_name\x18\x03 \x01(\tR\n" +
+	"volumeName\x12\x16\n" +
+	"\x06bucket\x18\x04 \x01(\tR\x06bucket\"\xf5\x01\n" +
 	"\x14RotateFileFEKRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1f\n" +
 	"\vvolume_uuid\x18\x03 \x01(\tR\n" +
@@ -1575,8 +1714,7 @@ const file_key_manager_proto_rawDesc = "" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\"t\n" +
 	"\x18RotateCompanyKEKResponse\x12&\n" +
 	"\x0fnew_kek_version\x18\x01 \x01(\rR\rnewKekVersion\x120\n" +
-	"\x14retiring_kek_version\x18\x02 \x01(\rR\x12retiringKekVersion2\xcf\n" +
-	"\n" +
+	"\x14retiring_kek_version\x18\x02 \x01(\rR\x12retiringKekVersion2\xf0\v\n" +
 	"\x16DriveKeyManagerService\x12z\n" +
 	"\rCreateFileKey\x123.agio.platform.drive.crypto.v1.CreateFileKeyRequest\x1a4.agio.platform.drive.crypto.v1.CreateFileKeyResponse\x12q\n" +
 	"\n" +
@@ -1586,7 +1724,8 @@ const file_key_manager_proto_rawDesc = "" +
 	"\x13ProvisionCompanyKEK\x129.agio.platform.drive.crypto.v1.ProvisionCompanyKEKRequest\x1a:.agio.platform.drive.crypto.v1.ProvisionCompanyKEKResponse\x12\x98\x01\n" +
 	"\x17GetPermissionGeneration\x12=.agio.platform.drive.crypto.v1.GetPermissionGenerationRequest\x1a>.agio.platform.drive.crypto.v1.GetPermissionGenerationResponse\x12\x86\x01\n" +
 	"\x11GetSTSCredentials\x127.agio.platform.drive.crypto.v1.GetSTSCredentialsRequest\x1a8.agio.platform.drive.crypto.v1.GetSTSCredentialsResponse\x12\x8e\x01\n" +
-	"\x15GetNodeSTSCredentials\x12;.agio.platform.drive.crypto.v1.GetNodeSTSCredentialsRequest\x1a8.agio.platform.drive.crypto.v1.GetSTSCredentialsResponse\x12z\n" +
+	"\x15GetNodeSTSCredentials\x12;.agio.platform.drive.crypto.v1.GetNodeSTSCredentialsRequest\x1a8.agio.platform.drive.crypto.v1.GetSTSCredentialsResponse\x12\x9e\x01\n" +
+	"\x19GetNodeStorageCredentials\x12?.agio.platform.drive.crypto.v1.GetNodeStorageCredentialsRequest\x1a@.agio.platform.drive.crypto.v1.GetNodeStorageCredentialsResponse\x12z\n" +
 	"\rRotateFileFEK\x123.agio.platform.drive.crypto.v1.RotateFileFEKRequest\x1a4.agio.platform.drive.crypto.v1.RotateFileFEKResponse\x12\x83\x01\n" +
 	"\x10RotateCompanyKEK\x126.agio.platform.drive.crypto.v1.RotateCompanyKEKRequest\x1a7.agio.platform.drive.crypto.v1.RotateCompanyKEKResponseB5Z3github.com/juicedata/juicefs/pkg/meta/keymanager_pbb\x06proto3"
 
@@ -1602,29 +1741,31 @@ func file_key_manager_proto_rawDescGZIP() []byte {
 	return file_key_manager_proto_rawDescData
 }
 
-var file_key_manager_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_key_manager_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_key_manager_proto_goTypes = []any{
-	(*CreateFileKeyRequest)(nil),            // 0: agio.platform.drive.crypto.v1.CreateFileKeyRequest
-	(*CreateFileKeyResponse)(nil),           // 1: agio.platform.drive.crypto.v1.CreateFileKeyResponse
-	(*GetFileFEKRequest)(nil),               // 2: agio.platform.drive.crypto.v1.GetFileFEKRequest
-	(*GetFileFEKResponse)(nil),              // 3: agio.platform.drive.crypto.v1.GetFileFEKResponse
-	(*FileFEKEntry)(nil),                    // 4: agio.platform.drive.crypto.v1.FileFEKEntry
-	(*GetBulkFileFEKRequest)(nil),           // 5: agio.platform.drive.crypto.v1.GetBulkFileFEKRequest
-	(*FileFEKResult)(nil),                   // 6: agio.platform.drive.crypto.v1.FileFEKResult
-	(*GetBulkFileFEKResponse)(nil),          // 7: agio.platform.drive.crypto.v1.GetBulkFileFEKResponse
-	(*FetchCompanyKEKRequest)(nil),          // 8: agio.platform.drive.crypto.v1.FetchCompanyKEKRequest
-	(*FetchCompanyKEKResponse)(nil),         // 9: agio.platform.drive.crypto.v1.FetchCompanyKEKResponse
-	(*ProvisionCompanyKEKRequest)(nil),      // 10: agio.platform.drive.crypto.v1.ProvisionCompanyKEKRequest
-	(*ProvisionCompanyKEKResponse)(nil),     // 11: agio.platform.drive.crypto.v1.ProvisionCompanyKEKResponse
-	(*GetPermissionGenerationRequest)(nil),  // 12: agio.platform.drive.crypto.v1.GetPermissionGenerationRequest
-	(*GetPermissionGenerationResponse)(nil), // 13: agio.platform.drive.crypto.v1.GetPermissionGenerationResponse
-	(*GetSTSCredentialsRequest)(nil),        // 14: agio.platform.drive.crypto.v1.GetSTSCredentialsRequest
-	(*GetSTSCredentialsResponse)(nil),       // 15: agio.platform.drive.crypto.v1.GetSTSCredentialsResponse
-	(*GetNodeSTSCredentialsRequest)(nil),    // 16: agio.platform.drive.crypto.v1.GetNodeSTSCredentialsRequest
-	(*RotateFileFEKRequest)(nil),            // 17: agio.platform.drive.crypto.v1.RotateFileFEKRequest
-	(*RotateFileFEKResponse)(nil),           // 18: agio.platform.drive.crypto.v1.RotateFileFEKResponse
-	(*RotateCompanyKEKRequest)(nil),         // 19: agio.platform.drive.crypto.v1.RotateCompanyKEKRequest
-	(*RotateCompanyKEKResponse)(nil),        // 20: agio.platform.drive.crypto.v1.RotateCompanyKEKResponse
+	(*CreateFileKeyRequest)(nil),              // 0: agio.platform.drive.crypto.v1.CreateFileKeyRequest
+	(*CreateFileKeyResponse)(nil),             // 1: agio.platform.drive.crypto.v1.CreateFileKeyResponse
+	(*GetFileFEKRequest)(nil),                 // 2: agio.platform.drive.crypto.v1.GetFileFEKRequest
+	(*GetFileFEKResponse)(nil),                // 3: agio.platform.drive.crypto.v1.GetFileFEKResponse
+	(*FileFEKEntry)(nil),                      // 4: agio.platform.drive.crypto.v1.FileFEKEntry
+	(*GetBulkFileFEKRequest)(nil),             // 5: agio.platform.drive.crypto.v1.GetBulkFileFEKRequest
+	(*FileFEKResult)(nil),                     // 6: agio.platform.drive.crypto.v1.FileFEKResult
+	(*GetBulkFileFEKResponse)(nil),            // 7: agio.platform.drive.crypto.v1.GetBulkFileFEKResponse
+	(*FetchCompanyKEKRequest)(nil),            // 8: agio.platform.drive.crypto.v1.FetchCompanyKEKRequest
+	(*FetchCompanyKEKResponse)(nil),           // 9: agio.platform.drive.crypto.v1.FetchCompanyKEKResponse
+	(*ProvisionCompanyKEKRequest)(nil),        // 10: agio.platform.drive.crypto.v1.ProvisionCompanyKEKRequest
+	(*ProvisionCompanyKEKResponse)(nil),       // 11: agio.platform.drive.crypto.v1.ProvisionCompanyKEKResponse
+	(*GetPermissionGenerationRequest)(nil),    // 12: agio.platform.drive.crypto.v1.GetPermissionGenerationRequest
+	(*GetPermissionGenerationResponse)(nil),   // 13: agio.platform.drive.crypto.v1.GetPermissionGenerationResponse
+	(*GetSTSCredentialsRequest)(nil),          // 14: agio.platform.drive.crypto.v1.GetSTSCredentialsRequest
+	(*GetSTSCredentialsResponse)(nil),         // 15: agio.platform.drive.crypto.v1.GetSTSCredentialsResponse
+	(*GetNodeSTSCredentialsRequest)(nil),      // 16: agio.platform.drive.crypto.v1.GetNodeSTSCredentialsRequest
+	(*GetNodeStorageCredentialsRequest)(nil),  // 17: agio.platform.drive.crypto.v1.GetNodeStorageCredentialsRequest
+	(*GetNodeStorageCredentialsResponse)(nil), // 18: agio.platform.drive.crypto.v1.GetNodeStorageCredentialsResponse
+	(*RotateFileFEKRequest)(nil),              // 19: agio.platform.drive.crypto.v1.RotateFileFEKRequest
+	(*RotateFileFEKResponse)(nil),             // 20: agio.platform.drive.crypto.v1.RotateFileFEKResponse
+	(*RotateCompanyKEKRequest)(nil),           // 21: agio.platform.drive.crypto.v1.RotateCompanyKEKRequest
+	(*RotateCompanyKEKResponse)(nil),          // 22: agio.platform.drive.crypto.v1.RotateCompanyKEKResponse
 }
 var file_key_manager_proto_depIdxs = []int32{
 	4,  // 0: agio.platform.drive.crypto.v1.GetBulkFileFEKRequest.entries:type_name -> agio.platform.drive.crypto.v1.FileFEKEntry
@@ -1637,20 +1778,22 @@ var file_key_manager_proto_depIdxs = []int32{
 	12, // 7: agio.platform.drive.crypto.v1.DriveKeyManagerService.GetPermissionGeneration:input_type -> agio.platform.drive.crypto.v1.GetPermissionGenerationRequest
 	14, // 8: agio.platform.drive.crypto.v1.DriveKeyManagerService.GetSTSCredentials:input_type -> agio.platform.drive.crypto.v1.GetSTSCredentialsRequest
 	16, // 9: agio.platform.drive.crypto.v1.DriveKeyManagerService.GetNodeSTSCredentials:input_type -> agio.platform.drive.crypto.v1.GetNodeSTSCredentialsRequest
-	17, // 10: agio.platform.drive.crypto.v1.DriveKeyManagerService.RotateFileFEK:input_type -> agio.platform.drive.crypto.v1.RotateFileFEKRequest
-	19, // 11: agio.platform.drive.crypto.v1.DriveKeyManagerService.RotateCompanyKEK:input_type -> agio.platform.drive.crypto.v1.RotateCompanyKEKRequest
-	1,  // 12: agio.platform.drive.crypto.v1.DriveKeyManagerService.CreateFileKey:output_type -> agio.platform.drive.crypto.v1.CreateFileKeyResponse
-	3,  // 13: agio.platform.drive.crypto.v1.DriveKeyManagerService.GetFileFEK:output_type -> agio.platform.drive.crypto.v1.GetFileFEKResponse
-	7,  // 14: agio.platform.drive.crypto.v1.DriveKeyManagerService.GetBulkFileFEK:output_type -> agio.platform.drive.crypto.v1.GetBulkFileFEKResponse
-	9,  // 15: agio.platform.drive.crypto.v1.DriveKeyManagerService.FetchCompanyKEK:output_type -> agio.platform.drive.crypto.v1.FetchCompanyKEKResponse
-	11, // 16: agio.platform.drive.crypto.v1.DriveKeyManagerService.ProvisionCompanyKEK:output_type -> agio.platform.drive.crypto.v1.ProvisionCompanyKEKResponse
-	13, // 17: agio.platform.drive.crypto.v1.DriveKeyManagerService.GetPermissionGeneration:output_type -> agio.platform.drive.crypto.v1.GetPermissionGenerationResponse
-	15, // 18: agio.platform.drive.crypto.v1.DriveKeyManagerService.GetSTSCredentials:output_type -> agio.platform.drive.crypto.v1.GetSTSCredentialsResponse
-	15, // 19: agio.platform.drive.crypto.v1.DriveKeyManagerService.GetNodeSTSCredentials:output_type -> agio.platform.drive.crypto.v1.GetSTSCredentialsResponse
-	18, // 20: agio.platform.drive.crypto.v1.DriveKeyManagerService.RotateFileFEK:output_type -> agio.platform.drive.crypto.v1.RotateFileFEKResponse
-	20, // 21: agio.platform.drive.crypto.v1.DriveKeyManagerService.RotateCompanyKEK:output_type -> agio.platform.drive.crypto.v1.RotateCompanyKEKResponse
-	12, // [12:22] is the sub-list for method output_type
-	2,  // [2:12] is the sub-list for method input_type
+	17, // 10: agio.platform.drive.crypto.v1.DriveKeyManagerService.GetNodeStorageCredentials:input_type -> agio.platform.drive.crypto.v1.GetNodeStorageCredentialsRequest
+	19, // 11: agio.platform.drive.crypto.v1.DriveKeyManagerService.RotateFileFEK:input_type -> agio.platform.drive.crypto.v1.RotateFileFEKRequest
+	21, // 12: agio.platform.drive.crypto.v1.DriveKeyManagerService.RotateCompanyKEK:input_type -> agio.platform.drive.crypto.v1.RotateCompanyKEKRequest
+	1,  // 13: agio.platform.drive.crypto.v1.DriveKeyManagerService.CreateFileKey:output_type -> agio.platform.drive.crypto.v1.CreateFileKeyResponse
+	3,  // 14: agio.platform.drive.crypto.v1.DriveKeyManagerService.GetFileFEK:output_type -> agio.platform.drive.crypto.v1.GetFileFEKResponse
+	7,  // 15: agio.platform.drive.crypto.v1.DriveKeyManagerService.GetBulkFileFEK:output_type -> agio.platform.drive.crypto.v1.GetBulkFileFEKResponse
+	9,  // 16: agio.platform.drive.crypto.v1.DriveKeyManagerService.FetchCompanyKEK:output_type -> agio.platform.drive.crypto.v1.FetchCompanyKEKResponse
+	11, // 17: agio.platform.drive.crypto.v1.DriveKeyManagerService.ProvisionCompanyKEK:output_type -> agio.platform.drive.crypto.v1.ProvisionCompanyKEKResponse
+	13, // 18: agio.platform.drive.crypto.v1.DriveKeyManagerService.GetPermissionGeneration:output_type -> agio.platform.drive.crypto.v1.GetPermissionGenerationResponse
+	15, // 19: agio.platform.drive.crypto.v1.DriveKeyManagerService.GetSTSCredentials:output_type -> agio.platform.drive.crypto.v1.GetSTSCredentialsResponse
+	15, // 20: agio.platform.drive.crypto.v1.DriveKeyManagerService.GetNodeSTSCredentials:output_type -> agio.platform.drive.crypto.v1.GetSTSCredentialsResponse
+	18, // 21: agio.platform.drive.crypto.v1.DriveKeyManagerService.GetNodeStorageCredentials:output_type -> agio.platform.drive.crypto.v1.GetNodeStorageCredentialsResponse
+	20, // 22: agio.platform.drive.crypto.v1.DriveKeyManagerService.RotateFileFEK:output_type -> agio.platform.drive.crypto.v1.RotateFileFEKResponse
+	22, // 23: agio.platform.drive.crypto.v1.DriveKeyManagerService.RotateCompanyKEK:output_type -> agio.platform.drive.crypto.v1.RotateCompanyKEKResponse
+	13, // [13:24] is the sub-list for method output_type
+	2,  // [2:13] is the sub-list for method input_type
 	2,  // [2:2] is the sub-list for extension type_name
 	2,  // [2:2] is the sub-list for extension extendee
 	0,  // [0:2] is the sub-list for field type_name
@@ -1667,7 +1810,7 @@ func file_key_manager_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_key_manager_proto_rawDesc), len(file_key_manager_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   21,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -29,12 +29,20 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// NodeCredentialMetadataKey is the gRPC metadata key carrying the
+// platform-issued node credential (node-token mode, add-render-selectel-company-keys):
+// the platform stores only the token's SHA-256 hash and the interceptor matches
+// the raw value read from exactly this key.
+const NodeCredentialMetadataKey = "x-node-credential"
+
 // KeyManagerClient is the interface to the agio-platform DriveKeyManagerService.
 // The proxy uses it to issue (CreateFileKey) and unwrap (GetFileFEK) per-file FEKs;
 // render nodes use FetchCompanyKEK once at mount (FR-RND-2). Stage 7 adds
 // GetPermissionGeneration (heartbeat revocation, task 7.3), GetSTSCredentials
 // (short-lived S3 credentials, task 7.4), GetNodeSTSCredentials (render-node STS,
 // task 7.11) and RotateFileFEK (offboarding rotation, task 7.5).
+// GetNodeStorageCredentials delivers the company's static S3 key pair to a
+// render node in the node-token mode (add-render-selectel-company-keys).
 type KeyManagerClient interface {
 	CreateFileKey(ctx context.Context, req *kmpb.CreateFileKeyRequest) (*kmpb.CreateFileKeyResponse, error)
 	GetFileFEK(ctx context.Context, req *kmpb.GetFileFEKRequest) (*kmpb.GetFileFEKResponse, error)
@@ -48,6 +56,12 @@ type KeyManagerClient interface {
 	// render node, authenticated by its YC IAM token in the gRPC metadata
 	// (ADR-003, task 7.11).
 	GetNodeSTSCredentials(ctx context.Context, req *kmpb.GetNodeSTSCredentialsRequest) (*kmpb.GetSTSCredentialsResponse, error)
+	// GetNodeStorageCredentials returns the company's active static S3 key pair
+	// to a render node authenticated by its node credential in the
+	// NodeCredentialMetadataKey metadata (ADR-004 delivery channel,
+	// add-render-selectel-company-keys); volume/bucket are resolved
+	// server-side from the facility config.
+	GetNodeStorageCredentials(ctx context.Context, req *kmpb.GetNodeStorageCredentialsRequest) (*kmpb.GetNodeStorageCredentialsResponse, error)
 	RotateFileFEK(ctx context.Context, req *kmpb.RotateFileFEKRequest) (*kmpb.RotateFileFEKResponse, error)
 	Close() error
 }
@@ -84,6 +98,10 @@ func (c *platformKeyManager) GetSTSCredentials(ctx context.Context, req *kmpb.Ge
 
 func (c *platformKeyManager) GetNodeSTSCredentials(ctx context.Context, req *kmpb.GetNodeSTSCredentialsRequest) (*kmpb.GetSTSCredentialsResponse, error) {
 	return c.client.GetNodeSTSCredentials(ctx, req)
+}
+
+func (c *platformKeyManager) GetNodeStorageCredentials(ctx context.Context, req *kmpb.GetNodeStorageCredentialsRequest) (*kmpb.GetNodeStorageCredentialsResponse, error) {
+	return c.client.GetNodeStorageCredentials(ctx, req)
 }
 
 func (c *platformKeyManager) RotateFileFEK(ctx context.Context, req *kmpb.RotateFileFEKRequest) (*kmpb.RotateFileFEKResponse, error) {

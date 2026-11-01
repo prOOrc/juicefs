@@ -21,7 +21,7 @@ option go_package = "github.com/juicedata/juicefs/pkg/meta/keymanager_pb";
 // DriveKeyManagerService manages the agio Drive encryption key hierarchy
 // (Per-File FEK + Company KEK). It is served on the same gRPC server as
 // AuthzService. Consumers: the JuiceFS Meta Proxy (user clients) and render nodes
-// (FetchCompanyKEK only).
+// (FetchCompanyKEK, GetNodeSTSCredentials and GetNodeStorageCredentials).
 //
 // Path contract: file-scoped RPCs (CreateFileKey, GetFileFEK, GetBulkFileFEK,
 // RotateFileFEK) receive the FULL client path (e.g. "/company-abc/projects/file.exr")
@@ -63,6 +63,14 @@ service DriveKeyManagerService {
   // authenticated by the node's YC IAM token (ADR-003). node_id is an audit
   // fallback only (mirrors FetchCompanyKEKRequest.node_id).
   rpc GetNodeSTSCredentials(GetNodeSTSCredentialsRequest) returns (GetSTSCredentialsResponse);
+
+  // GetNodeStorageCredentials returns the company's active static S3 key pair
+  // (ADR-004) to a render node — the Selectel delivery channel of the
+  // user-path credentials (add-render-selectel-company-keys). Authenticated by
+  // the node credential (platform-issued token) like FetchCompanyKEK, but only
+  // when the server runs in the node-token mode; volume/bucket are resolved
+  // from the facility config, never taken from the request.
+  rpc GetNodeStorageCredentials(GetNodeStorageCredentialsRequest) returns (GetNodeStorageCredentialsResponse);
 
   // RotateFileFEK generates a new FEK version for an existing file. Requires an
   // organization admin (SpiceDB manage permission on the organization).
@@ -214,6 +222,27 @@ message GetSTSCredentialsResponse {
 message GetNodeSTSCredentialsRequest {
   string company_id = 1;
   string node_id = 2; // render node identity (audit fallback from the verified IAM token)
+}
+
+// GetNodeStorageCredentialsRequest identifies the calling render node and the
+// company whose static pair it mounts. The node credential (platform-issued
+// token) is carried in the gRPC metadata and verified by the interceptor, not
+// here.
+message GetNodeStorageCredentialsRequest {
+  string company_id = 1;
+  string node_id = 2; // render node identity (audit fallback from the verified node credential)
+}
+
+// GetNodeStorageCredentialsResponse carries the company's active static S3 key
+// pair (over TLS) plus the volume/bucket scope resolved from the facility
+// config. The pair lives until rotated or revoked; the node re-fetches it at
+// every bootstrap and must not persist it beyond the mount session. It is
+// never logged by the platform.
+message GetNodeStorageCredentialsResponse {
+  string access_key_id = 1;
+  string secret_access_key = 2;
+  string volume_name = 3;
+  string bucket = 4;
 }
 
 // RotateFileFEKRequest: the company is derived server-side from the path (the caller
