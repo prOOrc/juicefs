@@ -289,19 +289,21 @@ func fetchCompanyKEKNodeToken(ctx context.Context, km meta.KeyManagerClient, p n
 }
 
 // nodeStorageCredentials is the company's active static S3 key pair delivered by
-// GetNodeStorageCredentials, together with the volume/bucket scope resolved
-// server-side from the facility config.
+// GetNodeStorageCredentials, together with the volume/bucket scope (and the S3
+// endpoint, when the platform sends it) resolved server-side from the facility
+// config.
 type nodeStorageCredentials struct {
 	accessKey  string
 	secretKey  string
 	volumeName string
 	bucket     string
+	endpoint   string
 }
 
 // getNodeStorageCredentials fetches the company's static S3 key pair
 // (GetNodeStorageCredentials, ADR-004 delivery channel): the node authenticates
-// with its platform-issued credential; volume/bucket come from the platform,
-// never from the request.
+// with its platform-issued credential; volume/bucket/endpoint come from the
+// platform, never from the request.
 func getNodeStorageCredentials(ctx context.Context, km meta.KeyManagerClient, p nodeCredentialProvider, companyID, nodeID string) (*nodeStorageCredentials, error) {
 	ctx, err := ctxWithNodeCredential(ctx, p)
 	if err != nil {
@@ -319,17 +321,23 @@ func getNodeStorageCredentials(ctx context.Context, km meta.KeyManagerClient, p 
 		secretKey:  resp.GetSecretAccessKey(),
 		volumeName: resp.GetVolumeName(),
 		bucket:     resp.GetBucket(),
+		endpoint:   resp.GetEndpoint(),
 	}, nil
 }
 
 // applyNodeStorageCredentials writes the platform-delivered static pair into a
 // format copy feeding the storage config (the same path volume-format keys use,
 // but sourced from the platform), with the delivered volume/bucket taking
-// priority over the Format (the client does not name volume/bucket). The
-// platform credentials replace the volume's legacy encrypted storage
-// credentials entirely: the render node never holds the format secret, so the
-// legacy cipher state (KeyEncrypted/EncryptKey/EncryptAlgo) is sanitized away
-// and createStorage takes the plain pair. It runs on every format reload so a
+// priority over the Format (the client does not name volume/bucket and does not
+// assemble the S3 endpoint itself — the platform delivers them resolved). When
+// the platform sends the S3 endpoint, bucket is joined as
+// "<endpoint>/<bucket>" — the "https://endpoint/bucket" form JuiceFS
+// Format.Bucket expects; without an endpoint the bare bucket name is used as
+// before (S3 clients would otherwise resolve it against AWS). The platform
+// credentials replace the volume's legacy encrypted storage credentials
+// entirely: the render node never holds the format secret, so the legacy
+// cipher state (KeyEncrypted/EncryptKey/EncryptAlgo) is sanitized away and
+// createStorage takes the plain pair. It runs on every format reload so a
 // refresh from Redis never clobbers the platform-delivered credentials.
 func applyNodeStorageCredentials(f *meta.Format, n *nodeStorageCredentials) {
 	if n == nil {
@@ -352,9 +360,13 @@ func applyNodeStorageCredentials(f *meta.Format, n *nodeStorageCredentials) {
 		logger.Warnf("render-mount: platform volume %q overrides format volume %q", n.volumeName, f.Name)
 		f.Name = n.volumeName
 	}
-	if n.bucket != "" && f.Bucket != n.bucket {
-		logger.Warnf("render-mount: platform bucket %q overrides format bucket %q", n.bucket, f.Bucket)
-		f.Bucket = n.bucket
+	bucket := n.bucket
+	if n.endpoint != "" {
+		bucket = strings.TrimSuffix(strings.TrimSpace(n.endpoint), "/") + "/" + strings.TrimPrefix(n.bucket, "/")
+	}
+	if bucket != "" && f.Bucket != bucket {
+		logger.Warnf("render-mount: platform bucket %q overrides format bucket %q", bucket, f.Bucket)
+		f.Bucket = bucket
 	}
 }
 

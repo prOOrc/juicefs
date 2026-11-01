@@ -243,6 +243,12 @@ message GetNodeStorageCredentialsResponse {
   string secret_access_key = 2;
   string volume_name = 3;
   string bucket = 4;
+  // S3 endpoint of the bucket ("https://s3.ru-7.storage.selcloud.ru"), without
+  // trailing slashes and without the bucket name. Optional on the wire:
+  // absence keeps the legacy bare-bucket client behavior. The client joins it
+  // with bucket as "<endpoint>/<bucket>" — the form JuiceFS Format.Bucket
+  // expects; the client never assembles the endpoint itself.
+  string endpoint = 5;
 }
 
 // RotateFileFEKRequest: the company is derived server-side from the path (the caller

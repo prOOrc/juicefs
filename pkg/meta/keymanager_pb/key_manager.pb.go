@@ -1229,8 +1229,14 @@ type GetNodeStorageCredentialsResponse struct {
 	SecretAccessKey string                 `protobuf:"bytes,2,opt,name=secret_access_key,json=secretAccessKey,proto3" json:"secret_access_key,omitempty"`
 	VolumeName      string                 `protobuf:"bytes,3,opt,name=volume_name,json=volumeName,proto3" json:"volume_name,omitempty"`
 	Bucket          string                 `protobuf:"bytes,4,opt,name=bucket,proto3" json:"bucket,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// S3 endpoint of the bucket ("https://s3.ru-7.storage.selcloud.ru"), without
+	// trailing slashes and without the bucket name. Optional on the wire:
+	// absence keeps the legacy bare-bucket client behavior. The client joins it
+	// with bucket as "<endpoint>/<bucket>" — the form JuiceFS Format.Bucket
+	// expects; the client never assembles the endpoint itself.
+	Endpoint      string `protobuf:"bytes,5,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetNodeStorageCredentialsResponse) Reset() {
@@ -1287,6 +1293,13 @@ func (x *GetNodeStorageCredentialsResponse) GetVolumeName() string {
 func (x *GetNodeStorageCredentialsResponse) GetBucket() string {
 	if x != nil {
 		return x.Bucket
+	}
+	return ""
+}
+
+func (x *GetNodeStorageCredentialsResponse) GetEndpoint() string {
+	if x != nil {
+		return x.Endpoint
 	}
 	return ""
 }
@@ -1681,13 +1694,14 @@ const file_key_manager_proto_rawDesc = "" +
 	" GetNodeStorageCredentialsRequest\x12\x1d\n" +
 	"\n" +
 	"company_id\x18\x01 \x01(\tR\tcompanyId\x12\x17\n" +
-	"\anode_id\x18\x02 \x01(\tR\x06nodeId\"\xac\x01\n" +
+	"\anode_id\x18\x02 \x01(\tR\x06nodeId\"\xc8\x01\n" +
 	"!GetNodeStorageCredentialsResponse\x12\"\n" +
 	"\raccess_key_id\x18\x01 \x01(\tR\vaccessKeyId\x12*\n" +
 	"\x11secret_access_key\x18\x02 \x01(\tR\x0fsecretAccessKey\x12\x1f\n" +
 	"\vvolume_name\x18\x03 \x01(\tR\n" +
 	"volumeName\x12\x16\n" +
-	"\x06bucket\x18\x04 \x01(\tR\x06bucket\"\xf5\x01\n" +
+	"\x06bucket\x18\x04 \x01(\tR\x06bucket\x12\x1a\n" +
+	"\bendpoint\x18\x05 \x01(\tR\bendpoint\"\xf5\x01\n" +
 	"\x14RotateFileFEKRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1f\n" +
 	"\vvolume_uuid\x18\x03 \x01(\tR\n" +

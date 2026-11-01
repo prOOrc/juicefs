@@ -249,9 +249,10 @@ func (s *nodeTokenUnauthenticatedServer) FetchCompanyKEK(ctx context.Context, re
 // TestRenderStaticKeysFromPlatform (add-render-selectel-company-keys,
 // domain-encrypt "Render path"): the platform-delivered static pair replaces
 // the volume-format credentials, the delivered volume/bucket win over the
-// Format, and the patch composition handed to NewReloadableStorage re-stamps
-// them on every format reload — a refresh from Redis (which carries no platform
-// keys) must not clobber the mount credentials.
+// Format (joined as "endpoint/bucket" when the platform sends the S3 endpoint,
+// bare otherwise), and the patch composition handed to NewReloadableStorage
+// re-stamps them on every format reload — a refresh from Redis (which carries
+// no platform keys) must not clobber the mount credentials.
 func TestRenderStaticKeysFromPlatform(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -274,8 +275,35 @@ func TestRenderStaticKeysFromPlatform(t *testing.T) {
 			want:   meta.Format{Name: "fmt-vol", Bucket: "fmt-bucket", AccessKey: "plat-ak", SecretKey: "plat-sk"},
 		},
 		{
-			// (в) the client does not name volume/bucket
-			name:   "platform volume and bucket win over the format",
+			// (в) the client does not name volume/bucket nor assemble the S3
+			// endpoint itself: the platform delivers endpoint+bucket resolved
+			// and the client joins them into the "https://endpoint/bucket"
+			// form Format.Bucket expects (stage acceptance: a bare bucket name
+			// sent the S3 client to AWS)
+			name:   "platform volume and endpoint-joined bucket win over the format",
+			format: &meta.Format{Name: "fmt-vol", Bucket: "fmt-bucket", AccessKey: "fmt-ak", SecretKey: "fmt-sk"},
+			creds: &nodeStorageCredentials{
+				accessKey: "plat-ak", secretKey: "plat-sk", volumeName: "plat-vol",
+				endpoint: "https://s3.ru-7.storage.selcloud.ru", bucket: "plat-bucket",
+			},
+			want: meta.Format{Name: "plat-vol", Bucket: "https://s3.ru-7.storage.selcloud.ru/plat-bucket", AccessKey: "plat-ak", SecretKey: "plat-sk"},
+		},
+		{
+			// endpoint/bucket delimiters are sanitized when joining: a trailing
+			// slash on the endpoint and a leading slash on the bucket must not
+			// double up
+			name:   "endpoint and bucket slashes are trimmed when joining",
+			format: &meta.Format{Name: "fmt-vol", Bucket: "fmt-bucket", AccessKey: "fmt-ak", SecretKey: "fmt-sk"},
+			creds: &nodeStorageCredentials{
+				accessKey: "plat-ak", secretKey: "plat-sk", volumeName: "plat-vol",
+				endpoint: "https://s3.ru-7.storage.selcloud.ru/", bucket: "/plat-bucket",
+			},
+			want: meta.Format{Name: "plat-vol", Bucket: "https://s3.ru-7.storage.selcloud.ru/plat-bucket", AccessKey: "plat-ak", SecretKey: "plat-sk"},
+		},
+		{
+			// platform answer without the endpoint (endpoint is optional on the
+			// wire) keeps the legacy bare-bucket behavior
+			name:   "platform bucket without endpoint stays bare",
 			format: &meta.Format{Name: "fmt-vol", Bucket: "fmt-bucket", AccessKey: "fmt-ak", SecretKey: "fmt-sk"},
 			creds:  &nodeStorageCredentials{accessKey: "plat-ak", secretKey: "plat-sk", volumeName: "plat-vol", bucket: "plat-bucket"},
 			want:   meta.Format{Name: "plat-vol", Bucket: "plat-bucket", AccessKey: "plat-ak", SecretKey: "plat-sk"},
@@ -329,7 +357,10 @@ func TestRenderStaticKeysFromPlatform(t *testing.T) {
 	// with stale Redis credentials and the platform keys survive.
 	t.Run("reload from redis does not clobber platform credentials", func(t *testing.T) {
 		c := parseRenderFlags(t)
-		creds := &nodeStorageCredentials{accessKey: "plat-ak", secretKey: "plat-sk", volumeName: "plat-vol", bucket: "plat-bucket"}
+		creds := &nodeStorageCredentials{
+			accessKey: "plat-ak", secretKey: "plat-sk", volumeName: "plat-vol",
+			endpoint: "https://s3.ru-7.storage.selcloud.ru", bucket: "plat-bucket",
+		}
 		patch := staticCredentialsPatch(updateFormat(c), creds)
 
 		// a format as Load(true) delivers it on the stage: identity and scope,
@@ -353,7 +384,7 @@ func TestRenderStaticKeysFromPlatform(t *testing.T) {
 		require.Equal(t, "plat-sk", reload.SecretKey)
 		require.Empty(t, reload.SessionToken)
 		require.Equal(t, "plat-vol", reload.Name)
-		require.Equal(t, "plat-bucket", reload.Bucket)
+		require.Equal(t, "https://s3.ru-7.storage.selcloud.ru/plat-bucket", reload.Bucket)
 		require.False(t, reload.KeyEncrypted, "Format.Decrypt must never trigger on a render node (no format secret)")
 		require.Empty(t, reload.EncryptKey, "no legacy data encryptor on top of the AGIO FEK/CEK data path")
 		require.Empty(t, reload.EncryptAlgo)
