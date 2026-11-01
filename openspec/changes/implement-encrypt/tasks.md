@@ -2980,10 +2980,22 @@ bash tests/security/redis-restore-test.sh
   write → close → open(O_CREAT без O_TRUNC) → старые данные читаются.
   Расширить существующие encrypt-тесты (`pkg/meta/encrypt_integration_test.go`).
   Проверка: `make test.meta.core`.
-- [ ] 11.7 Stage-приёмка: пересобрать proxy-образ, на tst-v3 создать файл и
+- [x] 11.7 Stage-приёмка: пересобрать proxy-образ, на tst-v3 создать файл и
   записать в одном сеансе → проверить объект в S3 (AGDF-magic / ciphertext),
   чтение ок. Follow-up вне этой стадии: fsck-детектор plaintext-slices
   (design B6).
+  **[x] 2026-11-01:** образ agio-v1.4.1_2026-11-01_28f4209f4b (amd64,
+  коммит 28f4209f4: stage 11 a7777e614 + session-churn 1b0727526) задеплоен
+  helm'ом; mount-под tstv4 (тот же образ, OIDC-кэш переминтован Hydra
+  admin-dance) на volume tst-v2 / компания tst-v3: create→write первого
+  сеанса — все чанки в drive-v2-stage начинаются с magic `AGDF`
+  (16388_0_1048576 / 16389_0_14 / 16386_0_6, размеры +33 байта оверхеда),
+  md5 stage11.bin через FUSE совпал (5e72d5fc66a085f8d28ba6cf4c2f6801).
+  Попутно выяснено: «пропажа» файлов прошлых прогонов — это JuiceFS trash:
+  регрессионный тест приёмки (`rm -rf /mnt/jfs/companies`) удаляет содержимое
+  company-каталога (уходит в .trash), денится только removal самого каталога —
+  тест деструктивен, содержимое следует восстанавливать из .trash при
+  необходимости (сами чанки в S3 целы).
 
 ## Definition of Done
 

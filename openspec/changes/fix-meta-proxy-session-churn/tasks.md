@@ -72,3 +72,9 @@
 - `make test.meta.core` зелёный; `make test.pkg` зелёный (vfs-правки)
 - Stage-проверка: рестарт drive-meta-proxy при живом маунте tst-v3 —
   readdir и open работают без перемонтирования.
+  **[x] 2026-11-01:** выполнено на маунте tstv4 (volume tst-v2, компания
+  tst-v3): `kubectl rollout restart deploy/drive-meta-proxy` при живом
+  FUSE-маунте → после rollout ls/cat/md5/post-restart write работают без
+  перемонтирования (md5 stage11.bin 5e72d5fc66a085f8d28ba6cf4c2f6801
+  совпал, новая запись f13.txt создана и прочитана). Change готов к
+  /opsx-archive.
