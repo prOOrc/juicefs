@@ -69,6 +69,42 @@ func (m *redisMeta) SetFileCrypto(ctx Context, inode Ino, c *FileCrypto) syscall
 	return 0
 }
 
+// SetFileCryptoIfUnbound is SetFileCrypto with create-time CAS semantics: inside
+// the same transaction that reads the attr, the write happens only when the inode
+// carries no crypto binding yet; otherwise it answers EEXIST without writing
+// anything (no genLog), so a concurrent creator's binding is left standing.
+// Deliberate re-binding (FEK rotation, clone/copy dst) must keep using the
+// unconditional SetFileCrypto — the guard is opt-in to the create path.
+func (m *redisMeta) SetFileCryptoIfUnbound(ctx Context, inode Ino, c *FileCrypto) syscall.Errno {
+	var attr Attr
+	err := m.txn(ctx, func(tx *redis.Tx) error {
+		a, err := tx.Get(ctx, m.inodeKey(inode)).Bytes()
+		if err != nil {
+			return err
+		}
+		m.parseAttr(a, &attr)
+		if len(attr.WrappedFek) > 0 || attr.DriveFileID != "" {
+			return syscall.EEXIST // already bound — a concurrent creator won the race
+		}
+		attr.Encrypted = true
+		attr.WrappedFek = c.WrappedFek
+		attr.DriveFileID = c.DriveFileID
+		attr.FekVersion = c.FekVersion
+		attr.CryptoAlg = c.CryptoAlg
+		now := time.Now()
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			pipe.Set(ctx, m.inodeKey(inode), m.marshal(&attr), 0)
+			m.genLog(ctx, pipe, now, "SETFILECRYPTO(%d,%s,%d)", inode, c.DriveFileID, c.FekVersion)
+			return nil
+		})
+		return err
+	}, m.inodeKey(inode))
+	if err != nil {
+		return errno(err)
+	}
+	return 0
+}
+
 // SliceCryptoAAD — AAD for AGCK wraps (design.md, «Межэтапные контракты»): binds a
 // wrapped CEK to the file identity it belongs to. The slice ID is shared between
 // source and target (clone/copy share slice objects), so only the file-level

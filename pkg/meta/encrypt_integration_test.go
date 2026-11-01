@@ -861,3 +861,90 @@ func TestInsiderCrossFileFEK_Denied(t *testing.T) {
 	_, cached := gm.fekCache.Get(uint64(inoY))
 	require.False(t, cached, "a denied FEK must not be cached")
 }
+
+// TestConcurrentCreateSingleBinding (scenario "Concurrent creates leave one
+// binding"): N clients Create the same path simultaneously on an encrypted
+// volume; the guard (SetFileCryptoIfUnbound) lets exactly one provisioning win,
+// every Create answers success with the standing binding, and a slice committed
+// under the standing identity unwraps from the final attr — the loser served
+// the standing binding instead of re-binding it.
+func TestConcurrentCreateSingleBinding(t *testing.T) {
+	env := newEncryptTestEnv(t, 14, true)
+	ctx := Background()
+	user := uuid.New().String()
+	cctx := userCtx(t, ctx, user)
+
+	const n = 8
+	clients := make([]Meta, n) // one "mount" per creator
+	t.Cleanup(func() {
+		for _, c := range clients {
+			_ = c.Shutdown()
+		}
+	})
+	for i := range clients {
+		clients[i] = env.dial(t)
+	}
+
+	var wg sync.WaitGroup
+	errnos := make([]syscall.Errno, n)
+	inodes := make([]Ino, n)
+	attrs := make([]Attr, n)
+	start := make(chan struct{})
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			errnos[i] = clients[i].Create(cctx, RootInode, "race.exr", 0644, 022,
+				uint32(syscall.O_CREAT|syscall.O_WRONLY), &inodes[i], &attrs[i])
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+
+	for i := 0; i < n; i++ {
+		require.Equal(t, syscall.Errno(0), errnos[i], "creator %d must succeed", i)
+		require.True(t, attrs[i].Encrypted, "creator %d must see the binding", i)
+		require.NotEmpty(t, attrs[i].Fek, "creator %d must be served the FEK over TLS", i)
+	}
+	for i := 1; i < n; i++ {
+		require.Equal(t, inodes[0], inodes[i], "all creators raced on the same file")
+		require.Equal(t, attrs[0].DriveFileID, attrs[i].DriveFileID,
+			"creator %d must see the same drive_file_id — the binding is allocated exactly once", i)
+		require.Equal(t, attrs[0].Fek, attrs[i].Fek, "creator %d must hold the standing binding's FEK", i)
+	}
+
+	// The engine's final attr is the standing binding, unchanged since the CAS.
+	var final Attr
+	require.Equal(t, syscall.Errno(0), env.meta.GetAttr(ctx, inodes[0], &final))
+	require.Equal(t, attrs[0].DriveFileID, final.DriveFileID)
+	require.Equal(t, attrs[0].WrappedFek, final.WrappedFek)
+	require.EqualValues(t, 1, final.FekVersion)
+
+	// Every creator that reached provisioning asked for a key before the CAS;
+	// the guard ensures only one of those keys ever landed.
+	env.keyMgr.mu.Lock()
+	require.GreaterOrEqual(t, env.keyMgr.createCalls, 1)
+	require.LessOrEqual(t, env.keyMgr.createCalls, n)
+	env.keyMgr.mu.Unlock()
+
+	// The first writer's slices stay readable: commit one bound to the standing
+	// identity (after all creates finished — a late engine-Create truncates the
+	// file, which would test engine overwrite semantics, not the guard), then
+	// unwrap it against the final attr. A re-bound inode would fail here.
+	var sid uint64
+	require.Equal(t, syscall.Errno(0), clients[0].NewSlice(cctx, &sid))
+	cek := randomKey32(t, 42)
+	blob, err := chunkenc.WrapCEK(attrs[0].Fek, cek, final.DriveFileID, sid, final.FekVersion)
+	require.NoError(t, err)
+	const recLen = 4096
+	require.Equal(t, syscall.Errno(0), clients[0].Write(cctx, inodes[0], 0, 0,
+		Slice{Id: sid, Size: recLen, Off: 0, Len: recLen, WrappedCEK: blob, FekVersion: final.FekVersion}, time.Now()))
+
+	var cs []Slice
+	require.Equal(t, syscall.Errno(0), env.meta.Read(ctx, inodes[0], 0, &cs))
+	require.Len(t, cs, 1)
+	got, err := chunkenc.UnwrapCEK(attrs[0].Fek, cs[0].WrappedCEK, final.DriveFileID, cs[0].Id, final.FekVersion)
+	require.NoError(t, err, "the committed slice must unwrap under the standing binding")
+	require.Equal(t, cek, got)
+}

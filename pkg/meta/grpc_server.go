@@ -83,6 +83,16 @@ type fileCryptoSetter interface {
 	SetFileCrypto(ctx Context, inode Ino, c *FileCrypto) syscall.Errno
 }
 
+// fileCryptoSetterCAS is implemented by engines whose provisioning write can
+// compare-and-swap on the standing binding (redisMeta). Call sites assert it
+// after fileCryptoSetter and fall back to the unconditional write when the
+// engine lacks it — the create-time binding race then stays the known
+// limitation instead of becoming a regression.
+type fileCryptoSetterCAS interface {
+	fileCryptoSetter
+	SetFileCryptoIfUnbound(ctx Context, inode Ino, c *FileCrypto) syscall.Errno
+}
+
 // NewMetaProxyServer creates a new MetaProxyServer.
 // cacheMaxSize sets the maximum inode→path mappings (0 = unlimited).
 func NewMetaProxyServer(m Meta, cacheMaxSize int) *MetaProxyServer {

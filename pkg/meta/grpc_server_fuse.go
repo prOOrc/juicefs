@@ -146,9 +146,12 @@ func (s *MetaProxyServer) Mknod(ctx context.Context, req *pb.MknodRequest) (*pb.
 		// MknodResponse — the first write goes through Open, which delivers it.
 		if s.encryptionEnabled() && req.Type == uint32(TypeFile) && s.keyManager != nil && len(attr.WrappedFek) == 0 {
 			driveFileID := uuid.New().String() // MknodRequest carries no client-side id (FR-USR-3 covers Create)
-			if st := s.provisionFileCrypto(ctx, mctx, Ino(req.Parent), req.Name, inode, childPath, driveFileID, &attr); st != 0 {
+			st := s.provisionFileCrypto(ctx, mctx, Ino(req.Parent), req.Name, inode, childPath, driveFileID, &attr)
+			if st != 0 && st != syscall.EEXIST {
 				return &pb.MknodResponse{Errno: uint32(st)}, nil
 			}
+			// The EEXIST sentinel (lost provisioning race) is success here: attr
+			// was refreshed with the standing binding and Mknod delivers no FEK.
 		}
 	}
 
@@ -218,25 +221,28 @@ func (s *MetaProxyServer) Create(ctx context.Context, req *pb.CreateRequest) (*p
 			// New file, or a legacy file without a binding: provision the first
 			// binding (decision B2). A provisioning failure rolls the file back
 			// (FR-USR-2) — a file whose key could not even be created is
-			// unusable. Known race (design addendum B2, fix-review note): two
-			// concurrent Creates of the same path can both see no binding and
-			// re-provision; the future guard is a compare-and-swap on the
-			// wrapped FEK in SetFileCrypto, out of Stage 11 scope.
-			if st := s.provisionFileCrypto(ctx, mctx, Ino(req.Parent), req.Name, inode, childPath, req.DriveFileId, &attr); st != 0 {
+			// unusable. The provisioning write is a compare-and-swap: a loser of
+			// the create race (EEXIST sentinel) must not re-bind the inode — it
+			// joins the idempotent overwrite path above with the standing
+			// binding (fix-create-crypto-binding-race, design D2).
+			st := s.provisionFileCrypto(ctx, mctx, Ino(req.Parent), req.Name, inode, childPath, req.DriveFileId, &attr)
+			if st != 0 && st != syscall.EEXIST {
 				return &pb.CreateResponse{Errno: uint32(st)}, nil
 			}
 			// The creating client must encrypt its very first write session
 			// (design Addendum 2026-11-01, B1): deliver the plaintext FEK here.
 			// A delivery failure rolls the file back only when this call created
 			// the inode: with O_EXCL set, success proves the inode is fresh (an
-			// existing file would have answered EEXIST above). For a may-be-
-			// existing file (legacy overwrite) deleting would destroy data older
-			// than this call — delivery stays best-effort: the client falls back
-			// to ResolveFileKey and the writer fails closed without a FEK (B4).
+			// existing file would have answered EEXIST above) and the CAS was
+			// won (the EEXIST sentinel proves the inode existed). For a may-be-
+			// existing file (legacy overwrite or lost race) deleting would
+			// destroy data older than this call — delivery stays best-effort:
+			// the client falls back to ResolveFileKey and the writer fails
+			// closed without a FEK (B4).
 			var err error
 			fek, fekVer, err = s.fetchFEKForCreate(ctx, inode, &attr, childPath, req.Flags)
 			if err != nil {
-				if req.Flags&syscall.O_EXCL != 0 {
+				if req.Flags&syscall.O_EXCL != 0 && st != syscall.EEXIST {
 					_ = s.meta.Unlink(mctx, Ino(req.Parent), req.Name) // rollback (FR-USR-2)
 					return &pb.CreateResponse{Errno: uint32(syscall.EACCES)}, nil
 				}
@@ -254,10 +260,14 @@ func (s *MetaProxyServer) Create(ctx context.Context, req *pb.CreateRequest) (*p
 }
 
 // provisionFileCrypto issues the first crypto binding for a regular file created
-// on an encrypted volume (Create/Mknod): KeyManager CreateFileKey followed by
-// SetFileCrypto, updating attr in place. Any failure removes the file (Unlink)
-// and returns the errno to answer — only valid for files this very call created
-// (FR-USR-2).
+// on an encrypted volume (Create/Mknod): KeyManager CreateFileKey followed by a
+// compare-and-swap write (SetFileCryptoIfUnbound), updating attr in place. Any
+// failure removes the file (Unlink) and returns the errno to answer — only valid
+// for files this very call created (FR-USR-2). The EEXIST sentinel (raised by
+// the CAS write only) means a concurrent creator won the race: the inode
+// existed, so nothing is rolled back and attr is refreshed with the standing
+// binding — the caller switches to the idempotent overwrite path
+// (fix-create-crypto-binding-race, design D2).
 func (s *MetaProxyServer) provisionFileCrypto(ctx context.Context, mctx Context, parent Ino, name string, inode Ino, childPath string, driveFileID string, attr *Attr) syscall.Errno {
 	userID, err := extractUserIDFromOIDC(ctx) // FR-ID-3: UUID validation (decision 3.7)
 	if err != nil {
@@ -285,14 +295,37 @@ func (s *MetaProxyServer) provisionFileCrypto(ctx context.Context, mctx Context,
 	if cryptoAlg == "" {
 		cryptoAlg = "AES-256-GCM"
 	}
-	if st := setter.SetFileCrypto(mctx, inode, &FileCrypto{
+	c := &FileCrypto{
 		WrappedFek:  resp.WrappedFek,
 		DriveFileID: driveFileID,
 		FekVersion:  uint32(resp.FekVersion),
 		CryptoAlg:   cryptoAlg,
-	}); st != 0 {
-		_ = s.meta.Unlink(mctx, parent, name)
-		return st
+	}
+	// The EEXIST sentinel is only meaningful from the CAS write — its contract
+	// (unlike the unconditional SetFileCrypto) defines it as "already bound".
+	if cas, ok := s.meta.(fileCryptoSetterCAS); ok {
+		if st := cas.SetFileCryptoIfUnbound(mctx, inode, c); st != 0 {
+			if st != syscall.EEXIST {
+				_ = s.meta.Unlink(mctx, parent, name)
+				return st
+			}
+			// A concurrent creator provisioned the binding between the attr
+			// read and the CAS. The inode existed, so no rollback ever applies
+			// here — serve the standing binding instead.
+			if gerr := s.meta.GetAttr(mctx, inode, attr); gerr != 0 {
+				logger.Warnf("create inode %d: fetch standing binding after lost race: %s", inode, gerr)
+			}
+			return syscall.EEXIST
+		}
+	} else {
+		// Engines without the CAS keep today's unconditional write: no
+		// regression, the binding race stays the known limitation (design B2).
+		// Its errors never read as the lost-race sentinel.
+		logger.Warnf("engine %T does not support SetFileCryptoIfUnbound — provisioning unconditionally (create-time binding race possible)", s.meta)
+		if st := setter.SetFileCrypto(mctx, inode, c); st != 0 {
+			_ = s.meta.Unlink(mctx, parent, name)
+			return st
+		}
 	}
 	attr.Encrypted = true
 	attr.DriveFileID = driveFileID

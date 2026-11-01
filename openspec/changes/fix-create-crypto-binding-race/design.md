@@ -31,10 +31,12 @@ attr → mutate → SET) уже сериализует конкурентов; �
 `grpc_server_fuse.go`: ветка «биндинга нет» (новый файл или легаси) вызывает
 `SetFileCryptoIfUnbound`. `EEXIST` → немедленный переход в существующую
 идемпотентную ветку Stage 11 (не перевыпускать, `GetFileFEK` стоящего
-биндинга, best-effort доставка). Ветви `fileCryptoSetter`-интерфейса не
-меняются: у прокси уже есть type-assertion на интерфейс — добавляем метод в
-тот же интерфейс (`fileCryptoSetter` расширяется; fallback для движков без
-метода — прежний unconditional + warning, поведение как сегодня).
+биндинга, best-effort доставка). Существующий `fileCryptoSetter` не
+расширяется: вводится отдельный интерфейс `fileCryptoSetterCAS {
+fileCryptoSetter; SetFileCryptoIfUnbound }`, и call site делает второй
+type-assertion с fallback на первый — движок без CAS получает прежний
+unconditional `SetFileCrypto` + warning (поведение как сегодня, его ошибки
+никогда не читаются как сентинель EEXIST).
 
 Порядок «сначала CAS, потом fetch FEK» сохраняет fr-USR-2 rollback только
 для genuinely-нового инода (O_EXCL): если CAS выигран, но доставка FEK

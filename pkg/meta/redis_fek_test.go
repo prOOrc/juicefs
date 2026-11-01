@@ -96,6 +96,132 @@ func TestSetFileCrypto(t *testing.T) {
 	})
 }
 
+// newIfUnboundTestEnv wires a real Redis (DB 13) with a fresh unbound regular
+// file for the SetFileCryptoIfUnbound unit tests. Returns the meta interface,
+// the raw redisMeta and the inode.
+func newIfUnboundTestEnv(t *testing.T) (Meta, *redisMeta, Ino) {
+	t.Helper()
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
+	}
+	m, err := newRedisMeta("redis", encTestRedisAddr()+"/13", testConfig())
+	require.NoError(t, err)
+	rm := m.(*redisMeta)
+	t.Cleanup(func() { _ = rm.Shutdown() })
+	require.NoError(t, rm.rdb.FlushDB(Background()).Err())
+	require.NoError(t, m.Init(testFormat(), true))
+	_, err = m.Load(true)
+	require.NoError(t, err)
+
+	ctx := Background()
+	var inode Ino
+	var attr Attr
+	require.Equal(t, syscall.Errno(0), m.Mknod(ctx, RootInode, "cas", TypeFile, 0644, 022, 0, "", &inode, &attr))
+	return m, rm, inode
+}
+
+// TestSetFileCryptoIfUnbound_FirstWriteWins (scenario "Concurrent creates leave
+// one binding"): the first guard write lands and carries the full binding; the
+// inode's non-crypto fields are preserved.
+func TestSetFileCryptoIfUnbound_FirstWriteWins(t *testing.T) {
+	m, rm, inode := newIfUnboundTestEnv(t)
+	ctx := Background()
+
+	require.Equal(t, syscall.Errno(0), rm.SetFileCryptoIfUnbound(ctx, inode, &FileCrypto{
+		WrappedFek:  []byte("agfk-blob"),
+		DriveFileID: "dfid-winner",
+		FekVersion:  1,
+		CryptoAlg:   "AES-256-GCM",
+	}))
+
+	var got Attr
+	require.Equal(t, syscall.Errno(0), m.GetAttr(ctx, inode, &got))
+	require.True(t, got.Encrypted)
+	require.Equal(t, []byte("agfk-blob"), got.WrappedFek)
+	require.Equal(t, "dfid-winner", got.DriveFileID)
+	require.EqualValues(t, 1, got.FekVersion)
+	require.Equal(t, "AES-256-GCM", got.CryptoAlg)
+	// non-crypto fields are preserved
+	require.EqualValues(t, 0644, got.Mode)
+	require.EqualValues(t, TypeFile, got.Typ)
+
+	t.Run("missing inode returns ENOENT", func(t *testing.T) {
+		st := rm.SetFileCryptoIfUnbound(ctx, Ino(999999), &FileCrypto{DriveFileID: "dfid-x", FekVersion: 1})
+		require.Equal(t, syscall.ENOENT, st)
+	})
+}
+
+// TestSetFileCryptoIfUnbound_ExistingBindingRefused (scenario "Loser serves the
+// standing binding"): once the inode carries a binding, the guard writes nothing
+// and answers EEXIST — any flavor of an existing binding counts (wrapped FEK
+// alone, or a bare drive_file_id).
+func TestSetFileCryptoIfUnbound_ExistingBindingRefused(t *testing.T) {
+	m, rm, inode := newIfUnboundTestEnv(t)
+	ctx := Background()
+
+	require.Equal(t, syscall.Errno(0), rm.SetFileCryptoIfUnbound(ctx, inode, &FileCrypto{
+		WrappedFek:  []byte("agfk-blob"),
+		DriveFileID: "dfid-winner",
+		FekVersion:  1,
+		CryptoAlg:   "AES-256-GCM",
+	}))
+
+	cases := []struct {
+		name    string
+		crypto  FileCrypto
+		boundBy string // what the standing binding is identified by
+	}{
+		{"full binding present", FileCrypto{WrappedFek: []byte("agfk-loser"), DriveFileID: "dfid-loser", FekVersion: 2, CryptoAlg: "AES-256-GCM"}, "wrapped fek"},
+		{"bare drive_file_id present", FileCrypto{WrappedFek: nil, DriveFileID: "dfid-loser", FekVersion: 2}, "drive_file_id"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			// Seed the flavor under test: the full binding already stands; the
+			// bare-id flavor needs a plain SetFileCrypto to install it.
+			if c.boundBy == "drive_file_id" {
+				require.Equal(t, syscall.Errno(0), rm.SetFileCrypto(ctx, inode, &FileCrypto{
+					DriveFileID: "dfid-winner", FekVersion: 1,
+				}))
+			}
+			require.Equal(t, syscall.EEXIST, rm.SetFileCryptoIfUnbound(ctx, inode, &c.crypto))
+
+			var got Attr
+			require.Equal(t, syscall.Errno(0), m.GetAttr(ctx, inode, &got))
+			require.Equal(t, "dfid-winner", got.DriveFileID, "the standing binding must be untouched")
+			require.EqualValues(t, 1, got.FekVersion, "the standing binding must be untouched")
+		})
+	}
+}
+
+// TestSetFileCryptoIfUnbound_RotationUnaffected (scenario "Rotation is not
+// blocked by the guard"): the unconditional SetFileCrypto still rewrites the
+// binding of an already-bound inode — deliberate re-binding (FEK rotation) is
+// opt-out of the guard by design (design D3).
+func TestSetFileCryptoIfUnbound_RotationUnaffected(t *testing.T) {
+	m, rm, inode := newIfUnboundTestEnv(t)
+	ctx := Background()
+
+	require.Equal(t, syscall.Errno(0), rm.SetFileCryptoIfUnbound(ctx, inode, &FileCrypto{
+		WrappedFek:  []byte("agfk-blob"),
+		DriveFileID: "dfid-rot",
+		FekVersion:  1,
+		CryptoAlg:   "AES-256-GCM",
+	}))
+
+	// The unconditional path overwrites the binding (rotation v1 -> v2).
+	require.Equal(t, syscall.Errno(0), rm.SetFileCrypto(ctx, inode, &FileCrypto{
+		WrappedFek:  []byte("agfk-blob-v2"),
+		DriveFileID: "dfid-rot",
+		FekVersion:  2,
+		CryptoAlg:   "AES-256-GCM",
+	}))
+
+	var got Attr
+	require.Equal(t, syscall.Errno(0), m.GetAttr(ctx, inode, &got))
+	require.Equal(t, []byte("agfk-blob-v2"), got.WrappedFek)
+	require.EqualValues(t, 2, got.FekVersion)
+}
+
 // newRewrapTestEnv wires a real Redis (DB 11) with a file whose chunk lists hold
 // slices wrapped under FEK_A: chunk 0 = legacy slice + encrypted slice (cek1),
 // chunk 1 = two encrypted slices (cek1/cek2). Returns the meta, the inode and the

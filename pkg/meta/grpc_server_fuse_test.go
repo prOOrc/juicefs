@@ -99,7 +99,7 @@ func TestOpenUnencryptedVolumeUnaffected(t *testing.T) {
 }
 
 // createFakeMeta answers Create/Mknod with a configurable attr and records
-// Unlink rollbacks and SetFileCrypto calls (the fileCryptoSetter the proxy
+// Unlink rollbacks and crypto writes (the fileCryptoSetterCAS the proxy
 // type-asserts). Any other call panics on the embedded nil Meta.
 type createFakeMeta struct {
 	Meta
@@ -107,6 +107,10 @@ type createFakeMeta struct {
 	format     *Format
 	createAttr Attr // attr the engine answers for Create/Mknod
 	ino        Ino  // inode the engine answers
+
+	casLost      bool // SetFileCryptoIfUnbound answers EEXIST (a concurrent creator won)
+	casCalls     int
+	standingAttr Attr // attr GetAttr answers (the standing binding after a lost race)
 
 	unlinks    int
 	setCrypto  int
@@ -126,12 +130,27 @@ func (f *createFakeMeta) Mknod(_ Context, _ Ino, _ string, _type uint8, _, _ uin
 	return 0
 }
 
+func (f *createFakeMeta) GetAttr(_ Context, _ Ino, attr *Attr) syscall.Errno {
+	*attr = f.standingAttr
+	return 0
+}
+
 func (f *createFakeMeta) Unlink(_ Context, _ Ino, _ string, _ ...bool) syscall.Errno {
 	f.unlinks++
 	return 0
 }
 
 func (f *createFakeMeta) SetFileCrypto(_ Context, _ Ino, c *FileCrypto) syscall.Errno {
+	f.setCrypto++
+	f.lastCrypto = *c
+	return 0
+}
+
+func (f *createFakeMeta) SetFileCryptoIfUnbound(_ Context, _ Ino, c *FileCrypto) syscall.Errno {
+	f.casCalls++
+	if f.casLost {
+		return syscall.EEXIST // the standing binding must not be overwritten
+	}
 	f.setCrypto++
 	f.lastCrypto = *c
 	return 0
@@ -398,6 +417,118 @@ func TestMknodRegularFileProvisionsBinding(t *testing.T) {
 				require.Equal(t, 0, km.createCalls)
 				km.mu.Unlock()
 				require.Equal(t, 0, m.setCrypto)
+			}
+		})
+	}
+
+	// A concurrent creator won the provisioning race before this Mknod's CAS:
+	// the standing binding stays, no rollback and no second CreateFileKey —
+	// Mknod answers success carrying the standing binding (no FEK delivery).
+	t.Run("regular file loses the provisioning race", func(t *testing.T) {
+		km := newFakeKeyManager()
+		format := &Format{Name: "mknod-race-test", UUID: uuid.New().String(), EncryptionEnabled: true}
+		fek := randomBytes(t, fekSize)
+		wrapped, err := WrapFEK(km.kek, fek, FekAAD{
+			VolumeUUID: format.UUID, CompanyID: testCompanyID,
+			DriveFileID: "dfid-standing", Inode: testFekCreateInode, FekVersion: 1,
+		}, 1)
+		require.NoError(t, err)
+		ts, m := newFekCreateTransportServer(t, true, km, format, Attr{Typ: TypeFile})
+		m.casLost = true
+		m.standingAttr = Attr{
+			Typ: TypeFile, Encrypted: true, DriveFileID: "dfid-standing",
+			FekVersion: 1, WrappedFek: wrapped,
+		}
+
+		resp, err := ts.Mknod(ts.userSubCtx(context.Background()), &pb.MknodRequest{
+			Parent: uint64(RootInode), Name: "node", Type: uint32(TypeFile), Mode: 0o644, Cumask: 0o22,
+		})
+		require.NoError(t, err)
+		require.EqualValues(t, 0, resp.Errno, "the Mknod must succeed for the race loser")
+		require.Equal(t, 0, m.unlinks)
+		require.Equal(t, 1, m.casCalls)
+		require.Equal(t, 0, m.setCrypto, "the loser must not write a binding")
+
+		km.mu.Lock()
+		require.Equal(t, 1, km.createCalls, "CreateFileKey runs once — the standing key is not re-issued")
+		require.Equal(t, 0, km.getFekCalls, "no FEK delivery on the mknod path")
+		km.mu.Unlock()
+
+		fc := resp.Attr.GetFileCrypto()
+		require.NotNil(t, fc)
+		require.Equal(t, "dfid-standing", fc.GetDriveFileId(), "the response carries the standing binding")
+		require.Equal(t, wrapped, fc.GetWrappedFek())
+	})
+}
+
+// TestCreateRaceLoserServesStandingBinding (scenario "Loser serves the standing
+// binding"): the CAS refused the provisioning write because a concurrent creator
+// bound the inode between the attr read and the write — the loser must not call
+// SetFileCrypto, must not roll the file back (even under O_EXCL: the inode
+// existed) and must answer success carrying the standing binding, best-effort
+// FEK included.
+func TestCreateRaceLoserServesStandingBinding(t *testing.T) {
+	cases := []struct {
+		name       string
+		excl       bool
+		denyGetFek bool
+		wantFek    bool
+	}{
+		{"loser serves the standing FEK", true, false, true},
+		{"delivery failure keeps the standing file (no rollback)", true, true, false},
+		{"loser without O_EXCL keeps the standing file", false, false, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			km := newFakeKeyManager()
+			format := &Format{Name: "race-loser-test", UUID: uuid.New().String(), EncryptionEnabled: true}
+			fek := randomBytes(t, fekSize)
+			wrapped, err := WrapFEK(km.kek, fek, FekAAD{
+				VolumeUUID: format.UUID, CompanyID: testCompanyID,
+				DriveFileID: "dfid-winner", Inode: testFekCreateInode, FekVersion: 1,
+			}, 1)
+			require.NoError(t, err)
+			ts, m := newFekCreateTransportServer(t, true, km, format, Attr{Typ: TypeFile})
+			m.casLost = true // the concurrent creator won the race before this CAS
+			m.standingAttr = Attr{
+				Typ: TypeFile, Encrypted: true, DriveFileID: "dfid-winner",
+				FekVersion: 1, WrappedFek: wrapped,
+			}
+			if c.denyGetFek {
+				km.mu.Lock()
+				km.denyGetFek = true
+				km.mu.Unlock()
+			}
+
+			flags := uint32(syscall.O_CREAT | syscall.O_WRONLY)
+			if c.excl {
+				flags |= syscall.O_EXCL
+			}
+			resp, err := ts.Create(ts.userSubCtx(context.Background()), &pb.CreateRequest{
+				Parent: uint64(RootInode), Name: "raced.exr", Mode: 0o644, Cumask: 0o22,
+				Flags: flags, DriveFileId: "dfid-loser",
+			})
+			require.NoError(t, err)
+			require.EqualValues(t, 0, resp.Errno, "the POSIX create must succeed for the race loser")
+			require.Equal(t, 0, m.unlinks, "a lost race must never roll the inode back")
+			require.Equal(t, 1, m.casCalls)
+			require.Equal(t, 0, m.setCrypto, "the loser must not write a binding")
+
+			km.mu.Lock()
+			require.Equal(t, 1, km.createCalls, "CreateFileKey runs once — the standing key is not re-issued")
+			km.mu.Unlock()
+
+			fc := resp.Attr.GetFileCrypto()
+			require.NotNil(t, fc)
+			require.Equal(t, "dfid-winner", fc.GetDriveFileId(), "the response carries the standing binding")
+			require.Equal(t, wrapped, fc.GetWrappedFek())
+
+			if c.wantFek {
+				require.Len(t, resp.Fek, fekSize)
+				require.Equal(t, fek, resp.Fek, "the delivered FEK is the standing binding's")
+				require.EqualValues(t, 1, resp.FekVersion)
+			} else {
+				require.Empty(t, resp.Fek, "no FEK could be delivered — the client falls back to ResolveFileKey")
 			}
 		})
 	}
