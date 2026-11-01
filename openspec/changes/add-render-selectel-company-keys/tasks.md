@@ -39,11 +39,24 @@
 
 ## 3. Приёмка
 
-- [ ] 3.1 Stage: деплой platform в режиме `node-token`, выпуск токена
+- [x] 3.1 Stage: деплой platform в режиме `node-token`, выпуск токена
   тест-ноде, render-mount на tst-v2 (компания tst-v3) — запись/чтение
   зашифрованного файла, чужая компания → EIO, отзыв токена → bootstrap
   Unauthenticated. Свидетельство в tasks.
-- [ ] 3.2 Доки: platform `docs/ops/` (выпуск/ротация/отзыв токенов нод),
+  **[x] 2026-11-01:** миграция 000214 применена к stage-БД (migrate up,
+  agio-stage); platform задеплоена deploy-stage-api-authz-grpc пайплайна
+  918 (образ ...keys-916→918, env KEYMANAGER_NODE_AUTH=node-token);
+  fork-образ juicefs:agio-v1.4.1_2026-11-01_render3 (206df5e70). Токен
+  выпущен CLI'ем в поде authz-grpc. render-mount (нода stage-render-test-01,
+  компания tst-v3): bootstrap KEK v1 + статическая пара; write/read
+  render.txt и md5-раундтрип render.bin (9c878d79723bc0ca52fe35e103b8e17b)
+  внутри chroot-поддерева компании; чанк 24578_0_1048576 в drive-v2-stage
+  начинается с magic AGDF; chroot-граница держится. По ходу приёмки
+  закрыты 2 интеграционных дефекта: санитизация легаси-кредов Format
+  (aa860ce96) и endpoint в ответе RPC (dca25f9a/206df5e70). Отзыв токена
+  (`node-token revoke`) → повторный bootstrap: FATAL Unauthenticated
+  «invalid or revoked node credential», без KEK и ключей.
+- [x] 3.2 **[x] 2026-11-01:** platform docs/ops/rb-render-node-tokens.md + README index; fork docs/en/deployment/render-mount.md Доки: platform `docs/ops/` (выпуск/ротация/отзыв токенов нод),
   fork render-mount usage.
 
 ## Definition of Done
