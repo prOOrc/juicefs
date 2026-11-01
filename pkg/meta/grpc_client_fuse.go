@@ -86,7 +86,10 @@ func (m *grpcMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 	}
 	resp, err := m.client.Lookup(m.withSessionID(ctx), req)
 	if err != nil {
-		return syscall.EIO
+		// Map through the shared status table (D3): a proxy deny arrives as
+		// PermissionDenied → EACCES, a vanished inode as NotFound → ENOENT —
+		// POSIX-observable instead of an undiagnosable EIO.
+		return grpcStatusToErrno(err)
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
@@ -144,7 +147,9 @@ func (m *grpcMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 	}
 	resp, err := m.client.GetAttr(m.withSessionID(ctx), req)
 	if err != nil {
-		return syscall.EIO
+		// Map through the shared status table (D3): PermissionDenied → EACCES,
+		// NotFound → ENOENT, other statuses → EIO.
+		return grpcStatusToErrno(err)
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())

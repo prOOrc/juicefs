@@ -503,6 +503,13 @@ func (v *VFS) Readdir(ctx Context, ino Ino, size uint32, off int, fh uint64, plu
 		}
 	}
 	if entries, err = h.dirHandler.List(ctx, off); err != 0 {
+		if err == syscall.EBADF {
+			// The proxy lost this handle (restart / stale handle): drop it so
+			// the next readdir recreates it (h.dirHandler == nil triggers the
+			// NewDirHandler branch above) instead of failing forever.
+			h.dirHandler.Close()
+			h.dirHandler = nil
+		}
 		return
 	}
 	readAt = h.readAt

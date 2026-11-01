@@ -18,6 +18,7 @@ package meta
 
 import (
 	"context"
+	"syscall"
 	"testing"
 
 	"github.com/google/uuid"
@@ -705,4 +706,101 @@ func TestInterceptor_StsProxyService(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, codes.Unauthenticated, st.Code())
 	})
+}
+
+// --- Inode path recovery at the interceptor (fix-meta-proxy-session-churn,
+// delta spec "Authorization interceptor" scenarios) ---
+
+// recoveryTestInterceptor builds an interceptor wired to server-side recovery
+// over the fake tree engine, with a cold inode→path cache (fresh proxy).
+func recoveryTestInterceptor(t *testing.T, engine *fakeTreeMeta, userID string) (*AuthzInterceptor, *mockAuthzClient, *InodePathCache) {
+	t.Helper()
+	cache := NewInodePathCache(0)
+	client := &mockAuthzClient{}
+	ai := newTestInterceptor(client, cache, userID)
+	ai.SetPathResolver(newPathResolver(engine, cache))
+	return ai, client, cache
+}
+
+// TestInterceptor_UnresolvedPathRecoveredByEngine: a request referencing an
+// inode missing from the cache (fresh proxy) is authorized against the path
+// reconstructed from the engine, exactly as if it had been cached, and the
+// recovery warms the ancestor chain.
+func TestInterceptor_UnresolvedPathRecoveredByEngine(t *testing.T) {
+	engine := churnTree() // /a/b/c/f.exr = inode 13
+	ai, client, cache := recoveryTestInterceptor(t, engine, "user-1")
+
+	client.On("CheckPermission", mock.Anything, "user-1",
+		"/a/b/c/f.exr", AuthzPermissionView, authzpb.Operation_OP_OTHER).Return(true, nil)
+
+	called := false
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		called = true
+		return &pb.GetAttrResponse{}, nil
+	}
+	_, err := ai.UnaryInterceptor()(context.Background(), &pb.GetAttrRequest{Inode: 13},
+		&grpc.UnaryServerInfo{FullMethod: "/pb.MetaService/GetAttr"}, handler)
+
+	assert.NoError(t, err)
+	assert.True(t, called, "handler must run when the recovered path is authorized")
+	client.AssertExpectations(t)
+	assert.Equal(t, "/a/b/c/f.exr", cache.Get(13), "recovery must repopulate the cache")
+}
+
+// TestInterceptor_RecoveryGoneReturnsENOENT: when the engine reports the
+// referenced inode missing, the RPC fails with codes.NotFound (the client
+// maps it to ENOENT) instead of a permission denial.
+func TestInterceptor_RecoveryGoneReturnsENOENT(t *testing.T) {
+	engine := churnTree()
+	ai, client, _ := recoveryTestInterceptor(t, engine, "user-1")
+
+	handlerCalled := false
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		handlerCalled = true
+		return &pb.GetAttrResponse{}, nil
+	}
+	_, err := ai.UnaryInterceptor()(context.Background(), &pb.GetAttrRequest{Inode: 999},
+		&grpc.UnaryServerInfo{FullMethod: "/pb.MetaService/GetAttr"}, handler)
+
+	st, ok := status.FromError(err)
+	assert.True(t, ok)
+	assert.Equal(t, codes.NotFound, st.Code(), "a vanished inode must answer NotFound (ENOENT)")
+	assert.False(t, handlerCalled)
+	client.AssertNotCalled(t, "CheckPermission", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+// TestInterceptor_RecoveryFailureStillDenies: cycle / depth cap / engine
+// error during reconstruction fail closed with the same deny as an
+// unresolved path (I3) — no authz call, no handler.
+func TestInterceptor_RecoveryFailureStillDenies(t *testing.T) {
+	cases := []struct {
+		name   string
+		engine *fakeTreeMeta
+	}{
+		{"engine error", churnTree().failGetAttr(10, syscall.EIO)},
+		{"cycle", func() *fakeTreeMeta {
+			e := churnTree()
+			e.attrs[10].Parent = 11 // corrupt the chain into a loop
+			return e
+		}()},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ai, client, _ := recoveryTestInterceptor(t, c.engine, "user-1")
+
+			handlerCalled := false
+			handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+				handlerCalled = true
+				return &pb.GetAttrResponse{}, nil
+			}
+			_, err := ai.UnaryInterceptor()(context.Background(), &pb.GetAttrRequest{Inode: 13},
+				&grpc.UnaryServerInfo{FullMethod: "/pb.MetaService/GetAttr"}, handler)
+
+			st, ok := status.FromError(err)
+			assert.True(t, ok)
+			assert.Equal(t, codes.PermissionDenied, st.Code(), "recovery failure must preserve the deny")
+			assert.False(t, handlerCalled)
+			client.AssertNotCalled(t, "CheckPermission", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		})
+	}
 }

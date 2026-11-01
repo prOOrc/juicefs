@@ -124,6 +124,13 @@ type grpcMeta struct {
 	// proxy can resolve the user for GetPermissionGeneration.
 	heartbeatBaseCtx context.Context
 
+	// chrootSubdir remembers the subdir of the last successful Chroot (design
+	// D4, fix-meta-proxy-session-churn): on reconnect the proxy forgot the
+	// session, so the client re-sends Chroot before the write journal replay.
+	// Political gate: one subdir per proxy deployment (design D4) — the
+	// last Chroot wins for every client behind the proxy.
+	chrootSubdir string
+
 	// OIDC (nil if not configured)
 	oidcConfig   *oidc.Config
 	tokenManager tokenProvider      // interface for testability
@@ -664,6 +671,13 @@ func (m *grpcMeta) doHeartbeat() {
 	// the journal is left for the next mount (NewVFS replays after
 	// loadAllHandles with fresh FEKs).
 	reconnected := m.markHubOnline()
+	if reconnected && !m.reChroot() {
+		// The proxy was restarted and forgot the subdir; the journal must not
+		// replay against the wrong root — go back offline and retry on the
+		// next beat (design D4: re-Chroot strictly before replay).
+		m.markHubOffline()
+		return
+	}
 	wiped := m.applyPermissionGeneration(resp.GetPermissionGeneration())
 	if reconnected && !wiped {
 		m.hubMu.Lock()
@@ -740,7 +754,38 @@ func (m *grpcMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
 	}
+	if subdir != "" {
+		// Remember the target for re-Chroot on reconnect (design D4).
+		m.mu.Lock()
+		m.chrootSubdir = subdir
+		m.mu.Unlock()
+	}
 	return 0
+}
+
+// chrootTarget returns the remembered Chroot subdir ("" when none).
+func (m *grpcMeta) chrootTarget() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.chrootSubdir
+}
+
+// reChroot re-sends the configured Chroot after a proxy restart (design D4):
+// the fresh proxy process has no memory of the session's subdir, and without
+// this the client's root silently reverts to the volume root. Returns false
+// when the root could not be re-established (caller goes back offline so the
+// replay hook does not run against the wrong root).
+func (m *grpcMeta) reChroot() bool {
+	subdir := m.chrootTarget()
+	if subdir == "" {
+		return true // nothing configured — no re-Chroot needed
+	}
+	if st := m.Chroot(Background(), subdir); st != 0 {
+		logger.Warnf("re-Chroot to %q after reconnect failed: %s", subdir, st)
+		return false
+	}
+	logger.Infof("re-Chroot to %q after reconnect", subdir)
+	return true
 }
 
 // grpcStatusToErrno maps a gRPC status error to an appropriate syscall.Errno.

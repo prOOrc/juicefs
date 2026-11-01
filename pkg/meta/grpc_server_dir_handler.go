@@ -101,7 +101,10 @@ func (s *MetaProxyServer) authzListing(ctx context.Context, entry *dirHandlerEnt
 		entries = entries[2:]
 	}
 
-	filtered := s.filterEntriesByAuthz(ctx, entry.inode, entries)
+	filtered, errno := s.filterEntriesByAuthz(ctx, entry.inode, entries)
+	if errno != 0 {
+		return nil, errno // unrecoverable parent path → EACCES, not a silent empty listing (D2)
+	}
 
 	// Cache paths for allowed entries (prevents cache pollution from unauthorized paths).
 	if len(filtered) > 0 {

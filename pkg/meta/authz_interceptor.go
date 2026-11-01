@@ -73,6 +73,7 @@ type AuthzInterceptor struct {
 	client          AuthzClient
 	cache           *InodePathCache
 	handleResolver  HandleResolver
+	recovery        PathRecovery // optional: server-side path reconstruction on cache miss
 	enabled         bool
 	userIDExtractor func(ctx context.Context) (string, error) // injectable for testing
 }
@@ -86,6 +87,13 @@ func NewAuthzInterceptor(client AuthzClient, cache *InodePathCache, resolver Han
 		enabled:         client != nil,
 		userIDExtractor: extractUserIDFromOIDC,
 	}
+}
+
+// SetPathResolver installs server-side path recovery (design D1): on a cache
+// miss the interceptor reconstructs the path through the engine before the
+// fail-closed deny. Must be called before the interceptor serves traffic.
+func (ai *AuthzInterceptor) SetPathResolver(pr PathRecovery) {
+	ai.recovery = pr
 }
 
 // extractUserIDFromOIDC returns the OIDC sub (= user.id UUID, invariant A6) and
@@ -154,7 +162,12 @@ func (ai *AuthzInterceptor) UnaryInterceptor() grpc.UnaryServerInterceptor {
 		}
 
 		// File-level: resolve checks and authorize
-		checks := ai.resolveChecks(req, info.FullMethod)
+		checks, goneErr := ai.resolveChecks(ctx, req, info.FullMethod)
+		if goneErr != nil {
+			// The engine reports the target inode as nonexistent (I7): an
+			// honest ENOENT for a stale inode, not a deny.
+			return nil, goneErr
+		}
 		if len(checks) == 0 {
 			authzLogger.Debugf("Cannot resolve path for method=%s user=%s — denying",
 				info.FullMethod, userID)
@@ -295,28 +308,57 @@ func (ai *AuthzInterceptor) requiredPermission(method string) AuthzPermission {
 	}
 }
 
-// resolveChecks returns the authorization checks needed for a request.
-func (ai *AuthzInterceptor) resolveChecks(req interface{}, method string) []AuthzCheck {
+// lookupPath returns the cached path of ino; on a miss it attempts server-side
+// recovery (design D1) through the configured resolver. gone=true means the
+// engine reports the inode as nonexistent (I7); unresolved+not-gone keeps the
+// legacy fail-closed deny path.
+func (ai *AuthzInterceptor) lookupPath(ctx context.Context, ino Ino) (p string, gone bool) {
+	if p = ai.cache.Get(ino); p != "" {
+		return p, false
+	}
+	if ai.recovery == nil {
+		return "", false
+	}
+	p, resolved, gone := ai.recovery.Resolve(ctx, ino)
+	if gone {
+		return "", true
+	}
+	if resolved {
+		return p, false
+	}
+	return "", false
+}
+
+// resolveChecks returns the authorization checks needed for a request. The
+// second return is a pre-built gRPC error (codes.NotFound) when the target
+// inode is gone — the client maps it to ENOENT (design I7/D3).
+func (ai *AuthzInterceptor) resolveChecks(ctx context.Context, req interface{}, method string) ([]AuthzCheck, error) {
+	goneErr := func(ino Ino) error {
+		return status.Errorf(codes.NotFound, "inode %d does not exist", ino)
+	}
 	perm := ai.requiredPermission(method)
 
 	switch r := req.(type) {
 	// --- Parent-based: check parent permission ---
 	case *pb.LookupRequest:
-		p := ai.cache.Get(Ino(r.Parent))
-		if p == "" {
-			return nil
+		p, gone := ai.lookupPath(ctx, Ino(r.Parent))
+		if gone {
+			return nil, goneErr(Ino(r.Parent))
 		}
-		return []AuthzCheck{{Path: p, Permission: AuthzPermissionView}}
+		if p == "" {
+			return nil, nil
+		}
+		return []AuthzCheck{{Path: p, Permission: AuthzPermissionView}}, nil
 
 	case *pb.ResolveRequest:
-		return nil // deny for PoC — multi-component paths not fully verified
+		return nil, nil // deny for PoC — multi-component paths not fully verified
 
 	case *pb.CreateRequest:
 		p := ai.cache.Get(Ino(r.Parent))
 		if p == "" {
-			return nil
+			return nil, nil
 		}
-		return []AuthzCheck{{Path: p, Permission: AuthzPermissionWrite}}
+		return []AuthzCheck{{Path: p, Permission: AuthzPermissionWrite}}, nil
 
 	case *pb.MkdirRequest:
 		// Check the CREATED DIRECTORY's path (parent + name, dir convention),
@@ -326,37 +368,37 @@ func (ai *AuthzInterceptor) resolveChecks(req interface{}, method string) []Auth
 		// root-level mkdir to "edit on /" and let arbitrary root dirs through.
 		child := ai.cache.BuildChildPath(Ino(r.Parent), r.Name)
 		if child == "" {
-			return nil
+			return nil, nil
 		}
-		return []AuthzCheck{{Path: dirAuthzPath(child), Permission: AuthzPermissionWrite, Op: authzpb.Operation_OP_MKDIR}}
+		return []AuthzCheck{{Path: dirAuthzPath(child), Permission: AuthzPermissionWrite, Op: authzpb.Operation_OP_MKDIR}}, nil
 
 	case *pb.MknodRequest:
 		p := ai.cache.Get(Ino(r.Parent))
 		if p == "" {
-			return nil
+			return nil, nil
 		}
-		return []AuthzCheck{{Path: p, Permission: AuthzPermissionWrite}}
+		return []AuthzCheck{{Path: p, Permission: AuthzPermissionWrite}}, nil
 
 	case *pb.SymlinkRequest:
 		p := ai.cache.Get(Ino(r.Parent))
 		if p == "" {
-			return nil
+			return nil, nil
 		}
-		return []AuthzCheck{{Path: p, Permission: AuthzPermissionWrite}}
+		return []AuthzCheck{{Path: p, Permission: AuthzPermissionWrite}}, nil
 
 	case *pb.UnlinkRequest:
 		p := ai.cache.Get(Ino(r.Parent))
 		if p == "" {
-			return nil
+			return nil, nil
 		}
-		return []AuthzCheck{{Path: p, Permission: AuthzPermissionWrite}}
+		return []AuthzCheck{{Path: p, Permission: AuthzPermissionWrite}}, nil
 
 	case *pb.RmdirRequest:
 		p := ai.cache.Get(Ino(r.Parent))
 		if p == "" {
-			return nil
+			return nil, nil
 		}
-		return []AuthzCheck{{Path: p, Permission: AuthzPermissionWrite}}
+		return []AuthzCheck{{Path: p, Permission: AuthzPermissionWrite}}, nil
 
 		// --- Multi-check: Rename (source parent + destination parent) ---
 	case *pb.RenameRequest:
@@ -364,12 +406,12 @@ func (ai *AuthzInterceptor) resolveChecks(req interface{}, method string) []Auth
 		dstParentPath := ai.cache.Get(Ino(r.ParentDst))
 
 		if srcParentPath == "" || dstParentPath == "" {
-			return nil // deny: cannot resolve both parents
+			return nil, nil // deny: cannot resolve both parents
 		}
 		return []AuthzCheck{
 			{Path: srcParentPath, Permission: AuthzPermissionWrite},
 			{Path: dstParentPath, Permission: AuthzPermissionWrite},
-		}
+		}, nil
 
 		// --- Multi-check: Link (source inode Read + destination parent Write) ---
 	case *pb.LinkRequest:
@@ -377,12 +419,12 @@ func (ai *AuthzInterceptor) resolveChecks(req interface{}, method string) []Auth
 		dstParentPath := ai.cache.Get(Ino(r.Parent))
 
 		if srcPath == "" || dstParentPath == "" {
-			return nil // deny: cannot resolve both paths
+			return nil, nil // deny: cannot resolve both paths
 		}
 		return []AuthzCheck{
 			{Path: srcPath, Permission: AuthzPermissionRead},
 			{Path: dstParentPath, Permission: AuthzPermissionWrite},
-		}
+		}, nil
 
 		// --- Multi-check: CopyFileRange (source Read + destination Write) ---
 	case *pb.CopyFileRangeRequest:
@@ -390,64 +432,76 @@ func (ai *AuthzInterceptor) resolveChecks(req interface{}, method string) []Auth
 		dstPath := ai.cache.Get(Ino(r.Fout))
 
 		if srcPath == "" || dstPath == "" {
-			return nil // deny: cannot resolve both paths
+			return nil, nil // deny: cannot resolve both paths
 		}
 		return []AuthzCheck{
 			{Path: srcPath, Permission: AuthzPermissionRead},
 			{Path: dstPath, Permission: AuthzPermissionWrite},
-		}
+		}, nil
 
 		// --- Open: permission from flags ---
 	case *pb.OpenRequest:
-		p := ai.cache.Get(Ino(r.Inode))
+		p, gone := ai.lookupPath(ctx, Ino(r.Inode))
+		if gone {
+			return nil, goneErr(Ino(r.Inode))
+		}
 		if p == "" {
-			return nil
+			return nil, nil
 		}
 		openPerm := permissionFromFlags(r.Flags)
-		return []AuthzCheck{{Path: p, Permission: openPerm}}
+		return []AuthzCheck{{Path: p, Permission: openPerm}}, nil
 
 		// --- Access: permission from mask ---
 	case *pb.AccessRequest:
-		p := ai.cache.Get(Ino(r.Inode))
+		p, gone := ai.lookupPath(ctx, Ino(r.Inode))
+		if gone {
+			return nil, goneErr(Ino(r.Inode))
+		}
 		if p == "" {
-			return nil
+			return nil, nil
 		}
 		accessPerm := permissionFromAccessMask(r.Modemask)
-		return []AuthzCheck{{Path: p, Permission: accessPerm}}
+		return []AuthzCheck{{Path: p, Permission: accessPerm}}, nil
 
 		// --- DirHandler: resolve handle to inode ---
 	case *pb.NewDirHandlerRequest:
-		p := ai.cache.Get(Ino(r.Inode))
-		if p == "" {
-			return nil
+		p, gone := ai.lookupPath(ctx, Ino(r.Inode))
+		if gone {
+			return nil, goneErr(Ino(r.Inode))
 		}
-		return []AuthzCheck{{Path: p, Permission: AuthzPermissionView}}
+		if p == "" {
+			return nil, nil
+		}
+		return []AuthzCheck{{Path: p, Permission: AuthzPermissionView}}, nil
 
 	case *pb.NewSliceRequest:
 		// Slice allocation carries no inode: an id is allocated per-volume and
 		// becomes user-visible data only when committed via Write, which is
 		// path-checked. Allow any authenticated user (identity is already
 		// UUID-validated above); nothing is leaked or written by NewSlice itself.
-		return []AuthzCheck{{Path: "/", Permission: AuthzPermissionView}}
+		return []AuthzCheck{{Path: "/", Permission: AuthzPermissionView}}, nil
 
 	case *pb.StsCredentialsRequest:
 		// STS issuance (task 7.12, ADR-003) is authz-gated on the platform (Read
 		// on the company); the proxy only authenticates the session — the subject
 		// was already UUID-validated above. The root/View pair below is the
 		// isAlwaysAllowed marker: no authz service call, nothing resolved.
-		return []AuthzCheck{{Path: "/", Permission: AuthzPermissionView}}
+		return []AuthzCheck{{Path: "/", Permission: AuthzPermissionView}}, nil
 
 	default:
-		// --- Inode-based: look up inode in cache ---
+		// --- Inode-based: look up inode in cache (with recovery on miss, D1) ---
 		inode := ai.extractInode(req)
 		if inode == 0 {
-			return nil
+			return nil, nil
 		}
-		p := ai.cache.Get(inode)
+		p, gone := ai.lookupPath(ctx, inode)
+		if gone {
+			return nil, goneErr(inode)
+		}
 		if p == "" {
-			return nil
+			return nil, nil
 		}
-		return []AuthzCheck{{Path: p, Permission: perm}}
+		return []AuthzCheck{{Path: p, Permission: perm}}, nil
 	}
 }
 

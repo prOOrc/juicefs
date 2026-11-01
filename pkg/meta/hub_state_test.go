@@ -322,3 +322,77 @@ func TestHeartbeat_GenerationChange_WipesKeys(t *testing.T) {
 	m.applyPermissionGeneration(6)
 	require.Equal(t, int32(1), atomic.LoadInt32(&wiped))
 }
+
+// fakeReconnectClient extends fakeHeartbeatClient with a recorded Chroot
+// (recording target: reconnectEventRecorder in grpc_client_test.go).
+type fakeReconnectClient struct {
+	fakeHeartbeatClient
+	rec       *reconnectEventRecorder
+	chrootErr error
+}
+
+func (c *fakeReconnectClient) Chroot(ctx context.Context, req *pb.ChrootRequest, opts ...grpc.CallOption) (*pb.ChrootResponse, error) {
+	if c.rec != nil {
+		c.rec.add("chroot:" + req.Subdir)
+	}
+	if c.chrootErr != nil {
+		return nil, c.chrootErr
+	}
+	return &pb.ChrootResponse{}, nil
+}
+
+// TestReChrootOnReconnect_NoSubdir verifies the gate: without a configured
+// subdir no Chroot is re-sent and the replay fires as before.
+func TestReChrootOnReconnect_NoSubdir(t *testing.T) {
+	rec := &reconnectEventRecorder{}
+	fc := &fakeReconnectClient{rec: rec}
+	m := &grpcMeta{
+		fekCache:       expirable.NewLRU[uint64, *fekEntry](10, nil, time.Minute),
+		offlineTimeout: 15 * time.Minute,
+		client:         fc,
+	}
+	m.SetOnReconnect(func() { rec.add("replay") })
+
+	fc.set(errors.New("hub down"), nil)
+	m.doHeartbeat()
+	fc.set(nil, &pb.FlushSessionResponse{})
+	m.doHeartbeat()
+	require.Eventually(t, func() bool {
+		return len(rec.snapshot()) == 1
+	}, time.Second, time.Millisecond)
+	require.Equal(t, []string{"replay"}, rec.snapshot())
+}
+
+// TestReChrootOnReconnect_FailureStaysOffline verifies the fail-safe: when the
+// re-Chroot fails on the reconnect beat, the client returns to
+// offline-connected and the replay hook does not fire; the next successful
+// beat retries the re-Chroot and only then replays.
+func TestReChrootOnReconnect_FailureStaysOffline(t *testing.T) {
+	rec := &reconnectEventRecorder{}
+	fc := &fakeReconnectClient{rec: rec}
+	m := &grpcMeta{
+		fekCache:       expirable.NewLRU[uint64, *fekEntry](10, nil, time.Minute),
+		offlineTimeout: 15 * time.Minute,
+		client:         fc,
+		chrootSubdir:   "companies/acme",
+	}
+	m.SetOnReconnect(func() { rec.add("replay") })
+
+	fc.set(errors.New("hub down"), nil)
+	m.doHeartbeat()
+	fc.chrootErr = errors.New("chroot denied")
+	fc.set(nil, &pb.FlushSessionResponse{})
+	m.doHeartbeat()
+	require.Equal(t, HubOfflineConnected, m.HubState(), "a failed re-Chroot must return the client offline")
+	time.Sleep(50 * time.Millisecond)
+	require.Equal(t, []string{"chroot:companies/acme"}, rec.snapshot(), "no replay under a wrong root")
+
+	// Next beat: re-Chroot succeeds → replay.
+	fc.chrootErr = nil
+	fc.set(nil, &pb.FlushSessionResponse{})
+	m.doHeartbeat()
+	require.Eventually(t, func() bool {
+		order := rec.snapshot()
+		return len(order) == 3 && order[1] == "chroot:companies/acme" && order[2] == "replay"
+	}, time.Second, time.Millisecond)
+}

@@ -155,3 +155,28 @@ func TestDirHandlerList_NoAuthz_Unchanged(t *testing.T) {
 
 	assert.Equal(t, []string{".", "..", ".minio.sys", "companies", "company", "programs"}, stream)
 }
+
+// TestDirHandlerList_Authz_UnresolvableParentIsEACCES (fix-meta-proxy-session-churn,
+// design D2): when the parent directory's path cannot be resolved even after
+// inode path recovery (here: the engine errors on the walk's root readdir),
+// the listing fails with EACCES — never a silent empty listing with errno 0.
+func TestDirHandlerList_Authz_UnresolvableParentIsEACCES(t *testing.T) {
+	engine := churnTree()
+	// Recovery of inode 10 (parent = root) walks via readdir(root): make it fail.
+	engine.failReaddir(RootInode, syscall.EIO)
+	server := NewMetaProxyServer(&churnMeta{engine}, 0)
+	client := new(mockAuthzClient)
+	server.SetAuthzInterceptor(newTestInterceptor(client, server.InodePathCache(), "user-1"))
+
+	// Open a handler for a directory whose path the cache does not know
+	// (cold cache: only the pinned root survives a restart).
+	newResp, err := server.NewDirHandler(context.Background(), &pb.NewDirHandlerRequest{Inode: uint64(10)})
+	assert.NoError(t, err)
+	assert.EqualValues(t, 0, newResp.Errno)
+
+	listResp, err := server.DirHandlerList(context.Background(),
+		&pb.DirHandlerListRequest{Handle: newResp.Handle, Offset: 0})
+	assert.NoError(t, err)
+	assert.EqualValues(t, syscall.EACCES, listResp.Errno, "unresolvable parent path must fail the listing with EACCES")
+	assert.Empty(t, listResp.Entries)
+}

@@ -61,6 +61,10 @@ type MetaProxyServer struct {
 	// provides no security and only produces false denials.
 	authzMode      bool
 	inodePathCache *InodePathCache
+	// pathResolver reconstructs inode→path mappings on cache miss (restart,
+	// eviction) through direct engine reads — the fix for proxy-restart
+	// session churn (fix-meta-proxy-session-churn, design D1).
+	pathResolver *pathResolver
 
 	// Encryption (optional): KeyManager client for per-file FEKs and the volume
 	// name used to resolve the companies prefix on the platform side.
@@ -82,17 +86,21 @@ type fileCryptoSetter interface {
 // NewMetaProxyServer creates a new MetaProxyServer.
 // cacheMaxSize sets the maximum inode→path mappings (0 = unlimited).
 func NewMetaProxyServer(m Meta, cacheMaxSize int) *MetaProxyServer {
-	return &MetaProxyServer{
+	s := &MetaProxyServer{
 		meta:           m,
 		handlers:       make(map[uint64]*dirHandlerEntry),
 		inodePathCache: NewInodePathCache(cacheMaxSize),
 		rotateRate:     defaultRotateRate,
 	}
+	s.pathResolver = newPathResolver(m, s.inodePathCache)
+	return s
 }
 
-// SetAuthzInterceptor configures the authorization interceptor.
+// SetAuthzInterceptor configures the authorization interceptor and wires the
+// server's path recovery into it (fix-meta-proxy-session-churn D1).
 // Called during server setup in cmd/meta_proxy.go (before gRPC Serve).
 func (s *MetaProxyServer) SetAuthzInterceptor(ai *AuthzInterceptor) {
+	ai.SetPathResolver(s.pathResolver)
 	s.authzInterceptor = ai
 }
 

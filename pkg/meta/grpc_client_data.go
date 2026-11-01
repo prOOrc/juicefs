@@ -761,7 +761,9 @@ func (m *grpcMeta) NewDirHandler(ctx Context, inode Ino, plus bool, initEntries 
 	resp, err := m.client.NewDirHandler(m.withSessionID(ctx), req)
 	if err != nil {
 		logger.Errorf("NewDirHandler error: %v", err)
-		return nil, syscall.EIO
+		// Map through the shared status table (D3): PermissionDenied → EACCES,
+		// NotFound → ENOENT, other statuses → EIO.
+		return nil, grpcStatusToErrno(err)
 	}
 	if resp.Errno != 0 {
 		return nil, syscall.Errno(resp.Errno)

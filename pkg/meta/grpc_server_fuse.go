@@ -19,6 +19,7 @@ package meta
 import (
 	"context"
 	"fmt"
+	"path"
 	"syscall"
 	"time"
 
@@ -255,7 +256,10 @@ func (s *MetaProxyServer) Open(ctx context.Context, req *pb.OpenRequest) (*pb.Op
 		// client holds this FEK version, so KeyManager is not called (decision 3.1).
 		if s.keyManager != nil && req.CachedFekVersion != attr.FekVersion {
 			forWrite := req.Flags&(syscall.O_WRONLY|syscall.O_RDWR) != 0
-			path := s.inodePathCache.Get(Ino(req.Inode))
+			path, gone := s.resolvePath(ctx, Ino(req.Inode))
+			if gone {
+				return &pb.OpenResponse{Errno: uint32(syscall.ENOENT)}, nil
+			}
 			if path == "" {
 				return &pb.OpenResponse{Errno: uint32(syscall.EACCES)}, nil // fail-closed
 			}
@@ -307,7 +311,10 @@ func (s *MetaProxyServer) ResolveFileKey(ctx context.Context, req *pb.ResolveFil
 	if s.encryptionEnabled() && !connectionIsTLS(ctx) {
 		return nil, status.Error(codes.Unauthenticated, "plaintext FEK delivery requires a TLS connection")
 	}
-	path := s.inodePathCache.Get(Ino(req.Inode))
+	path, gone := s.resolvePath(ctx, Ino(req.Inode))
+	if gone {
+		return &pb.ResolveFileKeyResponse{Errno: uint32(syscall.ENOENT)}, nil
+	}
 	if path == "" {
 		return &pb.ResolveFileKeyResponse{Errno: uint32(syscall.EACCES)}, nil // fail-closed
 	}
@@ -507,10 +514,60 @@ func (s *MetaProxyServer) RotateFileKeysByPaths(ctx context.Context, req *pb.Rot
 	return resp, nil
 }
 
+// resolvePath returns the cached path of ino, attempting server-side recovery
+// through the engine on a miss (fix-meta-proxy-session-churn D1). gone=true
+// means the engine reports the inode as nonexistent (design I7) — answer
+// ENOENT; an unresolved path without gone stays fail-closed at the caller.
+func (s *MetaProxyServer) resolvePath(ctx context.Context, ino Ino) (p string, gone bool) {
+	if p = s.inodePathCache.Get(ino); p != "" {
+		return p, false
+	}
+	if s.pathResolver == nil {
+		return "", false
+	}
+	p, resolved, gone := s.pathResolver.Resolve(ctx, ino)
+	if gone {
+		return "", true
+	}
+	if resolved {
+		return p, false
+	}
+	return "", false
+}
+
+// resolvedParentPath returns the parent's path (cache, then recovery), or ""
+// when even recovery cannot reconstruct it.
+func (s *MetaProxyServer) resolvedParentPath(ctx context.Context, parent Ino) string {
+	p, _ := s.resolvePath(ctx, parent)
+	return p
+}
+
 func (s *MetaProxyServer) Close(ctx context.Context, req *pb.CloseRequest) (*pb.CloseResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	errno := s.meta.Close(mctx, Ino(req.Inode))
 	return &pb.CloseResponse{Errno: uint32(errno)}, nil
+}
+
+// invalidateChild drops the cached path of a removed child (design D5). The
+// parent is recovered through the engine when it is not cached, so delete
+// hygiene keeps working on a cold proxy (restart / eviction).
+func (s *MetaProxyServer) invalidateChild(ctx context.Context, parent Ino, name string, dir bool) {
+	childPath := s.inodePathCache.BuildChildPath(parent, name)
+	if childPath == "" {
+		parentPath := s.resolvedParentPath(ctx, parent)
+		if parentPath == "" {
+			return // unresolvable parent — stale descendants heal via recovery
+		}
+		childPath = path.Join(parentPath, name)
+	}
+	if childIno := s.inodePathCache.GetInodeByPath(childPath); childIno != 0 {
+		s.pathResolver.Invalidate(childIno)
+	}
+	if dir {
+		s.inodePathCache.RemoveSubtree(childPath)
+		return
+	}
+	s.inodePathCache.UnsetByPath(childPath)
 }
 
 func (s *MetaProxyServer) Unlink(ctx context.Context, req *pb.UnlinkRequest) (*pb.UnlinkResponse, error) {
@@ -518,10 +575,7 @@ func (s *MetaProxyServer) Unlink(ctx context.Context, req *pb.UnlinkRequest) (*p
 	errno := s.meta.Unlink(mctx, Ino(req.Parent), req.Name, req.SkipCheckTrash)
 
 	if errno == 0 {
-		childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
-		if childPath != "" {
-			s.inodePathCache.UnsetByPath(childPath)
-		}
+		s.invalidateChild(ctx, Ino(req.Parent), string(req.Name), false)
 	}
 
 	return &pb.UnlinkResponse{Errno: uint32(errno)}, nil
@@ -532,10 +586,7 @@ func (s *MetaProxyServer) Rmdir(ctx context.Context, req *pb.RmdirRequest) (*pb.
 	errno := s.meta.Rmdir(mctx, Ino(req.Parent), req.Name, req.SkipCheckTrash)
 
 	if errno == 0 {
-		dirPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
-		if dirPath != "" {
-			s.inodePathCache.RemoveSubtree(dirPath)
-		}
+		s.invalidateChild(ctx, Ino(req.Parent), string(req.Name), true)
 	}
 
 	return &pb.RmdirResponse{Errno: uint32(errno)}, nil
@@ -550,7 +601,19 @@ func (s *MetaProxyServer) Rename(ctx context.Context, req *pb.RenameRequest) (*p
 
 	if errno == 0 && inode > 0 {
 		oldPath := s.inodePathCache.BuildChildPath(Ino(req.ParentSrc), string(req.NameSrc))
+		if oldPath == "" {
+			// Parent not cached (restart / eviction): recover it so the rename
+			// can rewrite the subtree mapping (design D5).
+			if p := s.resolvedParentPath(ctx, Ino(req.ParentSrc)); p != "" {
+				oldPath = path.Join(p, string(req.NameSrc))
+			}
+		}
 		newPath := s.inodePathCache.BuildChildPath(Ino(req.ParentDst), string(req.NameDst))
+		if newPath == "" {
+			if p := s.resolvedParentPath(ctx, Ino(req.ParentDst)); p != "" {
+				newPath = path.Join(p, string(req.NameDst))
+			}
+		}
 		// Directories are stored with a trailing slash (authz path convention).
 		oldPath = withDirSlash(oldPath, &attr)
 		newPath = withDirSlash(newPath, &attr)
@@ -560,6 +623,7 @@ func (s *MetaProxyServer) Rename(ctx context.Context, req *pb.RenameRequest) (*p
 			// remove its mapping first (rename overwrites the destination).
 			if dstInode := s.inodePathCache.GetInodeByPath(newPath); dstInode != 0 && dstInode != inode {
 				s.inodePathCache.RemoveSubtree(newPath)
+				s.pathResolver.Invalidate(dstInode)
 			}
 
 			// If old path is known, update subtree (covers both the entry and children).
@@ -656,7 +720,10 @@ func (s *MetaProxyServer) Readdir(ctx context.Context, req *pb.ReaddirRequest) (
 	}
 
 	// Post-filter first: filter entries by authorization (like MinIO's filterWalkResultCh)
-	filtered := s.filterEntriesByAuthz(ctx, Ino(req.Inode), entries)
+	filtered, errno := s.filterEntriesByAuthz(ctx, Ino(req.Inode), entries)
+	if errno != 0 {
+		return &pb.ReaddirResponse{Errno: uint32(errno)}, nil
+	}
 
 	// Cache only the filtered (allowed) entries — prevents cache pollution from
 	// unauthorized paths and avoids hardlink first-seen being set from forbidden listings.
@@ -683,22 +750,30 @@ func (s *MetaProxyServer) Readdir(ctx context.Context, req *pb.ReaddirRequest) (
 // filterEntriesByAuthz filters directory entries by user permissions.
 // Follows MinIO's pattern: get all results from backend, then filter by batch authz check.
 // Entries the user cannot see are simply not returned to the client.
-func (s *MetaProxyServer) filterEntriesByAuthz(ctx context.Context, parentInode Ino, entries []*Entry) []*Entry {
+// A nonzero errno fails the whole listing (design D2): a parent whose path is
+// unrecoverable even after engine-side reconstruction answers EACCES instead
+// of a silent empty listing — "empty dir, errno 0" reads like data loss.
+// An empty result with errno 0 stays legitimate for a known path with zero
+// authorized children.
+func (s *MetaProxyServer) filterEntriesByAuthz(ctx context.Context, parentInode Ino, entries []*Entry) ([]*Entry, syscall.Errno) {
 	if s.authzInterceptor == nil || !s.authzInterceptor.enabled {
-		return entries // no authz configured — return all
+		return entries, 0 // no authz configured — return all
 	}
 
 	userID, err := s.authzInterceptor.extractUserID(ctx)
 	if err != nil || userID == "" {
 		authzLogger.Warnf("Readdir: missing or invalid userID — returning empty list (deny): %v", err)
-		return nil // fail-closed: no user = no access
+		return nil, 0 // fail-closed: no user = no access
 	}
 
 	// Pre-check: user must have View on the parent directory to list it at all.
-	parentPath := s.inodePathCache.Get(parentInode)
+	parentPath, gone := s.resolvePath(ctx, parentInode)
+	if gone {
+		return nil, syscall.ENOENT // the directory was deleted — honest ENOENT
+	}
 	if parentPath == "" {
-		authzLogger.Debugf("Readdir: parent inode %d not in cache — returning empty list", parentInode)
-		return nil // can't resolve parent path — deny
+		authzLogger.Debugf("Readdir: parent inode %d unrecoverable — EACCES (fail-closed)", parentInode)
+		return nil, syscall.EACCES // can't resolve parent path even after recovery
 	}
 
 	// Root is always viewable (same as isAlwaysAllowed in the interceptor).
@@ -706,7 +781,7 @@ func (s *MetaProxyServer) filterEntriesByAuthz(ctx context.Context, parentInode 
 		allowedParent, err := s.authzInterceptor.client.CheckPermission(ctx, userID, parentPath, AuthzPermissionView, authzpb.Operation_OP_OTHER)
 		if err != nil || !allowedParent {
 			authzLogger.Debugf("Readdir: parent check denied for user=%s path=%s err=%v", userID, parentPath, err)
-			return nil // fail-closed: can't list this directory
+			return nil, 0 // fail-closed: can't list this directory
 		}
 	}
 
@@ -714,6 +789,13 @@ func (s *MetaProxyServer) filterEntriesByAuthz(ctx context.Context, parentInode 
 	paths := make([]string, 0, len(entries))
 	validIndices := make([]int, 0, len(entries))
 	for i, e := range entries {
+		name := string(e.Name)
+		if name == "." || name == ".." {
+			// Synthetic entries (baseMeta.Readdir prepends them); the kernel
+			// synthesizes its own, and authzListing strips them before the
+			// filter — never bulk-check or forward them.
+			continue
+		}
 		p := s.inodePathCache.Get(e.Inode)
 		if p == "" {
 			// Fallback: build from the actual parent inode (not RootInode).
@@ -728,20 +810,20 @@ func (s *MetaProxyServer) filterEntriesByAuthz(ctx context.Context, parentInode 
 	}
 
 	if len(paths) == 0 {
-		return nil
+		return nil, 0
 	}
 
 	// Batch check permissions (View — can see the entry in directory listing)
 	allowed, err := s.authzInterceptor.client.CheckBulkPermissions(ctx, userID, paths, AuthzPermissionView)
 	if err != nil {
 		authzLogger.Warnf("Readdir batch authz error: %v — returning empty list (fail-closed)", err)
-		return nil // fail-closed on authz error
+		return nil, 0 // fail-closed on authz error
 	}
 
 	if len(allowed) != len(paths) {
 		authzLogger.Warnf("Readdir authz bulk result length mismatch: %d != %d — returning empty list",
 			len(allowed), len(paths))
-		return nil
+		return nil, 0
 	}
 
 	// Filter: keep only allowed entries
@@ -756,7 +838,7 @@ func (s *MetaProxyServer) filterEntriesByAuthz(ctx context.Context, parentInode 
 		authzLogger.Debugf("Readdir filtered %d/%d entries for user %s", len(filtered), len(entries), userID)
 	}
 
-	return filtered
+	return filtered, 0
 }
 
 func (s *MetaProxyServer) Read(ctx context.Context, req *pb.ReadRequest) (*pb.ReadResponse, error) {

@@ -206,3 +206,53 @@ func TestTruncateCanceledLockReleasesContexts(t *testing.T) {
 	require.Equal(t, []Context{blocker}, second.ops, "the existing operation must remain registered")
 	require.EqualValues(t, 1, second.writing)
 }
+
+// ebadfDirHandler answers the first List with EBADF (a proxy restart lost the
+// server-side handle) and succeeds afterwards.
+type ebadfDirHandler struct {
+	meta.DirHandler
+	lists *int
+}
+
+func (d *ebadfDirHandler) List(meta.Context, int) ([]*meta.Entry, syscall.Errno) {
+	*d.lists++
+	if *d.lists == 1 {
+		return nil, syscall.EBADF
+	}
+	return []*meta.Entry{{Inode: 9, Name: []byte("entry"), Attr: &meta.Attr{Typ: meta.TypeFile}}}, 0
+}
+
+func (d *ebadfDirHandler) Close() {}
+
+// ebadfDirMeta hands out a fresh ebadfDirHandler per NewDirHandler call.
+type ebadfDirMeta struct {
+	meta.Meta
+	lists       int
+	newHandlers int
+}
+
+func (m *ebadfDirMeta) NewDirHandler(meta.Context, meta.Ino, bool, []*meta.Entry) (meta.DirHandler, syscall.Errno) {
+	m.newHandlers++
+	return &ebadfDirHandler{lists: &m.lists}, 0
+}
+
+// TestReaddirDropsStaleDirHandlerOnEBADF (fix-meta-proxy-session-churn, D4):
+// after a proxy restart the server no longer knows the client's DirHandler
+// handle; List answers EBADF forever unless the client drops the stale handle
+// and lets the next readdir recreate it.
+func TestReaddirDropsStaleDirHandlerOnEBADF(t *testing.T) {
+	m := &ebadfDirMeta{}
+	v := &VFS{Meta: m, Conf: &Config{}, handles: make(map[Ino][]*handle), handleIno: make(map[uint64]Ino)}
+	h := v.newHandle(rootID, true, 0)
+	ctx := NewLogContext(meta.Background())
+
+	_, _, err := v.Readdir(ctx, rootID, 0, 0, h.fh, false)
+	require.Equal(t, syscall.EBADF, err)
+	require.Nil(t, h.dirHandler, "EBADF must drop the stale dir handler")
+
+	// The next readdir recreates the handler and succeeds.
+	entries, _, err := v.Readdir(ctx, rootID, 0, 0, h.fh, false)
+	require.Zero(t, err)
+	require.Len(t, entries, 1)
+	require.EqualValues(t, 2, m.newHandlers, "stale handler dropped, fresh one created")
+}
