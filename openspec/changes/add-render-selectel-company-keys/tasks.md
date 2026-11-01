@@ -2,23 +2,23 @@
 
 ## 1. Platform (agio-platform, ветка feature/add-render-selectel-company-keys платформенного репо)
 
-- [ ] 1.1 Миграция `render_node_credential` (id, render_node_id FK, token_hash
+- [x] 1.1 Миграция `render_node_credential` (id, render_node_id FK, token_hash
   UNIQUE, status, created_at/rotated_at/revoked_at) + admin-мутация/CLI
   выпуска и отзыва токена (CSPRNG 32B, хранится только SHA-256).
   Проверка: `go test ./internal/... -run NodeCredential` (platform).
-- [ ] 1.2 Proto: `GetNodeStorageCredentials(CompanyID)` в
+- [x] 1.2 Proto: `GetNodeStorageCredentials(CompanyID)` в
   `DriveKeyManagerService` + regen; сервис: активная пара из
   CompanyStorageKeyService (расшифровка), volume/bucket из
   facility-конфига; fail-closed (нет строки/revoked/нет facility); аудит
   `get_node_storage_credentials` (actor `render_node:<id>`); TLS-only.
   Проверка: `go test ./application/authz/... -run GetNodeStorageCredentials`.
-- [ ] 1.3 Интерцептор: режим `node_auth` (`yc-iam` | `node-token`) —
+- [x] 1.3 Интерцептор: режим `node_auth` (`yc-iam` | `node-token`) —
   `node-token` проверяет `x-node-credential` по хэшу БД, кладёт
   `render_node:<id>` в контекст; guard'ы `FetchCompanyKEK` +
   `GetNodeStorageCredentials`; режим без fallback (fail-closed при
   неверной конфигурации).
   Проверка: `go test ./api/... -run IAMInterceptor`.
-- [ ] 1.4 Отзыв: инвалидация строки → оба RPC отвечают Unauthenticated;
+- [x] 1.4 Отзыв: инвалидация строки → оба RPC отвечают Unauthenticated;
   тест отзыва.
   Проверка: `go test -run NodeCredentialRevoked ./...`.
 
