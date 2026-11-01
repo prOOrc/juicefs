@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	chunkenc "github.com/juicedata/juicefs/pkg/chunk"
 	kmpb "github.com/juicedata/juicefs/pkg/meta/keymanager_pb"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/oidc"
@@ -452,6 +453,68 @@ func TestEncryptedFullCycle(t *testing.T) {
 	require.Equal(t, 2, env.keyMgr.getFekCalls, "fresh client must trigger a KeyManager re-issue")
 }
 
+// TestEncryptedFirstSessionCEK (stage 11.6): create → write → read within one
+// session through the full client path — the CreateResponse delivers the
+// plaintext FEK (decisions B1/B3), so the very first committed slices carry a
+// wrapped CEK under that FEK. A subsequent O_CREAT-without-O_EXCL Create keeps
+// the binding (decision B2): same drive_file_id, same FEK, and the old slices
+// stay readable.
+func TestEncryptedFirstSessionCEK(t *testing.T) {
+	env := newEncryptTestEnv(t, 9, true)
+	ctx := Background()
+	user := uuid.New().String()
+	cctx := userCtx(t, ctx, user)
+
+	var inode Ino
+	var attr Attr
+	require.Equal(t, syscall.Errno(0), env.client.Create(cctx, RootInode, "first.exr", 0644, 022, syscall.O_CREAT|syscall.O_EXCL, &inode, &attr))
+	require.Len(t, attr.Fek, fekSize, "the create response must deliver the plaintext FEK (decision B1)")
+	require.EqualValues(t, 1, attr.FekVersion)
+	require.Equal(t, 1, env.keyMgr.getFekCalls, "one create-path issuance")
+
+	// First-session write: the client wraps the slice CEK under the FEK from Create.
+	var sid uint64
+	require.Equal(t, syscall.Errno(0), env.client.NewSlice(cctx, &sid))
+	cek, err := chunkenc.NewCEK()
+	require.NoError(t, err)
+	const size = 4096
+	blob, err := chunkenc.WrapCEK(attr.Fek, cek, attr.DriveFileID, sid, attr.FekVersion)
+	require.NoError(t, err)
+	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, inode, 0, 0,
+		Slice{Id: sid, Size: size, Off: 0, Len: size, WrappedCEK: blob, FekVersion: attr.FekVersion}, time.Now()))
+
+	// The committed record carries the AGCK tail and unwraps under the
+	// create-delivered FEK (the persisted record's version lives in the AGFK/
+	// AGCK AAD; readers take it from the attr).
+	var cs []Slice
+	require.Equal(t, syscall.Errno(0), env.client.Read(cctx, inode, 0, &cs))
+	require.Len(t, cs, 1)
+	require.NotEmpty(t, cs[0].WrappedCEK, "first-session slices must carry a wrapped CEK")
+	gotCEK, err := chunkenc.UnwrapCEK(attr.Fek, cs[0].WrappedCEK, attr.DriveFileID, cs[0].Id, attr.FekVersion)
+	require.NoError(t, err)
+	require.Equal(t, cek, gotCEK)
+
+	// Overwrite stability (decision B2): re-Create without O_EXCL (the meta
+	// equivalent of open(O_CREAT) without O_TRUNC) keeps the binding and serves
+	// the same FEK for the new write session.
+	var overwriteAttr Attr
+	var overwriteIno Ino
+	require.Equal(t, syscall.Errno(0), env.client.Create(cctx, RootInode, "first.exr", 0644, 022, syscall.O_CREAT, &overwriteIno, &overwriteAttr))
+	require.Equal(t, inode, overwriteIno)
+	require.Equal(t, attr.DriveFileID, overwriteAttr.DriveFileID, "drive_file_id must not change on overwrite")
+	require.Equal(t, attr.WrappedFek, overwriteAttr.WrappedFek)
+	require.Len(t, overwriteAttr.Fek, fekSize, "the existing binding's FEK is delivered for the new write session")
+	require.Equal(t, attr.Fek, overwriteAttr.Fek)
+	require.Equal(t, 1, env.keyMgr.createCalls, "overwrite must not re-issue the binding")
+
+	// The old data stays readable under the unchanged binding.
+	cs = nil
+	require.Equal(t, syscall.Errno(0), env.client.Read(cctx, inode, 0, &cs))
+	require.Len(t, cs, 1)
+	_, err = chunkenc.UnwrapCEK(overwriteAttr.Fek, cs[0].WrappedCEK, overwriteAttr.DriveFileID, cs[0].Id, overwriteAttr.FekVersion)
+	require.NoError(t, err, "old slices must stay readable after the overwrite create")
+}
+
 // TestEncryptedOpenPlaintextRefused (implement-grpc-tls, spec scenario "Open on
 // encrypted volume over plaintext connection"): over the plaintext variant of
 // the stack the server refuses the FEK with Unauthenticated, and the client
@@ -475,7 +538,10 @@ func TestEncryptedOpenPlaintextRefused(t *testing.T) {
 }
 
 // TestUserWithoutPermission_Denied (FR-TEST-9): KeyManager denies the FEK → Open
-// fails closed with EACCES and no key material reaches the client.
+// fails closed with EACCES and no key material reaches the client. Since stage 11
+// the creating client legitimately holds the FEK delivered by Create (decision
+// B3), so its own Open is an LRU cache hit; the denial is observed by a fresh
+// client ("remount") whose LRU is empty.
 func TestUserWithoutPermission_Denied(t *testing.T) {
 	env := newEncryptTestEnv(t, 5, true)
 	ctx := Background()
@@ -485,16 +551,26 @@ func TestUserWithoutPermission_Denied(t *testing.T) {
 	var inode Ino
 	var attr Attr
 	require.Equal(t, syscall.Errno(0), env.client.Create(cctx, RootInode, "denied.exr", 0644, 022, 0, &inode, &attr))
+	require.Len(t, attr.Fek, fekSize, "the creating client receives the FEK at create (decision B3)")
 
 	env.keyMgr.mu.Lock()
 	env.keyMgr.denyGetFek = true
 	env.keyMgr.mu.Unlock()
 
+	// The creator's own Open is served from the LRU cached at create.
 	var openAttr Attr
-	st := env.client.Open(cctx, inode, syscall.O_RDONLY, &openAttr)
+	require.Equal(t, syscall.Errno(0), env.client.Open(cctx, inode, syscall.O_RDONLY, &openAttr))
+	require.Len(t, openAttr.Fek, fekSize)
+	require.Equal(t, 1, env.keyMgr.getFekCalls, "the cache hit must not call KeyManager")
+
+	// A client without the cached key is denied: EACCES, no key material.
+	remounted := env.dial(t)
+	defer remounted.Shutdown()
+	var remountAttr Attr
+	st := remounted.Open(cctx, inode, syscall.O_RDONLY, &remountAttr)
 	require.Equal(t, syscall.EACCES, st)
-	require.Nil(t, openAttr.Fek)
-	require.Equal(t, 1, env.keyMgr.getFekCalls, "the denied call must still be audited by KeyManager")
+	require.Nil(t, remountAttr.Fek)
+	require.Equal(t, 2, env.keyMgr.getFekCalls, "the denied call must still be audited by KeyManager")
 }
 
 // TestCreateRollback (FR-USR-2): KeyManager denies key creation → Create returns
@@ -611,7 +687,8 @@ func TestResolveFileKey(t *testing.T) {
 	require.Len(t, fek, fekSize)
 	require.Equal(t, attr.DriveFileID, driveFileID)
 	require.EqualValues(t, 1, ver)
-	require.Equal(t, 1, env.keyMgr.getFekCalls)
+	// One create-path delivery (stage 11 B1) plus the explicit resolve.
+	require.Equal(t, 2, env.keyMgr.getFekCalls)
 
 	// The returned FEK is exactly the one inside the stored AGFK blob.
 	format := env.meta.GetFormat()
@@ -635,7 +712,8 @@ func TestResolveFileKey(t *testing.T) {
 // TestResolveFileKey_Denied (task 5.2): KeyManager denies GetFileFEK → the client
 // gets EACCES and no key material, and nothing is cached (fail-closed). This env
 // has no authz interceptor; the denial is simulated at the KeyManager level, as in
-// TestUserWithoutPermission_Denied.
+// TestUserWithoutPermission_Denied. The creating client holds the create-delivered
+// FEK (stage 11 B3), so the denial is observed by a fresh client with an empty LRU.
 func TestResolveFileKey_Denied(t *testing.T) {
 	env := newEncryptTestEnv(t, 12, true)
 	ctx := Background()
@@ -650,7 +728,9 @@ func TestResolveFileKey_Denied(t *testing.T) {
 	env.keyMgr.denyGetFek = true
 	env.keyMgr.mu.Unlock()
 
-	gm, ok := env.client.(*grpcMeta)
+	remounted := env.dial(t)
+	defer remounted.Shutdown()
+	gm, ok := remounted.(*grpcMeta)
 	require.True(t, ok)
 
 	fek, _, _, err := gm.ResolveFileKey(cctx, inode)
@@ -680,9 +760,13 @@ func TestKeyManagerUnavailable_FailClosed(t *testing.T) {
 	env.keyMgr.errOverride = status.Error(codes.Unavailable, "keymanager unreachable")
 	env.keyMgr.mu.Unlock()
 
-	// Open must fail closed: no FEK reaches the client.
+	// Open must fail closed: no FEK reaches the client. The creating client
+	// holds the create-delivered FEK (stage 11 B3), so the failure is observed
+	// by a fresh client with an empty LRU.
+	remounted := env.dial(t)
+	defer remounted.Shutdown()
 	var openAttr Attr
-	st := env.client.Open(cctx, inode, syscall.O_RDONLY, &openAttr)
+	st := remounted.Open(cctx, inode, syscall.O_RDONLY, &openAttr)
 	require.NotEqual(t, syscall.Errno(0), st)
 	require.Nil(t, openAttr.Fek)
 
@@ -757,19 +841,23 @@ func TestInsiderCrossFileFEK_Denied(t *testing.T) {
 	env.keyMgr.denyGetFekPaths = map[string]bool{"/y.exr": true}
 	env.keyMgr.mu.Unlock()
 
-	// X: legitimate access — FEK delivered.
+	// X: legitimate access — FEK delivered (creator's LRU from create).
 	var openX Attr
 	require.Equal(t, syscall.Errno(0), env.client.Open(cctx, inoX, syscall.O_RDONLY, &openX))
 	require.Len(t, openX.Fek, fekSize)
 
-	// Y: denied — EACCES, no key material, nothing cached (fail-closed).
+	// Y: denied — EACCES, no key material, nothing cached (fail-closed). The
+	// creating client holds Y's FEK from its create (stage 11 B3), so the
+	// denial is observed by a fresh client with an empty LRU.
+	remounted := env.dial(t)
+	defer remounted.Shutdown()
+	gm, ok := remounted.(*grpcMeta)
+	require.True(t, ok)
 	var openY Attr
-	st := env.client.Open(cctx, inoY, syscall.O_RDONLY, &openY)
+	st := remounted.Open(cctx, inoY, syscall.O_RDONLY, &openY)
 	require.Equal(t, syscall.EACCES, st)
 	require.Nil(t, openY.Fek)
 
-	gm, ok := env.client.(*grpcMeta)
-	require.True(t, ok)
 	_, cached := gm.fekCache.Get(uint64(inoY))
 	require.False(t, cached, "a denied FEK must not be cached")
 }

@@ -23,6 +23,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	authzpb "github.com/juicedata/juicefs/pkg/meta/authz_pb"
 	kmpb "github.com/juicedata/juicefs/pkg/meta/keymanager_pb"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
@@ -138,6 +139,17 @@ func (s *MetaProxyServer) Mknod(ctx context.Context, req *pb.MknodRequest) (*pb.
 		if childPath != "" {
 			s.inodePathCache.Set(inode, withDirSlash(childPath, &attr))
 		}
+
+		// Encryption (decision B5): a regular file created via Mknod on an
+		// encrypted volume gets its crypto binding exactly like a Create;
+		// fifo/device/socket nodes are unaffected. No plaintext FEK rides in
+		// MknodResponse — the first write goes through Open, which delivers it.
+		if s.encryptionEnabled() && req.Type == uint32(TypeFile) && s.keyManager != nil && len(attr.WrappedFek) == 0 {
+			driveFileID := uuid.New().String() // MknodRequest carries no client-side id (FR-USR-3 covers Create)
+			if st := s.provisionFileCrypto(ctx, mctx, Ino(req.Parent), req.Name, inode, childPath, driveFileID, &attr); st != 0 {
+				return &pb.MknodResponse{Errno: uint32(st)}, nil
+			}
+		}
 	}
 
 	return &pb.MknodResponse{
@@ -186,51 +198,138 @@ func (s *MetaProxyServer) Create(ctx context.Context, req *pb.CreateRequest) (*p
 
 	// Encryption: issue the per-file FEK via KeyManager (FR-USR-1). The company
 	// is derived server-side from the path (decision 3.8) — the client never
-	// sends it. Any failure rolls the file back (FR-USR-2, decision 3.3).
+	// sends it.
+	var fek []byte
+	var fekVer uint32
 	if s.encryptionEnabled() && attr.Typ == TypeFile && s.keyManager != nil {
-		userID, err := extractUserIDFromOIDC(ctx) // FR-ID-3: UUID validation (decision 3.7)
-		if err != nil {
-			_ = s.meta.Unlink(mctx, Ino(req.Parent), req.Name)
-			return &pb.CreateResponse{Errno: uint32(syscall.EACCES)}, nil // fail-closed
+		if len(attr.WrappedFek) > 0 {
+			// O_CREAT overwrite of a file that already carries a binding
+			// (decision B2): the binding must stay as-is — re-issuing it with a
+			// new drive_file_id would break the AAD of the existing slices'
+			// CEKs. Serve the existing binding's FEK best-effort: POSIX requires
+			// O_CREAT-without-O_EXCL to succeed, and the client falls back to
+			// ResolveFileKey when no FEK is delivered.
+			var err error
+			fek, fekVer, err = s.fetchFEKForCreate(ctx, inode, &attr, childPath, req.Flags)
+			if err != nil {
+				logger.Warnf("create inode %d: deliver existing binding FEK: %v — client falls back to ResolveFileKey", inode, err)
+			}
+		} else {
+			// New file, or a legacy file without a binding: provision the first
+			// binding (decision B2). A provisioning failure rolls the file back
+			// (FR-USR-2) — a file whose key could not even be created is
+			// unusable. Known race (design addendum B2, fix-review note): two
+			// concurrent Creates of the same path can both see no binding and
+			// re-provision; the future guard is a compare-and-swap on the
+			// wrapped FEK in SetFileCrypto, out of Stage 11 scope.
+			if st := s.provisionFileCrypto(ctx, mctx, Ino(req.Parent), req.Name, inode, childPath, req.DriveFileId, &attr); st != 0 {
+				return &pb.CreateResponse{Errno: uint32(st)}, nil
+			}
+			// The creating client must encrypt its very first write session
+			// (design Addendum 2026-11-01, B1): deliver the plaintext FEK here.
+			// A delivery failure rolls the file back only when this call created
+			// the inode: with O_EXCL set, success proves the inode is fresh (an
+			// existing file would have answered EEXIST above). For a may-be-
+			// existing file (legacy overwrite) deleting would destroy data older
+			// than this call — delivery stays best-effort: the client falls back
+			// to ResolveFileKey and the writer fails closed without a FEK (B4).
+			var err error
+			fek, fekVer, err = s.fetchFEKForCreate(ctx, inode, &attr, childPath, req.Flags)
+			if err != nil {
+				if req.Flags&syscall.O_EXCL != 0 {
+					_ = s.meta.Unlink(mctx, Ino(req.Parent), req.Name) // rollback (FR-USR-2)
+					return &pb.CreateResponse{Errno: uint32(syscall.EACCES)}, nil
+				}
+				logger.Warnf("create inode %d: deliver fresh binding FEK: %v — file kept, writer fails closed without a FEK", inode, err)
+			}
 		}
-		resp, err := s.keyManager.CreateFileKey(ctx, &kmpb.CreateFileKeyRequest{
-			UserId:      userID,
-			VolumeUuid:  s.meta.GetFormat().UUID,
-			DriveFileId: req.DriveFileId,
-			Inode:       int64(inode),
-			Path:        childPath,
-			VolumeName:  s.volumeName,
-		})
-		if err != nil {
-			_ = s.meta.Unlink(mctx, Ino(req.Parent), req.Name) // rollback (FR-USR-2)
-			return &pb.CreateResponse{Errno: uint32(syscall.EIO)}, nil
-		}
-		setter, ok := s.meta.(fileCryptoSetter)
-		if !ok {
-			_ = s.meta.Unlink(mctx, Ino(req.Parent), req.Name)
-			return &pb.CreateResponse{Errno: uint32(syscall.EIO)}, nil
-		}
-		cryptoAlg := resp.CryptoAlg
-		if cryptoAlg == "" {
-			cryptoAlg = "AES-256-GCM"
-		}
-		if st := setter.SetFileCrypto(mctx, inode, &FileCrypto{
-			WrappedFek:  resp.WrappedFek,
-			DriveFileID: req.DriveFileId,
-			FekVersion:  uint32(resp.FekVersion),
-			CryptoAlg:   cryptoAlg,
-		}); st != 0 {
-			_ = s.meta.Unlink(mctx, Ino(req.Parent), req.Name)
-			return &pb.CreateResponse{Errno: uint32(st)}, nil
-		}
-		attr.Encrypted = true
-		attr.DriveFileID = req.DriveFileId
-		attr.FekVersion = uint32(resp.FekVersion)
-		attr.WrappedFek = resp.WrappedFek
-		attr.CryptoAlg = cryptoAlg
 	}
 
-	return &pb.CreateResponse{Errno: 0, Inode: uint64(inode), Attr: AttrToProto(&attr)}, nil
+	resp := &pb.CreateResponse{Errno: 0, Inode: uint64(inode), Attr: AttrToProto(&attr)}
+	if len(fek) > 0 {
+		resp.Fek = fek
+		resp.FekVersion = int32(fekVer)
+	}
+	return resp, nil
+}
+
+// provisionFileCrypto issues the first crypto binding for a regular file created
+// on an encrypted volume (Create/Mknod): KeyManager CreateFileKey followed by
+// SetFileCrypto, updating attr in place. Any failure removes the file (Unlink)
+// and returns the errno to answer — only valid for files this very call created
+// (FR-USR-2).
+func (s *MetaProxyServer) provisionFileCrypto(ctx context.Context, mctx Context, parent Ino, name string, inode Ino, childPath string, driveFileID string, attr *Attr) syscall.Errno {
+	userID, err := extractUserIDFromOIDC(ctx) // FR-ID-3: UUID validation (decision 3.7)
+	if err != nil {
+		_ = s.meta.Unlink(mctx, parent, name)
+		return syscall.EACCES // fail-closed
+	}
+	resp, err := s.keyManager.CreateFileKey(ctx, &kmpb.CreateFileKeyRequest{
+		UserId:      userID,
+		VolumeUuid:  s.meta.GetFormat().UUID,
+		DriveFileId: driveFileID,
+		Inode:       int64(inode),
+		Path:        childPath,
+		VolumeName:  s.volumeName,
+	})
+	if err != nil {
+		_ = s.meta.Unlink(mctx, parent, name) // rollback (FR-USR-2)
+		return syscall.EIO
+	}
+	setter, ok := s.meta.(fileCryptoSetter)
+	if !ok {
+		_ = s.meta.Unlink(mctx, parent, name)
+		return syscall.EIO
+	}
+	cryptoAlg := resp.CryptoAlg
+	if cryptoAlg == "" {
+		cryptoAlg = "AES-256-GCM"
+	}
+	if st := setter.SetFileCrypto(mctx, inode, &FileCrypto{
+		WrappedFek:  resp.WrappedFek,
+		DriveFileID: driveFileID,
+		FekVersion:  uint32(resp.FekVersion),
+		CryptoAlg:   cryptoAlg,
+	}); st != 0 {
+		_ = s.meta.Unlink(mctx, parent, name)
+		return st
+	}
+	attr.Encrypted = true
+	attr.DriveFileID = driveFileID
+	attr.FekVersion = uint32(resp.FekVersion)
+	attr.WrappedFek = resp.WrappedFek
+	attr.CryptoAlg = cryptoAlg
+	return 0
+}
+
+// fetchFEKForCreate delivers the plaintext FEK for a CreateResponse (decision
+// B1): the file is either freshly provisioned or already bound (O_CREAT
+// overwrite), and the creating client needs the key to encrypt its first write
+// session. TLS only — over a plaintext connection nothing is fetched and the
+// fields stay empty (the Open TLS contract, nil/nil/nil error).
+func (s *MetaProxyServer) fetchFEKForCreate(ctx context.Context, inode Ino, attr *Attr, path string, flags uint32) ([]byte, uint32, error) {
+	if !connectionIsTLS(ctx) {
+		return nil, 0, nil
+	}
+	userID, err := extractUserIDFromOIDC(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	fekResp, err := s.keyManager.GetFileFEK(ctx, &kmpb.GetFileFEKRequest{
+		UserId:      userID,
+		VolumeUuid:  s.meta.GetFormat().UUID,
+		DriveFileId: attr.DriveFileID,
+		Inode:       int64(inode),
+		Path:        path,
+		WrappedFek:  attr.WrappedFek,
+		WriteAccess: flags&(syscall.O_WRONLY|syscall.O_RDWR) != 0,
+		FekVersion:  attr.FekVersion,
+		VolumeName:  s.volumeName,
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	return fekResp.Fek, uint32(fekResp.FekVersion), nil
 }
 
 func (s *MetaProxyServer) Open(ctx context.Context, req *pb.OpenRequest) (*pb.OpenResponse, error) {

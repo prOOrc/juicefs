@@ -172,6 +172,15 @@ func newFekTransportServer(t *testing.T, encryptionEnabled, tlsOn bool) *fekTran
 	srv.InodePathCache().Set(testFekInode, "/secret.exr")
 	srv.SetVolumeName(format.Name)
 
+	ts := serveFekTransport(t, srv, tlsOn, fek)
+	return ts
+}
+
+// serveFekTransport serves an already-built MetaProxyServer over bufconn (TLS
+// per tlsOn, mirroring the newFekTransportServer config shape) and returns the
+// harness with a client bound to a simulated OIDC identity.
+func serveFekTransport(t *testing.T, srv *MetaProxyServer, tlsOn bool, fek []byte) *fekTransportServer {
+	t.Helper()
 	ts := &fekTransportServer{server: srv, tlsOn: tlsOn, fek: fek, identity: uuid.New().String()}
 	if tlsOn {
 		ts.tlsCert = generateTestTLSCert(t)

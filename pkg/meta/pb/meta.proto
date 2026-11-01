@@ -278,6 +278,8 @@ message CreateResponse {
   uint32 errno = 1;
   uint64 inode = 2;
   ProtoAttr attr = 3;
+  bytes fek = 4;         // plaintext FEK, TLS only (encrypted files; empty otherwise)
+  int32 fek_version = 5;
 }
 
 message OpenRequest {

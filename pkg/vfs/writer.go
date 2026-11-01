@@ -251,6 +251,12 @@ func (c *chunkWriter) commitThread() {
 					ss.WrappedCEK = wrapped
 					ss.FekVersion = f.fekVer
 				}
+			} else if f.encrypted {
+				// Fail closed (decision B4): an encrypted-flagged file must never
+				// commit a plaintext (unwrapped) slice — the legacy silent
+				// passthrough becomes an explicit error.
+				logger.Errorf("commit inode:%d chunk:%d rejected: encrypted file without a wrapped CEK", f.inode, c.indx)
+				err = syscall.EIO
 			}
 			utils.MemClear(fekCopy)
 			if err == 0 {
@@ -348,7 +354,10 @@ type fileWriter struct {
 	fek         []byte
 	fekVer      uint32
 	driveFileID string
-	stale       bool // keys wiped (NFR-SEC-3): in-flight commits fail closed with EIO
+	// encrypted is the attr.Encrypted flag at open time (immutable): writes
+	// without a usable FEK fail closed instead of storing plaintext (decision B4).
+	encrypted bool
+	stale     bool // keys wiped (NFR-SEC-3): in-flight commits fail closed with EIO
 
 	flushcond  *utils.Cond // wait for chunks==nil (flush)
 	writecond  *utils.Cond // wait for flushwaiting==0 (write)
@@ -426,6 +435,14 @@ func (f *fileWriter) freeChunk(c *chunkWriter) {
 
 // protected by file
 func (f *fileWriter) writeChunk(ctx meta.Context, indx uint32, off uint32, data []byte) syscall.Errno {
+	if f.encrypted && len(f.fek) == 0 {
+		// Fail closed (decision B4): an encrypted-flagged file without a
+		// usable FEK must not silently produce plaintext blocks. Legacy
+		// files (Encrypted=false) are unaffected. Checked before any writer
+		// state is created, so a refused write leaves nothing behind.
+		logger.Errorf("write inode:%d chunk:%d refused: encrypted file without a FEK", f.inode, indx)
+		return syscall.EIO
+	}
 	c := f.findChunk(indx)
 	s := c.findWritableSlice(off, uint32(len(data)))
 	if s == nil {
@@ -724,6 +741,7 @@ func (w *dataWriter) Open(inode Ino, len uint64, tierID uint8, attr *meta.Attr) 
 			f.fek = attr.Fek
 			f.fekVer = attr.FekVersion
 			f.driveFileID = attr.DriveFileID
+			f.encrypted = true
 		}
 		f.flushcond = utils.NewCond(f)
 		f.writecond = utils.NewCond(f)

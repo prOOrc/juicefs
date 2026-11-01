@@ -546,7 +546,12 @@ pb-поля 4/5 в `CreateResponse` (аддитивно, proto3 — старые
 (гейт по образцу Open, grpc_server_fuse.go:245-248). Стоимость: +1 вызов
 KeyManager на Create — Create и так тяжёлый (Mknod+CreateFileKey+
 SetFileCrypto). Mixed «новый клиент + старый прокси» закрывается клиентским
-fallback (B3).
+fallback (B3). Семантика неудачи доставки FEK (fix-review Stage 11): rollback
+только для доказуемо-свежего инода (создан этим вызовом — `O_EXCL`), иначе
+best-effort — файл остаётся с биндингом, клиент пере-резолвит через
+`ResolveFileKey`/Open, writer fail-closed (B4) не даёт тихого plaintext;
+rollback при неудаче провижининга (CreateFileKey/SetFileCrypto) безусловен
+(FR-USR-2).
 
 ### B2. Идемпотентность крипто-биндинга при overwrite
 
@@ -560,6 +565,15 @@ SetFileCrypto НЕ вызываются; FEK в ответ — через `GetFi
 биндинга (нужен клиенту для CEK overwrite-записи). Легаси-незашифрованный
 файл в зашифрованном томе получает первый биндинг (ломать нечего). Fail-closed
 (EEXIST) недопустим: POSIX обязывает O_CREAT-без-O_EXCL succeed.
+
+> **Известное ограничение (fix-review Stage 11).** Два конкурентных Create
+> одного пути могут оба прочитать attr без биндинга и оба провижинить — второй
+> `SetFileCrypto` молча перезаписывает биндинг первого (lost update), ломая AAD
+> slices, уже записанных первым сеансом. Класс предсуществующий: до Stage 11
+> перебиндинг происходил на каждом overwrite; B2 сузил его до окна
+> «провижининг при отсутствии биндинга». Будущий guard (вне Stage 11):
+> compare-and-swap по `WrappedFek` в `SetFileCrypto` — перечитать attr в txn и
+> отказаться от записи при чужом биндинге.
 
 ### B3. Клиент: resp.Fek + fallback ResolveFileKey
 

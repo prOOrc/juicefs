@@ -293,6 +293,25 @@ func (m *grpcMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 	}
 	if attr != nil && resp.Attr != nil {
 		*attr = *ProtoToAttr(resp.Attr)
+		// Stage 11 (decision B3): the proxy delivers the plaintext FEK of the
+		// (possibly just provisioned) binding, so the creating client encrypts
+		// its very first write session. A proxy older than this change sends no
+		// fek — on a TLS channel fall back to ResolveFileKey; over plaintext the
+		// FEK is undeliverable anyway and the writer fails closed (B4).
+		if len(resp.GetFek()) > 0 {
+			fek := resp.GetFek()
+			ver := uint32(resp.GetFekVersion())
+			m.cacheFek(Ino(resp.GetInode()), fek, ver)
+			attr.Fek = fek
+			attr.FekVersion = ver
+		} else if attr.Encrypted && m.tlsOn {
+			if fek, _, ver, err := m.ResolveFileKey(ctx, Ino(resp.GetInode())); err == nil && len(fek) > 0 {
+				attr.Fek = fek
+				attr.FekVersion = ver
+			} else if err != nil {
+				logger.Warnf("create inode %d: resolve FEK fallback failed: %v", resp.GetInode(), err)
+			}
+		}
 		m.putAttrInCache(resp.GetInode(), attr)
 	}
 	m.invalidateDirCache(uint64(parent))

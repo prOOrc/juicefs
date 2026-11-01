@@ -144,9 +144,10 @@ func TestClone_Rewrap_NoS3Rewrite(t *testing.T) {
 	}
 
 	// KeyManager audit: Create(src)+Create(dst); GetFileFEK for the two
-	// ResolveFileKey calls plus the clone's src (Read) and dst (Write).
+	// ResolveFileKey calls plus the clone's src (Read) and dst (Write) and the
+	// src create-path FEK delivery (stage 11 B1).
 	require.Equal(t, 2, env.keyMgr.createCalls)
-	require.Equal(t, 4, env.keyMgr.getFekCalls)
+	require.Equal(t, 5, env.keyMgr.getFekCalls)
 }
 
 // TestClone_LegacyFile (task 5.4): cloning a plaintext file on an unencrypted
@@ -360,9 +361,10 @@ func TestCopyFileRange_Encrypted(t *testing.T) {
 	require.Equal(t, srcPlain, readFile(srcIno, 3, srcFek, srcDFID, srcVer))
 
 	// KeyManager audit: only the two Create calls; GetFileFEK for the two
-	// ResolveFileKey calls plus the re-wrap's src (Read) and dst (Write).
+	// ResolveFileKey calls plus the re-wrap's src (Read) and dst (Write) and
+	// the two create-path FEK deliveries (stage 11 B1).
 	require.Equal(t, 2, env.keyMgr.createCalls)
-	require.Equal(t, 4, env.keyMgr.getFekCalls)
+	require.Equal(t, 6, env.keyMgr.getFekCalls)
 }
 
 // TestClone_Subset (FR-TEST-15, FR-OP-3): copying a subset of an encrypted file
