@@ -772,7 +772,11 @@ func (s *MetaProxyServer) Read(ctx context.Context, req *pb.ReadRequest) (*pb.Re
 func (s *MetaProxyServer) Write(ctx context.Context, req *pb.WriteRequest) (*pb.WriteResponse, error) {
 	mctx := s.metaCtx(ctx, req.Ctx)
 	slice := ProtoToSlice(req.Slice)
-	errno := s.meta.Write(mctx, Ino(req.Inode), req.Indx, req.Off, slice, time.Unix(req.Mtime, 0))
+	// WriteRequest.Mtime is microseconds since the epoch: the client sends
+	// mtime.UnixNano()/1000 (grpc_client_data.Write). Interpreting it as
+	// seconds stored a time ~1e6 years in the future (the "year 56835320"
+	// stat corruption).
+	errno := s.meta.Write(mctx, Ino(req.Inode), req.Indx, req.Off, slice, time.UnixMicro(req.GetMtime()))
 	return &pb.WriteResponse{Errno: uint32(errno)}, nil
 }
 

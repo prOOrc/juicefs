@@ -23,8 +23,10 @@ package meta
 
 import (
 	"context"
+	"sync"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/stretchr/testify/require"
@@ -93,4 +95,48 @@ func TestOpenUnencryptedVolumeUnaffected(t *testing.T) {
 	require.EqualValues(t, 0, resp.Errno)
 	require.True(t, resp.Encrypted)
 	require.Equal(t, ts.fek, resp.Fek, "unencrypted volume: no TLS requirement")
+}
+
+// writeCaptureMeta records the mtime the Write handler forwards to the engine.
+type writeCaptureMeta struct {
+	Meta
+
+	mu    sync.Mutex
+	inode Ino
+	slice Slice
+	mtime time.Time
+}
+
+func (w *writeCaptureMeta) Write(_ Context, inode Ino, _ uint32, _ uint32, slice Slice, mtime time.Time) syscall.Errno {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.inode, w.slice, w.mtime = inode, slice, mtime
+	return 0
+}
+
+// TestWriteMtimeMicroseconds pins the WriteRequest.Mtime unit contract: the
+// client sends microseconds since the epoch (grpc_client_data.Write:
+// mtime.UnixNano()/1000), so the handler must reconstruct the instant with
+// time.UnixMicro. Interpreting the value as seconds scaled the file mtime by
+// 1e6 — the "year 56835320" stat corruption seen on stage acceptance.
+func TestWriteMtimeMicroseconds(t *testing.T) {
+	capture := &writeCaptureMeta{}
+	s := NewMetaProxyServer(capture, 0)
+
+	now := time.Now()
+	sent := now.UnixNano() / 1000 // exactly what the client puts on the wire
+	resp, err := s.Write(context.Background(), &pb.WriteRequest{
+		Inode: 7,
+		Slice: SliceToProto(Slice{Id: 9, Size: 4, Off: 0, Len: 4}),
+		Mtime: sent,
+	})
+	require.NoError(t, err)
+	require.EqualValues(t, 0, resp.Errno)
+
+	capture.mu.Lock()
+	defer capture.mu.Unlock()
+	got := capture.mtime
+	require.Equal(t, sent/1e6, got.Unix(), "mtime seconds must be the microsecond value scaled down, not echoed")
+	require.Equal(t, int((sent%1e6)*1e3), got.Nanosecond(), "sub-second part must carry the microsecond remainder")
+	require.Less(t, got.Year(), 2300, "mtime must stay in a sane range")
 }

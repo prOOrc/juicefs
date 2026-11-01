@@ -55,3 +55,12 @@ func (c *stsProxyClient) GetSTSCredentials(ctx context.Context, in *pb.StsCreden
 func (m *grpcMeta) STSRefreshMargin() float64 {
 	return m.stsRefreshMargin
 }
+
+// ConnectionPlaintext reports whether the meta proxy channel dials without
+// TLS (no tls=1 in the meta URL). The proxy refuses to deliver per-file FEKs
+// over a plaintext connection (implement-grpc-tls), so on an encrypted volume
+// every encrypted open fails with EACCES; cmd/mount uses this to warn early
+// instead of leaving a bare permission error to be discovered on first read.
+func (m *grpcMeta) ConnectionPlaintext() bool {
+	return !m.tlsOn
+}

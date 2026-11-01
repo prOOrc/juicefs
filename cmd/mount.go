@@ -677,6 +677,17 @@ func mount(c *cli.Context) error {
 	if gm, ok := metaCli.(interface{ HubState() meta.HubState }); ok {
 		vfsConf.HubState = gm.HubState
 	}
+	// The proxy never delivers per-file FEKs over a plaintext connection
+	// (implement-grpc-tls): on an encrypted volume every encrypted open would
+	// fail with EACCES after the mount succeeds. Warn at mount, where the
+	// misconfiguration is actionable, instead of on the first failing read.
+	if format.EncryptionEnabled {
+		if gm, ok := metaCli.(interface{ ConnectionPlaintext() bool }); ok && gm.ConnectionPlaintext() {
+			logger.Warnf("volume %q has encryption enabled but the meta proxy connection is plaintext: "+
+				"opening encrypted files will fail with permission denied. "+
+				"Mount with tls=1&tls-ca=<proxy CA> and run `juicefs meta-proxy` with --tls-cert/--tls-key", format.Name)
+		}
+	}
 	setFuseOption(c, format, vfsConf)
 	if stage == 0 || stage == 3 {
 		blob, err = NewReloadableStorage(format, metaCli, updateFormat(c))

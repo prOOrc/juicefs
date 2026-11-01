@@ -17,10 +17,13 @@
 package meta
 
 import (
+	"strings"
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/prometheus/client_golang/prometheus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // fekCacheHits/fekCacheMisses count client FEK resolutions served from the
@@ -49,7 +52,18 @@ func (m *grpcMeta) openOnce(ctx Context, inode Ino, flags uint32, cachedFekVersi
 	if err != nil {
 		// Map through the shared status table (implement-grpc-tls): the FEK
 		// refusal over a plaintext connection arrives as Unauthenticated and
-		// surfaces to the caller as EACCES.
+		// surfaces to the caller as EACCES. Log the cause — a bare EACCES left
+		// stage acceptance without a hint that the proxy never even tried the
+		// KeyManager because the channel is not TLS.
+		if s, ok := status.FromError(err); ok && s.Code() == codes.Unauthenticated {
+			if strings.Contains(s.Message(), "TLS") {
+				logger.Errorf("open inode %d refused: %s — file keys are never delivered "+
+					"over a plaintext connection; mount with tls=1&tls-ca=<proxy CA> "+
+					"(the proxy needs --tls-cert/--tls-key)", inode, s.Message())
+			} else {
+				logger.Errorf("open inode %d refused by the proxy: %s", inode, s.Message())
+			}
+		}
 		return nil, grpcStatusToErrno(err)
 	}
 	if resp.GetErrno() != 0 {

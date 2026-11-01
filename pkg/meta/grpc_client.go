@@ -132,6 +132,12 @@ type grpcMeta struct {
 	// stsRefreshMargin is the sts-refresh-margin from the meta URL (design
 	// configure-sts-refresh-ttl D4); see STSRefreshMargin.
 	stsRefreshMargin float64
+
+	// tlsOn records whether the channel dials with TLS (tls=1). The proxy
+	// refuses to deliver per-file FEKs over a plaintext connection, so an
+	// encrypted volume on a plaintext channel fails every encrypted open with
+	// EACCES; the mount surfaces this as an early warning (ConnectionPlaintext).
+	tlsOn bool
 }
 
 // tokenProvider is the minimal interface needed by withAuth, the heartbeat
@@ -292,6 +298,7 @@ func newGRPCMeta(driver, addr string, conf *Config) (Meta, error) {
 		stsRefreshMargin:  stsRefreshMargin,
 		lastPermGen:       -1, // unset until the first successful heartbeat (task 7.3)
 		oidcConfig:        oidcCfg,
+		tlsOn:             tlsEnabled,
 	}
 	// Assign only when non-nil: wrapping a nil *oidc.TokenManager in the
 	// tokenProvider interface makes the interface non-nil and panics in withAuth.

@@ -563,6 +563,32 @@ func TestLegacyVolume_Unchanged(t *testing.T) {
 	require.Equal(t, 0, env.keyMgr.getFekCalls, "legacy volume must not call GetFileFEK")
 }
 
+// TestWriteMtimeRoundtrip pins the full client→proxy→engine mtime unit chain
+// (stage acceptance regression: the client sends WriteRequest.Mtime in
+// microseconds, the proxy scaled it by 1e6 by reading it as seconds, and the
+// file's mtime jumped to "year 56835320").
+func TestWriteMtimeRoundtrip(t *testing.T) {
+	env := newEncryptTestEnv(t, 13, true)
+	ctx := Background()
+	user := uuid.New().String()
+	cctx := userCtx(t, ctx, user)
+
+	var inode Ino
+	var attr Attr
+	require.Equal(t, syscall.Errno(0), env.client.Create(cctx, RootInode, "mtime.txt", 0644, 022, 0, &inode, &attr))
+
+	before := time.Now().Add(-time.Minute)
+	var sid uint64
+	require.Equal(t, syscall.Errno(0), env.client.NewSlice(cctx, &sid))
+	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, inode, 0, 0, Slice{Id: sid, Size: 4, Off: 0, Len: 4}, time.Now()))
+
+	var after Attr
+	require.Equal(t, syscall.Errno(0), env.client.GetAttr(cctx, inode, &after))
+	stored := time.Unix(after.Mtime, int64(after.Mtimensec))
+	require.True(t, stored.After(before), "mtime must stay near the write time: got %s", stored)
+	require.True(t, stored.Before(time.Now().Add(time.Minute)), "mtime must not be scaled into the far future: got %s", stored)
+}
+
 // TestResolveFileKey (task 5.2): ResolveFileKey returns the plaintext FEK and the
 // drive file ID and writes the client's FEK LRU; the returned key must be exactly
 // the one inside the stored AGFK blob (AAD intact).
