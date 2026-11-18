@@ -219,6 +219,30 @@ Health endpoint: kafka-режим — семантика без изменени
 Verified-by: pkg/meta/redis_outbox_test.go::TestRedisOutboxIsHealthy
 Verified-by: cmd/outbox_test.go::TestValidateSinkFlags
 
+### Requirement: Mount integration
+
+The `mount` command SHALL accept `--outbox-enabled` (boolean) and `--outbox-stream` (default
+`juicefs:outbox`) flags. When enabled, the mounted `redisMeta` instance SHALL write events to
+the stream as part of meta operations; the mount process SHALL NOT run the Kafka consumer —
+forwarding to the sink is performed exclusively by the standalone `outbox` command.
+
+The `gateway` command SHALL accept the same `--outbox-enabled` and `--outbox-stream` flags; when
+enabled, the gateway's `redisMeta` instance SHALL write events to the stream for operations
+performed through the S3 gateway (PUT с метаданными `X-Amz-Meta-*`, DELETE, move). Consumer
+forwarding logic из mount-интеграции применяется без изменений.
+
+#### Scenario: Mount writes, standalone command forwards
+
+- **WHEN** a volume is mounted with `--outbox-enabled` and a separate `juicefs outbox` process runs against the same Redis
+- **THEN** file operations on the mount SHALL appear in the stream and be forwarded to the sink by the standalone consumer
+
+#### Scenario: Gateway PUT with user metadata emits events
+
+- **WHEN** gateway запущен с `--outbox-enabled` и через S3 API выполняется PUT с заголовками
+  `X-Amz-Meta-*`
+- **THEN** rename tmp → final path в gateway-процессе эмитит событие с `xattrs["s3-meta"]`,
+  и standalone-консюмер доставляет его в sink
+
 ## ADDED Requirements
 
 ### Requirement: S3 object sink
@@ -254,14 +278,24 @@ Verified-by: pkg/meta/s3_sink_test.go::TestS3SinkPutErrorReturned
 
 ### Requirement: S3 spill and backpressure
 
-При недоступности sink и включённом `--s3-spill-dir` событие SHALL записываться в спилл-каталог
-JSONL-чанком с атомарной публикацией (запись во временный файл + rename), после чего сообщение
-подтверждается (ack-after-spill). Суммарный размер спилла ограничен `--s3-spill-max-size`. При
+При недоступности sink и включённом `--s3-spill-dir` событие SHALL дописываться одной
+JSONL-строкой в открытый чанк спилл-каталога, после чего сообщение подтверждается
+(ack-after-spill: событие либо целиком в чанке и ack'нуто, либо не записано и остаётся в PEL;
+оборванный хвост при крае отбрасывается дрением с WARN и ределиверится). Новый чанк создаётся
+атомарно (tmp+rename); чанк ротируется при достижении порога ротации. Суммарный размер спилла
+ограничен `--s3-spill-max-size`. При
 исчерпании лимита sink SHALL переходить в backpressure: консюмер перестаёт читать новые
 сообщения, выполнять reclaim-проход и подтверждать сообщения, `/health` возвращает 503, в лог
 пишется ERROR, процесс не завершается, события не отбрасываются. После восстановления sink спилл
 SHALL дренироваться в S3 (FIFO по
-файлам; частичный дренаж переписывает недренажированный остаток). При выключенном спилле
+файлам; дренаж попытками из цикла консюмера — каждый тик при непустом спилле и после каждого
+успешного Publish; позиция частичного дренажа отслеживается курсором, при неудаче чанк не
+перезаписывается; после рестарта курсор сбрасывается и дренаж идёт с начала чанка — повторная
+запись уже дренированных объектов идемпотентна по uuid-ключу). Backpressure SHALL сниматься
+только фактом успешного Put: при пустом спилле попытка дренажа выполняет probe-Put объекта
+`<prefix>/.probe/<uuid>.json` (вне date-префикса — не является событием, игнорируется
+drainer'ом, чистится lifecycle-правилом префикса); флаг backpressure не снимается
+«пустым» дренажем без доказательства работоспособности sink. При выключенном спилле
 недоставка оставляет сообщение в PEL с ретраями (поллинг/reclaim), без завершения процесса.
 
 #### Scenario: Spill on sink unavailability

@@ -23,11 +23,12 @@ redis-only).
 | Компонент | Файл | Изменение |
 |---|---|---|
 | `cmdOutbox` / `outboxConsumer` | cmd/outbox.go | флаг `--sink` + `--s3-*` + `--reclaim-min-idle` с env-алиасами, валидация режима (kafka-brokers теряет `Required: true` в urfave/cli-определении, валидируется по режиму), ветвление конструктора sink (строка :191), health через `SinkHealthChecker` |
+| gateway outbox-поддержка | cmd/gateway.go (без правок) | пре-существующая: флаги в `metaFlags()`⊂`clientFlags()`, чтение в общем `getMetaConf` (cmd/mount.go:378), meta строится в `initForSvc` до `NewClient` — верифицировано D10, контрактно зафиксировано дельтой Mount integration |
 | `EventSink` (rename из `KafkaPublisher`), `RedisOutbox`, `consumeLoop`, `pollAndPublish`, `processMessage`, `moveToDeadQueue` | pkg/meta/redis_outbox.go | rename интерфейса; reclaim-проход `XAutoClaim`; ack после Put или спилла (логика ack — в `processMessage`, исход — из возвращённой ошибки sink'а). XACK оригинала в `moveToDeadQueue` уже реализован (вызов deleteMessage/XAck) — поведение фиксируется требованием и новым тестом, код не меняется |
 | `S3Sink`, `S3SinkConfig`, `NewS3Sink`, `SinkHealthChecker` | pkg/meta/s3_sink.go | NEW: Put объекта, именование ключей, uuid-шим для legacy-событий, спилл (JSONL, tmp+rename, лимит), дренаж FIFO, backpressure, `Health() error` |
 | `JuiceFsEvent` | pkg/meta/events.go | поля `uuid string`, `mtime int64`, `xattrs map[string]string` (все omitempty) |
 | `publishEventToPipe`, `publishFileMovedToPipe`, `publishDirMovedToPipe` (+ остальные хелперы) | pkg/meta/redis_event.go | генерация uuid; mtime из `Attr.Mtime`/`Attr.Mtimensec`; общий хелпер снимка `s3-meta` (whitelist), вызываемый из обоих Moved-хелперов |
-| точки эмиссии | pkg/meta/redis.go (doRename :2787/:2789, doWrite :3226, doFallocate :1372, doMknod, doUnlink, doRmdir) | проброс Attr в точки эмиссии для mtime; снятие xattr — внутри Moved-хелперов |
+| точки эмиссии | pkg/meta/redis.go (doRename :2787/:2789, doWrite :3226, doFallocate :1372, doMknod, doUnlink, doRmdir, **doBatchUnlink :1952** — найдено e2e: gateway batch-delete шёл мимо эмиссии) | проброс Attr в точки эмиссии для mtime; снятие xattr — внутри Moved-хелперов; FileDeleted по каждой записи батч-unlink |
 | `FilterEvent` | pkg/meta/event_filter.go | правила фильтрации и семантика не меняются; литерал трансформации moved-from-tmp → Created выравнивается с SoT («all fields preserved except `old_path`»): перенос `Size` (сейчас теряется — дрейф от SoT) и новых полей `uuid`/`mtime`/`xattrs` |
 | `WatermillKafkaPublisher` | pkg/meta/watermill_kafka.go | без изменений (реализует EventSink неявно, имя метода Publish совпадает) |
 | object-слой | pkg/object (CreateStorage, minio-драйвер) | без изменений; использование по идиоме cmd/sync.go:425-443 (bucket в path endpoint'а) |
@@ -51,14 +52,27 @@ S3-режим (`juicefs outbox --sink s3 REDIS-URL`):
 5. `S3Sink.Publish`: ключ `prefix/YYYY-MM-DD/HH/uuid.json` (UTC по `event.Timestamp`; для
    legacy-событий без uuid — генерация до первой попытки) → `storage.Put(ctx, key, JSON)`:
    - успех → попытка дренажа спилла (если есть) → nil → XACK;
-   - ошибка Put + спилл включён и лимит не исчерпан → атомарная запись JSONL-чанка (tmp+rename),
-     учёт размера → nil → XACK (ack-after-spill);
+   - ошибка Put + спилл включён и лимит не исчерпан → JSONL-строка в открытый чанк (новый чанк —
+     tmp+rename; чанк ротируется на пороге 64 MiB; ack-after-append: либо строка целиком в чанке
+     и XACK, либо событие остаётся в PEL, оборванный хвост при крае дропается дрением с WARN) →
+     nil → XACK (ack-after-spill);
    - ошибка Put + спилл выключен или переполнен → error → сообщение остаётся в PEL,
      retry-счётчик растёт (reclaim вернёт сообщение), при исчерпании `MaxRetries` → DLQ + XACK.
 6. Backpressure: флаг в `S3Sink` → `Health()` возвращает error → `/health` 503; consumeLoop
    останавливает и poll новых сообщений, и reclaim-проход (PEL не расходуется — сообщения не
    уезжают в DLQ стеллажом), но продолжает попытки дренажа спилла; восстановление Put → дренаж
-   FIFO (частичный дренаж переписывает остаток) → снятие backpressure → 200.
+   FIFO → снятие backpressure → 200.
+   Дренаж спилла — тик-driven: consumeLoop каждый тик (после poll/reclaim, и в backpressure-ветке)
+   вызывает `SinkDrainer.TryDrain` — при непустом спилле это дешёвая попытка (одна неудавшаяся
+   Put-попытка = честный probe; курсор останавливает дренаж на месте неудачи БЕЗ перезаписи
+   чанка), после восстановления дренаж продолжается с курсора даже без нового трафика. После
+   рестарта курсор сбрасывается — повторный дренаж с начала чанка, перезапись уже
+   задрейненных объектов идемпотентна по uuid-ключу.
+   Снятие backpressure — только фактом успешного Put (найдено e2e: «пустой» дренаж снимал
+   флаг при мёртвом sink → health toggle'ился 503/200 каждый тик): при пустом спилле
+   TryDrain выполняет probe-Put `<prefix>/.probe/<uuid>.json` — вне date-префикса (drainer
+   LIST'ит только `events/<date>/<hour>/`, ключ не является событием), чистится
+   lifecycle-правилом префикса `events/`.
 7. SIGINT/SIGTERM: закрыть HTTP, `StopConsumer`; спилл-файлы остаются на диске и дренируются при
    следующем старте.
 
@@ -159,10 +173,20 @@ Kafka-режим: идентичен текущему, кроме: reclaim-пр�
   семантика не тронута — нулевая регрессия. Недоступный sink без спилла выглядит healthy (200) —
   как в kafka-режиме сегодня; алерт по логам ошибок Put (см. Risks).
 - **D9. Дельты спеки.** MODIFIED: Event model, Event emission from meta operations, Consumer
-  group and polling, Message processing and retry, Standalone outbox consumer command. ADDED:
-  S3 object sink, S3 spill and backpressure. Без дельт: Event path reconstruction, Redis stream
-  writing, Dead-letter queue (поля не меняются), Event filtering, Kafka publishing, Mount
-  integration.
+  group and polling, Message processing and retry, Standalone outbox consumer command, Mount
+  integration (gateway). ADDED: S3 object sink, S3 spill and backpressure. Без дельт: Event
+  path reconstruction, Redis stream writing, Dead-letter queue (поля не меняются), Event
+  filtering, Kafka publishing.
+- **D10 (аменд при apply). Gateway outbox-поддержка — уже существует, верифицировано.** Первая
+  рекогносцировка была неточной: `getMetaConf` живёт в cmd/mount.go:344-384 и читает
+  `conf.Outbox.Enabled` (:378-381) для ЛЮБОЙ службы, а флаги `outbox-enabled`/`outbox-stream`
+  лежат в `metaFlags()` (cmd/flags.go:347-357), входящем в `clientFlags()`, который gateway
+  подключает через `expandFlags(selfFlags, clientFlags(0), ...)` (gateway.go:138); meta строится
+  в `initForSvc` ДО `meta.NewClient` (gateway.go:251-254). Т.е. gateway УЖЕ принимает флаги и
+  эмитит события — правок кода не потребовалось (верифицировано `--help`-грепами и код-путём).
+  Дельта Mount integration фиксирует gateway-поведение контрактно и закрывается e2e-сценарием
+  6.2 (gateway PUT с X-Amz-Meta-* → объект в events/). Для gateway-метаданных в e2e требуется
+  флаг `--object-meta` (gConf.ObjMeta включает запись `s3-meta`).
 
 ## Risks / Trade-offs
 

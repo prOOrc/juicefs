@@ -43,6 +43,9 @@ type OutboxConfig struct {
 	KafkaTopic    string
 	MaxRetries    int
 	TrimMaxLen    int64
+	// ReclaimMinIdle is how long a message must sit in the consumer group's
+	// PEL before it is re-delivered to the consumer via XAutoClaim
+	ReclaimMinIdle time.Duration
 }
 
 type Config struct {
@@ -75,12 +78,13 @@ func DefaultConf() *Config {
 		AtimeMode:          NoAtime,
 		DirStatFlushPeriod: 1 * time.Second,
 		Outbox: OutboxConfig{
-			Enabled:       false,
-			StreamName:    "juicefs:outbox",
-			ConsumerGroup: "outbox",
-			KafkaTopic:    "juicefs.events",
-			MaxRetries:    10,
-			TrimMaxLen:    10000,
+			Enabled:        false,
+			StreamName:     "juicefs:outbox",
+			ConsumerGroup:  "outbox",
+			KafkaTopic:     "juicefs.events",
+			MaxRetries:     10,
+			TrimMaxLen:     10000,
+			ReclaimMinIdle: time.Minute,
 		},
 	}
 }

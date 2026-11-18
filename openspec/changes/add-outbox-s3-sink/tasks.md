@@ -2,10 +2,10 @@
 
 ## 1. Контракт события и эмиссия
 
-- [ ] 1.1 Расширить `JuiceFsEvent` (pkg/meta/events.go): поля `uuid string`, `mtime int64`,
+- [x] 1.1 Расширить `JuiceFsEvent` (pkg/meta/events.go): поля `uuid string`, `mtime int64`,
       `xattrs map[string]string`, все omitempty; mtime = Unix nanoseconds (wire-контракт — ns).
       Проверка: `go build ./pkg/meta/... && go vet ./pkg/meta/...`
-- [ ] 1.2 `publishEventToPipe` (pkg/meta/redis_event.go): генерация `uuid` (github.com/google/uuid,
+- [x] 1.2 `publishEventToPipe` (pkg/meta/redis_event.go): генерация `uuid` (github.com/google/uuid,
       direct dep), заполнение `mtime` из `Attr.Mtime` (секунды) ×10⁹ + `Attr.Mtimensec` (проброс
       Attr в точки эмиссии в pkg/meta/redis.go: doMknod, doRename, doWrite, doFallocate); в обоих
       Moved-хелперах `publishFileMovedToPipe` (:102) и `publishDirMovedToPipe` (:115) —
@@ -13,41 +13,61 @@
       `reconstructPath`).
       Файлы: pkg/meta/redis_event.go, pkg/meta/redis.go.
       Проверка: `go build ./pkg/meta/... && SKIP_NON_CORE=true go test -count=1 ./pkg/meta/... -run 'TestEventUUIDGenerated|TestWritePublishesMtime|TestRenamePublishesS3MetaSnapshot|TestSetXattrEmitsNoEvent'`
-- [ ] 1.3 Тесты (реальный Redis, паттерн `newTestRedisMetaWithOutbox` + readOutboxEvents):
+- [x] 1.3 Тесты (реальный Redis, паттерн `newTestRedisMetaWithOutbox` + readOutboxEvents):
       TestEventUUIDGenerated (uuid непуст и уникален), TestWritePublishesMtime (ns-значение),
       TestRenamePublishesS3MetaSnapshot (hSet s3-meta до rename; трансформация moved-from-tmp
       сохраняет xattrs), TestSetXattrEmitsNoEvent, TestEventJSONBackwardCompatibility
       (marshal без новых полей → unmarshal ok; расширенный JSON → старая структура игнорирует).
       Файлы: pkg/meta/redis_event_test.go.
       Проверка: `make test.meta.core`
-- [ ] 1.4 Выровнять литерал трансформации в `FilterEvent` (pkg/meta/event_filter.go:46-59) с SoT
+- [x] 1.4 Выровнять литерал трансформации в `FilterEvent` (pkg/meta/event_filter.go:46-59) с SoT
       («all fields preserved except `old_path`»): перенести `Size` (сейчас теряется — дрейф от
       SoT) и новые поля `uuid`/`mtime`/`xattrs`. Тест: расширить
       TestFilterEvent_TransformPreservesFields (трансформация сохраняет Size и новые поля).
       Файлы: pkg/meta/event_filter.go, pkg/meta/event_filter_test.go.
       Проверка: `go test -count=1 ./pkg/meta/... -run 'TestFilterEvent'`
+- [x] 1.5 Эмиссия FileDeleted в батч-unlink: `redisMeta.doBatchUnlink` (pkg/meta/redis.go:1952,
+      найдено e2e — gateway batch-delete через fs.BatchDeleteEntries → meta.BatchUnlink шёл мимо
+      эмиссии; tombstone-семантика change 2/3 требует deleted-события от gateway-писателей).
+      Для каждой не-директорий записи батча — publishFileDeletedToPipe в ту же транзакцию
+      (attr из entryInfo; директории пропускаются — они удаляются Rmdir через pruneEmptyDirs и
+      эмитят DirDeleted). Тест TestBatchUnlinkPublishesFileDeleted.
+      Файлы: pkg/meta/redis.go, pkg/meta/redis_event_test.go.
+      Проверка: `go build ./pkg/meta/... && SKIP_NON_CORE=true go test -count=1 ./pkg/meta/... -run 'TestBatchUnlinkPublishes|TestSetXattrEmitsNoEvent' -v | tail -6`
 
 ## 2. Доставка: EventSink, reclaim
 
-- [ ] 2.1 Rename `KafkaPublisher` → `EventSink` (pkg/meta/redis_outbox.go:32-34) и все
+- [x] 2.1 Rename `KafkaPublisher` → `EventSink` (pkg/meta/redis_outbox.go:32-34) и все
       использования (pkg/meta/redis_outbox.go, cmd/outbox.go); поведение не меняется.
       Проверка: `go build ./... && go vet ./pkg/meta/... ./cmd/...`
-- [ ] 2.2 consumeLoop (pkg/meta/redis_outbox.go): reclaim-проход `XAutoClaim` (MinIdle =
+- [x] 2.2 consumeLoop (pkg/meta/redis_outbox.go): reclaim-проход `XAutoClaim` (MinIdle =
       `--reclaim-min-idle`, default 60s, Count 100) → общий `processMessage`; при backpressure
       s3-синка poll и reclaim-проход не выполняются. XACK оригинала в `moveToDeadQueue` уже
       реализован (deleteMessage/XAck) — код не меняется, фиксируется тестом (2.3).
       Проверка: `go build ./pkg/meta/... && SKIP_NON_CORE=true go test -count=1 ./pkg/meta/... -run 'TestReclaimPending|TestMoveToDeadQueue'`
-- [ ] 2.3 Тесты (реальный Redis 127.0.0.1:6379/DB15, skip-паттерн
+- [x] 2.3 Тесты (реальный Redis 127.0.0.1:6379/DB15, skip-паттерн
       `TestInitConsumerGroupNoStream`; go-redis v9.18.1 XAutoClaim поддерживает, сервер ≥ 6.2):
       TestReclaimPendingMessages (сообщение старше MinIdle в PEL → redelivery → обработка),
       TestMoveToDeadQueueAcksOriginal (после DLQ-переноса сообщение отсутствует в PEL — фиксация
       существующего поведения).
       Файлы: pkg/meta/redis_outbox_test.go.
       Проверка: `make test.meta.core`
+- [x] 2.4 Тик-driven дренаж спилла: consumeLoop каждый тик вызывает SinkDrainer.TryDrain при
+      непустом спилле (не только в backpressure); TryDrain — курсорная семантика (стоп на
+      неудаче без перезаписи чанка, рестарт → дренаж с начала чанка, идемпотентно по uuid-ключу).
+      Найдено e2e: без нового трафика спилл после восстановления sink не дрейнился (дренаж был
+      привязан к успешному Publish и backpressure).
+      Файлы: pkg/meta/redis_outbox.go, pkg/meta/s3_sink.go, pkg/meta/s3_sink_test.go.
+      Проверка: `go build ./pkg/meta/... && go test -count=1 ./pkg/meta/... -run 'TestS3Sink|TestSpill' -v | tail -12`
+- [x] 2.5 Снятие backpressure только фактом успешного Put: «пустой» дренаж не снимает флаг (найдено
+      e2e — health toggle'ился 503/200 при мёртвом sink); при backpressure с пустым спиллом TryDrain
+      делает probe-Put `<prefix>/.probe/<uuid>.json` (вне date-префикса — drainer игнорирует, lifecycle чистит).
+      Файлы: pkg/meta/s3_sink.go, pkg/meta/s3_sink_test.go.
+      Проверка: `go build ./pkg/meta/... && go test -count=1 ./pkg/meta/... -run 'TestBackpressure|TestTryDrainNoOp|TestSpill' -v | tail -14`
 
 ## 3. S3Sink
 
-- [ ] 3.1 Новый pkg/meta/s3_sink.go: `S3SinkConfig` (prefix, spill-dir, spill-max-size),
+- [x] 3.1 Новый pkg/meta/s3_sink.go: `S3SinkConfig` (prefix, spill-dir, spill-max-size),
       `NewS3Sink(cfg, storage object.ObjectStorage)` (инъекция хранилища), `Publish`: ключ
       `<prefix>/<YYYY-MM-DD>/<HH>/<uuid>.json` (UTC по event.Timestamp), uuid-шим для
       legacy-событий, спилл (JSONL-чанки, tmp+rename, лимит байт), дренаж FIFO с переписыванием
@@ -55,7 +75,7 @@
       (реализация `SinkHealthChecker`). Ошибки sink возвращаются вызывающему; panic/os.Exit в
       sink-пути запрещены.
       Проверка: `go build ./pkg/meta/... && go vet ./pkg/meta/...`
-- [ ] 3.2 Тесты с моком ObjectStorage (встраивание интерфейса, tmpdir как спилл-каталог):
+- [x] 3.2 Тесты с моком ObjectStorage (встраивание интерфейса, tmpdir как спилл-каталог):
       TestS3SinkKeyFormat, TestS3SinkGeneratesUUIDWhenAbsent, TestS3SinkPutErrorReturned,
       TestSpillOnSinkUnavailable, TestSpillOverflowBackpressure, TestSpillDrainAfterRecovery.
       Файлы: pkg/meta/s3_sink_test.go.
@@ -63,7 +83,7 @@
 
 ## 4. CLI и health
 
-- [ ] 4.1 cmd/outbox.go: флаги `--sink`, `--s3-*`, `--reclaim-min-idle` + env-алиасы (конвенция
+- [x] 4.1 cmd/outbox.go: флаги `--sink`, `--s3-*`, `--reclaim-min-idle` + env-алиасы (конвенция
       существующих флагов); снять `Required: true` у kafka-brokers (cmd/outbox.go:70-75),
       валидация по режиму (kafka → brokers required; s3 → endpoint+bucket required; неизвестный
       sink → ошибка);
@@ -71,24 +91,31 @@
       идиоме cmd/sync.go:425-443, `--s3-region` → установка `MINIO_REGION`); /health комбинирует
       `outbox.IsHealthy()` + `SinkHealthChecker` (type-assertion).
       Проверка: `go build ./cmd/... && go vet ./cmd/...`
-- [ ] 4.2 Тесты флагов: TestValidateSinkFlags (kafka без brokers → ошибка; s3 без endpoint/bucket
+- [x] 4.2 Тесты флагов: TestValidateSinkFlags (kafka без brokers → ошибка; s3 без endpoint/bucket
       → ошибка; неизвестный sink → ошибка; s3 не требует kafka-флагов).
       Файлы: cmd/outbox_test.go.
       Проверка: `go test -count=1 ./cmd/... -run TestValidateSinkFlags`
+- [x] 4.3 Gateway outbox-поддержка: проверено при apply — уже пре-существующая (флаги в
+      `metaFlags()`⊂`clientFlags()`, чтение в общем `getMetaConf`, cmd/mount.go:378; meta в
+      `initForSvc` до `NewClient`). Код-правок не требуется; контрактно зафиксировано дельтой
+      Mount integration, runtime-проверка в e2e 6.2 (gateway PUT с X-Amz-Meta-* при
+      `--object-meta`).
+      Файлы: cmd/gateway.go (верификация --help), cmd/flags.go (без правок).
+      Проверка: `./juicefs gateway --help 2>&1 | grep -c outbox-enabled` ≥ 1 && `./juicefs mount --help 2>&1 | grep -c outbox-enabled` ≥ 1
 
 ## 5. Документация
 
-- [ ] 5.1 Обновить docs/en/deployment/outbox.md: режим s3, таблица флагов/env, именование
+- [x] 5.1 Обновить docs/en/deployment/outbox.md: режим s3, таблица флагов/env, именование
       объектов `events/<date>/<hour>/<uuid>.json`, спилл и backpressure, health-семантика,
       обновлённая схема потока, примечание об at-least-once и дедупе по uuid.
       Проверка: `grep -qi -- '--sink' docs/en/deployment/outbox.md && grep -qi 'spill' docs/en/deployment/outbox.md && grep -qi 'backpressure' docs/en/deployment/outbox.md`
 
 ## 6. E2E (apply-фаза)
 
-- [ ] 6.1 Новый docker-compose.outbox-s3-test.yml (корень, рядом с docker-compose.enc-test.yml):
+- [x] 6.1 Новый docker-compose.outbox-s3-test.yml (корень, рядом с docker-compose.enc-test.yml):
       redis + minio, network_mode: host.
       Проверка: `docker compose -f docker-compose.outbox-s3-test.yml up -d && docker compose -f docker-compose.outbox-s3-test.yml ps`
-- [ ] 6.2 E2E-прогон: format → mount `--outbox-enabled` → операции через FUSE (create/write/
+- [x] 6.2 E2E-прогон: format → mount `--outbox-enabled` → операции через FUSE (create/write/
       delete/rename) и через gateway PUT с `X-Amz-Meta-*` → `juicefs outbox --sink s3
       --s3-spill-dir /tmp/outbox-spill` → объекты `events/` с валидным JSON
       (created/written/deleted/moved + uuid/mtime/xattrs на gateway-PUT) → `docker stop` minio →

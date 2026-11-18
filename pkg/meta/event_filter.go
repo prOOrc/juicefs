@@ -45,19 +45,13 @@ func FilterEvent(event *JuiceFsEvent) *JuiceFsEvent {
 		if event.Type == DirMoved {
 			newType = DirCreated
 		}
-		return &JuiceFsEvent{
-			Type:      newType,
-			Timestamp: event.Timestamp,
-			Volume:    event.Volume,
-			Uid:       event.Uid,
-			Gid:       event.Gid,
-			Subdir:    event.Subdir,
-			Inode:     event.Inode,
-			Parent:    event.Parent,
-			Name:      event.Name,
-			Path:      event.Path,
-			Mode:      event.Mode,
-		}
+		// Preserve all fields (size, uuid, mtime, xattrs snapshot included):
+		// only the type changes and old_path is erased — the source tmp path
+		// is internal noise.
+		transformed := *event
+		transformed.Type = newType
+		transformed.OldPath = ""
+		return &transformed
 	}
 
 	// --- Default: pass through ---

@@ -31,7 +31,10 @@ kafka-моде; миграция в этот change не входит).
    `s3-meta` при move/rename — носитель метаданных X-Amz-Meta-* gateway; полный дамп xattr
    запрещён конструктивно). Обратная совместимость JSON в обе стороны.
 5. Health: в s3-режиме 503 при backpressure; kafka-режим не меняется.
-6. Документация outbox (`docs/en/deployment/outbox.md`) и E2E-compose (redis + minio).
+6. Gateway: флаги `--outbox-enabled`/`--outbox-stream` (по схеме mount) — без них gateway-процесс
+   не эмитит события, а HK-писатели = gateway (условие verify-сценария «gateway PUT с
+   X-Amz-Meta-* → объекты в events/»).
+7. Документация outbox (`docs/en/deployment/outbox.md`) и E2E-compose (redis + minio).
 
 ## Capabilities
 
@@ -71,9 +74,10 @@ xattr запрещён.
 ## Impact
 
 - Код: `cmd/outbox.go` (флаги, валидация режима, ветвление конструктора sink, health),
-  `pkg/meta/redis_outbox.go` (rename `KafkaPublisher`→`EventSink`, reclaim), `pkg/meta/events.go`
-  (поля расширения), `pkg/meta/redis_event.go` + `pkg/meta/redis.go` (генерация uuid, mtime,
-  снимок `s3-meta`), `pkg/meta/event_filter.go` (выравнивание литерала трансформации moved-from-tmp
+  `cmd/gateway.go` + `cmd/flags.go` (outbox-флаги, аменд при apply), `pkg/meta/redis_outbox.go`
+  (rename `KafkaPublisher`→`EventSink`, reclaim), `pkg/meta/events.go` (поля расширения),
+  `pkg/meta/redis_event.go` + `pkg/meta/redis.go` (генерация uuid, mtime, снимок `s3-meta`),
+  `pkg/meta/event_filter.go` (выравнивание литерала трансформации moved-from-tmp
   → Created с SoT: сейчас `Size` не переносится; + новые поля), `pkg/meta/s3_sink.go` (новый),
   документация `docs/en/deployment/outbox.md`, `docker-compose.outbox-s3-test.yml` (новый).
 - Зависимости: `github.com/google/uuid` v1.6.0 (уже direct dep); Redis-команда `XAUTOCLAIM`

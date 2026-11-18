@@ -54,4 +54,8 @@ type JuiceFsEvent struct {
 	OldPath string `json:"old_path,omitempty"` // For FileMoved/DirMoved (source path)
 	Size    uint64 `json:"size,omitempty"`     // For FileWritten
 	Mode    uint16 `json:"mode,omitempty"`     // For FileCreated/DirCreated
+	// Extension fields
+	Uuid   string            `json:"uuid,omitempty"`
+	Mtime  int64             `json:"mtime,omitempty"`  // Unix nanoseconds
+	Xattrs map[string]string `json:"xattrs,omitempty"` // whitelist only (s3-meta)
 }

@@ -1,0 +1,16 @@
+# Outbox S3-sink e2e environment: Redis (metadata + outbox stream) and MinIO
+# (S3 sink target). Linux/CI convention: network_mode host, same as
+# docker-compose.test.yml. On macOS Docker Desktop run `docker run -p` equivalents
+# instead (host networking is unavailable for linux containers there).
+services:
+  redis:
+    image: redis:7
+    network_mode: host
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    network_mode: host
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin

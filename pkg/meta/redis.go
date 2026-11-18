@@ -1369,7 +1369,7 @@ func (m *redisMeta) doFallocate(ctx Context, inode Ino, mode uint8, off uint64, 
 				}
 			}
 			pipe.IncrBy(ctx, m.usedSpaceKey(), align4K(length)-align4K(old))
-			m.publishFileWrittenToPipe(ctx, pipe, inode, length)
+			m.publishFileWrittenToPipe(ctx, pipe, inode, length, &t)
 			m.genLog(ctx, pipe, now, "FALLOCATE(%d,%d,%d,%d)", inode, off, size, mode)
 			return nil
 		})
@@ -1609,9 +1609,9 @@ func (m *redisMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, m
 			pipe.IncrBy(ctx, m.usedSpaceKey(), align4K(0))
 			pipe.Incr(ctx, m.totalInodesKey())
 			if _type == TypeDirectory {
-				m.publishDirCreatedToPipe(ctx, pipe, *inode, parent, name, mode&0777)
+				m.publishDirCreatedToPipe(ctx, pipe, *inode, parent, name, mode&0777, attr)
 			} else {
-				m.publishFileCreatedToPipe(ctx, pipe, *inode, parent, name, mode&0777)
+				m.publishFileCreatedToPipe(ctx, pipe, *inode, parent, name, mode&0777, attr)
 			}
 			behavior := ctx.Value(CtxKey("behavior"))
 			if behavior == nil {
@@ -1924,7 +1924,7 @@ func (m *redisMeta) doUnlink(ctx Context, parent Ino, name string, attr *Attr, s
 					pipe.Del(ctx, m.parentKey(inode))
 				}
 			}
-			m.publishFileDeletedToPipe(ctx, pipe, inode, parent, name)
+			m.publishFileDeletedToPipe(ctx, pipe, inode, parent, name, attr)
 			m.genLog(ctx, pipe, now, "UNLINK(%d,%s,%d,%t,%t):%d", parent, logEncode2(name), trash, opened, updateParent, inode)
 			return nil
 		})
@@ -2309,6 +2309,12 @@ func (m *redisMeta) doBatchUnlink(ctx Context, parent Ino, entries []*Entry, del
 				if updateParent {
 					pipe.Set(ctx, m.inodeKey(parent), m.marshal(&pattr), 0)
 				}
+				// entryInfos never contains directories (filtered at parse time),
+				// so every deleted entry is a file/symlink; emit regardless of the
+				// trash branch, like doUnlink
+				for _, info := range entryInfos {
+					m.publishFileDeletedToPipe(ctx, pipe, info.inode, parent, info.name, info.attr)
+				}
 				m.genLog(ctx, pipe, now, "UNLINKBATCH(%d,%s,%d,%t):%s", parent, strings.Join(encodedNames, ","), trash, updateParent, strings.Join(results, ","))
 				return nil
 			})
@@ -2446,7 +2452,7 @@ func (m *redisMeta) doRmdir(ctx Context, parent Ino, name string, pinode *Ino, o
 			pipe.HDel(ctx, m.dirQuotaKey(), field)
 			pipe.HDel(ctx, m.dirQuotaUsedSpaceKey(), field)
 			pipe.HDel(ctx, m.dirQuotaUsedInodesKey(), field)
-			m.publishDirDeletedToPipe(ctx, pipe, inode, parent, name)
+			m.publishDirDeletedToPipe(ctx, pipe, inode, parent, name, &attr)
 			m.genLog(ctx, pipe, now, "RMDIR(%d,%s,%d):%d", parent, logEncode2(name), trash, inode)
 			return nil
 		})
@@ -2784,9 +2790,9 @@ func (m *redisMeta) doRename(ctx Context, parentSrc Ino, nameSrc string, parentD
 				pipe.Set(ctx, m.inodeKey(parentDst), m.marshal(&dattr), 0)
 			}
 			if typ == TypeDirectory {
-				m.publishDirMovedToPipe(ctx, pipe, *inode, parentDst, nameDst, parentSrc, nameSrc)
+				m.publishDirMovedToPipe(ctx, pipe, *inode, parentDst, nameDst, parentSrc, nameSrc, &iattr)
 			} else {
-				m.publishFileMovedToPipe(ctx, pipe, *inode, parentDst, nameDst, parentSrc, nameSrc)
+				m.publishFileMovedToPipe(ctx, pipe, *inode, parentDst, nameDst, parentSrc, nameSrc, &iattr)
 			}
 			m.genLog(ctx, pipe, now, "MOVE(%d,%s,%d,%s,%d,%d,%d,%t,%t,%t):%d", parentSrc, logEncode2(nameSrc), parentDst, logEncode2(nameDst), flags, dino, trash, opened, supdate, dupdate, ino)
 			return nil
@@ -3223,7 +3229,7 @@ func (m *redisMeta) doWrite(ctx Context, inode Ino, indx uint32, off uint32, sli
 			if delta.space > 0 {
 				pipe.IncrBy(ctx, m.usedSpaceKey(), delta.space)
 			}
-			m.publishFileWrittenToPipe(ctx, pipe, inode, attr.Length)
+			m.publishFileWrittenToPipe(ctx, pipe, inode, attr.Length, attr)
 			m.genLog(ctx, pipe, now, "WRITE(%d,%d,%d,%d,%d,%d,%d):%d", inode, indx, off, slice.Id, slice.Len, attr.Mtime, attr.Mtimensec, *numSlices)
 			return nil
 		})

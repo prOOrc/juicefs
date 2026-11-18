@@ -28,9 +28,21 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// KafkaPublisher interface for publishing events to Kafka
-type KafkaPublisher interface {
+// EventSink delivers events to the configured sink (Kafka topic or S3 bucket)
+type EventSink interface {
 	Publish(ctx context.Context, event *JuiceFsEvent) error
+}
+
+// SinkHealthChecker is implemented by sinks that can signal backpressure
+// (e.g., the S3 sink while its spill buffer is exhausted)
+type SinkHealthChecker interface {
+	Health() error
+}
+
+// SinkDrainer is implemented by sinks that buffer undelivered data (e.g., the
+// S3 sink spill) and can attempt to deliver it while in backpressure
+type SinkDrainer interface {
+	TryDrain(ctx context.Context) error
 }
 
 // RedisOutbox manages Redis Streams for publishing filesystem events
@@ -142,8 +154,8 @@ func (o *RedisOutbox) InitConsumerGroup(ctx context.Context) error {
 	return nil
 }
 
-// StartConsumer starts the consumer that reads from the stream and publishes to Kafka
-func (o *RedisOutbox) StartConsumer(publisher KafkaPublisher) error {
+// StartConsumer starts the consumer that reads from the stream and publishes to the sink
+func (o *RedisOutbox) StartConsumer(sink EventSink) error {
 	if !o.Enabled() {
 		return nil
 	}
@@ -158,7 +170,7 @@ func (o *RedisOutbox) StartConsumer(publisher KafkaPublisher) error {
 	o.ctx, o.cancel = context.WithCancel(context.Background())
 	o.running = true
 
-	go o.consumeLoop(publisher)
+	go o.consumeLoop(sink)
 	logger.Infof("Outbox consumer started for stream %s", o.stream)
 
 	return nil
@@ -192,7 +204,7 @@ func (o *RedisOutbox) StopConsumer() {
 }
 
 // consumeLoop reads messages from the stream and publishes them
-func (o *RedisOutbox) consumeLoop(publisher KafkaPublisher) {
+func (o *RedisOutbox) consumeLoop(sink EventSink) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
@@ -201,13 +213,47 @@ func (o *RedisOutbox) consumeLoop(publisher KafkaPublisher) {
 		case <-o.ctx.Done():
 			return
 		case <-ticker.C:
-			o.pollAndPublish(o.ctx, publisher)
+			// Backpressure: skip both poll and reclaim this tick — the process
+			// stays alive, the sink buffers on its side, no events are dropped;
+			// keep trying to drain the sink buffer instead.
+			if o.sinkUnderBackpressure(sink) {
+				logger.Warnf("sink backpressure, skipping outbox poll for stream %s", o.stream)
+				o.tryDrainSink(sink)
+				continue
+			}
+			o.pollAndPublish(o.ctx, sink)
+			o.reclaimPending(o.ctx, sink)
+			// Drain the sink buffer even without backpressure: the sink may
+			// have recovered while no new traffic arrived
+			o.tryDrainSink(sink)
 		}
 	}
 }
 
+// sinkUnderBackpressure reports whether the sink signals backpressure
+// through the SinkHealthChecker interface (sinks without it never do)
+func (o *RedisOutbox) sinkUnderBackpressure(sink EventSink) bool {
+	hc, ok := sink.(SinkHealthChecker)
+	if !ok {
+		return false
+	}
+	return hc.Health() != nil
+}
+
+// tryDrainSink drains the sink's local buffer (e.g. the S3 spill) when the
+// sink implements SinkDrainer; drain errors are logged, never fatal
+func (o *RedisOutbox) tryDrainSink(sink EventSink) {
+	drainer, ok := sink.(SinkDrainer)
+	if !ok {
+		return
+	}
+	if err := drainer.TryDrain(o.ctx); err != nil {
+		logger.Warnf("sink drain attempt failed: %v", err)
+	}
+}
+
 // pollAndPublish polls the stream for new messages and publishes them
-func (o *RedisOutbox) pollAndPublish(ctx context.Context, publisher KafkaPublisher) {
+func (o *RedisOutbox) pollAndPublish(ctx context.Context, sink EventSink) {
 	// XREADGROUP with BLOCK 1000ms
 	msgs, err := o.client.XReadGroup(ctx, &redis.XReadGroupArgs{
 		Group:    o.group,
@@ -229,12 +275,39 @@ func (o *RedisOutbox) pollAndPublish(ctx context.Context, publisher KafkaPublish
 	}
 
 	for _, msg := range msgs[0].Messages {
-		o.processMessage(ctx, publisher, msg)
+		o.processMessage(ctx, sink, msg)
+	}
+}
+
+// reclaimPending re-delivers messages stuck in the PEL longer than
+// ReclaimMinIdle (e.g., after a consumer crash between read and ack) and
+// processes them the same way as new messages. Successful processing acks
+// them out of the PEL; failed ones stay pending and eventually reach the
+// dead queue via the retry counter. One pass of up to Count messages per
+// tick is enough for MVP — the next tick continues from "0-0".
+func (o *RedisOutbox) reclaimPending(ctx context.Context, sink EventSink) {
+	msgs, _, err := o.client.XAutoClaim(ctx, &redis.XAutoClaimArgs{
+		Stream:   o.stream,
+		Group:    o.group,
+		Consumer: "juicefs",
+		MinIdle:  o.config.ReclaimMinIdle,
+		Count:    100,
+		Start:    "0-0",
+	}).Result()
+	if err != nil {
+		if err != redis.Nil {
+			logger.Errorf("xautoclaim error: %v", err)
+		}
+		return
+	}
+
+	for _, msg := range msgs {
+		o.processMessage(ctx, sink, msg)
 	}
 }
 
 // processMessage processes a single message from the stream
-func (o *RedisOutbox) processMessage(ctx context.Context, publisher KafkaPublisher, msg redis.XMessage) {
+func (o *RedisOutbox) processMessage(ctx context.Context, sink EventSink, msg redis.XMessage) {
 	var event JuiceFsEvent
 	dataField := msg.Values["data"]
 	if dataField == nil {
@@ -264,9 +337,9 @@ func (o *RedisOutbox) processMessage(ctx context.Context, publisher KafkaPublish
 		return
 	}
 
-	// Publish filtered/transformed event to Kafka
-	if err := publisher.Publish(ctx, filtered); err != nil {
-		logger.Errorf("publish to kafka error: %v", err)
+	// Publish filtered/transformed event to the sink
+	if err := sink.Publish(ctx, filtered); err != nil {
+		logger.Errorf("publish to sink error: %v", err)
 		o.addRetryCount(ctx, msg.ID)
 		return
 	}

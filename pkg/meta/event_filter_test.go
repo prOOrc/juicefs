@@ -231,7 +231,11 @@ func TestFilterEvent_TransformPreservesFields(t *testing.T) {
 		Name:      "document.pdf",
 		Path:      "/data/users/alice/document.pdf",
 		OldPath:   "/.sys/tmp/d09/550e8400-e29b-41d4-a716-446655440000",
+		Size:      36,
 		Mode:      438,
+		Uuid:      "0198a0b4-6d5e-7cc3-9f21-3b6d1e8a2c77",
+		Mtime:     ts.UnixNano(),
+		Xattrs:    map[string]string{"s3-meta": `{"x-amz-meta-x-agio-sync":"task-1"}`},
 		Subdir:    "test",
 	}
 
@@ -256,6 +260,18 @@ func TestFilterEvent_TransformPreservesFields(t *testing.T) {
 	}
 	if result.Mode != input.Mode {
 		t.Fatalf("expected mode %d, got %d", input.Mode, result.Mode)
+	}
+	if result.Size != input.Size {
+		t.Fatalf("expected size %d, got %d", input.Size, result.Size)
+	}
+	if result.Uuid != input.Uuid {
+		t.Fatalf("expected uuid %s, got %s", input.Uuid, result.Uuid)
+	}
+	if result.Mtime != input.Mtime {
+		t.Fatalf("expected mtime %d, got %d", input.Mtime, result.Mtime)
+	}
+	if len(result.Xattrs) != 1 || result.Xattrs["s3-meta"] != input.Xattrs["s3-meta"] {
+		t.Fatalf("expected xattrs %v, got %v", input.Xattrs, result.Xattrs)
 	}
 	if result.Timestamp != ts {
 		t.Fatalf("expected timestamp %v, got %v", ts, result.Timestamp)

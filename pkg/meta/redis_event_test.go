@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func newTestRedisMetaWithOutbox(t *testing.T, db int, stream string) *redisMeta {
@@ -194,5 +195,330 @@ func TestRedisRenameTopLevelDirExactPaths(t *testing.T) {
 	}
 	if ev.OldPath != "/topdir" {
 		t.Errorf("expected old_path /topdir, got %s", ev.OldPath)
+	}
+}
+
+func TestBatchUnlinkPublishesFileDeleted(t *testing.T) {
+	m := newTestRedisMetaWithOutbox(t, 14, "test:outbox:batchunlink")
+	ctx := Background()
+
+	var parent Ino
+	if st := m.Mkdir(ctx, RootInode, "batchdir", 0777, 022, 0, &parent, nil); st != 0 {
+		t.Fatalf("mkdir batchdir: %s", st)
+	}
+	var f1, f2 Ino
+	if st := m.Mknod(ctx, parent, "file1", TypeFile, 0644, 022, 0, "", &f1, nil); st != 0 {
+		t.Fatalf("mknod file1: %s", st)
+	}
+	if st := m.Mknod(ctx, parent, "file2", TypeFile, 0644, 022, 0, "", &f2, nil); st != 0 {
+		t.Fatalf("mknod file2: %s", st)
+	}
+	var dir Ino
+	if st := m.Mkdir(ctx, parent, "subdir", 0777, 022, 0, &dir, nil); st != 0 {
+		t.Fatalf("mkdir subdir: %s", st)
+	}
+
+	var entries []*Entry
+	for _, e := range []struct {
+		ino  Ino
+		name string
+	}{{f1, "file1"}, {f2, "file2"}, {dir, "subdir"}} {
+		var attr Attr
+		if st := m.GetAttr(ctx, e.ino, &attr); st != 0 {
+			t.Fatalf("getattr %s: %s", e.name, st)
+		}
+		entries = append(entries, &Entry{Inode: e.ino, Name: []byte(e.name), Attr: &attr})
+	}
+
+	if st := m.BatchUnlink(ctx, parent, entries, nil, false); st != 0 {
+		t.Fatalf("batch unlink: %s", st)
+	}
+
+	events := readOutboxEvents(t, m, "test:outbox:batchunlink")
+	del1 := findOutboxEvent(events, FileDeleted, f1)
+	del2 := findOutboxEvent(events, FileDeleted, f2)
+	if del1 == nil || del2 == nil {
+		t.Fatalf("expected FileDeleted events for inodes %d and %d, got: %+v", f1, f2, events)
+	}
+	if del1.Name != "file1" {
+		t.Fatalf("expected name file1, got %s", del1.Name)
+	}
+	if del2.Name != "file2" {
+		t.Fatalf("expected name file2, got %s", del2.Name)
+	}
+	// The directory entry must not produce any deletion event
+	if d := findOutboxEvent(events, FileDeleted, dir); d != nil {
+		t.Fatalf("unexpected FileDeleted for directory inode %d: %+v", dir, d)
+	}
+	if d := findOutboxEvent(events, DirDeleted, dir); d != nil {
+		t.Fatalf("unexpected DirDeleted for directory inode %d: %+v", dir, d)
+	}
+	// mtime is filled from the pre-deletion attr
+	for _, ev := range []*JuiceFsEvent{del1, del2} {
+		if ev.Mtime <= 0 {
+			t.Fatalf("expected positive mtime on FileDeleted for inode %d, got %d", ev.Inode, ev.Mtime)
+		}
+	}
+}
+
+func TestEventUUIDGenerated(t *testing.T) {
+	m := newTestRedisMetaWithOutbox(t, 14, "test:outbox:uuid")
+	ctx := Background()
+
+	var ino1, ino2 Ino
+	if st := m.Mknod(ctx, RootInode, "f1", TypeFile, 0644, 022, 0, "", &ino1, nil); st != 0 {
+		t.Fatalf("mknod f1: %s", st)
+	}
+	if st := m.Mknod(ctx, RootInode, "f2", TypeFile, 0644, 022, 0, "", &ino2, nil); st != 0 {
+		t.Fatalf("mknod f2: %s", st)
+	}
+
+	events := readOutboxEvents(t, m, "test:outbox:uuid")
+	ev1 := findOutboxEvent(events, FileCreated, ino1)
+	if ev1 == nil {
+		t.Fatalf("expected FileCreated event for inode %d, got: %+v", ino1, events)
+	}
+	if ev1.Uuid == "" {
+		t.Fatalf("expected non-empty uuid on FileCreated event for inode %d", ino1)
+	}
+	ev2 := findOutboxEvent(events, FileCreated, ino2)
+	if ev2 == nil {
+		t.Fatalf("expected FileCreated event for inode %d, got: %+v", ino2, events)
+	}
+	if ev2.Uuid == "" {
+		t.Fatalf("expected non-empty uuid on FileCreated event for inode %d", ino2)
+	}
+	if ev1.Uuid == ev2.Uuid {
+		t.Fatalf("expected distinct uuids across operations, got %s twice", ev1.Uuid)
+	}
+}
+
+func TestWritePublishesMtime(t *testing.T) {
+	m := newTestRedisMetaWithOutbox(t, 14, "test:outbox:mtime")
+	ctx := Background()
+
+	var ino Ino
+	if st := m.Mknod(ctx, RootInode, "file", TypeFile, 0644, 022, 0, "", &ino, nil); st != 0 {
+		t.Fatalf("mknod: %s", st)
+	}
+
+	if st := m.Write(ctx, ino, 0, 0, Slice{Id: 1, Size: 4, Len: 4}, time.Now()); st != 0 {
+		t.Fatalf("write: %s", st)
+	}
+
+	events := readOutboxEvents(t, m, "test:outbox:mtime")
+	ev := findOutboxEvent(events, FileWritten, ino)
+	if ev == nil {
+		t.Fatalf("expected FileWritten event for inode %d, got: %+v", ino, events)
+	}
+	if ev.Mtime <= 0 {
+		t.Fatalf("expected positive mtime on FileWritten, got %d", ev.Mtime)
+	}
+	window := 5 * time.Second
+	lower := time.Now().Add(-window).UnixNano()
+	upper := time.Now().Add(window).UnixNano()
+	if ev.Mtime < lower || ev.Mtime > upper {
+		t.Fatalf("mtime %d outside reasonable window [%d, %d]", ev.Mtime, lower, upper)
+	}
+	// Cross-check against the inode attr after the write
+	var attr Attr
+	if st := m.GetAttr(ctx, ino, &attr); st != 0 {
+		t.Fatalf("getattr: %s", st)
+	}
+	if want := attr.Mtime*1_000_000_000 + int64(attr.Mtimensec); ev.Mtime != want {
+		t.Fatalf("expected mtime %d (from attr), got %d", want, ev.Mtime)
+	}
+}
+
+func TestRenamePublishesS3MetaSnapshot(t *testing.T) {
+	m := newTestRedisMetaWithOutbox(t, 14, "test:outbox:s3meta")
+	ctx := Background()
+	metaJSON := []byte(`{"x-amz-meta-x-agio-sync":"task-1"}`)
+
+	// Plain rename of a file with s3-meta: event carries the snapshot
+	var ino1 Ino
+	if st := m.Mknod(ctx, RootInode, "obj1", TypeFile, 0644, 022, 0, "", &ino1, nil); st != 0 {
+		t.Fatalf("mknod obj1: %s", st)
+	}
+	if st := m.SetXattr(ctx, ino1, s3MetaXattr, metaJSON, 0); st != 0 {
+		t.Fatalf("setxattr s3-meta: %s", st)
+	}
+	if st := m.Rename(ctx, RootInode, "obj1", RootInode, "final1", 0, nil, nil); st != 0 {
+		t.Fatalf("rename obj1: %s", st)
+	}
+
+	events := readOutboxEvents(t, m, "test:outbox:s3meta")
+	ev1 := findOutboxEvent(events, FileMoved, ino1)
+	if ev1 == nil {
+		t.Fatalf("expected FileMoved event for inode %d, got: %+v", ino1, events)
+	}
+	if got := ev1.Xattrs[s3MetaXattr]; got != string(metaJSON) {
+		t.Fatalf("expected xattrs[%s] %s, got %q (xattrs: %v)", s3MetaXattr, metaJSON, got, ev1.Xattrs)
+	}
+
+	// Gateway PUT pattern: rename from /.sys/tmp/... transforms into
+	// FileCreated via FilterEvent with the snapshot preserved
+	var tmpDir Ino
+	if st := m.Mkdir(ctx, RootInode, ".sys", 0777, 022, 0, &tmpDir, nil); st != 0 {
+		t.Fatalf("mkdir .sys: %s", st)
+	}
+	var d09 Ino
+	if st := m.Mkdir(ctx, tmpDir, "tmp", 0777, 022, 0, &d09, nil); st != 0 {
+		t.Fatalf("mkdir .sys/tmp: %s", st)
+	}
+	var ino2 Ino
+	if st := m.Mknod(ctx, d09, "tmp-obj", TypeFile, 0644, 022, 0, "", &ino2, nil); st != 0 {
+		t.Fatalf("mknod tmp-obj: %s", st)
+	}
+	if st := m.SetXattr(ctx, ino2, s3MetaXattr, metaJSON, 0); st != 0 {
+		t.Fatalf("setxattr s3-meta on tmp-obj: %s", st)
+	}
+	if st := m.Rename(ctx, d09, "tmp-obj", RootInode, "final2", 0, nil, nil); st != 0 {
+		t.Fatalf("rename tmp-obj: %s", st)
+	}
+
+	events = readOutboxEvents(t, m, "test:outbox:s3meta")
+	ev2 := findOutboxEvent(events, FileMoved, ino2)
+	if ev2 == nil {
+		t.Fatalf("expected FileMoved event for inode %d, got: %+v", ino2, events)
+	}
+	if !strings.HasPrefix(ev2.OldPath, "/.sys/tmp/") {
+		t.Fatalf("expected old_path under /.sys/tmp/, got %s", ev2.OldPath)
+	}
+	transformed := FilterEvent(ev2)
+	if transformed == nil {
+		t.Fatal("expected transformed event, got nil")
+	}
+	if transformed.Type != FileCreated {
+		t.Fatalf("expected FileCreated, got %s", transformed.Type)
+	}
+	if transformed.OldPath != "" {
+		t.Fatalf("expected empty old_path after transform, got %s", transformed.OldPath)
+	}
+	if got := transformed.Xattrs[s3MetaXattr]; got != string(metaJSON) {
+		t.Fatalf("transformed event lost xattrs[%s]: expected %s, got %q", s3MetaXattr, metaJSON, got)
+	}
+}
+
+func TestSetXattrEmitsNoEvent(t *testing.T) {
+	m := newTestRedisMetaWithOutbox(t, 14, "test:outbox:setxattr")
+	ctx := Background()
+
+	var ino Ino
+	if st := m.Mknod(ctx, RootInode, "file", TypeFile, 0644, 022, 0, "", &ino, nil); st != 0 {
+		t.Fatalf("mknod: %s", st)
+	}
+
+	before := len(readOutboxEvents(t, m, "test:outbox:setxattr"))
+
+	if st := m.SetXattr(ctx, ino, s3MetaXattr, []byte(`{"x-amz-meta-x-agio-sync":"task-1"}`), 0); st != 0 {
+		t.Fatalf("setxattr s3-meta: %s", st)
+	}
+	if st := m.RemoveXattr(ctx, ino, s3MetaXattr); st != 0 {
+		t.Fatalf("removexattr s3-meta: %s", st)
+	}
+
+	after := len(readOutboxEvents(t, m, "test:outbox:setxattr"))
+	if after != before {
+		t.Fatalf("expected no new events from xattr ops, before=%d after=%d", before, after)
+	}
+}
+
+func TestEventJSONBackwardCompatibility(t *testing.T) {
+	// (a) A JuiceFsEvent without extension fields marshals/unmarshals with zero
+	// extension fields
+	legacy := JuiceFsEvent{
+		Type:      FileMoved,
+		Timestamp: time.Unix(1767225600, 0).UTC(),
+		Volume:    "vol",
+		Uid:       1000,
+		Gid:       1000,
+		Inode:     42,
+		Parent:    1,
+		Name:      "n",
+	}
+	data, err := json.Marshal(&legacy)
+	if err != nil {
+		t.Fatalf("marshal legacy event: %v", err)
+	}
+	var ev JuiceFsEvent
+	if err := json.Unmarshal(data, &ev); err != nil {
+		t.Fatalf("unmarshal legacy event: %v", err)
+	}
+	if ev.Type != legacy.Type || ev.Inode != legacy.Inode || ev.Volume != legacy.Volume {
+		t.Fatalf("unexpected event after roundtrip: %+v", ev)
+	}
+	if ev.Uuid != "" || ev.Mtime != 0 || ev.Xattrs != nil {
+		t.Fatalf("expected zero extension fields, got uuid=%q mtime=%d xattrs=%v", ev.Uuid, ev.Mtime, ev.Xattrs)
+	}
+	// Extension fields must be omitted from JSON when zero
+	for _, field := range []string{`"uuid"`, `"mtime"`, `"xattrs"`} {
+		if strings.Contains(string(data), field) {
+			t.Fatalf("expected %s omitted in zero-valued event JSON: %s", field, data)
+		}
+	}
+
+	// (b) JSON produced by an old producer (no extension fields) unmarshals
+	// into the extended struct without error
+	oldEvent := struct {
+		Type      EventType `json:"type"`
+		Timestamp time.Time `json:"timestamp"`
+		Volume    string    `json:"volume"`
+		Uid       uint32    `json:"uid"`
+		Gid       uint32    `json:"gid"`
+		Inode     Ino       `json:"inode"`
+		Parent    Ino       `json:"parent"`
+		Name      string    `json:"name"`
+	}{
+		Type:      FileCreated,
+		Timestamp: legacy.Timestamp,
+		Volume:    "vol",
+		Uid:       1,
+		Gid:       1,
+		Inode:     7,
+		Parent:    1,
+		Name:      "f",
+	}
+	oldData, err := json.Marshal(&oldEvent)
+	if err != nil {
+		t.Fatalf("marshal old-struct event: %v", err)
+	}
+	var ev2 JuiceFsEvent
+	if err := json.Unmarshal(oldData, &ev2); err != nil {
+		t.Fatalf("unmarshal old-struct event: %v", err)
+	}
+	if ev2.Type != oldEvent.Type || ev2.Inode != oldEvent.Inode || ev2.Name != oldEvent.Name || ev2.Uid != oldEvent.Uid {
+		t.Fatalf("unexpected event from old JSON: %+v", ev2)
+	}
+	if ev2.Uuid != "" || ev2.Mtime != 0 || ev2.Xattrs != nil {
+		t.Fatalf("expected zero extension fields, got uuid=%q mtime=%d xattrs=%v", ev2.Uuid, ev2.Mtime, ev2.Xattrs)
+	}
+
+	// (c) Extended JSON round-trips through the extended struct
+	full := JuiceFsEvent{
+		Type:      FileWritten,
+		Timestamp: legacy.Timestamp,
+		Volume:    "vol",
+		Inode:     9,
+		Parent:    1,
+		Name:      "w",
+		Size:      8,
+		Uuid:      "0198a0b4-6d5e-7cc3-9f21-3b6d1e8a2c77",
+		Mtime:     legacy.Timestamp.UnixNano(),
+		Xattrs:    map[string]string{s3MetaXattr: `{"x-amz-meta-x-agio-sync":"task-1"}`},
+	}
+	fullData, err := json.Marshal(&full)
+	if err != nil {
+		t.Fatalf("marshal full event: %v", err)
+	}
+	var ev3 JuiceFsEvent
+	if err := json.Unmarshal(fullData, &ev3); err != nil {
+		t.Fatalf("unmarshal full event: %v", err)
+	}
+	if ev3.Uuid != full.Uuid || ev3.Mtime != full.Mtime || ev3.Size != full.Size {
+		t.Fatalf("extension fields lost after roundtrip: %+v", ev3)
+	}
+	if got := ev3.Xattrs[s3MetaXattr]; got != full.Xattrs[s3MetaXattr] {
+		t.Fatalf("expected xattrs[%s] %s, got %q", s3MetaXattr, full.Xattrs[s3MetaXattr], got)
 	}
 }
