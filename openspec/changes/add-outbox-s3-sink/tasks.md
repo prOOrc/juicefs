@@ -128,11 +128,13 @@
 
 ## 7. Образ (apply-фаза, кросс-репо agio-cloud)
 
-- [ ] 7.1 agio-cloud: bump `JUICEFS_REV` в docker/juicefs/Dockerfile (и в variables
+- [x] 7.1 agio-cloud: bump `JUICEFS_REV` в docker/juicefs/Dockerfile (и в variables
       `JUICEFS_REV` джобы juicefs-image-build в .gitlab-ci.yml) на HEAD ветки
       `agio-drive-v2` после мержа; запустить CI-джобу juicefs-image-build (manual); записать
       фактический тег сюда:
-      IMAGE_TAG: __TO_BE_FILLED_AT_APPLY__
+      IMAGE_TAG: registry.agio.services/agio/juicedata/juicefs:agio-v1.4.2_20261119a_bf4bd204a
+      (джоба 37264, пайплайн 2159 agio-cloud master @facbe59a, 228s, smoke OK; change 0a пинит
+      этот ref в var.hk_outbox_image_tag)
       Проверка: CI green, тег уникален (manifest inspect guard), smoke `juicefs meta-proxy --help` в джобе.
 
 ## Definition of Done
