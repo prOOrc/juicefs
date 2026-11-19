@@ -347,3 +347,234 @@ func TestRouteReadStrippedBeforeParse(t *testing.T) {
 		t.Fatalf("parseRedisClientOptions failed after stripping route-read: %v", err)
 	}
 }
+
+// blockingSink is a test EventSink whose Publish blocks until release is
+// closed, with channels to synchronize with the test
+type blockingSink struct {
+	enteredOnce sync.Once
+	entered     chan struct{} // closed when Publish is entered
+	releaseOnce sync.Once
+	release     chan struct{} // Publish blocks until this is closed
+
+	mu        sync.Mutex
+	published int
+}
+
+func (s *blockingSink) Publish(ctx context.Context, event *JuiceFsEvent) error {
+	s.enteredOnce.Do(func() { close(s.entered) })
+	<-s.release
+	s.mu.Lock()
+	s.published++
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *blockingSink) closeRelease() {
+	s.releaseOnce.Do(func() { close(s.release) })
+}
+
+func (s *blockingSink) publishedCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.published
+}
+
+func TestStopConsumerWaitsForLoopExit(t *testing.T) {
+	client := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379", DB: 15})
+	ctx := context.Background()
+	if err := client.Ping(ctx).Err(); err != nil {
+		t.Skipf("Redis not available: %v", err)
+	}
+
+	stream := "test:stopwait:outbox"
+	// Clean leftovers from previous runs (keys may survive if a previous
+	// test aborted before its cleanup)
+	client.Del(ctx, stream)
+
+	outbox := NewRedisOutbox(client, OutboxConfig{
+		Enabled:       true,
+		StreamName:    stream,
+		ConsumerGroup: "testgroup",
+		MaxRetries:    10,
+		TrimMaxLen:    10000,
+	})
+
+	sink := &blockingSink{
+		entered: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	t.Cleanup(func() {
+		// Unblock Publish in case the test aborted while it was in flight,
+		// then stop the consumer (StopConsumer waits for the loop to exit)
+		sink.closeRelease()
+		outbox.StopConsumer()
+		client.Del(ctx, stream)
+		client.Close()
+	})
+
+	if err := outbox.InitConsumerGroup(ctx); err != nil {
+		t.Fatalf("InitConsumerGroup failed: %v", err)
+	}
+
+	event := &JuiceFsEvent{
+		Type:      FileCreated,
+		Timestamp: time.Now(),
+		Volume:    "test-vol",
+		Inode:     11,
+		Parent:    1,
+		Name:      "stopwait-file",
+		Path:      "/data/stopwait-file",
+	}
+	data, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("marshal event: %v", err)
+	}
+	if _, err := client.XAdd(ctx, &redis.XAddArgs{
+		Stream: stream,
+		Values: map[string]interface{}{"data": string(data)},
+	}).Result(); err != nil {
+		t.Fatalf("xadd: %v", err)
+	}
+
+	if err := outbox.StartConsumer(sink); err != nil {
+		t.Fatalf("start consumer: %v", err)
+	}
+
+	// Wait until the consume loop is inside Publish (the loop ticks every 1s,
+	// so allow a generous deadline)
+	select {
+	case <-sink.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Publish was not entered within 5s")
+	}
+
+	// StopConsumer must not return while Publish is in flight
+	stopReturned := make(chan struct{})
+	go func() {
+		outbox.StopConsumer()
+		close(stopReturned)
+	}()
+
+	select {
+	case <-stopReturned:
+		t.Fatal("StopConsumer returned while Publish in flight")
+	case <-time.After(300 * time.Millisecond):
+		// expected: StopConsumer is still waiting for the loop to exit
+	}
+
+	// Let Publish finish — StopConsumer must now return
+	sink.closeRelease()
+
+	select {
+	case <-stopReturned:
+	case <-time.After(5 * time.Second):
+		t.Fatal("StopConsumer did not return within 5s after Publish finished")
+	}
+
+	if sink.publishedCount() != 1 {
+		t.Fatalf("expected exactly 1 published event, got %d", sink.publishedCount())
+	}
+
+	if outbox.IsHealthy() {
+		t.Fatal("expected unhealthy after StopConsumer returned")
+	}
+}
+
+func TestRestartAfterStopSingleLoop(t *testing.T) {
+	client := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379", DB: 15})
+	ctx := context.Background()
+	if err := client.Ping(ctx).Err(); err != nil {
+		t.Skipf("Redis not available: %v", err)
+	}
+
+	stream := "test:restart:outbox"
+	// Clean leftovers from previous runs (keys may survive if a previous
+	// test aborted before its cleanup)
+	client.Del(ctx, stream)
+
+	outbox := NewRedisOutbox(client, OutboxConfig{
+		Enabled:       true,
+		StreamName:    stream,
+		ConsumerGroup: "testgroup",
+		MaxRetries:    10,
+		TrimMaxLen:    10000,
+	})
+	t.Cleanup(func() {
+		outbox.StopConsumer()
+		client.Del(ctx, stream)
+		client.Close()
+	})
+
+	if err := outbox.InitConsumerGroup(ctx); err != nil {
+		t.Fatalf("InitConsumerGroup failed: %v", err)
+	}
+
+	// Two valid events must be in the stream before the first consumer starts
+	for i := 1; i <= 2; i++ {
+		event := &JuiceFsEvent{
+			Type:      FileCreated,
+			Timestamp: time.Now(),
+			Volume:    "test-vol",
+			Inode:     Ino(i),
+			Parent:    1,
+			Name:      fmt.Sprintf("restart-file-%d", i),
+			Path:      fmt.Sprintf("/data/restart-file-%d", i),
+		}
+		data, err := json.Marshal(event)
+		if err != nil {
+			t.Fatalf("marshal event: %v", err)
+		}
+		if _, err := client.XAdd(ctx, &redis.XAddArgs{
+			Stream: stream,
+			Values: map[string]interface{}{"data": string(data)},
+		}).Result(); err != nil {
+			t.Fatalf("xadd: %v", err)
+		}
+	}
+
+	sink := &captureSink{}
+
+	if err := outbox.StartConsumer(sink); err != nil {
+		t.Fatalf("first StartConsumer failed: %v", err)
+	}
+
+	// Both events must be delivered by the first loop
+	deadline := time.After(5 * time.Second)
+	for len(sink.collected()) < 2 {
+		select {
+		case <-deadline:
+			t.Fatalf("expected 2 events within 5s, got %d", len(sink.collected()))
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+
+	// StopConsumer returns only after the loop goroutine has exited, so the
+	// restart below is guaranteed to run a single loop
+	outbox.StopConsumer()
+
+	// Restart on the same instance must succeed
+	if err := outbox.StartConsumer(sink); err != nil {
+		t.Fatalf("restart StartConsumer after stop failed: %v", err)
+	}
+
+	// Wait two full consume-loop ticks: the restarted loop must not
+	// redeliver the already acknowledged events (no duplicates from a
+	// second loop)
+	time.Sleep(2500 * time.Millisecond)
+	if got := len(sink.collected()); got != 2 {
+		t.Fatalf("expected exactly 2 events after restart (no duplicates), got %d", got)
+	}
+
+	// A third StartConsumer without an intermediate stop must fail
+	if err := outbox.StartConsumer(sink); err == nil {
+		t.Fatal("expected error from StartConsumer while consumer is already running")
+	} else if err.Error() != "consumer already running" {
+		t.Fatalf("unexpected StartConsumer error: %v", err)
+	}
+
+	outbox.StopConsumer()
+
+	if outbox.IsHealthy() {
+		t.Fatal("expected unhealthy after final StopConsumer")
+	}
+}

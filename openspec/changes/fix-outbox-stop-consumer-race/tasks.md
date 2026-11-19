@@ -2,14 +2,14 @@
 
 ## 1. Done-channel семантика остановки
 
-- [ ] 1.1 pkg/meta/redis_outbox.go: поле `done chan struct{}` в `RedisOutbox`; `StartConsumer`
+- [x] 1.1 pkg/meta/redis_outbox.go: поле `done chan struct{}` в `RedisOutbox`; `StartConsumer`
       создаёт `done` перед `go o.consumeLoop(sink)`; `consumeLoop` — `defer close(o.done)`;
       `StopConsumer`: под `mu` — `cancel()` + `running=false` + локальная ссылка на `done`,
       вне `mu` — ожидание `<-done`, затем лог «Outbox consumer stopped». Поведение
       `IsHealthy`, poll/reclaim/спилла/backpressure не меняется.
       Файлы: pkg/meta/redis_outbox.go.
       Проверка: `go build ./pkg/meta/... && go vet ./pkg/meta/...`
-- [ ] 1.2 Тесты (реальный Redis 127.0.0.1:6379/DB15, skip-паттерн `TestInitConsumerGroupNoStream`;
+- [x] 1.2 Тесты (реальный Redis 127.0.0.1:6379/DB15, skip-паттерн `TestInitConsumerGroupNoStream`;
       новый мок `blockingSink` с каналами синхронизации):
       TestStopConsumerWaitsForLoopExit — событие в стриме, `Publish` блокирован горутиной,
       `StopConsumer` в отдельной горутине не возвращается, пока `Publish` не завершён; после

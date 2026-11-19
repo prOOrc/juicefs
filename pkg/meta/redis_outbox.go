@@ -56,6 +56,7 @@ type RedisOutbox struct {
 	running   bool
 	ctx       context.Context
 	cancel    context.CancelFunc
+	done      chan struct{}
 }
 
 // NewRedisOutbox creates a new outbox instance
@@ -169,6 +170,7 @@ func (o *RedisOutbox) StartConsumer(sink EventSink) error {
 
 	o.ctx, o.cancel = context.WithCancel(context.Background())
 	o.running = true
+	o.done = make(chan struct{})
 
 	go o.consumeLoop(sink)
 	logger.Infof("Outbox consumer started for stream %s", o.stream)
@@ -187,19 +189,29 @@ func (o *RedisOutbox) IsHealthy() bool {
 	return o.client.Ping(context.Background()).Err() == nil
 }
 
-// StopConsumer stops the consumer
+// StopConsumer stops the consumer and returns only after the consume loop
+// goroutine has exited (done channel closed). The wait happens outside mu so
+// IsHealthy and a subsequent StartConsumer are not blocked meanwhile. A call
+// racing another stop (or arriving after a previous one) waits too: done
+// belongs to the loop that was live when running was flipped to false, so it
+// is closed exactly when that loop exits.
 func (o *RedisOutbox) StopConsumer() {
 	o.mu.Lock()
-	defer o.mu.Unlock()
-
-	if !o.running {
+	if !o.running && o.done == nil {
+		// Never started — nothing to wait for
+		o.mu.Unlock()
 		return
 	}
-
-	if o.cancel != nil {
-		o.cancel()
+	if o.running {
+		if o.cancel != nil {
+			o.cancel()
+		}
+		o.running = false
 	}
-	o.running = false
+	done := o.done
+	o.mu.Unlock()
+
+	<-done
 	logger.Info("Outbox consumer stopped")
 }
 
@@ -207,6 +219,7 @@ func (o *RedisOutbox) StopConsumer() {
 func (o *RedisOutbox) consumeLoop(sink EventSink) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
+	defer close(o.done)
 
 	for {
 		select {
