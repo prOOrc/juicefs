@@ -26,6 +26,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/vfs"
+	"github.com/juicedata/juicefs/pkg/win"
 	"github.com/juicedata/juicefs/pkg/winfsp"
 	"github.com/urfave/cli/v2"
 )
@@ -139,7 +140,7 @@ func mountFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:  "owner-override",
-			Usage: "present POSIX ownership of all files and dirs as <uid>:<gid>; pass --owner-override= to present the mount process uid:gid; accepted on Windows but ignored — WinFsp does not enforce POSIX ownership",
+			Usage: "present POSIX ownership of all files and dirs as <uid>:<gid>; pass --owner-override= (empty value) to present the mount process uid:gid. WinFsp synthesizes security descriptors from the presented uid:gid:mode (D4: dirs owned by other uid with non-world-writable mode are read-only to Windows), so the override lets writes reach the server — server authz stays the only real gate",
 		},
 		// STS credentials (ADR-003): same semantics as the Unix build — the
 		// shared handling in cmd/mount.go rejects non-encrypted volumes and
@@ -186,6 +187,17 @@ func mountMain(v *vfs.VFS, c *cli.Context) {
 	v.Conf.EntryTimeout = utils.Duration(c.String("entry-cache"))
 	v.Conf.DirEntryTimeout = utils.Duration(c.String("dir-entry-cache"))
 	v.Conf.Mountpoint = c.Args().Get(1)
+	if c.IsSet("owner-override") {
+		// D4 (write blocker, see d2-fix-plan.md): WinFsp FSD access-checks
+		// writes against a security descriptor synthesized from the presented
+		// uid:gid:mode. Dirs created by background/server contexts (uid 0 →
+		// presented as SYSTEM) are read-only to the mounting user unless the
+		// presentation is overridden; the server authz interceptor remains the
+		// only real gate for writes.
+		uid, gid := parseUIDGID(c.String("owner-override"), uint32(win.GetCurrentUID()), uint32(win.GetCurrentGID()))
+		v.Conf.OwnerOverride = &vfs.AnonymousAccount{Uid: uid, Gid: gid}
+		logger.Infof("Map presented ownership to %d/%d by setting owner-override", uid, gid)
+	}
 
 	delayCloseTime := utils.Duration(c.String("delay-close"))
 

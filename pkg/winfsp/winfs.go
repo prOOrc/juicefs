@@ -436,18 +436,29 @@ func (j *juice) attrToStat(inode Ino, attr *meta.Attr, stat *fuse.Stat_t) {
 	stat.Uid = attr.Uid
 	stat.Gid = attr.Gid
 
-	if stat.Uid == 0 {
-		if j.adminAsRoot {
-			stat.Uid = win.AdministratorUIDFromFUSE
-		} else {
-			stat.Uid = win.SystemUIDFromFUSE
+	if acc := j.conf.OwnerOverride; acc != nil {
+		// D4: WinFsp synthesizes the security descriptor presented to the FSD
+		// from the uid:gid:mode here — cgofuse has no GetSecurityByName, so
+		// this is the only ownership signal Windows sees. Presenting the
+		// mounting user lets writes reach the server, where the authz
+		// interceptor is the only real gate. Idempotent: vfs.GetAttr may
+		// already have applied the same override.
+		stat.Uid = acc.Uid
+		stat.Gid = acc.Gid
+	} else {
+		if stat.Uid == 0 {
+			if j.adminAsRoot {
+				stat.Uid = win.AdministratorUIDFromFUSE
+			} else {
+				stat.Uid = win.SystemUIDFromFUSE
+			}
 		}
-	}
-	if stat.Gid == 0 && j.adminAsRoot {
-		if j.adminAsRoot {
-			stat.Gid = win.AdminstratorsGIDFromFUSE
-		} else {
-			stat.Gid = win.SystemUIDFromFUSE
+		if stat.Gid == 0 && j.adminAsRoot {
+			if j.adminAsRoot {
+				stat.Gid = win.AdminstratorsGIDFromFUSE
+			} else {
+				stat.Gid = win.SystemUIDFromFUSE
+			}
 		}
 	}
 

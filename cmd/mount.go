@@ -940,3 +940,35 @@ func ensureWorkingDirLevel(ctx meta.Context, m workingDirEnsurer, parent meta.In
 	}
 	return ino, nil
 }
+
+// parseUIDGID parses a "uid:gid" value ("197608:197121", ":gid", "uid:" or
+// "" — empty parts fall back to the defaults). Shared by unix and Windows
+// bridges; on Windows the defaults come from the process token
+// (win.GetCurrentUID/GetCurrentGID, FspPosixMapSidToUid-consistent).
+func parseUIDGID(input string, defaultUid uint32, defaultGid uint32) (uint32, uint32) {
+	ss := strings.SplitN(strings.TrimSpace(input), ":", 2)
+	uid, gid := defaultUid, defaultGid
+	if ss[0] != "" {
+		u, err := strconv.ParseUint(ss[0], 10, 32)
+		if err != nil {
+			logger.Fatalf("invalid uid: %q", ss[0])
+		}
+		uid = uint32(u)
+		if uid == 0 {
+			logger.Warnf("Can't map uid as 0, use %d instead", defaultUid)
+			uid = defaultUid
+		}
+	}
+	if len(ss) == 2 && ss[1] != "" {
+		g, err := strconv.ParseUint(ss[1], 10, 32)
+		if err != nil {
+			logger.Fatalf("invalid gid: %q", ss[1])
+		}
+		gid = uint32(g)
+		if gid == 0 {
+			logger.Warnf("Can't map gid as 0, use %d instead", defaultGid)
+			gid = defaultGid
+		}
+	}
+	return uid, gid
+}
