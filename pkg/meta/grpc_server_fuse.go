@@ -274,6 +274,12 @@ func (s *MetaProxyServer) provisionFileCrypto(ctx context.Context, mctx Context,
 	})
 	if err != nil {
 		_ = s.meta.Unlink(mctx, parent, name) // rollback (FR-USR-2)
+		// D3: honest errno — a policy deny from the keymanager (PermissionDenied,
+		// e.g. a non-owner creating at a company root, stage evidence 2026-11-25)
+		// must surface as EACCES, not a generic EIO that reads as a disk fault.
+		if status.Code(err) == codes.PermissionDenied {
+			return syscall.EACCES
+		}
 		return syscall.EIO
 	}
 	setter, ok := s.meta.(fileCryptoSetter)
