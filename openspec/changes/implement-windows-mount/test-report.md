@@ -1,6 +1,6 @@
 # Windows E2E Test Report — implement-windows-mount
 
-Период: 2026-10-03 → 2026-10-04. Верификация фаз change'а на живых Windows-машинах со stage-топологией JuiceFS Drive (Meta Proxy + authz/KeyManager + OIDC + зашифрованный том).
+Период: 2026-10-03 → 2026-11-25. Верификация фаз change'а на живых Windows-машинах со stage-топологией JuiceFS Drive (Meta Proxy + authz/KeyManager + OIDC + зашифрованный том).
 
 ## Verdict
 
@@ -8,6 +8,8 @@
 
 - **D1** — fork `prOOrc/go-redis v9.18.1` (replace в go.mod) не работает под Windows: PING зависает до таймаута. Все redis-мета-пути на Windows мертвы.
 - **D2** — grpc-маунт зашифрованного тома: метаданные обрабатываются, но файловые операции падают `ERROR_IO_DEVICE`. Воспроизводится только в agio-drive-v2-дереве (vanilla-сборка тем же тулчейном на той же машине работает).
+
+**Дополнение 2026-11-25 (прогон по ранбуку на новой машине, VK-топология tst-enc-vk):** вердикт остаётся **BLOCKED D2** — rebase-дерево `31355c61`+8 (октябрьские ~250 upstream-фиксов не помогли). Среда впервые здорова на свежем Win11 26300 (L1 PASS) — itx-блокер среды снят; 2.1 first-login закрыт (браузер → логин владельцем → NewSession+STS+кеш), 2.2 кеш-ремоунт PASS, fail-fast оба негатива PASS (+впервые на grpc-мете). Новый дефект №3 (самого change'а): дубль `owner-override` в `cmd/mount_windows.go` после ребейза → `panic: mount flag redefined` на любом mount — найден и исправлен в этом прогоне. Локализация D2 сужена fuse-trace'ом (см. секцию Run 2026-11-25).
 
 ## Environments
 
@@ -62,7 +64,36 @@
 
 **Вывод**: регрессия ответа FUSE-хендлеров под Windows в agio-drive-v2-дереве на grpc-мете. Бисект по agio-коммитам (e3f21cff..HEAD) не проводился — следующий шаг. Дополнительно проверить: vfs Init/log-пайплайн, logout watcher (`internal.go`), STS refresher goroutine — всё, чего нет в v1.4.1.
 
-## Diagnostics notes (для будущих прогонов)
+## Run 2026-11-25 — домашняя Windows-машина (прогон по `windows-runbook.md`)
+
+### Environment
+
+| | домашняя машина (2026-11-25) |
+|---|---|
+| ОС | Windows 11 Home, build 26300 (тот же «свежий Win11»-класс, что заблокированный 26200 itx.lan) |
+| Доступ | интерактивная консольная сессия владельца (браузерный логин лично) |
+| WinFsp | 2.1.25156 (MSI, Launcher running) |
+| Тулчейн | Go 1.26.11 (zip в `C:\jfs\toolchains\go`) + mingw-builds 14.2.0-rt_v12-rev1 posix-seh-ucrt (`C:\mingw64`); заголовки `hack\winfsp_headers` → `C:\WinFsp\inc\fuse` |
+| Бинарь | нативная сборка `8b29770818d4` (go1.26.11, `go version -m` в `C:\jfs\binary-version.txt`), 8 коммитов change'а поверх базы agio-drive-v2 `31355c61` |
+| Топология | VK stage: `drive-meta-proxy-tst-enc-vk.agio.services:443` (LE, TLS до пода), том tst-enc-vk, OIDC hydra client `juicefs-drive-stage` (redirect 18080), компания Home gri-lom `0f7afc02…`, data-plane `hb.ru-msk.vkcloud-storage.ru` |
+
+### Verified (октябрьский остаток)
+
+- **2.1 first-login (закрыт)**: пустой кеш → маунт → браузер открылся автоматически → логин владельцем `gril-lom@yandex.ru` (~4м55с от старта маунта до `NewSession`, внутри 5m-окна) → `NewSession sid=1`, `STS credentials refreshed (expiry +1h)` [swap@sts_refresher.go:339], токен-кеш `%USERPROFILE%\.oidc-login\<hash>` создан. Файловая половина критерия («Z: читается») — BLOCKED D2.
+- **2.2 remount from cache**: umount → mount той же командой — браузера нет, `NewSession` за ~7с от старта (токен из кеша, вращающийся refresh_token не был проблемой: кеш жил на машине логина).
+- **1.2 fail-fast (повтор)**: `--sts-enabled` на незашифрованном sqlite-томе → `FATAL: --sts-enabled requires an encrypted volume` (мгновенно); **впервые репетирован на grpc-мете**: bare-том `juicefs-b-stage` через `drive-meta-proxy-stage:443` + `--sts-enabled` → та же дословная ошибка (мгновенно).
+- **L1 среда**: sqlite-маунт (`sqlite3://C:/jfs/meta.db`) — формат, маунт, mkdir/write/read/umount всё работает; **среда здорова на Win11 26300** — itx-блокер (WinFsp × свежий Win11) на этом дереве/окружении не воспроизводится. (Прим.: ранбучная схема `sqlite:///…` неверна — драйвер регистрируется как `sqlite3://`; поправить в ранбуке.)
+- **STS + chroot**: `STS credentials refreshed` на каждом маунте; данные VK (`hb.ru-msk.vkcloud-storage.ru/juicefs-tst-enc-vk-stage/`).
+
+### Finding №3 (change'а) — owner-override double declaration panics every mount
+
+После ребейза на `31355c61` в `cmd/mount_windows.go` остались ОБЕ декларации `owner-override`: из базовой линии agio-drive-v2 (там флаг уже появился в задаче owner-override) и блок коммита 0b2a0cea (писался до появления флага в базе). `urfave/cli` паникует при построении flagset: `panic: mount flag redefined: owner-override` — **любая** команда `juicefs mount` на Windows падает до всякой работы. Usage-тексты дублей идентичны. Фикс в этом прогоне: удалён дубль-блок (единственная минимальная правка деклараций, разрешённая контекстом задач). Урок для ребейзов: range-diff 8/8 идентичен, но итоговое дерево от этого не защищено (дубль внёс именно merge-разрешение).
+
+### Finding D2 — update: жив после rebase, локализация сужена fuse-trace'ом
+
+Воспроизведён на rebase-дереве (`31355c61`+8, `8b29770818d4`): NewSession/STS OK, том жив в WinFsp (`fsptool lsvol`: `Z: \Device\Volume{…}\juicefs-tst-enc-vk\tst-enc-vk`; `net use` знает `Z: → \\juicefs-tst-enc-vk\tst-enc-vk`), но пути не резолвятся: `dir Z:\` → «The request could not be performed because of an I/O device error.» С `--fuse-trace-log` впервые видно FUSE-слой: `Getattr(/)` → 0 (0.000000s, attr-cache); **`Getattr(/_JFS_LOGOUT)` → -2 ENOENT за 7-11ms — сетевой grpc-вызов, ответ меты честный → транспорт и мета-RPC живы**; `Opendir(/)` → **-5 (EIO) за 4-8ms**, ровно раз в секунду (WinFsp VolumeInfoTimeout=1000 retry), клиентского лога об ошибке нет. Октябрьская формулировка «ответы не доходят до WinFsp» уточняется: меты-RPC доходят и обрабатываются, EIO возникает в **readdir-пути** (Opendir) — кандидат-зона бисекта: `pkg/vfs` internal/readonly dir-хендлеры и logout-watcher interaction с WinFsp-слоем (в v1.4.1 этого кода нет). Бисект `e3f21cff..HEAD` — отдельное кодовое решение.
+
+### Diagnostics notes (для будущих прогонов)
 
 1. **kubectl port-forward не годится для FUSE-трафика**: мета-RPC (NewSession/flush/STS) через него ходят, а потоки файловых операций зависают. Прокси держать процессом на той же машине, что и маунт.
 2. **Ложноположительные результаты probe-скриптов**: старый живой маунт удерживает точку монтирования; после `Stop-Process` папка остаётся обычной NTFS-папкой — все последующие «операции с томом» тихо выполняются на NTFS. Каждый прогон: убивать процессы по имени, удалять папку монтирования и проверять `fsptool lsvol` (том без буквы/с префиксом = живой маунт).

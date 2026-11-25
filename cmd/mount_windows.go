@@ -152,10 +152,6 @@ func mountFlags() []cli.Flag {
 			Name:  "company-id",
 			Usage: "company ID for STS credential requests (required with --sts-enabled)",
 		},
-		&cli.StringFlag{
-			Name:  "owner-override",
-			Usage: "present POSIX ownership of all files and dirs as <uid>:<gid>; pass --owner-override= to present the mount process uid:gid; accepted on Windows but ignored — WinFsp does not enforce POSIX ownership",
-		},
 	}
 }
 
