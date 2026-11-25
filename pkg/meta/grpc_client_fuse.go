@@ -64,7 +64,11 @@ func (m *grpcMeta) Access(ctx Context, inode Ino, modemask uint8, attr *Attr) sy
 	}
 	resp, err := m.client.Access(m.withSessionID(ctx), req)
 	if err != nil {
-		return syscall.EIO
+		logger.Errorf("Access error: %v", err)
+		// Map through the shared status table (D3): PermissionDenied → EACCES,
+		// NotFound → ENOENT, other statuses → EIO. Silent EIO here masked the
+		// WinFsp Opendir failure (D2, see d2-fix-plan.md).
+		return grpcStatusToErrno(err)
 	}
 	if resp.GetErrno() != 0 {
 		return syscall.Errno(resp.GetErrno())
