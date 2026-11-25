@@ -126,8 +126,8 @@ winfsp-тест-бинарь кросс-собраны на macOS (mingw-w64; н
 Локальный sqlite-мета (go-redis не участвует — D1 сюда не относится):
 
 ```powershell
-C:\jfs\juicefs.exe format sqlite:///C:/jfs/meta.db winvol
-C:\jfs\juicefs.exe mount sqlite:///C:/jfs/meta.db X:
+C:\jfs\juicefs.exe format sqlite3://C:/jfs/meta.db winvol
+C:\jfs\juicefs.exe mount sqlite3://C:/jfs/meta.db X:
 mkdir X:\t1; "hello" > X:\t1\a.txt; type X:\t1\a.txt        # должно быть hello
 C:\jfs\juicefs.exe umount X:
 ```
@@ -313,8 +313,8 @@ $env:CGO_ENABLED=1; $env:PATH += ";C:\mingw64\bin"; $env:CGO_CFLAGS='-IC:/WinFsp
 go build -ldflags "-s -w" -o C:\jfs\juicefs.exe .
 
 # L1 sqlite-смоук среды
-C:\jfs\juicefs.exe format sqlite:///C:/jfs/meta.db winvol
-C:\jfs\juicefs.exe mount sqlite:///C:/jfs/meta.db X:
+C:\jfs\juicefs.exe format sqlite3://C:/jfs/meta.db winvol
+C:\jfs\juicefs.exe mount sqlite3://C:/jfs/meta.db X:
 
 # L2 негатив (немедленный fail-fast)
 C:\jfs\juicefs.exe mount redis://127.0.0.1:6379/1 Y: --sts-enabled
