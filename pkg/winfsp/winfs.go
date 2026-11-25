@@ -1202,6 +1202,21 @@ func Serve(v *vfs.VFS, fuseOpt string, asRoot bool, delayCloseSec int, showDotFi
 	}
 
 	logger.Debugf("mount point: %s, mountPointIsDrive: %v, options: %s", conf.Mountpoint, mountPointIsDrive, options)
+	// Windows readiness marker: the unix path prints `OK, <vol> is ready at "<mp>"`
+	// (cmd/mount_unix.go) once os.Stat confirms the mount, and the agio-drive
+	// client supervisor (pkg/jfs/supervisor.go) keys readiness on that marker on
+	// every platform. host.Mount blocks until unmount, so poll in the background;
+	// the 150s ceiling is far above any WinFsp volume-creation latency.
+	markerPath, markerName := conf.Mountpoint, volAlias
+	go func() {
+		for i := 0; i < 300; i++ {
+			time.Sleep(500 * time.Millisecond)
+			if _, err := os.Stat(markerPath); err == nil {
+				logger.Infof("OK, %s is ready at %q", markerName, markerPath)
+				return
+			}
+		}
+	}()
 	exitOk := host.Mount(conf.Mountpoint, []string{"-o", options})
 	if exitOk {
 		return nil
