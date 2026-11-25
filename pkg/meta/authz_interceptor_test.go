@@ -608,8 +608,9 @@ func TestIsAlwaysAllowed(t *testing.T) {
 	assert.True(t, isAlwaysAllowed("/", AuthzPermissionView))
 	// Root + Write → NOT always allowed
 	assert.False(t, isAlwaysAllowed("/", AuthzPermissionWrite))
-	// Root + Read → NOT always allowed
-	assert.False(t, isAlwaysAllowed("/", AuthzPermissionRead))
+	// Root + Read → always allowed (D2: chroot'ed STS mounts hit a blanket
+	// SpiceDB deny on Read "/" for every Opendir; POSIX access remains the gate)
+	assert.True(t, isAlwaysAllowed("/", AuthzPermissionRead))
 	// Non-root + View → NOT always allowed
 	assert.False(t, isAlwaysAllowed("/company-abc", AuthzPermissionView))
 	// Non-root + Write → NOT always allowed
