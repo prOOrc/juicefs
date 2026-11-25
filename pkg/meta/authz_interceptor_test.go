@@ -611,6 +611,12 @@ func TestIsAlwaysAllowed(t *testing.T) {
 	// Root + Read → always allowed (D2: chroot'ed STS mounts hit a blanket
 	// SpiceDB deny on Read "/" for every Opendir; POSIX access remains the gate)
 	assert.True(t, isAlwaysAllowed("/", AuthzPermissionRead))
+	// Companies namespace container (dir convention and cached form) — same
+	// container-root reasoning; listing is server-post-filtered
+	assert.True(t, isAlwaysAllowed("/companies", AuthzPermissionView))
+	assert.True(t, isAlwaysAllowed("/companies", AuthzPermissionRead))
+	assert.True(t, isAlwaysAllowed("/companies/", AuthzPermissionRead))
+	assert.False(t, isAlwaysAllowed("/companies", AuthzPermissionWrite))
 	// Non-root + View → NOT always allowed
 	assert.False(t, isAlwaysAllowed("/company-abc", AuthzPermissionView))
 	// Non-root + Write → NOT always allowed

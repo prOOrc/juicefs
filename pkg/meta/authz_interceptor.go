@@ -608,17 +608,24 @@ func permissionFromAccessMask(mask uint32) AuthzPermission {
 }
 
 // isAlwaysAllowed returns true for paths that don't require an authz service call.
-// Root "/" with View is always allowed: it's the container for company directories,
-// and access control starts at the /company-code/ level.
-// Root "/" with Read is allowed too: on STS mounts the proxy root is chroot'ed to
-// the caller's company dir (Chroot RPC), so a SpiceDB Read check on "/" only
+// Namespace container roots ("/", "/companies", dir-convention "/companies/") with
+// View are always allowed: they're the containers for company directories, and
+// access control starts at the /company-code/ level. Read is allowed on them too:
+// on STS mounts the proxy root is chroot'ed to the caller's company dir (Chroot
+// RPC), and directory listing is post-filtered by the server anyway
+// (filterEntriesByAuthz), so a SpiceDB Read check on a container root only
 // produced a blanket deny that masked every Opendir under WinFsp (defect D2,
 // see openspec/changes/implement-windows-mount/d2-fix-plan.md). The meta
-// engine's POSIX access check remains the real gate for Read on "/". Write on
-// "/" still requires an explicit authz check.
+// engine's POSIX access check remains the real gate. Write still requires an
+// explicit authz check everywhere.
 func isAlwaysAllowed(path string, perm AuthzPermission) bool {
-	if path == "/" && (perm == AuthzPermissionView || perm == AuthzPermissionRead) {
+	if perm != AuthzPermissionView && perm != AuthzPermissionRead {
+		return false
+	}
+	if path == "/" {
 		return true
 	}
-	return false
+	// dirAuthzPath adds a trailing slash for dirs; Access carries the cached
+	// path as-is ("/companies"), Mkdir checks the dir convention ("/companies/")
+	return path == "/companies" || path == "/companies/"
 }
