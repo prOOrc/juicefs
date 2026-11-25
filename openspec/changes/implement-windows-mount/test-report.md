@@ -109,6 +109,38 @@
 4. **Офлайн-подготовка Windows-образов YC**: `hiberfil.sys`/`pagefile.sys` удалить офлайн обязательно (hiberboot резюмится и игнорирует правки реестра), `ntfsfix -d` перед rw-маунтом; автологон с пустым паролем требует `PasswordLess\Device\DevicePasswordLessBuildVersion=0`; Cloudbase-Init в образе windows10-pro-01 сконфигурён под EC2-metadata и крашится (event 7034) — user-data не работает, sshd ставится через RunOnce.
 5. **Раздел из 20GB-образа расширять сразу** (`Resize-Partition -Size ($m=Get-PartitionSupportedSize).SizeMax`): диск забивается мгновенно (Go-сборке нужно ~10GB), обрезанный модуль-cache даёт пустые файлы в `$GOROOT/src`.
 
+## Run 2026-11-25 вечер — D4 root cause + fix + E2E PASS (tst-enc-vk, Windows)
+
+### Finding D4 — depth≥1 write EACCES: WinFsp FSD security-eval по presented uid:gid:mode (НАЙДЕН И ИСПРАВЛЕН)
+
+**Симптом:** на зашифрованном STS-маунте (image `agio-v1.4.2_20261125b_94d75904`, чтение/листинг уже работали после D2/S2b-фиксов) любая запись глубже корня — «Access to the path is denied» (EACCES), при этом fuse-trace не показывал dispatch операции: FSD делал `Getattr(child)×3 → Getattr(parent)=0 → Opendir(parent)=0` и обрывался сам, до cgofuse-метода. Корневые Create/Mkdir диспатчились (и честно получали EIO от серверного authz Write-денай на «/»). Контраст: sqlite-маунт тем же бинарём писал в подкаталоги — различие не в бинарe/DLL, а в предъявляемых атрибутах.
+
+**Root cause:** cgofuse v1.6.0 не имеет GetSecurityByName — WinFsp FSD синтезирует security descriptor из presented uid:gid:mode. Каталоги `companies/`+`companies/home-john-doe` созданы `ensureCompanyWorkingDir` из `meta.Background()` (uid 0) → `attrToStat` мапит uid 0 → `win.SystemUIDFromFUSE=18` (SYSTEM SID) → mode 0755 даёт маунт-юзеру только world r-x → `FILE_ADD_FILE/ADD_SUBDIRECTORY` denied в ядре, до сервера. Корень тома и sqlite-каталоги, созданные самим юзером (uid 197608 → свой SID → owner rwx), диспатчились. Комментарий флага `--owner-override` «accepted on Windows but ignored — WinFsp does not enforce POSIX ownership» был неверен: FSD как раз enforce-ит SD-синтез.
+
+**Фикс (клиент, `implement-windows-mount@2381b5a4`):** `--owner-override` реализован на Windows по образцу unix: `parseUIDGID` перенесён в общий `cmd/mount.go`; `mountMain` строит `Config.OwnerOverride` (дефолт — uid:gid из process token, `win.GetCurrentUID/GetCurrentGID`, консистентно с FspPosixMapSidToUid); `winfs.attrToStat` презентует override в единственной Windows-точке (Getattr/Lstat/Readdir проходят через неё). Хранимые метаданные не трогаются; серверный authz остаётся единственным реальным гейтом. Юнит-тест `TestAttrToStatOwnerOverride` PASS.
+
+**Сопутствующий серверный фикс (`fix/d2-authz-root-read@d2ef5fee`, в образ не заведён — polish):** keymanager-денай в `provisionFileCrypto` мапится в EACCES вместо безусловного EIO (D3-урок F1).
+
+### E2E вердикт — **PASS** (впервые за историю change'а)
+
+tst-enc-vk, `--sts-enabled --company-id 8215ee97-… --owner-override=`, из токен-кеша без браузера:
+
+| операция | результат |
+|---|---|
+| mount (OIDC из кеша, STS 1h, working dir ensured) | OK |
+| `mkdir /companies/home-gri-llo/d4test` (своё owner-компания 0f7afc02) | **OK** (dispatch → сервер allow) |
+| write 4096B + read back, md5 | **match** `b13787aa353f38640852f9e6cf2d335e` |
+| `rm`+`rmdir` того же файла/каталога | OK |
+| create в корне тома | DENIED сервером (EIO) — fail-closed корректен |
+| create/mkdir в `companies/home-john-doe/` (admin-не-owner на homestudio 8215ee97) | DENIED — см. платформенную находку ниже |
+| unmount (`juicefs umount`), гигиена (procs=0, Z: отсутствует) | OK |
+
+### Платформенные находки (agio-platform, владельцу — не дефекты форка)
+
+1. **Корень компании — owner-only по дизайну платформы.** Цепь для `companies/home-john-doe/f1.txt` (юзер admin, не owner): meta-authz-интерсептор пропускает Create (company-level `edit`: admin→manage→edit, лог authz-grpc `allowed:true home-john-doe/ EDIT`), но `provisionFileCrypto → keymanager.CreateFileKey` денится (`PermissionDenied` в логах authz-grpc: `no write permission on path`) — keymanager проверяет `edit` по пути файла, а нового файла в drive_object ещё нет, parent-цепочка у корня пуста → non-owner deny. Для owner (home-gri-llo 0f7afc02, founder+owner) — owner-bypass пропускает всё. Асимметрия «meta-authz allow / keymanager deny» для admin-не-owner на корне компании — наблюдение владельцу платформы (fail-closed работает в обе стороны).
+2. **Данные прав на stage**: юзер mail@example.com (4f1a9022) — founder+owner на home-gri-llo, admin на homestudio (home-john-doe, owner 2c222ab9), на Tailormade связей нет (STS fail-closed 25.11 — корректно).
+3. **Наблюдение**: Windows-маунт встаёт на мировой корень тома (chroot по working_dir, как на mac, на клиенте не выполняется) — записи в чужие компании/корень честно денятся сервером; chroot-семантика на Windows — отдельное решение.
+
 ## Bench state (сохранён, остановлен)
 
 - **VM `jfs-win10`** (внутренний 10.129.0.56-диапазон, публичный IP на момент остановки 103.76.55.118): OpenSSH (`jfsadmin` / `JD`, пароль `Jf-E2E-Pass-2026`); `C:\jfs` — `juicefs-nofork2.exe` (без redis-fork), `juicefs-native.exe`, ваниль-сборки, Go 1.26.5 + w64devkit (`C:\jfs\go`, `C:\jfs\w64`), все probe-скрипты (`*.ps1`, `*.cmd`) и логи прогонов; `C:\Users\jfsadmin\.oidc-login` и `C:\Users\JD\.oidc-login` — кеш tst-a1 (refresh_token протухнет, обновить перед ретестом); kubeconfig с IAM-токеном (тоже протухнет — пересоздать `yc iam create-token`).
