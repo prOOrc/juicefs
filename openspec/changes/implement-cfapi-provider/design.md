@@ -314,7 +314,7 @@ func (p *Provider) runIngest(ctx context.Context, op JournalOp) error {
 
 | ID | Неопределённость | Проба | Шаг | Запасной вариант |
 |---|---|---|---|---|
-| U1 | Права на `CfRegisterSyncRoot`; должен ли корень быть пустым; какая ветка реестра нужна Explorer | регистрация из обычного и повышенного процесса | 1 | разовая регистрация с повышением на этапе установки |
+| U1 | Права на `CfRegisterSyncRoot`; должен ли корень быть пустым; какая ветка реестра нужна Explorer | регистрация из обычного и повышенного процесса | 1 | разовая регистрация с повышением на этапе установки — **ЗАКРЫТО 26.11 (пробы на живой машине): регистрация из ОБЫЧНОГО процесса ОК (exit 0); корень непустой (probe.txt) — не мешает; ветка HKCU достаточна (Explorer\SyncRootManager\AgioDrive!SID!Agio: DisplayName/IconResource/UserSyncRoots\<SID>); идемпотентный повтор ОК (RegisterFlagUpdate, ключ один); unregister удаляет ключ, status → not registered; identity=nil возражений от cldapi нет** |
 | U2 | Когда выдаётся FETCH_PLACEHOLDERS и как доставляются записи | трассировка callback'ов при открытии каталога | 2 | уведомление об открытии каталога и `CfCreatePlaceholders` |
 | U3 | Передаётся ли FileIdentity в параметрах FETCH_DATA | логирование первого callback'а | 3 | чтение по inode: `meta.Read` и store (cmd/gc.go:96-110) |
 | U4 | Выравнивание и максимальный размер буфера TRANSFER_DATA | передача выровненным буфером; замер Length | 3 | VirtualAlloc под запрос целиком |
@@ -323,7 +323,7 @@ func (p *Provider) runIngest(ctx context.Context, op JournalOp) error {
 | U7 | Открытие на запись частично дегидратированного плейсхолдера | проба | 5 | `CfHydratePlaceholder` из пула выгрузки перед чтением |
 | U8 | Имена и флаги преобразования в плейсхолдер и пометки in-sync | по `cldapi.h` | 5 | — |
 | U9 | Все десять callback-типов существуют с 1709 | по `cldapi.h` и MS Docs | 1 | сократить набор — **ЗАКРЫТО 26.11: типов 13, NOTIFY_DIRECTORY_CREATED не существует; 7 OS-thunk'ов на 9 OS-точек через *_IS_DIRECTORY-флаги (см. D5); 10-я точка движка наполняется запасным механизмом** |
-| U10 | Второй `CfConnectSyncRoot` на тот же корень | запуск второго `serve` | 1 | именованный mutex как единственная защита |
+| U10 | Второй `CfConnectSyncRoot` на тот же корень | запуск второго `serve` | 1 | именованный mutex как единственная защита — **ЗАКРЫТО 26.11: второй serve → exit=1 FATAL «another provider instance ... already running (mutex Local\juicefs-clouddrive-\<san>)» ДО Connect; первый жив (mutex удержан). Также первый живой CfConnectSyncRoot прошёл (connected, loggingDispatcher, idle)** |
 | U11 | Очистка staging-файлов juicefs после падения | чтение pkg/chunk и pkg/vfs | 5 | очистка при старте в провайдере |
 | U12 | Наличие родителя в Attr для подъёма inode → путь | pkg/meta | 3 | обход от корня |
 | U13 | Завершает ли запрос ошибку, возвращённую из callback'а | возврат ошибки из thunk'а | 3 | отдельное `CfExecute` с ошибкой из воркера |
