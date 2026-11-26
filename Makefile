@@ -70,13 +70,14 @@ juicefs.linux:
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CC=x86_64-linux-musl-gcc CGO_LDFLAGS="-static" go build -gcflags="$(GCFLAGS)" -ldflags="$(LDFLAGS)"  -o juicefs .
 
 # This is the script for compiling the Darwin version on the MacOS platform.
-# Please install osxcross (https://github.com/tpoechtrager/osxcross) with the MacOSX11.3.sdk before using it.
+# Please install osxcross (https://github.com/tpoechtrager/osxcross) with the MacOSX12.0.sdk before using it.
 # Used by agio-drive CI (goreleaser-cross toolchain); CGO is required for mattn/go-sqlite3.
+# SDK 12.0 is required for linking with Go >= 1.25/1.26 (_SecTrustCopyCertificateChain, a macOS 12+ API); MacOSX12.0.sdk is already in the CI image goreleaser-cross:0.0.2.
 juicefs-darwin-amd64:
-	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 CC=o64-clang CXX=o64-clang++ OSXCROSS_SDKROOT=/usr/local/osxcross/SDK/MacOSX11.3.sdk OSXCROSS_NO_INCLUDE_PATH_WARNINGS=1 go build -gcflags="$(GCFLAGS)" -ldflags="$(LDFLAGS)" -o juicefs-darwin-amd64 .
+	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 CC=o64-clang CXX=o64-clang++ OSXCROSS_SDKROOT=/usr/local/osxcross/SDK/MacOSX12.0.sdk OSXCROSS_NO_INCLUDE_PATH_WARNINGS=1 go build -gcflags="$(GCFLAGS)" -ldflags="$(LDFLAGS)" -o juicefs-darwin-amd64 .
 
 juicefs-darwin-arm64:
-	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 CC=o64-clang CXX=o64-clang++ OSXCROSS_SDKROOT=/usr/local/osxcross/SDK/MacOSX11.3.sdk OSXCROSS_NO_INCLUDE_PATH_WARNINGS=1 go build -gcflags="$(GCFLAGS)" -ldflags="$(LDFLAGS)" -o juicefs-darwin-arm64 .
+	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 CC=o64-clang CXX=o64-clang++ OSXCROSS_SDKROOT=/usr/local/osxcross/SDK/MacOSX12.0.sdk OSXCROSS_NO_INCLUDE_PATH_WARNINGS=1 go build -gcflags="$(GCFLAGS)" -ldflags="$(LDFLAGS)" -o juicefs-darwin-arm64 .
 
 /usr/local/include/winfsp:
 	sudo mkdir -p /usr/local/include/winfsp
