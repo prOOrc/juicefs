@@ -1,4 +1,4 @@
-FROM golang:1.23-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 ENV CGO_CFLAGS="-D_LARGEFILE64_SOURCE"
 
@@ -10,7 +10,7 @@ COPY . /home/juicefs
 WORKDIR /home/juicefs
 RUN make juicefs
 
-FROM golang:1.23-alpine
+FROM golang:1.26-alpine
 
 EXPOSE 9000
 
