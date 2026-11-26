@@ -57,6 +57,7 @@ var (
 	procCfUpdatePlaceholder               = modcldapi.NewProc("CfUpdatePlaceholder")
 	procCfGetPlaceholderInfo              = modcldapi.NewProc("CfGetPlaceholderInfo")
 	procCfGetPlaceholderStateFromFileInfo = modcldapi.NewProc("CfGetPlaceholderStateFromFileInfo")
+	procCfGetSyncRootInfoByPath           = modcldapi.NewProc("CfGetSyncRootInfoByPath")
 )
 
 // HRESULTError — ошибка HRESULT, возвращённая процедурой cldapi.dll.
@@ -157,6 +158,12 @@ func CfUnregisterSyncRoot(syncRootPath string) error {
 // CfConnectSyncRoot подключает провайдер к sync root с таблицей callback'ов
 // (см. CallbackTable в callbacks.go). CallbackContext возвращается фильтром
 // в CF_CALLBACK_INFO.CallbackContext.
+//
+// Контракт времени жизни (design.md D7): фильтр читает callbackTable и
+// callbackContext ПОСЛЕ возврата этой функции — всё время соединения.
+// Прямые вызовы этой обёртки должны удерживать таблицу и контекст сами;
+// безопасный путь — Connect, который копирует их в *Connection (см.
+// connection.go). Передавать временные значения нельзя.
 func CfConnectSyncRoot(syncRootPath string, callbackTable []CFCallbackRegistration, callbackContext uintptr, connectFlags uint32, connectionKey *ConnectionKey) error {
 	path, err := windows.UTF16PtrFromString(syncRootPath)
 	if err != nil {
@@ -378,4 +385,30 @@ func CfGetPlaceholderStateFromFileInfo(infoBuffer []byte, infoClass uint32) uint
 	}
 	state, _, _ := procCfGetPlaceholderStateFromFileInfo.Call(buf, uintptr(infoClass))
 	return uint32(state)
+}
+
+// CfGetSyncRootInfoByPath читает информацию sync root, содержащего путь
+// (CF_SYNC_ROOT_INFO_CLASS; минимум — CF_SYNC_ROOT_BASIC_INFO). Ошибка
+// означает, что путь вне зарегистрированного sync root — так провайдер
+// проверяет регистрацию при старте (design.md D4).
+func CfGetSyncRootInfoByPath(filePath string, infoClass uint32, infoBuffer []byte, returnedLength *uint32) error {
+	path, err := windows.UTF16PtrFromString(filePath)
+	if err != nil {
+		return err
+	}
+	var buf, ret uintptr
+	if len(infoBuffer) > 0 {
+		buf = uintptr(unsafe.Pointer(&infoBuffer[0]))
+	}
+	if returnedLength != nil {
+		ret = uintptr(unsafe.Pointer(returnedLength))
+	}
+	r, _, _ := procCfGetSyncRootInfoByPath.Call(
+		uintptr(unsafe.Pointer(path)),
+		uintptr(infoClass),
+		buf,
+		uintptr(len(infoBuffer)),
+		ret,
+	)
+	return hresult(r, "CfGetSyncRootInfoByPath")
 }

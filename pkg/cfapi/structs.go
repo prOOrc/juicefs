@@ -507,6 +507,13 @@ type CFPlaceholderBasicInfo struct {
 	FileIdentity       [1]byte // BYTE FileIdentity[1]: хвост переменной длины
 }
 
+// CFSyncRootBasicInfo — CF_SYNC_ROOT_BASIC_INFO: ответ
+// CfGetSyncRootInfoByPath(CF_SYNC_ROOT_INFO_BASIC). Успешный запрос по пути —
+// признак зарегистрированного sync root (design.md D4).
+type CFSyncRootBasicInfo struct {
+	SyncRootFileId int64
+}
+
 // CFPlaceholderStandardInfo — CF_PLACEHOLDER_STANDARD_INFO.
 type CFPlaceholderStandardInfo struct {
 	OnDiskDataSize     int64

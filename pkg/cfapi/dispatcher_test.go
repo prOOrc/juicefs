@@ -145,6 +145,52 @@ func TestDispatcherQueueNoWorkers(t *testing.T) {
 	}
 }
 
+// TestDispatcherQueueNoWorkersNoIO — дословный сценарий спеки «Очередь без
+// воркеров»: 1000 событий FETCH_DATA проходят через диспетчер (thunk →
+// CallbackDispatcher) при остановленных воркерах; все вызовы возвращаются
+// суммарно менее чем за 1 секунду, счётчик операций ввода-вывода подменной
+// реализации равен нулю (в одном тесте: и время, и отсутствие I/O).
+func TestDispatcherQueueNoWorkersNoIO(t *testing.T) {
+	fake := &fakeDispatcher{}
+	SetDispatcher(fake)
+	defer SetDispatcher(nil)
+
+	var info CFCallbackInfo
+	info.ConnectionKey = ConnectionKey{Internal: 1}
+	info.TransferKey = 11
+	var params CFCallbackParameters
+	p := params.FetchDataParams()
+	p.RequiredFileOffset = 0
+	p.RequiredLength = 4096
+
+	goroutinesBefore := runtime.NumGoroutine()
+	start := time.Now()
+	for i := 0; i < 1000; i++ {
+		info.TransferKey = TransferKey(i)
+		if rc := fetchDataCallback(&info, &params); rc != 0 {
+			t.Fatalf("fetchDataCallback(%d) вернул %d, ожидается 0 (VOID)", i, rc)
+		}
+	}
+	elapsed := time.Since(start)
+	if elapsed > time.Second {
+		t.Errorf("1000 событий FETCH_DATA заняли %v, лимит 1 c", elapsed)
+	}
+	if fake.ioOps != 0 {
+		t.Errorf("счётчик I/O подменной реализации = %d, ожидается 0", fake.ioOps)
+	}
+	if got := runtime.NumGoroutine(); got != goroutinesBefore {
+		t.Errorf("диспетчер запустил горутины: %d -> %d", goroutinesBefore, got)
+	}
+	if len(fake.fetchJobs) != 1000 {
+		t.Errorf("fetchJobs = %d, ожидается 1000", len(fake.fetchJobs))
+	}
+	for i, job := range fake.fetchJobs {
+		if job.TransferKey != TransferKey(i) {
+			t.Fatalf("fetchJobs[%d].TransferKey = %d, ожидается %d", i, job.TransferKey, i)
+		}
+	}
+}
+
 // TestDispatcherOverflow — спека «Переполненная очередь»: заполненная очередь
 // возвращает ErrQueueFull, задание не ставится и не блокирует.
 func TestDispatcherOverflow(t *testing.T) {
