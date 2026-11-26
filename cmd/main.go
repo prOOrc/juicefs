@@ -96,7 +96,7 @@ func Main(args []string) error {
 	}
 
 	if runtime.GOOS == "windows" {
-		app.Commands = append(app.Commands, cmdPrintSID())
+		app.Commands = append(app.Commands, cmdPrintSID(), cmdCloudDrive())
 	}
 
 	if calledViaMount(args) {

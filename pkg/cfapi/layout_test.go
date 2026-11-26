@@ -247,6 +247,9 @@ const (
 	goldOffPlaceholderStandardInfoSyncRootFileId     = 48
 	goldOffPlaceholderStandardInfoFileIdentityLength = 56
 	goldOffPlaceholderStandardInfoFileIdentity       = 60
+
+	goldSizeofSyncRootBasicInfo          = 8
+	goldOffSyncRootBasicInfoSyncRootFile = 0
 )
 
 // checkS/checkO сверяют размер и смещение с эталоном.
@@ -499,6 +502,10 @@ func TestLayout(t *testing.T) {
 	checkO(t, "CFPlaceholderStandardInfo.SyncRootFileId", unsafe.Offsetof(CFPlaceholderStandardInfo{}.SyncRootFileId), goldOffPlaceholderStandardInfoSyncRootFileId)
 	checkO(t, "CFPlaceholderStandardInfo.FileIdentityLength", unsafe.Offsetof(CFPlaceholderStandardInfo{}.FileIdentityLength), goldOffPlaceholderStandardInfoFileIdentityLength)
 	checkO(t, "CFPlaceholderStandardInfo.FileIdentity", unsafe.Offsetof(CFPlaceholderStandardInfo{}.FileIdentity), goldOffPlaceholderStandardInfoFileIdentity)
+
+	// CF_SYNC_ROOT_BASIC_INFO
+	checkS(t, "CFSyncRootBasicInfo", unsafe.Sizeof(CFSyncRootBasicInfo{}), goldSizeofSyncRootBasicInfo)
+	checkO(t, "CFSyncRootBasicInfo.SyncRootFileId", unsafe.Offsetof(CFSyncRootBasicInfo{}.SyncRootFileId), goldOffSyncRootBasicInfoSyncRootFile)
 }
 
 // windowsGUID — псевдоним для проверки размера GUID из x/sys (16 байт,

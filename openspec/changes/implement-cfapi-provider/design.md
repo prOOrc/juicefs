@@ -132,9 +132,9 @@ Write-back выключен: задание считается выполнен�
 
 ### D4. Регистрация, готовность, владелец
 
-- `register` проверяет, что том корня — NTFS, вызывает `CfRegisterSyncRoot` и создаёт ключ `Explorer\SyncRootManager\<providerId>!<SID>!<accountId>`. Ветка реестра — по пробе U1.
-- `serve` при старте проверяет регистрацию; при отсутствии сообщает об ошибке и завершается.
-- Единственный экземпляр: именованный mutex (x/sys/windows) и поведение второго `CfConnectSyncRoot` по U10.
+- `register` проверяет, что том корня — NTFS, вызывает `CfRegisterSyncRoot` и создаёт ключ `Explorer\SyncRootManager\<providerId>!<SID>!<accountId>`. Ветка реестра — по пробе U1 (реализация пока HKCU). Фактические значения (задача 1.4): providerId=`AgioDrive`, accountId=`Agio`, GUID провайдера `{3F7A2C5D-8E41-4B6A-9C2D-5A7E1F0B8C4D}` (новая константа; design не задавал — зафиксировано здесь); политики: hydration=Progressive+StreamingAllowed, population=Partial (согласовано с «дети по первому обращению»), inSync=TrackNone, hardlink=None, mgmt=Default; identity при регистрации — nil (плейсхолдеры получают inode-идентичность при создании, D6); повтор register → ретрай `RegisterFlagUpdate` (без дублей). Идентичности могут уточниться по U1.
+- `serve` при старте проверяет NTFS корня (требование proposal, рисковая таблица), затем регистрацию; при отсутствии сообщает об ошибке и завершается.
+- Единственный экземпляр: именованный mutex `Local\juicefs-clouddrive-<санитизированный корень>` (initialOwner=false — существование как признак; ReleaseMutex не используется из-за thread-affinity горутин, «release» = CloseHandle в Stop; поведение задокументировано в pkg/cfprovider/provider.go); поведение второго `CfConnectSyncRoot` — по пробе U10.
 - Маркер готовности повторяет адаптер WinFSP (`pkg/winfsp/winfs.go:1205-1218` — ветка `implement-windows-mount`): строка `OK, <имя тома> is ready` выводится один раз, когда соединение установлено и плейсхолдеры верхнего уровня созданы.
 - Owner-override (`winfs.go:439-445`) не переносится: плейсхолдеры создаёт процесс провайдера от имени пользователя, владелец получается нужным без переопределения.
 
