@@ -108,13 +108,15 @@ Write-back выключен: задание считается выполнен�
 - адреса thunk'ов хранятся в переменных уровня пакета;
 - паника в thunk'е недопустима — она завершает процесс.
 
-Источник эталонного header: SDK 10.0.26100.0 его не содержит (cldapi.lib есть). Берётся пакет `Microsoft.Windows.SDK.CPP` на NuGet, либо заголовки mingw-w64. Источник, версия и SHA-256 файла записываются в разделе Integration Points при закрытии задачи 0.3; header в репозиторий не коммитится. Имена функций дополнительно сверяются с экспортами `C:\Windows\System32\cldapi.dll` (`objdump -p` из mingw). Имена функций, callback-типов и флагов в этом change — рабочие; спека ссылается на список в этом разделе, а не на имена напрямую.
+Источник эталонного header (закрыто задачей 0.3, 2026-11-26): **NuGet `Microsoft.Windows.SDK.CPP` версии 10.0.26100.7175**, файл `c/Include/10.0.26100.0/um/cfapi.h`, **SHA-256 `c50fb112b31a38e91151b84c46fcfefeb395aa12faa60cdc270103cdce7c4ae7`** (1175 строк; 35 Cf-функций, 15 CF_CALLBACK_TYPE_*; все функции биндинга и write-пути присутствуют). В mingw-w64 (GitHub master) cfapi.h отсутствует — NuGet единственный источник. Локальный путь заголовка (вне репозитория): `C:/Users/iobukhov/jfs-tmp/cfapi-headers/cfapi.h`; архив nupkg удалён после извлечения. Header в репозиторий не коммитится. Имена функций сверены с экспортами `C:\Windows\System32\cldapi.dll` (`objdump -p`, задача 0.4): все функции D1/D5 и write-пути в экспортах присутствуют — CfRegisterSyncRoot, CfUnregisterSyncRoot, CfConnectSyncRoot, CfDisconnectSyncRoot, CfCreatePlaceholders, CfExecute, CfReportProviderProgress, CfHydratePlaceholder, CfDehydratePlaceholder, CfSetPinState, CfSetInSyncState, CfConvertToPlaceholder, CfUpdatePlaceholder, CfGetPlaceholderInfo, CfGetPlaceholderStateFromFileInfo, CfGetTransferKey/CfReleaseTransferKey, CfRevertPlaceholder, CfOpenFileWithOplock. Имена функций, callback-типов и флагов в этом change — рабочие; спека ссылается на список в этом разделе, а не на имена напрямую.
 
 ### D2. CGO: вариант α
 
 Чистая сборка невозможна: `pkg/compress/compress.go:23-24` безусловно импортирует CGO-зависимые DataDog/zstd и hungys/go-lz4, а `pkg/chunk`, `pkg/object` и `pkg/fs` тянут этот пакет. Теги `nosqlite` (`pkg/meta/sql_sqlite.go:1`), `nofdb` (`pkg/meta/tkv_fdb.go:1`), `nogspt` этого не снимают (проверено сборкой `CGO_ENABLED=0` — exit 1 на zstd/lz4).
 
 Прототип собирается с `CGO_ENABLED=1` под mingw gcc. Правок форка ради сборки нет. Рецепт уже существует — Makefile-таргет `juicefs.exe` (PATH `C:\mingw64\bin`, `CGO_ENABLED=1`, `CGO_CFLAGS='-IC:/WinFsp/inc/fuse'` — флаг нужен, т.к. `cmd` тянет `pkg/winfsp` через cgofuse). Задача 0.2 — стоп-точка: воспроизвести сборку ветки до написания кода.
+
+Факт 0.2 (2026-11-26, стоп-точка пройдена): `PATH="/c/mingw64/bin:$PATH" CGO_ENABLED=1 CGO_CFLAGS='-IC:/WinFsp/inc/fuse' go build -ldflags='-s -w' -o juicefs.exe .` → `juicefs.exe` 137 MB; `go version go1.26.5 windows/amd64` (совпадает с go.mod), gcc из `C:\mingw64\bin`. Build-теги pkg/meta (задача 0.5): `pkg/meta/sql_sqlite.go` = `//go:build !nosqlite` (mattn/go-sqlite3, CGO), `pkg/meta/tkv_fdb.go` = `//go:build fdb` — опциональны для сокращения сборки, на CGO-вариант α не влияют.
 
 Вариант β (замена на klauspost/zstd и pierrec/lz4 ради `CGO_ENABLED=0`) — отдельный change с предусловиями:
 

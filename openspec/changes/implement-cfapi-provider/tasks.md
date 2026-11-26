@@ -4,11 +4,11 @@
 
 ## 0. Предусловия
 
-- [ ] 0.1 Создать ветку `implement-cfapi-provider` от `agio-drive-v2`. Файлы: —. Проверка: `git merge-base --is-ancestor agio-drive-v2 HEAD`.
-- [ ] 0.2 Собрать бинарь ветки с CGO по рецепту Makefile-таргета `juicefs.exe` (PATH `C:\mingw64\bin`, `CGO_ENABLED=1`, `CGO_CFLAGS='-IC:/WinFsp/inc/fuse'`, `go build -ldflags='-s -w' -o juicefs.exe .`). Toolchain обязан соответствовать `go 1.26.5` из go.mod. Файлы: —. Проверка: существование `juicefs.exe`; `go version` и фактическую команду записать в design.md (D2). Стоп-точка: при неудаче — эскалация, код не пишется.
-- [ ] 0.3 Получить эталонный `cldapi.h` (пакет `Microsoft.Windows.SDK.CPP` на NuGet либо заголовки mingw-w64). Источник, версия, SHA-256 — в design.md (раздел Decisions & Rationale, D1). Файлы: design.md. Проверка: файл header существует локально, запись в design.md. В репозиторий header не коммитить.
-- [ ] 0.4 Сверить имена функций биндинга с экспортами. Файлы: design.md (список D1). Проверка: `objdump -p C:\Windows\System32\cldapi.dll | grep -i Cf` содержит все функции списка.
-- [ ] 0.5 Записать имена build-тегов `pkg/meta` для sqlite и fdb (`pkg/meta/sql_sqlite.go`, `pkg/meta/tkv_fdb.go`) в design.md. Файлы: design.md. Проверка: grep `//go:build` в обоих файлах.
+- [x] 0.1 Создать ветку `implement-cfapi-provider` от `agio-drive-v2`. Файлы: —. Проверка: `git merge-base --is-ancestor agio-drive-v2 HEAD`.
+- [x] 0.2 Собрать бинарь ветки с CGO по рецепту Makefile-таргета `juicefs.exe` (PATH `C:\mingw64\bin`, `CGO_ENABLED=1`, `CGO_CFLAGS='-IC:/WinFsp/inc/fuse'`, `go build -ldflags='-s -w' -o juicefs.exe .`). Toolchain обязан соответствовать `go 1.26.5` из go.mod. Файлы: —. Проверка: существование `juicefs.exe`; `go version` и фактическую команду записать в design.md (D2). Стоп-точка: при неудаче — эскалация, код не пишется.
+- [x] 0.3 Получить эталонный `cldapi.h` (пакет `Microsoft.Windows.SDK.CPP` на NuGet либо заголовки mingw-w64). Источник, версия, SHA-256 — в design.md (раздел Decisions & Rationale, D1). Файлы: design.md. Проверка: файл header существует локально, запись в design.md. В репозиторий header не коммитить.
+- [x] 0.4 Сверить имена функций биндинга с экспортами. Файлы: design.md (список D1). Проверка: `objdump -p C:\Windows\System32\cldapi.dll | grep -i Cf` содержит все функции списка.
+- [x] 0.5 Записать имена build-тегов `pkg/meta` для sqlite и fdb (`pkg/meta/sql_sqlite.go`, `pkg/meta/tkv_fdb.go`) в design.md. Файлы: design.md. Проверка: grep `//go:build` в обоих файлах.
 
 ## 1. Биндинг, регистрация, подключение
 
