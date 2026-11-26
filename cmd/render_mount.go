@@ -338,44 +338,15 @@ func renderMount(c *cli.Context) error {
 	logger.Infof("Data use %s", blob)
 
 	// STS credentials (tasks 7.4/7.11, ADR-003): replace the static storage
-	// credentials with short-lived ones scoped to the volume. AWS: AssumeRole
-	// with the node's instance profile and a volume-scoped session policy; YC:
-	// platform-issued STS via GetNodeSTSCredentials — the node authenticates
-	// with its IAM token, the platform derives volume and bucket itself.
-	// Fail-fast on the initial fetch.
+	// credentials with short-lived ones scoped to the volume. The provider
+	// selection and the fail-fast initial fetch live in the shared helper
+	// (cmd/storage_helper.go) — the same wiring serves clouddrive, so the
+	// two entry points cannot drift apart.
 	if c.Bool("sts-enabled") {
-		holder, ok := blob.(*storageHolder)
-		if !ok {
+		refresher, err := startNodeSTS(format, blob, c.String("sts-role-arn"), km, tp, nodeID, companyID)
+		if err != nil {
 			_ = km.Close()
-			return fmt.Errorf("sts: storage is not reloadable")
-		}
-		var provider stsCredentialsProvider
-		switch format.Storage {
-		case "aws":
-			roleARN := c.String("sts-role-arn")
-			if roleARN == "" {
-				_ = km.Close()
-				return fmt.Errorf("--sts-role-arn is required with --sts-enabled on AWS volumes")
-			}
-			provider = &awsAssumeRoleProvider{
-				roleARN:     roleARN,
-				sessionName: nodeID,
-				bucket:      format.Bucket,
-				prefix:      format.Name + "/", // chunk keys are <volume>/chunks/... (A6)
-				duration:    defaultSTSTTL,
-			}
-		default:
-			provider = &platformNodeSTSProvider{
-				keyManager: km,
-				token:      tp,
-				nodeID:     nodeID,
-				companyID:  companyID,
-			}
-		}
-		refresher := newSTSRefresher(provider, holder, meta.DefaultSTSRefreshMargin)
-		if err := refresher.Start(context.Background()); err != nil {
-			_ = km.Close()
-			return fmt.Errorf("sts: %w", err)
+			return err
 		}
 		defer refresher.Stop()
 	}
