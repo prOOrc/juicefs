@@ -27,6 +27,7 @@
 | ADR-002 | ADR | Outbox: события по дочерним объектам при move/rename/delete директории | draft | specs/decisions/ADR-002-outbox-child-events.md | - | 2026-08-29 |
 | ADR-003 | ADR | Data-plane креденшелы: platform-issued YC STS (закрытие FR-REV-3) | superseded (ADR-004) | specs/decisions/ADR-003-data-plane-sts.md | - | 2026-10-30 |
 | ADR-004 | ADR | Data-plane креденшелы v2: статические per-company ключи Selectel (замена YC STS) | accepted | specs/decisions/ADR-004-static-per-company-s3-keys-selectel.md | ADR-003, implement-juicefs-mount | 2026-10-30 |
+| ADR-005 | ADR | Windows-транспорт V3 — провайдер Cloud Files API на Go (замена WinFSP) | draft | specs/decisions/ADR-005-cfapi-provider-windows-transport.md | ADR-004, SRS-001, implement-cfapi-provider | 2026-11-26 |
 
 ## Рабочие документы (вне жизненного цикла BRD/SRS/ADR)
 
