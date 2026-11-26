@@ -12,9 +12,9 @@
 
 ## 1. Биндинг, регистрация, подключение
 
-- [ ] 1.1 `pkg/cfapi`: структуры и процедуры из списка D1 design.md, пул страница-выровненных буферов (VirtualAlloc). Файлы: `pkg/cfapi/*.go`. Проверка: `go build ./pkg/cfapi/...`.
-- [ ] 1.2 `pkg/cfapi`: эталонные размеры и смещения структур и тест `TestLayout`. Значения получить одноразовой C-утилитой по `cldapi.h`; в репозиторий — только константы. Файлы: `pkg/cfapi/layout_test.go`. Проверка: `go test ./pkg/cfapi -run TestLayout`.
-- [ ] 1.3 `pkg/cfapi`: десять thunk'ов по таблице D5 design.md и диспетчер с очередями. В thunk'ах нет ввода-вывода. Файлы: `pkg/cfapi/callbacks.go`, `pkg/cfapi/dispatcher.go`, `pkg/cfapi/dispatcher_test.go`. Проверка: `go test ./pkg/cfapi`.
+- [x] 1.1 `pkg/cfapi`: структуры и процедуры из списка D1 design.md, пул страница-выровненных буферов (VirtualAlloc). CfOpenFileWithOplock и CfRevertPlaceholder — деферрал в 4.1/5.x (обёртки operations.go по плану задач). Файлы: `pkg/cfapi/*.go`. Проверка: `go build ./pkg/cfapi/...` — go build/vet/test/race зелёные, CgoFiles пусто (reviewer APPROVED).
+- [x] 1.2 `pkg/cfapi`: эталонные размеры и смещения структур и тест `TestLayout`. Значения получены одноразовой C-утилитой (mingw64 gcc, флаги NTDDI обязательны — без них mingw отсекает содержимое по NTDDI); утилита и header вне репо. TestLayout поймал и исправил ошибку транскрипции (pad перед ProviderId). Файлы: `pkg/cfapi/layout_test.go`. Проверка: `go test ./pkg/cfapi -run TestLayout` — PASS.
+- [x] 1.3 `pkg/cfapi`: thunk'и и диспетчер с очередями. В thunk'ах нет ввода-вывода. Фактическая поверхность (проба U9 закрыта по header): 7 OS-thunk'ов на 9 OS-точек D5 — RENAME/DELETE маршрутизируют файл/каталог по `*_IS_DIRECTORY`-флагам; отдельного NOTIFY_DIRECTORY_CREATED в CfAPI нет; 10-я точка движка (`OnNotifyDirectoryCreated`) — в интерфейсе диспетчера, наполняется запасным механизмом U9 (design.md D5 обновлён). Файлы: `pkg/cfapi/callbacks.go`, `pkg/cfapi/dispatcher.go`, `pkg/cfapi/dispatcher_test.go`. Проверка: `go test ./pkg/cfapi` — PASS (14 тестов + race).
 - [ ] 1.4 `cmd/clouddrive.go`: `register`, `unregister`, `status`; корень по умолчанию `%USERPROFILE%\AgioDrive`; предпроверка NTFS; ключ реестра. Файлы: `cmd/clouddrive.go`, регистрация подкоманды в `cmd/main.go`. Проверка: `go build ./cmd/...`; ручной прогон сценариев «Регистрация sync root», «Отмена регистрации», «Корень не на NTFS».
 - [ ] 1.5 Пробы U1, U9, U10; результаты и решения — в таблицу Open Questions design.md. Файлы: design.md. Проверка: строки U1/U9/U10 заполнены.
 - [ ] 1.6 `serve`: `CfConnectSyncRoot` с таблицей callback'ов, `CfDisconnectSyncRoot` при завершении, именованный mutex. Файлы: `cmd/clouddrive.go`, `pkg/cfprovider/provider.go`. Проверка: `go build ./...`; сценарий «Второй экземпляр».
@@ -44,7 +44,7 @@ DoD этапа: сценарии «Содержимое совпадает с ba
 
 ## 4. Pin и unpin
 
-- [ ] 4.1 `pin` и `unpin` с `CfSetPinState`, флаг `--recursive`. Проба U5. Файлы: `cmd/clouddrive.go`, `pkg/cfapi/operations.go`. Проверка: `go build ./cmd/...`; ручной прогон сценариев «Pin файла и чтение без провайдера», «Pin каталога», «Unpin».
+- [ ] 4.1 `pin` и `unpin` с `CfSetPinState`, флаг `--recursive`; обёртки `CfOpenFileWithOplock`/`CfRevertPlaceholder` добавляются в `pkg/cfapi/operations.go` на этапе 4/5 по потребности (деферрал из 1.1, замечание ревью P2-1). Проба U5. Файлы: `cmd/clouddrive.go`, `pkg/cfapi/operations.go`. Проверка: `go build ./cmd/...`; ручной прогон сценариев «Pin файла и чтение без провайдера», «Pin каталога», «Unpin».
 - [ ] 4.2 Ручная проверка встроенного меню Explorer без MSIX; результат — в design.md. Файлы: design.md. Проверка: запись результата U5 в таблице.
 
 DoD этапа: сценарии «Pin файла и чтение без провайдера», «Pin каталога», «Unpin» пройдены.

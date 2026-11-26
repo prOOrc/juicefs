@@ -58,6 +58,8 @@ Windows Explorer / приложения
 
 ### Гидратация (D7)
 
+Контракт этапа 1 (по замечанию ревью): реестр активных заданий диспетчера адресуется TransferKey; при двух конкурентных FETCH_DATA по одному файлу (общий TransferKey, разные RequestKey) отмена доходит только к последнему — на этапе 3 движок добавляет адресацию по RequestKey (FetchJob уже несёт оба ключа). Контракт `CfConnectSyncRoot` (закрытие в 1.6): таблица callback'ов и callback-контекст ДОЛЖНЫ удерживаться всё время соединения — объект соединения провайдера хранит их, а не передаёт временные значения.
+
 1. Thunk копирует параметры FETCH_DATA в задание и ставит его в буферизованную очередь. При переполненной очереди thunk возвращает ошибку (U13).
 2. Воркер берёт страница-выровненный буфер из пула (VirtualAlloc) и разрешает inode в путь.
 3. Файл читается через `pkg/fs` порциями не больше 4 MiB; между порциями проверяется флаг отмены.
@@ -99,7 +101,7 @@ Write-back выключен: задание считается выполнен�
 
 ### D1. Go и биндинг через syscall
 
-Биндинг — `syscall.NewLazySystemDLL("cldapi.dll")` и `syscall.SyscallN`. Структуры `CF_*` — транскрипция `cldapi.h`. cgo не используется, поэтому биндинг не зависит от mingw и от невозможности чистой сборки (D2).
+Биндинг — `windows.NewLazySystemDLL("cldapi.dll")` (x/sys, LOAD_LIBRARY_SEARCH_SYSTEM32; в stdlib `syscall` такой функции нет — замечание ревьюера подтверждено по x/sys v0.47.0) и вызовы через `LazyProc.Call`. Структуры `CF_*` — транскрипция `cldapi.h`. cgo не используется, поэтому биндинг не зависит от mingw и от невозможности чистой сборки (D2).
 
 Конструкцию определяют ограничения `syscall.NewCallback`:
 
@@ -138,20 +140,20 @@ Write-back выключен: задание считается выполнен�
 
 ### D5. Таблица callback'ов
 
-Регистрируются десять типов. PRE_DELETE и PRE_RENAME не регистрируются: вето на операции прототипу не нужно.
+Реальность CfAPI (подтверждено по `cldapi.h`, проба U9 закрыта): **13 callback-типов; отдельного NOTIFY_DIRECTORY_CREATED не существует** — создание каталога попадает в NOTIFY_RENAME/NOTIFY_DELETE с флагом `*_IS_DIRECTORY`. Поэтому «10 OS-thunk'ов» физически нереализуем: реализовано **7 OS-thunk'ов на 9 OS-точек** — RENAME и DELETE маршрутизируют файл/каталог по флагам `CF_CALLBACK_NOTIFICATION_FLAG_*_IS_DIRECTORY`. Десятая точка движка (`OnNotifyDirectoryCreated`) остаётся в интерфейсе `CallbackDispatcher` — при отрицательном исходе U9 её наполняет запасной механизм (ReadDirectoryChangesW-журнал). PRE_DELETE и PRE_RENAME не регистрируются: вето на операции прототипу не нужно. Thunk'и возвращают 0 — `CF_CALLBACK` в header есть `VOID`-функция, результат фильтром игнорируется; возврат ошибки фильтру — предмет пробы U13 (этап 3).
 
-| Callback | Действие | Шаг |
-|---|---|---|
-| FETCH_DATA | постановка задания гидратации | 3 |
-| CANCEL_FETCH_DATA | установка флага отмены | 3 |
-| FETCH_PLACEHOLDERS | наполнение каталога, если подтверждается U2 | 2 |
-| CANCEL_FETCH_PLACEHOLDERS | отмена наполнения | 2 |
-| NOTIFY_FILE_CLOSE_COMPLETION | классификация файла, постановка выгрузки | 5 |
-| NOTIFY_FILE_RENAMED | переименование в backend | 6 |
-| NOTIFY_FILE_DELETED | удаление в backend | 6 |
-| NOTIFY_DIRECTORY_CREATED | Mkdir в backend, плейсхолдер каталога | 6 |
-| NOTIFY_DIRECTORY_RENAMED | переименование в backend, обновление индекса | 6 |
-| NOTIFY_DIRECTORY_DELETED | Rmdir в backend | 6 |
+| Точка D5 | OS-callback (реальный) | Действие | Шаг |
+|---|---|---|---|
+| Гидратация: постановка задания | FETCH_DATA | задание в очередь гидратации | 3 |
+| Гидратация: отмена | CANCEL_FETCH_DATA | флаг отмены по TransferKey | 3 |
+| Наполнение каталога | FETCH_PLACEHOLDERS | наполнение, если подтверждается U2 | 2 |
+| Отмена наполнения | CANCEL_FETCH_PLACEHOLDERS | флаг отмены | 2 |
+| Выгрузка нового/изменённого | NOTIFY_FILE_CLOSE_COMPLETION | классификация, постановка выгрузки | 5 |
+| Переименование файла / каталога | NOTIFY_FILE_RENAMED | переименование в backend, обновление индекса (флаг IS_DIRECTORY) | 6 |
+| Удаление файла / каталога | NOTIFY_FILE_DELETED | удаление в backend (флаг IS_DIRECTORY) | 6 |
+| Создание каталога | *OS-типа нет* — из NOTIFY-флагов или запасной механизм U9 | Mkdir в backend, плейсхолдер каталога | 6 |
+| Переименование каталога | NOTIFY_FILE_RENAMED (IS_DIRECTORY) | то же, точка 6 | 6 |
+| Удаление каталога | NOTIFY_FILE_DELETED (IS_DIRECTORY) | Rmdir в backend | 6 |
 
 ### D6. Индекс и плейсхолдеры
 
@@ -320,7 +322,7 @@ func (p *Provider) runIngest(ctx context.Context, op JournalOp) error {
 | U6 | Получение пути файла в NOTIFY-callback'ах, особенно для ещё не-плейсхолдеров | проба на новом файле | 5 | журнал ReadDirectoryChangesW; NOTIFY как барьер |
 | U7 | Открытие на запись частично дегидратированного плейсхолдера | проба | 5 | `CfHydratePlaceholder` из пула выгрузки перед чтением |
 | U8 | Имена и флаги преобразования в плейсхолдер и пометки in-sync | по `cldapi.h` | 5 | — |
-| U9 | Все десять callback-типов существуют с 1709 | по `cldapi.h` и MS Docs | 1 | сократить набор |
+| U9 | Все десять callback-типов существуют с 1709 | по `cldapi.h` и MS Docs | 1 | сократить набор — **ЗАКРЫТО 26.11: типов 13, NOTIFY_DIRECTORY_CREATED не существует; 7 OS-thunk'ов на 9 OS-точек через *_IS_DIRECTORY-флаги (см. D5); 10-я точка движка наполняется запасным механизмом** |
 | U10 | Второй `CfConnectSyncRoot` на тот же корень | запуск второго `serve` | 1 | именованный mutex как единственная защита |
 | U11 | Очистка staging-файлов juicefs после падения | чтение pkg/chunk и pkg/vfs | 5 | очистка при старте в провайдере |
 | U12 | Наличие родителя в Attr для подъёма inode → путь | pkg/meta | 3 | обход от корня |
