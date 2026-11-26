@@ -75,6 +75,8 @@ type FetchPlaceholdersJob struct {
 	ConnectionKey ConnectionKey
 	TransferKey   TransferKey
 	RequestKey    RequestKey
+	Path          string // NormalizedPath каталога (REQUIRE_FULL_FILE_PATH)
+	FileID        uint64 // первые 8 байт FileIdentity каталога — inode (LE), design.md D6
 	Pattern       string // шаблон FindFirstFileW; пустой — все записи
 	Cancel        atomic.Bool
 }
@@ -260,6 +262,8 @@ func fetchPlaceholdersCallback(info *CFCallbackInfo, params *CFCallbackParameter
 		ConnectionKey: info.ConnectionKey,
 		TransferKey:   info.TransferKey,
 		RequestKey:    info.RequestKey,
+		Path:          utf16ToString(info.NormalizedPath),
+		FileID:        fileIDOf(info.FileIdentity, info.FileIdentityLength),
 		Pattern:       utf16ToString(p.Pattern),
 	}
 	if d := dispatch(); d != nil {

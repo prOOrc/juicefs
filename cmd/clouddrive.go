@@ -21,12 +21,18 @@ package cmd
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
+	"mime"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
+	"text/tabwriter"
+	"time"
 
 	"github.com/urfave/cli/v2"
 	"golang.org/x/sys/windows"
@@ -34,15 +40,21 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/cfapi"
 	"github.com/juicedata/juicefs/pkg/cfprovider"
+	"github.com/juicedata/juicefs/pkg/chunk"
+	"github.com/juicedata/juicefs/pkg/fs"
+	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/object"
+	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
+	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/juicedata/juicefs/pkg/win"
 )
 
 // Константы регистрации AgioDrive (design.md D4). id провайдера в имени
 // ключа Explorer — строка, аккаунт — Agio. GUID провайдера — постоянный
 // идентификатор CfAPI-регистрации. Ветка реестра — HKCU (проба U1; HKLM —
-// только если проба покажет необходимость). pin/unpin/ls/hash добавляются
-// задачами этапов 2+ (tasks.md 2.6, 4.1, 5.7).
+// только если проба покажет необходимость). pin/unpin добавляются задачей
+// 4.1, status <путь> — задачей 5.7.
 const (
 	cloudDriveDisplayName  = "AgioDrive"
 	cloudDriveProviderID   = "AgioDrive"
@@ -61,7 +73,7 @@ func cmdCloudDrive() *cli.Command {
 		Category:        "SERVICE",
 		Usage:           "Manage the AgioDrive Windows Cloud Files sync root",
 		HideHelpCommand: true,
-		Flags: []cli.Flag{
+		Flags: append([]cli.Flag{
 			&cli.StringFlag{
 				Name:  "root",
 				Value: defaultCloudDriveRoot(),
@@ -69,9 +81,13 @@ func cmdCloudDrive() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:  "volume-name",
-				Usage: "volume name for readiness logging",
+				Usage: "volume name for readiness logging (default: name from the volume format)",
 			},
-		},
+			&cli.StringFlag{
+				Name:  "state-dir",
+				Usage: "provider state directory (default: %LOCALAPPDATA%\\AgioDrive\\<volume>)",
+			},
+		}, nodeSTSFlags()...),
 		Description: `
 Manage a Windows Cloud Files API (CfAPI) sync root backed by a JuiceFS volume.
 
@@ -83,7 +99,13 @@ $ juicefs clouddrive register
 $ juicefs clouddrive status
 
 # Serve the sync root (single instance, Ctrl+C to stop)
-$ juicefs clouddrive serve
+$ juicefs clouddrive serve grpc://meta-proxy:9900?tls=1 --sts-enabled --company-id <uuid>
+
+# List a backend directory (same entries Explorer shows under the sync root)
+$ juicefs clouddrive ls grpc://meta-proxy:9900?tls=1 /docs
+
+# SHA-256 of a backend file
+$ juicefs clouddrive hash grpc://meta-proxy:9900?tls=1 /docs/report.pdf
 
 # Unregister the sync root
 $ juicefs clouddrive unregister`,
@@ -104,9 +126,22 @@ $ juicefs clouddrive unregister`,
 				Action: cloudDriveStatus,
 			},
 			{
-				Name:   "serve",
-				Usage:  "Serve the sync root as the Cloud Files API provider",
-				Action: cloudDriveServe,
+				Name:      "serve",
+				ArgsUsage: "META-URL",
+				Usage:     "Serve the sync root as the Cloud Files API provider (Ctrl+C to stop)",
+				Action:    cloudDriveServe,
+			},
+			{
+				Name:      "ls",
+				ArgsUsage: "META-URL PATH",
+				Usage:     "List a backend directory (path relative to the volume root)",
+				Action:    cloudDriveLs,
+			},
+			{
+				Name:      "hash",
+				ArgsUsage: "META-URL PATH",
+				Usage:     "Print SHA-256 of a backend file (hex)",
+				Action:    cloudDriveHash,
 			},
 		},
 	}
@@ -231,16 +266,17 @@ func cloudDriveStatus(c *cli.Context) error {
 	return nil
 }
 
-// cloudDriveServe — спека «Второй экземпляр»: единственный процесс
-// провайдера на sync root (именованный mutex), CfConnectSyncRoot с таблицей
-// callback'ов, CfDisconnectSyncRoot при завершении. Шаг 1 MVP-лестницы:
-// наполнение плейсхолдерами и маркер готовности — этап 2 (задачи 2.3, 2.5).
+// cloudDriveServe — единственный процесс провайдера на sync root (спека
+// «Второй экземпляр»): data path поверх meta+chunk (design.md Integration
+// Points), CfConnectSyncRoot с таблицей callback'ов, наполнение верхнего
+// уровня и маркер готовности (задачи 2.3, 2.5 — внутри провайдера),
+// CfDisconnectSyncRoot при завершении.
 func cloudDriveServe(c *cli.Context) error {
-	setup(c, 0)
+	setup(c, 1)
 	root := c.String("root")
-	volume := c.String("volume-name")
-	if volume == "" {
-		volume = filepath.Base(root)
+	metaURI := c.Args().Get(0)
+	if metaURI == "" {
+		return errors.New("serve requires META-URL, e.g. grpc://host:9900?tls=1")
 	}
 
 	// Предпроверка тома до проверки регистрации и до mutex/connect:
@@ -253,10 +289,42 @@ func cloudDriveServe(c *cli.Context) error {
 		return fmt.Errorf("sync root %s is on %s; the Cloud Files API requires NTFS", root, fsName)
 	}
 
-	provider := cfprovider.New(root, volume, nil, nil)
-
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// Data path: недоступный hub не завершает serve (спека «Hub
+	// недоступен») — попытки с нарастающей паузой до успеха или Ctrl+C.
+	stack, err := connectWithRetry(ctx, metaURI, stsNodeOptionsFrom(c))
+	if err != nil {
+		return err
+	}
+	defer stack.Close()
+
+	volume := c.String("volume-name")
+	if volume == "" {
+		volume = stack.format.Name
+	}
+
+	// Индекс плейсхолдеров (inode → путь) с журналом в каталоге состояния
+	// (design.md D6, proposal D-8).
+	stateDir := c.String("state-dir")
+	if stateDir == "" {
+		stateDir = cfprovider.DefaultStateDir(volume)
+	}
+	idx, err := cfprovider.NewIndex(stateDir)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := idx.Close(); err != nil {
+			logger.Warnf("close index journal: %v", err)
+		}
+	}()
+
+	// Реальный диспетчер очередей: заглушка-логгер (dispatch=nil) не
+	// обслуживает FETCH_PLACEHOLDERS — перечисление каталогов детьми
+	// повисло бы до таймаута фильтра.
+	provider := cfprovider.New(root, volume, nil, cfapi.NewDispatcher(cfapi.DefaultQueueOptions())).WithData(stack.fsys, idx)
 	if err := provider.Start(ctx); err != nil {
 		return err
 	}
@@ -264,6 +332,291 @@ func cloudDriveServe(c *cli.Context) error {
 	<-ctx.Done()
 	logger.Info("shutting down: disconnecting sync root and releasing the instance mutex")
 	return provider.Stop()
+}
+
+// cloudDriveStack — data path провайдера (design.md Integration Points,
+// gc-паттерн cmd/gc.go и STS-выбор mount): meta.NewClient → Load(true) →
+// getDefaultChunkConf → NewReloadableStorage (STS — общий startNodeSTS) →
+// chunk.NewCachedStore → fs.NewFileSystem. WriteJournalPath не заполняется:
+// очистка staging после падения — проба U11 (design.md Open Questions,
+// задача 5.5).
+type cloudDriveStack struct {
+	format    *meta.Format
+	metaCli   meta.Meta
+	blob      object.ObjectStorage
+	store     chunk.ChunkStore
+	fsys      *fs.FileSystem
+	km        meta.KeyManagerClient // nil без --sts-enabled
+	refresher *stsRefresher         // nil без --sts-enabled
+}
+
+// buildCloudDriveStack собирает data path. Последовательность и обработка
+// ошибок повторяют mount: каждый отказ закрывает уже созданные ресурсы.
+func buildCloudDriveStack(metaURI string, sts *stsNodeOptions) (*cloudDriveStack, error) {
+	metaConf := meta.DefaultConf()
+	metaCli := meta.NewClient(metaURI, metaConf)
+	format, err := metaCli.Load(true)
+	if err != nil {
+		_ = metaCli.Shutdown()
+		return nil, fmt.Errorf("load volume format: %w", err)
+	}
+	chunkConf := getDefaultChunkConf(format)
+	vfsConf := &vfs.Config{
+		Meta: metaConf,
+		// Format — стартовый снимок (актуальный отдаёт Meta.GetFormat).
+		Format:   *format,
+		Security: &vfs.SecurityConfig{},
+		Version:  version.Version(),
+		Chunk:    chunkConf,
+		Pid:      os.Getpid(),
+		PPid:     os.Getppid(),
+		UMask:    0xFFFF,
+	}
+	// Состояние connectivity hub — как в mount (журнал отложенных записей
+	// включается провайдером на этапах 5+).
+	if gm, ok := metaCli.(interface{ HubState() meta.HubState }); ok {
+		vfsConf.HubState = gm.HubState
+	}
+
+	blob, err := NewReloadableStorage(format, metaCli, nil)
+	if err != nil {
+		_ = metaCli.Shutdown()
+		return nil, fmt.Errorf("object storage: %w", err)
+	}
+	logger.Infof("Data use %s", blob)
+
+	var km meta.KeyManagerClient
+	var refresher *stsRefresher
+	if sts != nil {
+		if !format.EncryptionEnabled {
+			object.Shutdown(blob)
+			_ = metaCli.Shutdown()
+			return nil, errors.New("--sts-enabled requires an encrypted volume")
+		}
+		km, tp, err := openKeyManager(sts)
+		if err != nil {
+			object.Shutdown(blob)
+			_ = metaCli.Shutdown()
+			return nil, err
+		}
+		nodeID := sts.nodeID
+		if nodeID == "" {
+			nodeID = defaultNodeID()
+		}
+		refresher, err = startNodeSTS(format, blob, sts.roleARN, km, tp, nodeID, sts.companyID)
+		if err != nil {
+			_ = km.Close()
+			object.Shutdown(blob)
+			_ = metaCli.Shutdown()
+			return nil, err
+		}
+	}
+
+	store := chunk.NewCachedStore(blob, *chunkConf, nil)
+	registerMetaMsg(metaCli, store, chunkConf)
+	if err := metaCli.NewSession(true); err != nil {
+		if refresher != nil {
+			refresher.Stop()
+		}
+		if km != nil {
+			_ = km.Close()
+		}
+		object.Shutdown(blob)
+		_ = metaCli.Shutdown()
+		return nil, fmt.Errorf("new session: %w", err)
+	}
+	metaCli.OnReload(func(fmt *meta.Format) error {
+		store.UpdateLimit(fmt.UploadLimit, fmt.DownloadLimit)
+		return nil
+	})
+	fsys, err := fs.NewFileSystem(vfsConf, metaCli, store, nil)
+	if err != nil {
+		if refresher != nil {
+			refresher.Stop()
+		}
+		if km != nil {
+			_ = km.Close()
+		}
+		_ = metaCli.CloseSession()
+		object.Shutdown(blob)
+		_ = metaCli.Shutdown()
+		return nil, fmt.Errorf("create filesystem: %w", err)
+	}
+	logger.Infof("JuiceFS version %s", version.Version())
+	return &cloudDriveStack{
+		format:    format,
+		metaCli:   metaCli,
+		blob:      blob,
+		store:     store,
+		fsys:      fsys,
+		km:        km,
+		refresher: refresher,
+	}, nil
+}
+
+// Close освобождает ресурсы стека в обратном порядке создания:
+// refresher до KeyManager (обновляет креды через него), сессия meta до
+// хранилища — как в mount.
+func (s *cloudDriveStack) Close() {
+	if s == nil {
+		return
+	}
+	if s.fsys != nil {
+		if err := s.fsys.Close(); err != nil {
+			logger.Warnf("close filesystem: %v", err)
+		}
+	}
+	if s.refresher != nil {
+		s.refresher.Stop()
+	}
+	if s.km != nil {
+		if err := s.km.Close(); err != nil {
+			logger.Warnf("close keymanager client: %v", err)
+		}
+	}
+	if err := s.metaCli.CloseSession(); err != nil {
+		logger.Warnf("close session: %v", err)
+	}
+	object.Shutdown(s.blob)
+	if err := s.metaCli.Shutdown(); err != nil {
+		logger.Debugf("meta shutdown: %v", err)
+	}
+}
+
+// connectWithRetry собирает data path, повторяя попытки с нарастающей
+// паузой (2 c → 30 c): недоступный hub не завершает serve (спека «Hub
+// недоступен»), из цикла выходят только успехом или отменой ctx (Ctrl+C).
+func connectWithRetry(ctx context.Context, metaURI string, sts *stsNodeOptions) (*cloudDriveStack, error) {
+	const maxDelay = 30 * time.Second
+	delay := 2 * time.Second
+	for attempt := 1; ; attempt++ {
+		stack, err := buildCloudDriveStack(metaURI, sts)
+		if err == nil {
+			if attempt > 1 {
+				logger.Infof("volume %s connected after %d attempts", stack.format.Name, attempt)
+			}
+			return stack, nil
+		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		logger.Warnf("connecting to the volume (attempt %d): %v; retrying in %s", attempt, err, delay)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(delay):
+		}
+		delay *= 2
+		if delay > maxDelay {
+			delay = maxDelay
+		}
+	}
+}
+
+// withCloudDriveStack — общий каркас ls/hash: разбор META-URL, сборка
+// data path (одна попытка — команды короткоживущие), гарантированное
+// освобождение.
+func withCloudDriveStack(c *cli.Context, fn func(*cloudDriveStack) error) error {
+	metaURI := c.Args().Get(0)
+	if metaURI == "" {
+		return errors.New("META-URL is required, e.g. grpc://host:9900?tls=1")
+	}
+	stack, err := buildCloudDriveStack(metaURI, stsNodeOptionsFrom(c))
+	if err != nil {
+		return err
+	}
+	defer stack.Close()
+	return fn(stack)
+}
+
+// normalizeFsPath приводит путь аргумента к стилю fs: разделитель "/",
+// ведущий "/", без хвостового "/" (кроме корня).
+func normalizeFsPath(p string) string {
+	p = strings.TrimSpace(filepath.ToSlash(p))
+	if p == "" {
+		return "/"
+	}
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	if len(p) > 1 {
+		p = strings.TrimRight(p, "/")
+	}
+	if p == "" {
+		return "/"
+	}
+	return p
+}
+
+// cloudDriveLs — задача 2.6: печать записей каталога backend (name/size/
+// type/mime) через fs.FileSystem; путь — относительно корня тома.
+func cloudDriveLs(c *cli.Context) error {
+	setup(c, 2)
+	return withCloudDriveStack(c, func(stack *cloudDriveStack) error {
+		p := normalizeFsPath(c.Args().Get(1))
+		entries, err := cfprovider.NewBackendFS(stack.fsys).List(context.Background(), p)
+		if err != nil {
+			return err
+		}
+		w := tabwriter.NewWriter(os.Stdout, 1, 4, 2, ' ', 0)
+		fmt.Fprintf(w, "NAME\tSIZE\tTYPE\tMIME\n")
+		for _, e := range entries {
+			typ, mimeType := "file", "-"
+			if e.IsDir {
+				typ, mimeType = "dir", "-"
+			} else if t := mime.TypeByExtension(strings.ToLower(filepath.Ext(e.Name))); t != "" {
+				mimeType = t
+			} else {
+				mimeType = "application/octet-stream"
+			}
+			fmt.Fprintf(w, "%s\t%d\t%s\t%s\n", e.Name, e.Size, typ, mimeType)
+		}
+		return w.Flush()
+	})
+}
+
+// cloudDriveHash — задача 2.6: SHA-256 содержимого файла backend, читается
+// порциями через fs.Open/Pread; вывод — hex (сценарий «Содержимое совпадает
+// с backend» сврявается с sha256sum файла в sync root).
+func cloudDriveHash(c *cli.Context) error {
+	setup(c, 2)
+	return withCloudDriveStack(c, func(stack *cloudDriveStack) error {
+		p := normalizeFsPath(c.Args().Get(1))
+		// Контекст meta — как в BackendFS.List и pkg/fs/http.go (uid/gid
+		// процесса, не root): права доступа backend применяются честно.
+		mctx := meta.WrapWithCancel(context.Background(), uint32(os.Getpid()), uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
+		defer mctx.Cancel()
+		f, errno := stack.fsys.Open(mctx, p, 0)
+		if errno != 0 {
+			return fmt.Errorf("open %s: %v", p, errno)
+		}
+		defer func() {
+			if errno := f.Close(mctx); errno != 0 {
+				logger.Warnf("close %s: %v", p, errno)
+			}
+		}()
+		digest := sha256.New()
+		buf := make([]byte, 4<<20)
+		var off int64
+		for {
+			n, err := f.Pread(mctx, buf, off)
+			if n > 0 {
+				digest.Write(buf[:n])
+				off += int64(n)
+			}
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				return fmt.Errorf("read %s: %v", p, err)
+			}
+			if n == 0 {
+				break
+			}
+		}
+		fmt.Printf("%x  %s\n", digest.Sum(nil), p)
+		return nil
+	})
 }
 
 // currentUserSIDStr — SID текущего пользователя (строкой), элемент имени

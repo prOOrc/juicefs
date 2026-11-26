@@ -91,7 +91,7 @@ DoD этапа: сценарии «Удаление плейсхолдера», 
 - `go test ./pkg/cfapi/... ./pkg/cfprovider/...` — зелёный; `go test ./pkg/fs` зелёный, если задача 5.1 меняла `pkg/fs`.
 - `golangci-lint run` по затронутым пакетам — без новых замечаний (fallback `go vet` — см. 7.3).
 - `go list -f "{{.CgoFiles}}" ./pkg/cfapi ./pkg/cfprovider` — пусто.
-- `git diff agio-drive-v2 -- pkg/meta pkg/chunk pkg/object pkg/compress cmd/sts_refresher.go cmd/render_mount.go` — пусто.
+- `git diff agio-drive-v2 -- pkg/meta pkg/chunk pkg/object pkg/compress cmd/sts_refresher.go` — пусто; `cmd/render_mount.go` может отличаться ТОЛЬКО вызовом общего хелпера `startNodeSTS` (`cmd/storage_helper.go`, задача 2.1) — провайдеры кредов и refresher без изменений.
 - Все сценарии `specs/domain-cfapi-provider/spec.md` пройдены вручную или тестами; таблица U закрыта.
 - Результаты замеров M1/M2/M3 (design.md D11) записаны; отчёт языкового гейта передан владельцу, ADR-005 обновлён (7.8–7.9).
 

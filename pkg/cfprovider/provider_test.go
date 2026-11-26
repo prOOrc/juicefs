@@ -22,13 +22,44 @@ package cfprovider
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/windows"
 
 	"github.com/juicedata/juicefs/pkg/cfapi"
 )
+
+// logCapture — хук логгера: собирает сообщения для проверок «ровно один раз».
+type logCapture struct {
+	mu       sync.Mutex
+	messages []string
+}
+
+func (h *logCapture) Fire(e *logrus.Entry) error {
+	h.mu.Lock()
+	h.messages = append(h.messages, e.Message)
+	h.mu.Unlock()
+	return nil
+}
+
+func (h *logCapture) Levels() []logrus.Level { return logrus.AllLevels }
+
+func (h *logCapture) count(substr string) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	n := 0
+	for _, m := range h.messages {
+		if strings.Contains(m, substr) {
+			n++
+		}
+	}
+	return n
+}
 
 // fakeSyncRootAPI — подменная реализация cfapi.SyncRootAPI: считает вызовы,
 // не обращается к cldapi.dll (спека «Движок проверяется без Cloud Files API»).
@@ -199,6 +230,181 @@ func TestProviderMutexAvailableCheck(t *testing.T) {
 	}
 	if api.connects != 0 {
 		t.Errorf("Connect вызван при недоступной DLL: %d раз, ожидается 0", api.connects)
+	}
+}
+
+// TestProviderReadyMarkerOnce — спеки «Готовность» и «Hub недоступен»:
+// после соединения и успешного наполнения верхнего уровня маркер
+// `OK, <имя тома> is ready` выводится ровно один раз; повторное наполнение
+// и второй Start маркер не дублируют. Первый List backend'а падает —
+// цикл готовности повторяет попытки и завершается успехом.
+func TestProviderReadyMarkerOnce(t *testing.T) {
+	root := t.TempDir()
+	api := &fakeSyncRootAPI{registered: true}
+	backend := &fakeBackend{
+		dirs: map[string][]BackendEntry{
+			"/": {{Name: "top.txt", Inode: 3, Size: 1}},
+		},
+		failNum: 1, // первая попытка — отказ backend (недоступный hub)
+	}
+	store := &fakeStore{local: map[string]bool{}, localReal: map[string]bool{}}
+	idx, err := NewIndex(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewIndex: %v", err)
+	}
+	t.Cleanup(func() { _ = idx.Close() })
+
+	p := New(root, "vol-one", api, cfapi.NewDispatcher(cfapi.DefaultQueueOptions()))
+	p.backend = backend
+	p.store = store
+	p.idx = idx
+	p.retryDelay = 2 * time.Millisecond
+
+	hook := &logCapture{}
+	logger.AddHook(hook)
+	baseline := hook.count("OK, vol-one is ready")
+
+	if err := p.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() {
+		if err := p.Stop(); err != nil {
+			t.Errorf("Stop: %v", err)
+		}
+	}()
+
+	// Маркер появляется после retry-цикла (первая попытка неудачна).
+	deadline := time.Now().Add(5 * time.Second)
+	for !p.Ready() && time.Now().Before(deadline) {
+		time.Sleep(2 * time.Millisecond)
+	}
+	if !p.Ready() {
+		t.Fatal("маркер готовности не появился после восстановления backend")
+	}
+	if n := hook.count("OK, vol-one is ready"); n-baseline != 1 {
+		t.Errorf("маркер в логе %d раз, ожидается ровно 1", n-baseline)
+	}
+	// Повторное наполнение — маркер не дублируется.
+	if err := populateTopLevel(context.Background(), p); err != nil {
+		t.Fatalf("повторное populateTopLevel: %v", err)
+	}
+	if n := hook.count("OK, vol-one is ready"); n-baseline != 1 {
+		t.Errorf("после повторного наполнения маркер выведен %d раз, ожидается 1", n-baseline)
+	}
+}
+
+// TestProviderReadyNoMarkerWhenBackendDown — спека «Hub недоступен»:
+// наполнение не удаётся — маркера нет, процесс запущен и продолжает
+// попытки (Stop их корректно завершает).
+func TestProviderReadyNoMarkerWhenBackendDown(t *testing.T) {
+	root := t.TempDir()
+	api := &fakeSyncRootAPI{registered: true}
+	backend := &fakeBackend{
+		dirs:    map[string][]BackendEntry{},
+		failNum: 1 << 30, // все попытки неудачны
+	}
+	store := &fakeStore{local: map[string]bool{}, localReal: map[string]bool{}}
+	idx, err := NewIndex(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewIndex: %v", err)
+	}
+	t.Cleanup(func() { _ = idx.Close() })
+
+	p := New(root, "vol-down", api, cfapi.NewDispatcher(cfapi.DefaultQueueOptions()))
+	p.backend = backend
+	p.store = store
+	p.idx = idx
+	p.retryDelay = time.Millisecond
+
+	hook := &logCapture{}
+	logger.AddHook(hook)
+	baseline := hook.count("is ready")
+
+	if err := p.Start(context.Background()); err != nil {
+		t.Fatalf("Start при недоступном backend: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if p.Ready() {
+		t.Error("маркер готовности выведен при недоступном backend")
+	}
+	if n := hook.count("is ready"); n-baseline != 0 {
+		t.Errorf("строка маркера в логе: %d раз, ожидается 0", n-baseline)
+	}
+	// Попытки продолжаются, Stop завершает воркеров без зависания.
+	if err := p.Stop(); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+}
+
+// TestProviderStopDuringPopulation — Stop во время активной обработки
+// FETCH_PLACEHOLDERS не зависает: воркер завершает текущее задание (wg.Wait
+// ждёт его), затем выходит по снапшоту остановки (регрессия гонки p.stop).
+func TestProviderStopDuringPopulation(t *testing.T) {
+	root := t.TempDir()
+	api := &fakeSyncRootAPI{registered: true}
+	backend := &fakeBackend{dirs: map[string][]BackendEntry{
+		"/":    {{Name: "top.bin", Inode: 1, Size: 1}},
+		"/sub": {{Name: "a.txt", Inode: 2, Size: 1}},
+	}}
+	store := &slowAnswerStore{
+		fakeStore: fakeStore{local: map[string]bool{}, localReal: map[string]bool{}},
+		hold:      150 * time.Millisecond,
+		entered:   make(chan struct{}),
+	}
+	idx, err := NewIndex(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewIndex: %v", err)
+	}
+	t.Cleanup(func() { _ = idx.Close() })
+
+	dispatcher := cfapi.NewDispatcher(cfapi.DefaultQueueOptions())
+	p := New(root, "vol-stop", api, dispatcher)
+	p.backend = backend
+	p.store = store
+	p.idx = idx
+	p.retryDelay = time.Millisecond
+	if err := p.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	// Верхний уровень наполнен — цикл готовности завершился.
+	deadline := time.Now().Add(5 * time.Second)
+	for !p.Ready() && time.Now().Before(deadline) {
+		time.Sleep(2 * time.Millisecond)
+	}
+	if !p.Ready() {
+		t.Fatal("верхний уровень не наполнился")
+	}
+
+	// Задание наполнения: воркер входит в задержанный ответ.
+	if err := dispatcher.OnFetchPlaceholders(&cfapi.FetchPlaceholdersJob{
+		Path:        filepath.Join(root, "sub"),
+		TransferKey: cfapi.TransferKey(9),
+	}); err != nil {
+		t.Fatalf("OnFetchPlaceholders: %v", err)
+	}
+	select {
+	case <-store.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("воркер не начал отвечать на задание наполнения")
+	}
+
+	// Stop ждёт завершения in-flight задания (wg.Wait), но не зависает:
+	// после него воркер обязан выйти, а не застрять на nil-канале.
+	done := make(chan error, 1)
+	go func() {
+		done <- p.Stop()
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("Stop вернул ошибку: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Stop завис во время активной обработки задания")
+	}
+	if len(store.answerCalls()) != 1 {
+		t.Errorf("in-flight задание не завершено ответом: %d ответов", len(store.answerCalls()))
 	}
 }
 

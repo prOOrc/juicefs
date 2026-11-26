@@ -30,27 +30,53 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 
 	"github.com/juicedata/juicefs/pkg/cfapi"
+	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/utils"
 )
 
 var logger = utils.GetLogger("cfprovider")
 
-// Provider — провайдер Cloud Files API. Шаг 1 MVP-лестницы (design.md):
-// проверка регистрации, единственный экземпляр (именованный mutex),
-// подключение CfConnectSyncRoot с таблицей callback'ов. Движок
-// (индекс, плейсхолдеры, пулы) добавляется задачами этапов 2+.
+// Provider — провайдер Cloud Files API (design.md): проверка регистрации,
+// единственный экземпляр (именованный mutex), подключение
+// CfConnectSyncRoot с таблицей callback'ов; с подключённым data path
+// (WithData) — наполнение плейсхолдерами, маркер готовности и воркер
+// наполнения детей каталогов (этап 2 лестницы MVP).
 type Provider struct {
 	root     string // путь sync root, например %USERPROFILE%\AgioDrive
-	volume   string // имя тома для логов (маркер готовности — задача 2.5)
+	volume   string // имя тома для логов (маркер готовности)
 	api      cfapi.SyncRootAPI
 	dispatch cfapi.CallbackDispatcher // nil никогда: New ставит заглушку-логгер
+
+	// Data path этапа 2 (WithData; nil — режим этапа 1 без наполнения):
+	fsys    *fs.FileSystem   // pkg/fs поверх meta+chunk (design.md Integration Points)
+	idx     *Index           // inode → путь, журнал в каталоге состояния
+	backend backendLister    // записи backend (реально — BackendFS)
+	store   placeholderStore // локальный диск + CfAPI (реально — osStore)
+
+	// Воркеры этапа 2: жизненный цикл внутренних горутин (наполнение,
+	// готовность) — канал stop, закрывается в Stop; wg ждёт их завершения.
+	// Отдельный mutex: Stop держит p.mu во время wg.Wait — воркеры читают
+	// stop без p.mu, иначе взаимная блокировка.
+	stopMu sync.RWMutex
+	stop   chan struct{}
+	wg     sync.WaitGroup
+
+	// Маркер готовности (спека «Готовность», «Hub недоступен»): выводится
+	// ровно один раз за запуск — после соединения и наполнения верхнего
+	// уровня; readyLoop повторяет попытки с нарастающей паузой.
+	readyOnce  sync.Once
+	ready      atomic.Bool
+	retryDelay time.Duration // база нарастающей паузы; тесты сокращают
 
 	mu      sync.Mutex
 	running bool
@@ -60,8 +86,8 @@ type Provider struct {
 
 // New создаёт провайдера для sync root root. api == nil — реальный
 // cldapi.dll (cfapi.OS); dispatch == nil — заглушка-логгер: задания
-// callback'ов только логируются и не блокируют фильтр (этап 1; пулы
-// воркеров — задачи этапов 2+).
+// callback'ов только логируются и не блокируют фильтр (пулы воркеров —
+// этапы 2+; в тестах передаётся *cfapi.Dispatcher).
 func New(root, volume string, api cfapi.SyncRootAPI, dispatch cfapi.CallbackDispatcher) *Provider {
 	if api == nil {
 		api = cfapi.OS
@@ -69,13 +95,45 @@ func New(root, volume string, api cfapi.SyncRootAPI, dispatch cfapi.CallbackDisp
 	if dispatch == nil {
 		dispatch = &loggingDispatcher{}
 	}
-	return &Provider{root: root, volume: volume, api: api, dispatch: dispatch}
+	return &Provider{
+		root:       root,
+		volume:     volume,
+		api:        api,
+		dispatch:   dispatch,
+		backend:    nil,
+		store:      osStore{},
+		retryDelay: 2 * time.Second,
+	}
+}
+
+// WithData подключает data path (design.md Integration Points): fs.FileSystem
+// поверх meta+chunk и индекс плейсхолдеров. Только после этого Start
+// запускает наполнение и маркер готовности; без data path провайдер работает
+// в режиме этапа 1 (соединение без наполнения — тесты).
+func (p *Provider) WithData(fsys *fs.FileSystem, idx *Index) *Provider {
+	p.fsys = fsys
+	p.idx = idx
+	if fsys != nil {
+		p.backend = NewBackendFS(fsys)
+		idx.SetResolver(func(ctx context.Context, ino uint64) (string, bool) {
+			return resolveInoMeta(ctx, p, ino)
+		})
+	}
+	return p
+}
+
+// hasDataPath — подключены ли backend и индекс (тесты ставят fake-backend
+// напрямую, не через WithData).
+func (p *Provider) hasDataPath() bool {
+	return p.backend != nil && p.idx != nil
 }
 
 // Start запускает провайдера: проверка регистрации sync root, захват
 // именованного mutex (второй экземпляр получает ошибку ДО подключения —
-// спека «Второй экземпляр»), подключение к sync root. ctx — жизненный цикл
-// движка этапов 2+; на шаге 1 фоновых горутин у провайдера нет.
+// спека «Второй экземпляр»), подключение к sync root. С подключённым data
+// path дополнительно запускаются воркер наполнения детей каталогов и цикл
+// готовности (наполнение верхнего уровня с повторами и маркер). ctx —
+// жизненный цикл движка; внутренние горутины останавливаются также Stop.
 func (p *Provider) Start(ctx context.Context) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -106,14 +164,28 @@ func (p *Provider) Start(ctx context.Context) error {
 	}
 	p.conn = conn
 	p.mutex = h
+	p.stopMu.Lock()
+	p.stop = make(chan struct{})
+	p.stopMu.Unlock()
 	p.running = true
+	if p.hasDataPath() {
+		p.wg.Add(2)
+		go func() {
+			defer p.wg.Done()
+			runPopulation(ctx, p)
+		}()
+		go func() {
+			defer p.wg.Done()
+			p.readyLoop(ctx)
+		}()
+	}
 	logger.Infof("provider connected to sync root %s (volume %s)", p.root, p.volume)
 	return nil
 }
 
-// Stop останавливает провайдера: отключение CfDisconnectSyncRoot и
-// освобождение именованного mutex. Идемпотентен: на не запущенном
-// провайдере ничего не делает.
+// Stop останавливает провайдера: отключение CfDisconnectSyncRoot,
+// остановка внутренних горутин и освобождение именованного mutex.
+// Идемпотентен: на не запущенном провайдере ничего не делает.
 func (p *Provider) Stop() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -127,6 +199,15 @@ func (p *Provider) Stop() error {
 		logger.Error(firstErr)
 	}
 	p.conn = nil
+	// Остановка воркеров этапа 2 до закрытия mutex: горутины завершаются
+	// по закрытию stop, Stop ждёт их завершения.
+	p.stopMu.Lock()
+	if p.stop != nil {
+		close(p.stop)
+		p.stop = nil
+	}
+	p.stopMu.Unlock()
+	p.wg.Wait()
 	if p.mutex != 0 {
 		// «Освобождение» mutex — закрытие единственного хендла: объект
 		// уничтожается, следующий экземпляр сможет его создать. ReleaseMutex
@@ -140,6 +221,90 @@ func (p *Provider) Stop() error {
 	p.running = false
 	logger.Infof("provider stopped for sync root %s", p.root)
 	return firstErr
+}
+
+// readyLoop добивается наполнения верхнего уровня и после успеха выводит
+// маркер готовности ровно один раз (спеки «Готовность», «Hub недоступен»):
+// недоступный hub (ошибки чтения backend) не завершает процесс — попытки
+// продолжаются с нарастающей паузой до успеха, отмены ctx или Stop.
+func (p *Provider) readyLoop(ctx context.Context) {
+	const maxDelay = 30 * time.Second
+	delay := p.retryDelay
+	for attempt := 1; ; attempt++ {
+		err := populateTopLevel(ctx, p)
+		if err == nil {
+			p.markReady()
+			return
+		}
+		stop := p.stopChan()
+		if ctx.Err() != nil || stop == nil {
+			return
+		}
+		logger.Warnf("top-level population attempt %d failed: %v; retrying in %s", attempt, err, delay)
+		if !sleepCtx(ctx, stop, delay) {
+			return
+		}
+		delay *= 2
+		if delay > maxDelay {
+			delay = maxDelay
+		}
+	}
+}
+
+// stopChan — снимок канала остановки (nil после Stop).
+func (p *Provider) stopChan() chan struct{} {
+	p.stopMu.RLock()
+	defer p.stopMu.RUnlock()
+	return p.stop
+}
+
+// markReady выводит маркер готовности `OK, <имя тома> is ready` ровно один
+// раз за запуск (design.md D4, контракт для supervisor'а agio-drive).
+func (p *Provider) markReady() {
+	p.readyOnce.Do(func() {
+		p.ready.Store(true)
+		logger.Infof("OK, %s is ready", p.volume)
+	})
+}
+
+// Ready — выведен ли уже маркер готовности.
+func (p *Provider) Ready() bool {
+	return p.ready.Load()
+}
+
+// sleepCtx ждёт d либо первой из отмен: ctx или закрытия stop.
+func sleepCtx(ctx context.Context, stop chan struct{}, d time.Duration) bool {
+	if d <= 0 {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-stop:
+			return false
+		default:
+			return true
+		}
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-stop:
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+// fsPathOf переводит локальный путь под sync root в путь в стиле fs
+// (разделитель "/", от корня); путь вне корня (в т.ч. ".."-относительный)
+// и сам корень — "/".
+func (p *Provider) fsPathOf(localPath string) string {
+	rel, err := filepath.Rel(p.root, localPath)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, `..\`) {
+		return "/"
+	}
+	return "/" + filepath.ToSlash(rel)
 }
 
 // acquireInstanceMutex захватывает именованный mutex единственного экземпляра
