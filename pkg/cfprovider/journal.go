@@ -658,9 +658,13 @@ func (p *Provider) executeUploadOp(ctx context.Context, op *JournalOp) error {
 // операция не может выполниться ни при каких повторах (права доступа, тип
 // записи, занятость имени). ENOENT обрабатывается исполнителями отдельно
 // (отсутствие записи = цель достигнута); ENOTEMPTY/EIO/сетевые — транзиентные.
+// EXDEV — отказ платформы на операцию ЗА ПРЕДЕЛАМИ компании сессии
+// (cross-company = другой «диск»; живой кейс 27.11: watcher-событие
+// walk-созданного каталога чужой компании → mkdir → EXDEV → вечный retry);
+// повтор невозможен по определению.
 func permanentJournalErrno(eno syscall.Errno) bool {
 	switch eno {
-	case syscall.EACCES, syscall.EPERM, syscall.EINVAL, syscall.ENOTDIR, syscall.EISDIR:
+	case syscall.EACCES, syscall.EPERM, syscall.EINVAL, syscall.ENOTDIR, syscall.EISDIR, syscall.EXDEV:
 		return true
 	}
 	if eno == syscall.Errno(5) { // ERROR_ACCESS_DENIED (OS-код)
