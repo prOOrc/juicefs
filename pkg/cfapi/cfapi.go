@@ -53,6 +53,8 @@ var (
 	procCfDehydratePlaceholder            = modcldapi.NewProc("CfDehydratePlaceholder")
 	procCfSetPinState                     = modcldapi.NewProc("CfSetPinState")
 	procCfSetInSyncState                  = modcldapi.NewProc("CfSetInSyncState")
+	procCfOpenFileWithOplock              = modcldapi.NewProc("CfOpenFileWithOplock")
+	procCfRevertPlaceholder               = modcldapi.NewProc("CfRevertPlaceholder")
 	procCfConvertToPlaceholder            = modcldapi.NewProc("CfConvertToPlaceholder")
 	procCfUpdatePlaceholder               = modcldapi.NewProc("CfUpdatePlaceholder")
 	procCfGetPlaceholderInfo              = modcldapi.NewProc("CfGetPlaceholderInfo")

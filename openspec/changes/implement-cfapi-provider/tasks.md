@@ -53,8 +53,8 @@ DoD этапа: сценарии «Содержимое совпадает с ba
 
 ## 4. Pin и unpin
 
-- [ ] 4.1 `pin` и `unpin` с `CfSetPinState`, флаг `--recursive`; обёртки `CfOpenFileWithOplock`/`CfRevertPlaceholder` добавляются в `pkg/cfapi/operations.go` на этапе 4/5 по потребности (деферрал из 1.1, замечание ревью P2-1). Проба U5. Файлы: `cmd/clouddrive.go`, `pkg/cfapi/operations.go`. Проверка: `go build ./cmd/...`; ручной прогон сценариев «Pin файла и чтение без провайдера», «Pin каталога», «Unpin».
-- [ ] 4.2 Ручная проверка встроенного меню Explorer без MSIX; результат — в design.md. Файлы: design.md. Проверка: запись результата U5 в таблице.
+- [x] 4.1 `pin` и `unpin` с `CfSetPinState`, флаг `--recursive`; обёртки `CfOpenFileWithOplock`/`CfRevertPlaceholder` добавляются в `pkg/cfapi/operations.go` на этапе 4/5 по потребности (деферрал из 1.1, замечание ревью P2-1). Проба U5. Файлы: `cmd/clouddrive.go`, `pkg/cfapi/operations.go`. Проверка: `go build ./cmd/...`; ручной прогон сценариев «Pin файла и чтение без провайдера», «Pin каталога», «Unpin».
+- [x] 4.2 Ручная проверка встроенного меню Explorer без MSIX; результат — в design.md. Файлы: design.md. Проверка: запись результата U5 в таблице.
 
 DoD этапа: сценарии «Pin файла и чтение без провайдера», «Pin каталога», «Unpin» пройдены.
 

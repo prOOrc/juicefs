@@ -19,11 +19,17 @@
 
 // Обёртки CfExecute — операции провайдера (план задач: файл operations.go
 // наполняется этапами 3+ по потребности; на этапе 2 — ответ на
-// FETCH_PLACEHOLDERS, design.md D5/D6; на этапе 3 — ответ на FETCH_DATA).
+// FETCH_PLACEHOLDERS, design.md D5/D6; на этапе 3 — ответ на FETCH_DATA;
+// на этапе 4 — pin/unpin и отложенные биндинги CfOpenFileWithOplock/
+// CfRevertPlaceholder, задача 4.1).
 package cfapi
 
 import (
+	"fmt"
+	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 // AnswerFetchData отвечает на задание FETCH_DATA операцией TRANSFER_DATA
@@ -118,4 +124,67 @@ func AnswerFetchPlaceholders(conn ConnectionKey, transferKey TransferKey, reques
 	p.PlaceholderCount = uint32(len(placeholders))
 	p.EntriesProcessed = entriesProcessed
 	return CfExecute(&opInfo, &opParams)
+}
+
+// CfOpenFileWithOplock открывает запись sync root хендлом, пригодным для
+// Cf-операций плейсхолдеров (cfapi.h:765): protected-хендл держит oplock
+// фильтра и переживает дегидратацию/гидрацию записи. Флаги —
+// CF_OPEN_FILE_FLAGS (OpenFileFlag*).
+func CfOpenFileWithOplock(filePath string, flags uint32, protectedHandle *syscall.Handle) error {
+	path, err := windows.UTF16PtrFromString(filePath)
+	if err != nil {
+		return err
+	}
+	r, _, _ := procCfOpenFileWithOplock.Call(
+		uintptr(unsafe.Pointer(path)),
+		uintptr(flags),
+		uintptr(unsafe.Pointer(protectedHandle)),
+	)
+	return hresult(r, "CfOpenFileWithOplock")
+}
+
+// CfRevertPlaceholder откатывает запись в обычный (не-плейсхолдер) файл
+// (cfapi.h:854): содержимое становится локальным, связь с sync engine
+// разрывается. Отложенный биндинг этапа 6 (проба U15 — осиротевшие
+// плейсхолдеры блокируют удаление); к командам прототипа не подключён.
+func CfRevertPlaceholder(fileHandle syscall.Handle, revertFlags uint32, overlapped uintptr) error {
+	r, _, _ := procCfRevertPlaceholder.Call(
+		uintptr(fileHandle),
+		uintptr(revertFlags),
+		overlapped,
+	)
+	return hresult(r, "CfRevertPlaceholder")
+}
+
+// SetPinStateByPath — pin/unpin по пути (задача 4.1, cfapi.h:909):
+// CfOpenFileWithOplock → CfSetPinState → закрытие хендла. pinState —
+// CF_PIN_STATE (PinStatePinned/PinStateUnpinned/...), pinFlags —
+// CF_SET_PIN_FLAGS (SetPinFlag*; RECURSE — флаг --recursive команды).
+//
+// Вызов безопасен из ЛЮБОГО процесса с доступом к записи — в том числе из
+// CLI-процесса `juicefs clouddrive pin` (design.md D3 ограничивает только
+// пул воркеров провайдера: воркер гидратации не должен вызывать
+// CfSetPinState/CfHydratePlaceholder, чтобы не блокировать себя на
+// собственную очередь). Состояние pin фильтр хранит персистентно
+// (переживает перезапуск провайдера); гидрация — по FETCH_DATA к живому
+// соединению, поэтому скачивание содержимого требует работающего serve.
+//
+// Проба U5 (этап 4): рекурсивный pin каталога фильтр выполняет сам —
+// FETCH_DATA приходит в serve пачкой на все файлы поддерева и обслуживается
+// пулом гидратации (--hydration-workers); CLI-процесс не участвует.
+// Unpin (PinStateUnpinned): фильтр дешидратирует запись; callback
+// NOTIFY_DEHYDRATE не зарегистрирован (D5 — не среди 9 OS-точек), поэтому
+// уведомление протекает без ack — поведение по умолчанию допустимо.
+func SetPinStateByPath(path string, pinState, pinFlags uint32) error {
+	var h syscall.Handle
+	if err := CfOpenFileWithOplock(path, OpenFileFlagNone, &h); err != nil {
+		return fmt.Errorf("CfOpenFileWithOplock(%s): %w", path, err)
+	}
+	defer func() {
+		_ = windows.CloseHandle(windows.Handle(h))
+	}()
+	if err := CfSetPinState(h, pinState, pinFlags, 0); err != nil {
+		return fmt.Errorf("CfSetPinState(%s): %w", path, err)
+	}
+	return nil
 }
