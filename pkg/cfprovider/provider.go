@@ -91,8 +91,8 @@ type Provider struct {
 	// ingestFailed — задания, снятые после отказа пересоздания
 	// плейсхолдера (диагностика, аналог walk failed; контент выгружен —
 	// повторит следующий close/рестарт). readOnly (--read-only serve)
-	// отключает выгрузку: классификация close-уведомлений игнорирует всё
-	// с однократным логом (спека «Режим без записи»).
+	// отключает выгрузку: классификация close-уведомлений и notify-операций
+	// игнорирует всё с однократным логом (спека «Режим без записи»).
 	istore              ingestStore
 	ibackend            ingestBackend
 	remover             localRemover
@@ -104,6 +104,27 @@ type Provider struct {
 	clock               ingestClock
 	readOnly            bool
 	readOnlyOnce        sync.Once
+
+	// Журнал невыполненных операций backend (этап 6, design.md D9, задачи
+	// 6.3/6.5; ставится WithJournal из serve): неуспешные выгрузка/удаление/
+	// переименование/mkdir повторяются replayer'ом с нарастающей паузой
+	// journalRetryBase → journalRetryMax, в том числе после перезапуска.
+	// ingestDb — коалисер пула выгрузки (для reconcile/queueUpload);
+	// activeUploads — активные выгрузки для отмены при REMOVED (задача 6.5);
+	// syncRootWarnOnce — однократный Warn удаления sync root (задача 6.2);
+	// dirRenameOld — сопоставление OLD/NEW_NAME dir-событий watcher'а.
+	journal           *Journal
+	journalRetryBase  time.Duration
+	journalRetryMax   time.Duration
+	ingestDbMu        sync.Mutex
+	ingestDb          *ingestDebouncer
+	uploadLocks       sync.Map // lower(fsPath) → *sync.Mutex (сериализация выгрузок пути)
+	activeMu          sync.Mutex
+	activeUploads     map[string]*uploadHandle
+	syncRootWarnOnce  sync.Once
+	dirRenameMu       sync.Mutex
+	dirRenamePending  []string // FIFO OLD_NAME-событий (пары по смежности с NEW)
+	dirRenameOldLimit int
 
 	// Супрессия собственных событий watcher'а (U18-α replace-after-upload):
 	// финализация удаляет и пересоздаёт локальную запись — remove/create
@@ -184,12 +205,25 @@ func New(root, volume string, api cfapi.SyncRootAPI, dispatch cfapi.CallbackDisp
 		ingestMaxRetryDelay:  30 * time.Second,
 		selfEventUntil:       make(map[string]time.Time),
 		clock:                wallClock{},
+		journalRetryBase:     journalRetryBase,
+		journalRetryMax:      journalRetryMax,
+		activeUploads:        make(map[string]*uploadHandle),
+		dirRenameOldLimit:    256,
 		retryDelay:           2 * time.Second,
 		readyCh:              make(chan struct{}),
 		walkRetryDelay:       time.Second,
 		walkRetryMax:         30 * time.Second,
 		walkProgressInterval: 5 * time.Second,
 	}
+}
+
+// WithJournal подключает журнал невыполненных операций backend (этап 6,
+// design.md D9; serve создаёт его в каталоге состояния рядом с индексом).
+// Без журнала невыполненные операции не повторяются после перезапуска
+// (режим диагностики/тестов этапа 5).
+func (p *Provider) WithJournal(j *Journal) *Provider {
+	p.journal = j
+	return p
 }
 
 // WithData подключает data path (design.md Integration Points): fs.FileSystem
@@ -367,9 +401,13 @@ func (p *Provider) Stop() error {
 	p.walkMu.Lock()
 	p.walkStarted = false
 	p.walkMu.Unlock()
-	// Пул выгрузки завершён — разрешён на следующем запуске.
+	// Пул выгрузки завершён — разрешён на следующем запуске; коалисер
+	// снимается (queueUpload после остановки уходит в журнал).
 	p.ingestMu.Lock()
 	p.ingestStarted = false
+	p.ingestDbMu.Lock()
+	p.ingestDb = nil
+	p.ingestDbMu.Unlock()
 	p.ingestMu.Unlock()
 	if p.mutex != 0 {
 		// «Освобождение» mutex — закрытие единственного хендла: объект

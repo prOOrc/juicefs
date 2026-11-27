@@ -353,7 +353,7 @@ func (p *Provider) walkOne(ctx context.Context, stop chan struct{}, stats *walkS
 		}
 		return nil
 	}
-	res := populateDirectory(p, dir, entries)
+	res := populateDirectory(ctx, p, dir, entries)
 	if res.conflicts > 0 {
 		// Один Warn на каталог (design.md D6.8), до 10 примеров имён.
 		logger.Warnf("walk conflict: %s: skipped %d hub entries, e.g. %v", dir, res.conflicts, res.conflictExamples)

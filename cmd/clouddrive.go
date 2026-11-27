@@ -570,7 +570,8 @@ func cloudDriveServe(c *cli.Context) error {
 		volume = stack.format.Name
 	}
 
-	// Индекс плейсхолдеров (inode → путь) с журналом в каталоге состояния
+	// Индекс плейсхолдеров (inode → путь) и журнал невыполненных операций
+	// backend (этап 6, design.md D9) — в каталоге состояния
 	// (design.md D6, proposal D-8).
 	stateDir := c.String("state-dir")
 	if stateDir == "" {
@@ -585,13 +586,22 @@ func cloudDriveServe(c *cli.Context) error {
 			logger.Warnf("close index journal: %v", err)
 		}
 	}()
+	journal, err := cfprovider.NewJournal(stateDir)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := journal.Close(); err != nil {
+			logger.Warnf("close ops journal: %v", err)
+		}
+	}()
 
 	// Реальный диспетчер очередей: заглушка-логгер (dispatch=nil) не
 	// обслуживает FETCH_PLACEHOLDERS — перечисление каталогов детьми
 	// повисло бы до таймаута фильтра. Пул гидратации — --hydration-workers
 	// (этап 3, замер M2); --read-only отключает выгрузку локальных
-	// изменений (задача 5.6).
-	provider := cfprovider.New(root, volume, nil, cfapi.NewDispatcher(cfapi.DefaultQueueOptions())).WithData(stack.fsys, idx).WithFetchWorkers(c.Int("hydration-workers")).WithReadOnly(c.Bool("read-only"))
+	// изменений и распространение операций в backend (задача 5.6).
+	provider := cfprovider.New(root, volume, nil, cfapi.NewDispatcher(cfapi.DefaultQueueOptions())).WithData(stack.fsys, idx).WithJournal(journal).WithFetchWorkers(c.Int("hydration-workers")).WithReadOnly(c.Bool("read-only"))
 	if err := provider.Start(ctx); err != nil {
 		return err
 	}

@@ -35,7 +35,10 @@ import (
 )
 
 // indexRecord — одна строка журнала плейсхолдеров (JSONL). Путь — в стиле
-// fs (разделитель "/", от корня): "/a/b"; корень — "/".
+// fs (разделитель "/", от корня): "/a/b"; корень — "/". Пустой путь —
+// надгробие удаления записи (этап 6: события удаления/переименования
+// известных плейсхолдеров тоже отражаются в журнале, чтобы перезапуск не
+// воскресил удалённое).
 type indexRecord struct {
 	Ino  uint64 `json:"ino"`
 	Path string `json:"path"`
@@ -43,17 +46,19 @@ type indexRecord struct {
 
 // indexJournalName — файл журнала в каталоге состояния. Простой append:
 // каждая строка самостоятельная запись, последняя может быть обрезана при
-// падении — при загрузке неполные строки пропускаются (ротация и повтор
-// невыполненных операций — задача 6.3, отдельный Journal).
+// падении — при загрузке неполные строки пропускаются (невыполненные
+// операции backend — отдельный Journal, задача 6.3, ops.journal).
 const indexJournalName = "placeholders.journal"
 
-// Index — inode → путь: карта в памяти + append-журнал. События «известного
-// плейсхолдера» (переименование, удаление) журнал не содержит до этапа 6.
+// Index — inode → путь: карты в памяти (прямая и обратная) + append-журнал.
+// События известных плейсхолдеров (этап 6): Delete — удаление (надгробие в
+// журнале), RenamePrefix — переименование каталога (пути потомков).
 type Index struct {
-	mu    sync.RWMutex
-	byIno map[uint64]string
-	jPath string
-	jFile *os.File
+	mu     sync.RWMutex
+	byIno  map[uint64]string
+	byPath map[string]uint64 // lower(path) → ino (LookupPath/PathsInDir без обхода)
+	jPath  string
+	jFile  *os.File
 
 	// resolver — подъём по родителям через meta при промахе карты (U12);
 	// ставит провайдер при подключённом data path (WithData). nil — только
@@ -83,7 +88,7 @@ func NewIndex(stateDir string) (*Index, error) {
 		return nil, fmt.Errorf("cfprovider: create state dir %s: %w", stateDir, err)
 	}
 	jPath := filepath.Join(stateDir, indexJournalName)
-	ix := &Index{byIno: make(map[uint64]string), jPath: jPath}
+	ix := &Index{byIno: make(map[uint64]string), byPath: make(map[string]uint64), jPath: jPath}
 	if err := ix.load(); err != nil {
 		return nil, err
 	}
@@ -95,9 +100,10 @@ func NewIndex(stateDir string) (*Index, error) {
 	return ix, nil
 }
 
-// load читает журнал: валидные JSONL-строки в карту, обрезанные/битые
+// load читает журнал: валидные JSONL-строки в карты, обрезанные/битые
 // пропускаются с предупреждением (журнал — append-file, падение могло
-// оборвать последнюю строку).
+// оборвать последнюю строку). Пустой путь — надгробие: запись inode
+// удаляется (этап 6: переименование/удаление известных плейсхолдеров).
 func (ix *Index) load() error {
 	f, err := os.Open(ix.jPath)
 	if err != nil {
@@ -118,13 +124,18 @@ func (ix *Index) load() error {
 			logger.Warnf("index journal %s line %d is not valid JSON, skipping: %v", ix.jPath, line, err)
 			continue
 		}
+		// Повтор записи по тому же inode — последняя версия побеждает;
+		// надгробие (пустой путь) снимает запись (удаление плейсхолдера).
+		if prev, ok := ix.byIno[rec.Ino]; ok {
+			delete(ix.byPath, strings.ToLower(prev))
+		}
 		if rec.Path == "" {
-			logger.Warnf("index journal %s line %d has no path, skipping", ix.jPath, line)
+			delete(ix.byIno, rec.Ino)
+			loaded++
 			continue
 		}
-		// Повтор записи по тому же inode — последняя версия побеждает
-		// (переименование переписывает путь, задача 6.3 продолжит контракт).
 		ix.byIno[rec.Ino] = rec.Path
+		ix.byPath[strings.ToLower(rec.Path)] = rec.Ino
 		loaded++
 	}
 	if err := scanner.Err(); err != nil {
@@ -141,10 +152,16 @@ func (ix *Index) SetResolver(r func(ctx context.Context, ino uint64) (string, bo
 	ix.mu.Unlock()
 }
 
-// Put сохраняет соответствие inode → путь: память + append в журнал.
+// Put сохраняет соответствие inode → путь: память (обе карты) + append в
+// журнал. Повторный Put по тому же inode (переименование) обновляет обе
+// карты.
 func (ix *Index) Put(ino uint64, path string) error {
 	ix.mu.Lock()
+	if prev, ok := ix.byIno[ino]; ok {
+		delete(ix.byPath, strings.ToLower(prev))
+	}
 	ix.byIno[ino] = path
+	ix.byPath[strings.ToLower(path)] = ino
 	ix.mu.Unlock()
 	if ix.jFile == nil {
 		return nil
@@ -159,6 +176,139 @@ func (ix *Index) Put(ino uint64, path string) error {
 	return nil
 }
 
+// Delete снимает запись inode (удаление известного плейсхолдера, этап 6):
+// память + надгробие в журнале (пустой путь), чтобы перезапуск не
+// воскресил запись.
+func (ix *Index) Delete(ino uint64) error {
+	ix.mu.Lock()
+	prev, ok := ix.byIno[ino]
+	if ok {
+		delete(ix.byIno, ino)
+		delete(ix.byPath, strings.ToLower(prev))
+	}
+	ix.mu.Unlock()
+	if !ok || ix.jFile == nil {
+		return nil
+	}
+	b, err := json.Marshal(indexRecord{Ino: ino})
+	if err != nil {
+		return fmt.Errorf("cfprovider: marshal index tombstone: %w", err)
+	}
+	if _, err := ix.jFile.Write(append(b, '\n')); err != nil {
+		return fmt.Errorf("cfprovider: append journal %s: %w", ix.jPath, err)
+	}
+	return nil
+}
+
+// RenamePrefix переписывает пути каталога dir и всех его потомков на newDir
+// (переименование каталога-плейсхолдера, этап 6): каждой изменённой записи —
+// строка журнала. Возвращает число переписанных записей.
+func (ix *Index) RenamePrefix(oldDir, newDir string) (int, error) {
+	oldTrim := strings.TrimSuffix(oldDir, "/")
+	oldLow := strings.ToLower(oldTrim)
+	prefixLow := oldLow + "/"
+	ix.mu.Lock()
+	type moved struct {
+		ino  uint64
+		path string
+	}
+	var moves []moved
+	for ino, p := range ix.byIno {
+		low := strings.ToLower(p)
+		if low != oldLow && !strings.HasPrefix(low, prefixLow) {
+			continue
+		}
+		np := newDir + p[len(oldTrim):]
+		moves = append(moves, moved{ino: ino, path: np})
+	}
+	for _, m := range moves {
+		delete(ix.byPath, strings.ToLower(ix.byIno[m.ino]))
+		ix.byIno[m.ino] = m.path
+		ix.byPath[strings.ToLower(m.path)] = m.ino
+	}
+	jFile := ix.jFile
+	ix.mu.Unlock()
+	renamed := 0
+	for _, m := range moves {
+		if jFile == nil {
+			renamed++
+			continue
+		}
+		b, err := json.Marshal(indexRecord{Ino: m.ino, Path: m.path})
+		if err != nil {
+			return renamed, fmt.Errorf("cfprovider: marshal index record: %w", err)
+		}
+		if _, err := jFile.Write(append(b, '\n')); err != nil {
+			return renamed, fmt.Errorf("cfprovider: append journal %s: %w", ix.jPath, err)
+		}
+		renamed++
+	}
+	return renamed, nil
+}
+
+// DeletePrefix снимает записи каталога dir и всех его потомков (удаление
+// каталога-плейсхолдера, этап 6): каждой снятой записи — надгробие в
+// журнале. Возвращает число снятых записей.
+func (ix *Index) DeletePrefix(dir string) (int, error) {
+	trim := strings.TrimSuffix(dir, "/")
+	low := strings.ToLower(trim)
+	prefixLow := low + "/"
+	ix.mu.Lock()
+	var inos []uint64
+	for ino, p := range ix.byIno {
+		lp := strings.ToLower(p)
+		if lp != low && !strings.HasPrefix(lp, prefixLow) {
+			continue
+		}
+		inos = append(inos, ino)
+	}
+	for _, ino := range inos {
+		delete(ix.byPath, strings.ToLower(ix.byIno[ino]))
+		delete(ix.byIno, ino)
+	}
+	jFile := ix.jFile
+	ix.mu.Unlock()
+	removed := 0
+	for _, ino := range inos {
+		if jFile == nil {
+			removed++
+			continue
+		}
+		b, err := json.Marshal(indexRecord{Ino: ino})
+		if err != nil {
+			return removed, fmt.Errorf("cfprovider: marshal index tombstone: %w", err)
+		}
+		if _, err := jFile.Write(append(b, '\n')); err != nil {
+			return removed, fmt.Errorf("cfprovider: append journal %s: %w", ix.jPath, err)
+		}
+		removed++
+	}
+	return removed, nil
+}
+
+// IndexPathEntry — прямая запись каталога для сверки (этап 6.4).
+type IndexPathEntry struct {
+	Ino  uint64
+	Path string
+}
+
+// PathsInDir возвращает прямых детей каталога dir (путь в стиле fs) из
+// карты byPath — записи сверки при старте (design.md D9: «записи индекса,
+// отсутствующие на диске в каталогах с завершённым наполнением»).
+func (ix *Index) PathsInDir(dir string) []IndexPathEntry {
+	prefix := strings.ToLower(strings.TrimSuffix(dir, "/")) + "/"
+	ix.mu.RLock()
+	defer ix.mu.RUnlock()
+	var out []IndexPathEntry
+	for low, ino := range ix.byPath {
+		if !strings.HasPrefix(low, prefix) || strings.Contains(low[len(prefix):], "/") {
+			continue // не прямой ребёнок (свои каталоги проверяются отдельно)
+		}
+		out = append(out, IndexPathEntry{Ino: ino, Path: ix.byIno[ino]})
+	}
+	return out
+}
+
 // Path возвращает путь по inode из памяти.
 func (ix *Index) Path(ino uint64) (string, bool) {
 	ix.mu.RLock()
@@ -168,18 +318,14 @@ func (ix *Index) Path(ino uint64) (string, bool) {
 }
 
 // LookupPath — inode записи по пути (обратный поиск по карте; запись
-// `status <путь>`, задача 5.7). Пути сравниваются в нижнем регистре —
-// Windows-семантика, как в классификации walk (design.md D6.5).
+// `status <путь>`, задача 5.7; события известных плейсхолдеров, этап 6).
+// Пути сравниваются в нижнем регистре — Windows-семантика, как в
+// классификации walk (design.md D6.5).
 func (ix *Index) LookupPath(path string) (uint64, bool) {
-	low := strings.ToLower(path)
 	ix.mu.RLock()
 	defer ix.mu.RUnlock()
-	for ino, p := range ix.byIno {
-		if strings.ToLower(p) == low {
-			return ino, true
-		}
-	}
-	return 0, false
+	ino, ok := ix.byPath[strings.ToLower(path)]
+	return ino, ok
 }
 
 // IndexPathJournal — путь журнала индекса в каталоге состояния (команды CLI

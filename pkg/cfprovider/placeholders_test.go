@@ -207,6 +207,21 @@ func (f *fakeStore) StandardInfo(path string) (*cfapi.CFPlaceholderStandardInfo,
 	return &cfapi.CFPlaceholderStandardInfo{OnDiskDataSize: 0}, nil
 }
 
+// SetInSync — фиксация пометки in-sync (интерфейс ingestStore; сверка
+// reconcileDir/queueUpload использует StandardInfo того же store — тесты
+// walk/sверки остаются DLL-независимыми).
+func (f *fakeStore) SetInSync(path string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	info, ok := f.standard[path]
+	if !ok {
+		info = &cfapi.CFPlaceholderStandardInfo{}
+		f.standard[path] = info
+	}
+	info.InSyncState = cfapi.InSyncStateInSync
+	return nil
+}
+
 func (f *fakeStore) convertCalls() []convertCall {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -271,6 +286,15 @@ func newTestProvider(t *testing.T, root string, backend backendLister, store pla
 	p.backend = backend
 	p.store = store
 	p.idx = idx
+	// istore = store: классификация состояния сверки (reconcileDir) и
+	// ingestStore без обращения к cldapi.dll (инвариант «Движок проверяется
+	// без CfAPI»; fakeStore/simStore реализуют StandardInfo + SetInSync).
+	if s, ok := store.(interface {
+		StandardInfo(string) (*cfapi.CFPlaceholderStandardInfo, error)
+		SetInSync(string) error
+	}); ok {
+		p.istore = s
+	}
 	p.retryDelay = time.Millisecond
 	return p, idx
 }
@@ -1021,7 +1045,7 @@ func TestPopulateDirectoryExistingByIndexNoJournal(t *testing.T) {
 	}
 	rows := journalLines(t, idx)
 
-	res := populateDirectory(p, "/kept", entries)
+	res := populateDirectory(context.Background(), p, "/kept", entries)
 
 	if res.skipped != 1 || res.createdFiles != 0 || res.conflicts != 0 {
 		t.Errorf("skipped=%d created=%d conflicts=%d, ожидается 1/0/0 (existing по индексу)", res.skipped, res.createdFiles, res.conflicts)
@@ -1038,7 +1062,7 @@ func TestPopulateDirectoryExistingByIndexNoJournal(t *testing.T) {
 		t.Fatalf("idx.Put: %v", err)
 	}
 	rows = journalLines(t, idx)
-	res = populateDirectory(p, "/kept", entries)
+	res = populateDirectory(context.Background(), p, "/kept", entries)
 	if res.skipped != 1 {
 		t.Errorf("skipped = %d, ожидается 1", res.skipped)
 	}
@@ -1047,5 +1071,53 @@ func TestPopulateDirectoryExistingByIndexNoJournal(t *testing.T) {
 	}
 	if got, ok := idx.Path(60); !ok || got != "/kept/same.bin" {
 		t.Errorf("idx.Path(60) = (%q, %v), ожидается /kept/same.bin (актуализация индекса)", got, ok)
+	}
+}
+
+// --- Фикс-итерация 1 (ревью этапа 6) ---
+
+// raceConvertStore — Convert-«гонка» (fix-1.7): путь уже сконвертирован
+// параллельной операцией (notifyDirCreate/повтор журнала) — store помечает
+// плейсхолдер и ОТКАЗЫВАЕТ нашу конверсию (фильтр отвергает повторную
+// конверсию плейсхолдера).
+type raceConvertStore struct {
+	fakeStore
+}
+
+func (s *raceConvertStore) Convert(path string, isDir bool, identity []byte, flags uint32) error {
+	s.mu.Lock()
+	s.local[path] = true // гонка успела: путь уже плейсхолдер
+	s.mu.Unlock()
+	return errFake("fake: already a placeholder (convert rejected)")
+}
+
+// TestCreateEntryAdoptsRaceConvertedEntry — fix-1.7: между созданием реальной
+// записи и нашей конверсией запись сконвертирована параллельной операцией —
+// усыновление (resultExists) БЕЗ отката: откат удалил бы валидный
+// плейсхолдер.
+func TestCreateEntryAdoptsRaceConvertedEntry(t *testing.T) {
+	root := t.TempDir()
+	store := &raceConvertStore{fakeStore: fakeStore{local: map[string]bool{}, localReal: map[string]bool{}}}
+	p, _ := newTestProvider(t, root, &fakeBackend{dirs: map[string][]BackendEntry{}}, store)
+
+	// Файл: реальная запись создана, конверсия отвергнута гонкой.
+	e := BackendEntry{Name: "raced.txt", Inode: 70, Size: 5, MtimeSec: 100}
+	kind, err := createEntry(p, "/", e)
+	if kind != resultExists || err != nil {
+		t.Fatalf("createEntry file = (%v, %v), ожидается (resultExists, nil)", kind, err)
+	}
+	local := filepath.Join(root, "raced.txt")
+	if _, serr := os.Stat(local); serr != nil {
+		t.Fatalf("валидный плейсхолдер удалён откатом: %v", serr)
+	}
+
+	// Каталог: та же гонка.
+	de := BackendEntry{Name: "raceddir", Inode: 71, MtimeSec: 100, IsDir: true}
+	kind, err = createEntry(p, "/", de)
+	if kind != resultExists || err != nil {
+		t.Fatalf("createEntry dir = (%v, %v), ожидается (resultExists, nil)", kind, err)
+	}
+	if _, serr := os.Stat(filepath.Join(root, "raceddir")); serr != nil {
+		t.Fatalf("каталог удалён откатом: %v", serr)
 	}
 }

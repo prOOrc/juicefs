@@ -77,19 +77,35 @@ func (l *opLog) kinds() []string {
 
 // fakeIngestBackend — подменный ingestBackend: записи в памяти; существующие
 // записи (карта files) Create отвечает EEXIST — проверка OpenWrite-ветки.
+// Каталоги — карта dirs (этап 6: mkdir/rmdir/rename каталогов). Ошибки
+// deleteErr/renameErr/mkdirErr — симуляция недоступного hub (журнал/replay);
+// flushGate/writeGate — блокировки для тестов отмены выгрузки (6.5).
 type fakeIngestBackend struct {
-	mu       sync.Mutex
-	log      *opLog
-	files    map[string][]byte // существующие записи backend
-	inodes   map[string]uint64 // inode записи backend по пути
-	nextIno  uint64
-	flushErr syscall.Errno // ошибка Flush созданных/открытых файлов
-	creates  int
-	opens    int
+	mu        sync.Mutex
+	log       *opLog
+	files     map[string][]byte // существующие записи backend
+	dirs      map[string]bool   // существующие каталоги backend
+	inodes    map[string]uint64 // inode записи backend по пути
+	nextIno   uint64
+	flushErr  syscall.Errno // ошибка Flush созданных/открытых файлов
+	deleteErr syscall.Errno // ошибка Delete/Rmdir (недоступный hub)
+	// deleteErrPaths — отказ Delete по конкретным путям (симуляция частичного
+	// сбоя — ротация replayer'а, fix-1.2).
+	deleteErrPaths map[string]syscall.Errno
+	renameErr      syscall.Errno // ошибка Rename
+	mkdirErr       syscall.Errno // ошибка Mkdir
+	creates        int
+	opens          int
+	deletes        int
+	rmdirs         int
+	mkdirs         int
+	renames        int
+	flushGate      chan struct{} // Flush блокируется до закрытия канала (6.5)
+	writeGate      chan struct{} // первая Pwrite блокируется до закрытия канала
 }
 
 func newFakeIngestBackend(log *opLog) *fakeIngestBackend {
-	return &fakeIngestBackend{log: log, files: map[string][]byte{}, inodes: map[string]uint64{}, nextIno: 100}
+	return &fakeIngestBackend{log: log, files: map[string][]byte{}, dirs: map[string]bool{}, inodes: map[string]uint64{}, nextIno: 100}
 }
 
 func (b *fakeIngestBackend) Create(ctx meta.Context, path string) (ingestFile, syscall.Errno) {
@@ -117,10 +133,130 @@ func (b *fakeIngestBackend) OpenWrite(ctx meta.Context, path string) (ingestFile
 	return &fakeIngestFile{b: b, path: path, ino: b.inodes[path], flushErr: b.flushErr}, 0
 }
 
+func (b *fakeIngestBackend) Rename(ctx meta.Context, oldpath, newpath string) syscall.Errno {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.renames++
+	if b.renameErr != 0 {
+		return b.renameErr
+	}
+	data, ok := b.files[oldpath]
+	if !ok {
+		if !b.dirs[oldpath] {
+			return syscall.ENOENT
+		}
+		delete(b.dirs, oldpath)
+		b.dirs[newpath] = true
+		ino := b.inodes[oldpath]
+		delete(b.inodes, oldpath)
+		b.inodes[newpath] = ino
+		b.log.add("rename:" + oldpath + "->" + newpath)
+		return 0
+	}
+	delete(b.files, oldpath)
+	b.files[newpath] = data
+	ino := b.inodes[oldpath]
+	delete(b.inodes, oldpath)
+	b.inodes[newpath] = ino
+	b.log.add("rename:" + oldpath + "->" + newpath)
+	return 0
+}
+
+func (b *fakeIngestBackend) Delete(ctx meta.Context, path string) syscall.Errno {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.deletes++
+	if eno, ok := b.deleteErrPaths[path]; ok {
+		return eno
+	}
+	if b.deleteErr != 0 {
+		return b.deleteErr
+	}
+	if _, ok := b.files[path]; ok {
+		delete(b.files, path)
+		delete(b.inodes, path)
+		b.log.add("delete:" + path)
+		return 0
+	}
+	if b.dirs[path] {
+		// Модель fs.Delete (Delete0): каталог — Rmdir; непустой — ENOTEMPTY
+		// (деконпозиция executeDeleteOp, fix-1.2).
+		for other := range b.dirs {
+			if other != path && strings.HasPrefix(other, path+"/") {
+				return syscall.ENOTEMPTY
+			}
+		}
+		for other := range b.files {
+			if strings.HasPrefix(other, path+"/") {
+				return syscall.ENOTEMPTY
+			}
+		}
+		delete(b.dirs, path)
+		delete(b.inodes, path)
+		b.log.add("rmdir:" + path)
+		return 0
+	}
+	return syscall.ENOENT
+}
+
+func (b *fakeIngestBackend) Rmdir(ctx meta.Context, path string) syscall.Errno {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.rmdirs++
+	if b.deleteErr != 0 {
+		return b.deleteErr
+	}
+	if !b.dirs[path] {
+		return syscall.ENOENT
+	}
+	delete(b.dirs, path)
+	delete(b.inodes, path)
+	b.log.add("rmdir:" + path)
+	return 0
+}
+
+func (b *fakeIngestBackend) Mkdir(ctx meta.Context, path string) syscall.Errno {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.mkdirs++
+	if b.mkdirErr != 0 {
+		return b.mkdirErr
+	}
+	if b.dirs[path] {
+		return syscall.EEXIST
+	}
+	if _, ok := b.files[path]; ok {
+		return syscall.EEXIST
+	}
+	b.nextIno++
+	b.dirs[path] = true
+	b.inodes[path] = b.nextIno
+	b.log.add("mkdir:" + path)
+	return 0
+}
+
+func (b *fakeIngestBackend) Stat(ctx meta.Context, path string) (uint64, bool, syscall.Errno) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if _, ok := b.files[path]; ok {
+		return b.inodes[path], false, 0
+	}
+	if b.dirs[path] {
+		return b.inodes[path], true, 0
+	}
+	return 0, false, syscall.ENOENT
+}
+
 func (b *fakeIngestBackend) content(path string) []byte {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return append([]byte(nil), b.files[path]...)
+}
+
+func (b *fakeIngestBackend) hasDir(path string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.dirs[path]
 }
 
 func (b *fakeIngestBackend) inodeOf(path string) uint64 {
@@ -130,7 +266,8 @@ func (b *fakeIngestBackend) inodeOf(path string) uint64 {
 }
 
 // fakeIngestFile — подменный открытый файл backend: данные пишутся в память
-// сразу, Flush/Close фиксируются в журнале, Flush — с настраиваемой ошибкой.
+// сразу, Flush/Close фиксируются в журнале, Flush — с настраиваемой ошибкой;
+// flushGate/writeGate backend'а — блокировки тестов отмены (6.5).
 type fakeIngestFile struct {
 	b        *fakeIngestBackend
 	path     string
@@ -139,6 +276,12 @@ type fakeIngestFile struct {
 }
 
 func (f *fakeIngestFile) Pwrite(ctx meta.Context, b []byte, off int64) (int, syscall.Errno) {
+	f.b.mu.Lock()
+	gate := f.b.writeGate
+	f.b.mu.Unlock()
+	if gate != nil {
+		<-gate
+	}
 	f.b.mu.Lock()
 	defer f.b.mu.Unlock()
 	data := f.b.files[f.path]
@@ -171,6 +314,12 @@ func (f *fakeIngestFile) Truncate(ctx meta.Context, length uint64) syscall.Errno
 }
 
 func (f *fakeIngestFile) Flush(ctx meta.Context) syscall.Errno {
+	f.b.mu.Lock()
+	gate := f.b.flushGate
+	f.b.mu.Unlock()
+	if gate != nil {
+		<-gate
+	}
 	f.b.mu.Lock()
 	defer f.b.mu.Unlock()
 	f.b.log.add("flush:" + f.path)
@@ -1161,5 +1310,584 @@ func TestIngestRecreateExistsAdoptsHydratedHonestMetadata(t *testing.T) {
 	ino := backend.inodeOf("/adopt-hydrated.txt")
 	if got, ok := idx.Path(ino); !ok || got != "/adopt-hydrated.txt" {
 		t.Errorf("idx.Path(%d) = (%q, %v), ожидается /adopt-hydrated.txt (усыновлён)", ino, got, ok)
+	}
+}
+
+// --- Этап 6: распространение операций (задачи 6.1–6.2), отмена выгрузки
+// --- (задача 6.5), журнал (задача 6.3).
+
+// notifyJournalTestProvider — провайдер этапа 6 с журналом (без replayer —
+// исполнение операций вызывается синхронно из теста).
+func notifyJournalTestProvider(t *testing.T) (*Provider, *fakeIngestBackend, *fakeIngestStore, *fakeStore, *Index, *Journal, *opLog) {
+	t.Helper()
+	p, backend, store, fstore, idx, log := newIngestTestProvider(t)
+	j, err := NewJournal(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewJournal: %v", err)
+	}
+	t.Cleanup(func() { _ = j.Close() })
+	p.journal = j
+	return p, backend, store, fstore, idx, j, log
+}
+
+// TestNotifyDeleteKnownPlaceholder — удаление известного плейсхолдера
+// доходит до backend (спека «Удаление плейсхолдера»), индекс чистится,
+// журнал не нужен (исполнено сразу).
+func TestNotifyDeleteKnownPlaceholder(t *testing.T) {
+	p, backend, _, _, idx, j, _ := notifyJournalTestProvider(t)
+	if err := idx.Put(42, "/del.txt"); err != nil {
+		t.Fatalf("idx.Put: %v", err)
+	}
+	backend.mu.Lock()
+	backend.files["/del.txt"] = []byte("x")
+	backend.inodes["/del.txt"] = 42
+	backend.mu.Unlock()
+
+	p.notifyDeletePath(filepath.Join(p.root, "del.txt"), 42, false)
+
+	if backend.deletes != 1 {
+		t.Fatalf("deletes = %d, ожидается 1", backend.deletes)
+	}
+	if len(backend.content("/del.txt")) != 0 {
+		t.Error("backend-запись не удалена")
+	}
+	if _, ok := idx.Path(42); ok {
+		t.Error("индекс не почищен")
+	}
+	if n := len(j.Ops()); n != 0 {
+		t.Errorf("журнал = %+v, ожидается пусто (исполнено сразу)", j.Ops())
+	}
+}
+
+// TestNotifyDeleteUnknownIgnored — неизвестная запись (локальный plain-файл
+// пользователя, инвариант задачи 6.2) в backend не передаётся никогда.
+func TestNotifyDeleteUnknownIgnored(t *testing.T) {
+	p, backend, _, _, _, j, _ := notifyJournalTestProvider(t)
+	local := filepath.Join(p.root, "plain-user.txt")
+	if err := os.WriteFile(local, []byte("user data"), 0o644); err != nil {
+		t.Fatalf("write local: %v", err)
+	}
+
+	p.notifyDeletePath(local, 0, false)
+
+	if backend.deletes != 0 {
+		t.Errorf("deletes = %d, ожидается 0 (неизвестная запись)", backend.deletes)
+	}
+	if n := len(j.Ops()); n != 0 {
+		t.Errorf("журнал = %+v, ожидается пусто", j.Ops())
+	}
+	if _, err := os.Stat(local); err != nil {
+		t.Errorf("локальный файл пользователя затронут: %v", err)
+	}
+}
+
+// TestNotifyDeleteSyncRootNever — инвариант (спека «Удаление sync root»):
+// удаление sync root НИКОГДА не передаётся в backend; Warn однократный.
+func TestNotifyDeleteSyncRootNever(t *testing.T) {
+	p, backend, _, _, _, j, _ := notifyJournalTestProvider(t)
+	hook := &logCapture{}
+	logger.AddHook(hook)
+	if err := p.idx.Put(1, "/"); err != nil {
+		t.Fatalf("idx.Put корня: %v", err)
+	}
+	backend.mu.Lock()
+	backend.dirs["/"] = true
+	backend.inodes["/"] = 1
+	backend.mu.Unlock()
+
+	for i := 0; i < 3; i++ {
+		p.notifyDeletePath(p.root, 1, i == 2) // и как файл, и как каталог
+	}
+	if backend.deletes != 0 || backend.rmdirs != 0 {
+		t.Errorf("backend затронут: deletes=%d rmdirs=%d, ожидается 0/0", backend.deletes, backend.rmdirs)
+	}
+	if n := len(j.Ops()); n != 0 {
+		t.Errorf("журнал = %+v, ожидается пусто", j.Ops())
+	}
+	if n := hook.count("never propagated to the backend"); n != 1 {
+		t.Errorf("строк Warn «never propagated»: %d, ожидается 1 (однократный)", n)
+	}
+}
+
+// TestNotifyDeleteOfflineJournals — спека «Удаление офлайн»: hub недоступен
+// — операция в журнале, индекс не тронут (walk не воскресит запись);
+// исполнение ветки replayer'а доводит до backend.
+func TestNotifyDeleteOfflineJournals(t *testing.T) {
+	p, backend, _, _, idx, j, _ := notifyJournalTestProvider(t)
+	if err := idx.Put(43, "/off.txt"); err != nil {
+		t.Fatalf("idx.Put: %v", err)
+	}
+	backend.mu.Lock()
+	backend.files["/off.txt"] = []byte("x")
+	backend.inodes["/off.txt"] = 43
+	backend.deleteErr = syscall.EIO // hub недоступен
+	backend.mu.Unlock()
+
+	p.notifyDeletePath(filepath.Join(p.root, "off.txt"), 43, false)
+
+	ops := j.Ops()
+	if len(ops) != 1 || ops[0].Type != OpDelete || ops[0].Ino != 43 {
+		t.Fatalf("журнал = %+v, ожидается delete /off.txt ino=43", ops)
+	}
+	if _, ok := idx.Path(43); !ok {
+		t.Fatal("индекс потерял запись (walk воскресил бы удалённое)")
+	}
+	// Восстановление: исполнение операции.
+	backend.mu.Lock()
+	backend.deleteErr = 0
+	backend.mu.Unlock()
+	if err := p.executeJournalOp(context.Background(), ops[0]); err != nil {
+		t.Fatalf("executeJournalOp: %v", err)
+	}
+	if len(backend.content("/off.txt")) != 0 {
+		t.Error("backend-запись не удалена после восстановления")
+	}
+	if _, ok := idx.Path(43); ok {
+		t.Error("индекс не почищен после восстановления")
+	}
+}
+
+// TestNotifyRenameKnownPlaceholder — спека «Переименование»: известный
+// плейсхолдер переименовывается в backend, индекс переносится на новый путь
+// (inode сохраняется, пере-резолв через backend Stat), журнал пуст.
+func TestNotifyRenameKnownPlaceholder(t *testing.T) {
+	p, backend, store, _, idx, j, _ := notifyJournalTestProvider(t)
+	data := []byte("renamed content")
+	if err := idx.Put(9, "/old.txt"); err != nil {
+		t.Fatalf("idx.Put: %v", err)
+	}
+	backend.mu.Lock()
+	backend.files["/old.txt"] = data
+	backend.inodes["/old.txt"] = 9
+	backend.mu.Unlock()
+	store.setStandard(filepath.Join(p.root, "new.txt"), cfapi.InSyncStateInSync)
+
+	p.notifyRenamePaths(context.Background(), filepath.Join(p.root, "old.txt"), filepath.Join(p.root, "new.txt"), 9, false)
+
+	if backend.renames != 1 {
+		t.Fatalf("renames = %d, ожидается 1", backend.renames)
+	}
+	if got := backend.content("/new.txt"); string(got) != string(data) {
+		t.Errorf("содержимое /new.txt = %q, ожидается %q", got, data)
+	}
+	if len(backend.content("/old.txt")) != 0 {
+		t.Error("старая запись backend не переехала")
+	}
+	if got, ok := idx.Path(9); !ok || got != "/new.txt" {
+		t.Errorf("idx.Path(9) = (%q, %v), ожидается /new.txt (inode сохранён)", got, ok)
+	}
+	if n := len(j.Ops()); n != 0 {
+		t.Errorf("журнал = %+v, ожидается пусто", j.Ops())
+	}
+}
+
+// TestNotifyRenameUnknownIgnored — переименование не-плейсхолдера в backend
+// не передаётся (задача 6.2).
+func TestNotifyRenameUnknownIgnored(t *testing.T) {
+	p, backend, _, _, _, j, _ := notifyJournalTestProvider(t)
+	if err := os.WriteFile(filepath.Join(p.root, "u1.txt"), []byte("a"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(p.root, "u2.txt"), []byte("a"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	p.notifyRenamePaths(context.Background(), filepath.Join(p.root, "u1.txt"), filepath.Join(p.root, "u2.txt"), 0, false)
+
+	if backend.renames != 0 {
+		t.Errorf("renames = %d, ожидается 0", backend.renames)
+	}
+	if n := len(j.Ops()); n != 0 {
+		t.Errorf("журнал = %+v, ожидается пусто", j.Ops())
+	}
+}
+
+// TestNotifyRenameOfflineJournals — hub недоступен: операция rename в
+// журнале; исполнение доводит backend и индекс.
+func TestNotifyRenameOfflineJournals(t *testing.T) {
+	p, backend, _, _, idx, j, _ := notifyJournalTestProvider(t)
+	if err := idx.Put(11, "/r1.txt"); err != nil {
+		t.Fatalf("idx.Put: %v", err)
+	}
+	backend.mu.Lock()
+	backend.files["/r1.txt"] = []byte("x")
+	backend.inodes["/r1.txt"] = 11
+	backend.renameErr = syscall.EIO
+	backend.mu.Unlock()
+
+	p.notifyRenamePaths(context.Background(), filepath.Join(p.root, "r1.txt"), filepath.Join(p.root, "r2.txt"), 11, false)
+
+	ops := j.Ops()
+	if len(ops) != 1 || ops[0].Type != OpRename || ops[0].NewPath != "/r2.txt" {
+		t.Fatalf("журнал = %+v, ожидается rename /r1.txt -> /r2.txt", ops)
+	}
+	backend.mu.Lock()
+	backend.renameErr = 0
+	backend.mu.Unlock()
+	if err := p.executeJournalOp(context.Background(), ops[0]); err != nil {
+		t.Fatalf("executeJournalOp: %v", err)
+	}
+	if got, ok := idx.Path(11); !ok || got != "/r2.txt" {
+		t.Errorf("idx.Path(11) = (%q, %v), ожидается /r2.txt", got, ok)
+	}
+}
+
+// TestNotifyDirCreate — спека «Новый каталог»: пользовательский каталог
+// создаётся в backend (Mkdir), конвертируется в плейсхолдер (MARK_IN_SYNC),
+// попадает в индекс.
+func TestNotifyDirCreate(t *testing.T) {
+	p, backend, _, fstore, idx, j, _ := notifyJournalTestProvider(t)
+	local := filepath.Join(p.root, "brand-new")
+	if err := os.Mkdir(local, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	p.notifyDirCreate(context.Background(), local)
+
+	if backend.mkdirs != 1 {
+		t.Fatalf("mkdirs = %d, ожидается 1", backend.mkdirs)
+	}
+	if !backend.hasDir("/brand-new") {
+		t.Error("каталог не создан в backend")
+	}
+	converts := fstore.convertCalls()
+	if len(converts) != 1 || !converts[0].isDir || converts[0].flags != cfapi.ConvertFlagMarkInSync {
+		t.Fatalf("конверсии = %+v, ожидается конверсия каталога MARK_IN_SYNC", converts)
+	}
+	ino, _, _ := backend.Stat(noopCtx(), "/brand-new")
+	if got, ok := idx.Path(ino); !ok || got != "/brand-new" {
+		t.Errorf("idx.Path(%d) = (%q, %v), ожидается /brand-new", ino, got, ok)
+	}
+	if n := len(j.Ops()); n != 0 {
+		t.Errorf("журнал = %+v, ожидается пусто", j.Ops())
+	}
+}
+
+// TestNotifyDirCreateKnownSkip — каталог, уже известный индексу (создан
+// walk-ом), повторно не создаётся и не конвертируется.
+func TestNotifyDirCreateKnownSkip(t *testing.T) {
+	p, backend, _, fstore, _, j, _ := notifyJournalTestProvider(t)
+	if err := p.idx.Put(77, "/walkdir"); err != nil {
+		t.Fatalf("idx.Put: %v", err)
+	}
+	local := filepath.Join(p.root, "walkdir")
+	if err := os.Mkdir(local, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	p.notifyDirCreate(context.Background(), local)
+
+	if backend.mkdirs != 0 {
+		t.Errorf("mkdirs = %d, ожидается 0 (известный плейсхолдер)", backend.mkdirs)
+	}
+	if n := len(fstore.convertCalls()); n != 0 {
+		t.Errorf("конверсий = %d, ожидается 0", n)
+	}
+	if n := len(j.Ops()); n != 0 {
+		t.Errorf("журнал = %+v, ожидается пусто", j.Ops())
+	}
+}
+
+// TestNotifyDirCreateOfflineJournals — hub недоступен: mkdir в журнале;
+// исполнение создаёт каталог в backend и доводит локальный до плейсхолдера.
+func TestNotifyDirCreateOfflineJournals(t *testing.T) {
+	p, backend, _, fstore, idx, j, _ := notifyJournalTestProvider(t)
+	local := filepath.Join(p.root, "offline-dir")
+	if err := os.Mkdir(local, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	backend.mu.Lock()
+	backend.mkdirErr = syscall.EIO
+	backend.mu.Unlock()
+
+	p.notifyDirCreate(context.Background(), local)
+
+	ops := j.Ops()
+	if len(ops) != 1 || ops[0].Type != OpMkdir || ops[0].Path != "/offline-dir" {
+		t.Fatalf("журнал = %+v, ожидается mkdir /offline-dir", ops)
+	}
+	backend.mu.Lock()
+	backend.mkdirErr = 0
+	backend.mu.Unlock()
+	if err := p.executeJournalOp(context.Background(), ops[0]); err != nil {
+		t.Fatalf("executeJournalOp: %v", err)
+	}
+	if !backend.hasDir("/offline-dir") {
+		t.Error("каталог не создан в backend после восстановления")
+	}
+	if n := len(fstore.convertCalls()); n != 1 || !fstore.convertCalls()[0].isDir {
+		t.Errorf("конверсии = %+v, ожидается одна конверсия каталога", fstore.convertCalls())
+	}
+	ino, _, _ := backend.Stat(noopCtx(), "/offline-dir")
+	if _, ok := idx.Path(ino); !ok {
+		t.Error("каталог не попал в индекс")
+	}
+}
+
+// TestNotifyDirDelete — удаление каталога-плейсхолдера: Rmdir в backend,
+// индекс чистится с потомками (DeletePrefix).
+func TestNotifyDirDelete(t *testing.T) {
+	p, backend, _, _, idx, _, _ := notifyJournalTestProvider(t)
+	if err := idx.Put(5, "/gone-dir"); err != nil {
+		t.Fatalf("idx.Put: %v", err)
+	}
+	if err := idx.Put(6, "/gone-dir/inner.txt"); err != nil {
+		t.Fatalf("idx.Put: %v", err)
+	}
+	backend.mu.Lock()
+	backend.dirs["/gone-dir"] = true
+	backend.inodes["/gone-dir"] = 5
+	backend.mu.Unlock()
+
+	p.notifyDeletePath(filepath.Join(p.root, "gone-dir"), 0, true)
+
+	if backend.rmdirs != 1 {
+		t.Fatalf("rmdirs = %d, ожидается 1", backend.rmdirs)
+	}
+	if backend.hasDir("/gone-dir") {
+		t.Error("каталог backend не удалён")
+	}
+	if _, ok := idx.Path(5); ok {
+		t.Error("индекс каталога не почищен")
+	}
+	if _, ok := idx.Path(6); ok {
+		t.Error("потомок каталога не снят с индекса (DeletePrefix)")
+	}
+}
+
+// TestNotifyDirRename — переименование каталога-плейсхолдера: backend
+// rename, пути потомков в индексе переносит RenamePrefix.
+func TestNotifyDirRename(t *testing.T) {
+	p, backend, _, _, idx, _, _ := notifyJournalTestProvider(t)
+	backend.mu.Lock()
+	backend.dirs["/odir"] = true
+	backend.inodes["/odir"] = 5
+	backend.mu.Unlock()
+	if err := idx.Put(5, "/odir"); err != nil {
+		t.Fatalf("idx.Put: %v", err)
+	}
+	if err := idx.Put(6, "/odir/kid.txt"); err != nil {
+		t.Fatalf("idx.Put: %v", err)
+	}
+
+	p.notifyRenamePaths(context.Background(), filepath.Join(p.root, "odir"), filepath.Join(p.root, "ndir"), 0, true)
+
+	if backend.renames != 1 {
+		t.Fatalf("renames = %d, ожидается 1", backend.renames)
+	}
+	if !backend.hasDir("/ndir") || backend.hasDir("/odir") {
+		t.Error("каталог backend не переименован")
+	}
+	if got, ok := idx.Path(5); !ok || got != "/ndir" {
+		t.Errorf("idx.Path(5) = (%q, %v), ожидается /ndir", got, ok)
+	}
+	if got, ok := idx.Path(6); !ok || got != "/ndir/kid.txt" {
+		t.Errorf("idx.Path(6) = (%q, %v), ожидается /ndir/kid.txt", got, ok)
+	}
+}
+
+// TestUploadCanceledAfterFlushJournalsDelete — задача 6.5 (design.md D9
+// «Удаление локального файла с незавершённой выгрузкой»): REMOVED в окне
+// выгрузки ПОСЛЕ подтверждённого Flush — версия уже в backend, в журнал
+// ставится удаление по inode; исполнение оставляет backend без файла.
+func TestUploadCanceledAfterFlushJournalsDelete(t *testing.T) {
+	p, backend, _, fstore, _, j, log := notifyJournalTestProvider(t)
+	local := filepath.Join(p.root, "cancel.txt")
+	data := patternBytes(200)
+	if err := os.WriteFile(local, data, 0o644); err != nil {
+		t.Fatalf("write local: %v", err)
+	}
+	// Flush блокируется до команды теста — окно «версия подтверждается».
+	gate := make(chan struct{})
+	backend.mu.Lock()
+	backend.flushGate = gate
+	backend.mu.Unlock()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- p.runIngest(ctx, ingestTask{fsPath: "/cancel.txt", local: local, key: "/cancel.txt"})
+	}()
+	waitFor(t, func() bool { return containsKind(log, "truncate") }) // до Flush дошёл
+
+	// Пользователь удаляет файл в окне выгрузки → REMOVED. Реальное окно
+	// удаления — до открытия/после закрытия read-хендла (os.Open не несёт
+	// FILE_SHARE_DELETE — само удаление блокируется до закрытия; событие
+	// REMOVED доходит до handleLocalRemoved асинхронно в любом случае), в
+	// тесте — прямая подача события.
+	p.handleLocalRemoved(local)
+
+	// Выгрузка завершается (Flush подтверждает версию).
+	close(gate)
+	if err := <-done; err != nil {
+		t.Fatalf("runIngest = %v, ожидается nil", err)
+	}
+	// Финализации не было (файл удалён), журнал: удаление по inode.
+	if n := len(fstore.convertCalls()); n != 0 {
+		t.Errorf("конверсий = %d, ожидается 0 (финализация отменена)", n)
+	}
+	ops := j.Ops()
+	if len(ops) != 1 || ops[0].Type != OpDelete || ops[0].Path != "/cancel.txt" {
+		t.Fatalf("журнал = %+v, ожидается delete /cancel.txt", ops)
+	}
+	if ops[0].Ino == 0 || ops[0].Ino != backend.inodeOf("/cancel.txt") {
+		t.Errorf("op.Ino = %d, ожидается inode backend %d", ops[0].Ino, backend.inodeOf("/cancel.txt"))
+	}
+	// Локальная запись удалена (read-хендл закрыт — теперь удаление возможно);
+	// исполнение очереди: backend без файла (DoD «backend без файла»).
+	if err := os.Remove(local); err != nil {
+		t.Fatalf("remove local после выгрузки: %v", err)
+	}
+	if err := p.executeJournalOp(context.Background(), ops[0]); err != nil {
+		t.Fatalf("executeJournalOp: %v", err)
+	}
+	if len(backend.content("/cancel.txt")) != 0 {
+		t.Error("backend не очищен от подтверждённой версии удалённого файла")
+	}
+}
+
+// containsKind — проверка наличия вида операции в журнале вызовов.
+func containsKind(l *opLog, kind string) bool {
+	for _, k := range l.kinds() {
+		if k == kind {
+			return true
+		}
+	}
+	return false
+}
+
+// noopCtx — meta.Context для подменного backend (им не используется).
+func noopCtx() meta.Context {
+	return meta.WrapWithCancel(context.Background(), uint32(os.Getpid()), 0, nil)
+}
+
+// TestCancelBeforeFlushNoJournal — REMOVED в окне выгрузки ДО подтверждения
+// Flush (блокировка первой записи, порции по 16 байт): задание снимается
+// без журнала — версии в backend нет; удаление существовавшей версии
+// донесёт NOTIFY_FILE_DELETED (плейсхолдер).
+func TestCancelBeforeFlushNoJournal(t *testing.T) {
+	p, backend, _, fstore, _, j, log := notifyJournalTestProvider(t)
+	local := filepath.Join(p.root, "precancel.txt")
+	if err := os.WriteFile(local, patternBytes(64), 0o644); err != nil {
+		t.Fatalf("write local: %v", err)
+	}
+	wg := make(chan struct{})
+	backend.mu.Lock()
+	backend.writeGate = wg
+	backend.mu.Unlock()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- p.runIngest(ctx, ingestTask{fsPath: "/precancel.txt", local: local, key: "/precancel.txt"})
+	}()
+	waitFor(t, func() bool { return containsKind(log, "create") })
+
+	// Пользователь удаляет файл в окне записи → REMOVED → отмена (событие
+	// подаётся напрямую — см. комментарий в TestUploadCanceledAfterFlushJournalsDelete).
+	p.handleLocalRemoved(local)
+	close(wg)
+	if err := <-done; err != nil {
+		t.Fatalf("runIngest = %v, ожидается nil (отмена — не ошибка)", err)
+	}
+	if n := len(j.Ops()); n != 0 {
+		t.Errorf("журнал = %+v, ожидается пусто (версия не подтверждена)", j.Ops())
+	}
+	if containsKind(log, "flush") || containsKind(log, "truncate") {
+		t.Errorf("подтверждение версии при отмене: %v", log.kinds())
+	}
+	if n := len(fstore.convertCalls()); n != 0 {
+		t.Errorf("конверсий = %d, ожидается 0", n)
+	}
+}
+
+// TestRemovedReplacesPendingUploadWithDelete — задача 6.5: REMOVED при
+// ожидающей в журнале выгрузке БЕЗ активного задания (снятое занятостью/
+// остановкой) — выгрузка заменяется удалением; исполнение очищает backend
+// (ENOENT — исполнено).
+func TestRemovedReplacesPendingUploadWithDelete(t *testing.T) {
+	p, backend, _, _, _, j, _ := notifyJournalTestProvider(t)
+	local := filepath.Join(p.root, "busy2.txt")
+	if err := os.WriteFile(local, []byte("confirmed"), 0o644); err != nil {
+		t.Fatalf("write local: %v", err)
+	}
+	if err := j.Add(JournalOp{Type: OpUpload, Path: "/busy2.txt"}); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	backend.mu.Lock()
+	backend.files["/busy2.txt"] = []byte("confirmed")
+	backend.inodes["/busy2.txt"] = 21
+	backend.mu.Unlock()
+	// Запись известна индексу — inode попадает в замену (fix-1.4).
+	if err := p.idx.Put(21, "/busy2.txt"); err != nil {
+		t.Fatalf("idx.Put: %v", err)
+	}
+
+	// Файл удалён, активной выгрузки нет — выгрузка меняется на удаление.
+	if err := os.Remove(local); err != nil {
+		t.Fatalf("remove local: %v", err)
+	}
+	p.handleLocalRemoved(local)
+
+	ops := j.Ops()
+	if len(ops) != 1 || ops[0].Type != OpDelete || ops[0].Path != "/busy2.txt" {
+		t.Fatalf("журнал = %+v, ожидается delete /busy2.txt", ops)
+	}
+	if ops[0].Ino != 21 {
+		t.Errorf("op.Ino = %d, ожидается 21 (inode из индекса, fix-1.4)", ops[0].Ino)
+	}
+	if err := p.executeJournalOp(context.Background(), ops[0]); err != nil {
+		t.Fatalf("executeJournalOp: %v", err)
+	}
+	if len(backend.content("/busy2.txt")) != 0 {
+		t.Error("подтверждённая версия удалённого файла не вычищена")
+	}
+}
+
+// TestRemovedOwnEventSuppressed — собственное событие финализации
+// (replace-after-upload) не отменяет выгрузку: в окне супрессии REMOVED
+// игнорируется, журнал пуст.
+func TestRemovedOwnEventSuppressed(t *testing.T) {
+	p, _, _, _, _, j, _ := notifyJournalTestProvider(t)
+	clock := newFakeClock(time.Unix(0, 0))
+	p.clock = clock
+	local := filepath.Join(p.root, "own.txt")
+	if err := os.WriteFile(local, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write local: %v", err)
+	}
+	p.markSelfEvent("/own.txt")
+
+	p.handleLocalRemoved(local)
+
+	if n := len(j.Ops()); n != 0 {
+		t.Errorf("журнал = %+v, ожидается пусто (собственное событие)", j.Ops())
+	}
+}
+
+// TestNotifyRenameFalseENOENTKeepsEntry — fix-1.8: ENOENT при rename при
+// существующей цели — гонка (переименование уже исполнено другим источником);
+// валидная запись не сносится, индекс переносится на новый путь.
+func TestNotifyRenameFalseENOENTKeepsEntry(t *testing.T) {
+	p, backend, _, _, idx, j, _ := notifyJournalTestProvider(t)
+	// «Переименование уже исполнено» другим источником: старой записи нет,
+	// новая есть с тем же inode, backend rename отвечает ENOENT.
+	backend.mu.Lock()
+	backend.files["/done.txt"] = []byte("x")
+	backend.inodes["/done.txt"] = 12
+	backend.renameErr = syscall.ENOENT
+	backend.mu.Unlock()
+	if err := idx.Put(12, "/src.txt"); err != nil {
+		t.Fatalf("idx.Put: %v", err)
+	}
+
+	p.notifyRenamePaths(context.Background(), filepath.Join(p.root, "src.txt"), filepath.Join(p.root, "done.txt"), 12, false)
+
+	if got, ok := idx.Path(12); !ok || got != "/done.txt" {
+		t.Fatalf("idx.Path(12) = (%q, %v), ожидается /done.txt (запись сохранена)", got, ok)
+	}
+	if n := len(j.Ops()); n != 0 {
+		t.Errorf("журнал = %+v, ожидается пусто (исполнено)", j.Ops())
 	}
 }

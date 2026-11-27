@@ -176,8 +176,15 @@ func rollbackEntry(path string) error {
 
 // failedAfterCreate — отказ createEntry после создания реальной записи:
 // откат (удаление) и ошибка с причиной; неудавшийся откат — карантин в
-// цепочке ошибки (errors.As находит *quarantineError).
-func failedAfterCreate(local, rel, step string, cause error) (placeholderResultKind, error) {
+// цепочке ошибки (errors.As находит *quarantineError). Гонка с
+// notifyDirCreate/повтором журнала (между созданием реальной записи и нашей
+// конверсией запись уже сконвертирована в плейсхолдер): откат удалил бы
+// валидный плейсхолдер — усыновление (resultExists, без отката, fix-1.7).
+func failedAfterCreate(p *Provider, local, rel, step string, cause error) (placeholderResultKind, error) {
+	if exists, isPh, serr := p.store.StateOf(local); serr == nil && exists && isPh {
+		logger.Debugf("create %s: converted by a concurrent op while pending; adopted", rel)
+		return resultExists, nil
+	}
 	if rerr := rollbackEntry(local); rerr != nil {
 		return resultFailed, fmt.Errorf("%s %s: %v; rollback: %w", step, rel, cause, rerr)
 	}
@@ -218,10 +225,10 @@ func createEntry(p *Provider, dir string, e BackendEntry) (placeholderResultKind
 			return resultFailed, fmt.Errorf("mkdir %s: %w", rel, err)
 		}
 		if err := os.Chtimes(local, mtime, mtime); err != nil {
-			return failedAfterCreate(local, rel, "chtimes", err)
+			return failedAfterCreate(p, local, rel, "chtimes", err)
 		}
 		if err := p.store.Convert(local, true, identity, cfapi.ConvertFlagMarkInSync); err != nil {
-			return failedAfterCreate(local, rel, "convert dir", err)
+			return failedAfterCreate(p, local, rel, "convert dir", err)
 		}
 		return resultCreated, nil
 	}
@@ -234,14 +241,14 @@ func createEntry(p *Provider, dir string, e BackendEntry) (placeholderResultKind
 	}
 	if err := f.Truncate(e.Size); err != nil {
 		_ = f.Close()
-		return failedAfterCreate(local, rel, "truncate", err)
+		return failedAfterCreate(p, local, rel, "truncate", err)
 	}
 	if err := os.Chtimes(local, mtime, mtime); err != nil {
 		_ = f.Close()
-		return failedAfterCreate(local, rel, "chtimes", err)
+		return failedAfterCreate(p, local, rel, "chtimes", err)
 	}
 	if err := f.Close(); err != nil {
-		return failedAfterCreate(local, rel, "close", err)
+		return failedAfterCreate(p, local, rel, "close", err)
 	}
 	if err := p.store.Convert(local, false, identity, cfapi.ConvertFlagMarkInSync|cfapi.ConvertFlagDehydrate); err != nil {
 		// Fallback (design.md D6.4): convert без дегидратации, затем
@@ -249,13 +256,13 @@ func createEntry(p *Provider, dir string, e BackendEntry) (placeholderResultKind
 		// одна строка.
 		logger.Infof("create %s: convert(DEHYDRATE) rejected: %v; fallback convert+update", rel, err)
 		if ferr := p.store.Convert(local, false, identity, cfapi.ConvertFlagMarkInSync); ferr != nil {
-			return failedAfterCreate(local, rel, "convert", ferr)
+			return failedAfterCreate(p, local, rel, "convert", ferr)
 		}
 		if uerr := p.store.Update(local, makeFsMetadata(e), cfapi.UpdateFlagDehydrate|cfapi.UpdateFlagMarkInSync); uerr != nil {
 			// Остался бы гидратированный плейсхолдер (EOF-нули без DEHYDRATE
 			// не дают FETCH_DATA) — недопустимое конечное состояние (D6.4),
 			// откат.
-			return failedAfterCreate(local, rel, "dehydrate", uerr)
+			return failedAfterCreate(p, local, rel, "dehydrate", uerr)
 		}
 	}
 	return resultCreated, nil
@@ -559,7 +566,7 @@ type dirPopulation struct {
 // Сбои createEntry (design.md D6.4): созданная реальная запись удаляется;
 // групповой Warn на каталог до 10 имён вместо одиночных; неудавшееся
 // удаление — «карантин» (`walk quarantine:`), на следующем walk конфликт.
-func populateDirectory(p *Provider, dir string, entries []BackendEntry) *dirPopulation {
+func populateDirectory(ctx context.Context, p *Provider, dir string, entries []BackendEntry) *dirPopulation {
 	res := &dirPopulation{dir: dir}
 	baseDir := localJoin(p.root, dir)
 	// Локальное перечисление D (design.md D6.5). Ошибка чтения — в лог,
@@ -567,12 +574,15 @@ func populateDirectory(p *Provider, dir string, entries []BackendEntry) *dirPopu
 	// поверх обычного файла пользователя не пройдёт — EEXIST-переклассификация
 	// даст конфликт, запись не затирается.
 	present := make(map[string]struct{})
+	presentNames := make(map[string]string) // нижний регистр → оригинал (сверка)
 	names, err := p.local.ListNames(baseDir)
 	if err != nil {
 		logger.Warnf("walk %s: list local %s: %v; conflict detection is limited", dir, baseDir, err)
 	}
 	for _, n := range names {
-		present[strings.ToLower(n)] = struct{}{}
+		low := strings.ToLower(n)
+		present[low] = struct{}{}
+		presentNames[low] = n
 	}
 	var failedExamples []string // до 10 имён для группового Warn каталога
 	for _, e := range entries {
@@ -582,10 +592,24 @@ func populateDirectory(p *Provider, dir string, entries []BackendEntry) *dirPopu
 			classifyOccupied(p, res, e, rel, localPath, true, &failedExamples)
 			continue
 		}
+		if _, known := p.idx.Path(e.Inode); known {
+			// Inode известен индексу, локального имени нет: удаление
+			// известного плейсхолдера, не дошедшее до backend (сбой после
+			// локального удаления). Повторное создание потеряло бы удаление
+			// пользователя; удаление в backend ставит сверка (reconcileDir,
+			// сценарий «Восстановление после сбоя»).
+			res.skipped++
+			continue
+		}
 		// to-create: convert-примитив (design.md D6.4).
 		kind, cerr := createEntry(p, dir, e)
 		applyCreateResult(p, res, e, rel, localPath, kind, cerr, &failedExamples)
 	}
+	// Write-часть сверки (design.md D9, задача 6.4): каталог обработан —
+	// плейсхолдеры вне in-sync и локальные файлы без записи backend →
+	// очередь выгрузки; записи индекса без локального файла → очередь
+	// удаления backend.
+	reconcileDir(ctx, p, dir, entries, presentNames)
 	if res.failedEntries > 0 {
 		// Групповой Warn на каталог (design.md D6.4), до 10 имён — замена
 		// одиночных Warn'ов батч-пути.
@@ -739,7 +763,7 @@ func populateTopLevel(ctx context.Context, p *Provider) error {
 	if err != nil {
 		return fmt.Errorf("list backend root: %w", err)
 	}
-	res := populateDirectory(p, "/", entries)
+	res := populateDirectory(ctx, p, "/", entries)
 	p.setRootSubdirs(res.subdirs)
 	if res.conflicts > 0 {
 		logger.Warnf("top-level population: %d entr(ies) skipped due to conflicting local files, e.g. %v", res.conflicts, res.conflictExamples)
