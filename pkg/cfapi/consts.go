@@ -199,7 +199,15 @@ const (
 	HardlinkPolicyAllowed uint32 = 0x00000001
 )
 
-// CF_PLACEHOLDER_MANAGEMENT_POLICY.
+// CF_PLACEHOLDER_MANAGEMENT_POLICY — кто делает placeholder-операции.
+// DEFAULT (0x0) означает «провайдер делает всё»: фильтр блокирует
+// пользовательские операции с плейсхолдерами. Unrestricted-биты открывают
+// их пользователю: CREATE (0x1 — новые файлы в sync root), CONVERT (0x2 —
+// конверсия full-файла в плейсхолдер, например после выгрузки), UPDATE
+// (0x4 — правки содержимого плейсхолдеров). Живая проба 27.11: DEFAULT на
+// register → ЛЮБОЙ create в sync root падает с ERROR_CANT_RESOLVE_FILENAME
+// (Win32 1921 / HRESULT 0x80070781) — для write-пути (В3) нужны все три
+// бита (маска 0x7).
 const (
 	PlaceholderManagementPolicyDefault               uint32 = 0x00000000
 	PlaceholderManagementPolicyCreateUnrestricted    uint32 = 0x00000001

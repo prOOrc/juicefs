@@ -33,11 +33,16 @@ import (
 //
 // status — CompletionStatus ответа (StatusSuccess, при отмене — код отказа);
 // placeholders — записи плейсхолдеров (nil допустим, например при отмене);
-// total — полное число записей каталога, если известно; неизвестно — EOF.
+// total — PlaceholderTotalCount: полное число записей каталога (не EOF, см.
+// провайдера); entriesProcessed — EntriesProcessed: кумулятивный счётчик
+// обработанных провайдером записей. Живая проба 27.11: фильтр завершает
+// population по processed >= total — single-shot ответ должен нести
+// processed = полное число записей каталога (== count, когда каталог
+// передаётся целиком), иначе create пендится вечно.
 //
 // Ответ обязателен на каждое задание ровно один раз — иначе перечисление
 // каталога в Explorer остаётся подвешенным до таймаута фильтра.
-func AnswerFetchPlaceholders(conn ConnectionKey, transferKey TransferKey, requestKey RequestKey, status NTStatus, placeholders []CFPlaceholderCreateInfo, total int64) error {
+func AnswerFetchPlaceholders(conn ConnectionKey, transferKey TransferKey, requestKey RequestKey, status NTStatus, placeholders []CFPlaceholderCreateInfo, total int64, entriesProcessed uint32) error {
 	opInfo := CFOperationInfo{
 		StructSize:    uint32(unsafe.Sizeof(CFOperationInfo{})),
 		Type:          OperationTypeTransferPlaceholders,
@@ -46,7 +51,16 @@ func AnswerFetchPlaceholders(conn ConnectionKey, transferKey TransferKey, reques
 		RequestKey:    requestKey,
 	}
 	opParams := CFOperationParameters{
-		ParamSize: uint32(unsafe.Sizeof(operationTransferPlaceholdersParams{})),
+		// ParamSize — размер ВСЕЙ структуры параметров (union целиком).
+		// cfapi.h ParamSize не документирует; в MS-сэмпле CloudMirror
+		// встречается и размер активной ветки (sizeof(opParams.TransferData)).
+		// Живые пробы U2 (27.11): (1) ParamSize=32 (размер ветки
+		// TransferPlaceholders) при count=0/NULL-массиве — E_INVALIDARG;
+		// (2) с union-размером count=0+SUCCESS принят фильтром — легальный
+		// ответ «населено, можно создавать» (на provider'е: пустой каталог
+		// или каталог, всё содержимое которого уже на диске). Если union
+		// целиком когда-нибудь отвергается — вернуть размер ветки.
+		ParamSize: uint32(unsafe.Sizeof(CFOperationParameters{})),
 	}
 	p := opParams.OperationTransferPlaceholders()
 	p.Flags = OperationTransferPlaceholdersFlagNone
@@ -56,6 +70,6 @@ func AnswerFetchPlaceholders(conn ConnectionKey, transferKey TransferKey, reques
 		p.PlaceholderArray = &placeholders[0]
 	}
 	p.PlaceholderCount = uint32(len(placeholders))
-	p.EntriesProcessed = 0
+	p.EntriesProcessed = entriesProcessed
 	return CfExecute(&opInfo, &opParams)
 }

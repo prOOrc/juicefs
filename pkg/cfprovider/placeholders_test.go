@@ -72,23 +72,37 @@ func (f *fakeBackend) listCalls() int {
 	return f.calls
 }
 
-// fakeStore — подменный placeholderStore: создает вызовы фиксирует,
+// fakeStore — подменный placeholderStore: convert/update вызовы фиксирует,
 // состояние локальных путей задаётся картой (есть путь — есть плейсхолдер).
 type fakeStore struct {
 	mu        sync.Mutex
-	creates   []createCall
+	converts  []convertCall
+	updates   []updateCall
 	answers   []answerCall
 	local     map[string]bool // локальные пути, существующие как ПЛЕЙСХОЛДЕРЫ
 	localReal map[string]bool // локальные пути, существующие как ОБЫЧНЫЕ файлы
+	// standard — CF_PLACEHOLDER_STANDARD_INFO по путям (усыновление);
+	// отсутствие записи — дегидратированный плейсхолдер (OnDiskDataSize 0).
+	standard map[string]*cfapi.CFPlaceholderStandardInfo
+	// answerResults — симуляция записи фильтром per-entry Result в наш
+	// массив при обработке TRANSFER-ответа (имя записи → Result).
+	answerResults map[string]cfapi.HRESULT
 }
 
-type createCall struct {
-	basePath string
-	names    []string
-	identies []uint64
-	isDirs   []bool
-	sizes    []int64
-	flags    []uint32
+// convertCall — фиксация convert-примитива (design.md D6.4): путь, тип
+// записи, identity (inode) и CF_CONVERT_FLAGS.
+type convertCall struct {
+	path  string
+	isDir bool
+	ino   uint64
+	flags uint32
+}
+
+// updateCall — фиксация fallback-дегидратации (CfUpdatePlaceholder).
+type updateCall struct {
+	path  string
+	size  int64
+	flags uint32
 }
 
 type answerCall struct {
@@ -98,40 +112,41 @@ type answerCall struct {
 	status      cfapi.NTStatus
 	names       []string
 	total       int64
+	processed   uint32
 }
 
-func (f *fakeStore) Create(baseDirPath string, infos []cfapi.CFPlaceholderCreateInfo, createFlags uint32, entriesProcessed *uint32) error {
+func (f *fakeStore) Convert(path string, isDir bool, identity []byte, flags uint32) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	call := createCall{basePath: baseDirPath}
-	for i := range infos {
-		name := utf16Name(infos[i].RelativeFileName)
-		call.names = append(call.names, name)
-		var ino uint64
-		if infos[i].FileIdentity != nil && infos[i].FileIdentityLength >= 8 {
-			b := (*[8]byte)(infos[i].FileIdentity)
-			ino = binary.LittleEndian.Uint64(b[:])
-		}
-		call.identies = append(call.identies, ino)
-		call.isDirs = append(call.isDirs, infos[i].FsMetadata.BasicInfo.FileAttributes&uint32(windows.FILE_ATTRIBUTE_DIRECTORY) != 0)
-		call.sizes = append(call.sizes, infos[i].FsMetadata.FileSize)
-		call.flags = append(call.flags, infos[i].Flags)
-		// Реальный фильтр возвращает статус каждой записи здесь.
-		infos[i].Result = 0
+	var ino uint64
+	if len(identity) >= 8 {
+		ino = binary.LittleEndian.Uint64(identity)
 	}
-	if entriesProcessed != nil {
-		*entriesProcessed = uint32(len(infos))
-	}
-	f.creates = append(f.creates, call)
+	f.converts = append(f.converts, convertCall{path: path, isDir: isDir, ino: ino, flags: flags})
+	// Модель реального фильтра: после успешной конверсии путь — плейсхолдер.
+	f.local[path] = true
 	return nil
 }
 
-func (f *fakeStore) AnswerFetchPlaceholders(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, status cfapi.NTStatus, infos []cfapi.CFPlaceholderCreateInfo, total int64) error {
+func (f *fakeStore) Update(path string, fsMetadata cfapi.CFFileMetadata, flags uint32) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	call := answerCall{conn: conn, transferKey: transferKey, requestKey: requestKey, status: status, total: total}
+	f.updates = append(f.updates, updateCall{path: path, size: fsMetadata.FileSize, flags: flags})
+	return nil
+}
+
+func (f *fakeStore) AnswerFetchPlaceholders(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, status cfapi.NTStatus, infos []cfapi.CFPlaceholderCreateInfo, total int64, entriesProcessed uint32) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	call := answerCall{conn: conn, transferKey: transferKey, requestKey: requestKey, status: status, total: total, processed: entriesProcessed}
 	for i := range infos {
-		call.names = append(call.names, utf16Name(infos[i].RelativeFileName))
+		name := utf16Name(infos[i].RelativeFileName)
+		call.names = append(call.names, name)
+		// Фильтр пишет per-entry Result в НАШ буфер при обработке ответа —
+		// подменная реализация симулирует это тем же способом.
+		if res, ok := f.answerResults[name]; ok {
+			infos[i].Result = res
+		}
 	}
 	f.answers = append(f.answers, call)
 	return nil
@@ -152,10 +167,27 @@ func (f *fakeStore) StateOf(path string) (bool, bool, error) {
 	return false, false, nil
 }
 
-func (f *fakeStore) createCalls() []createCall {
+// StandardInfo подменного store: карта standard; по умолчанию —
+// дегидратированный плейсхолдер (OnDiskDataSize = 0).
+func (f *fakeStore) StandardInfo(path string) (*cfapi.CFPlaceholderStandardInfo, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return append([]createCall(nil), f.creates...)
+	if info, ok := f.standard[path]; ok {
+		return info, nil
+	}
+	return &cfapi.CFPlaceholderStandardInfo{OnDiskDataSize: 0}, nil
+}
+
+func (f *fakeStore) convertCalls() []convertCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]convertCall(nil), f.converts...)
+}
+
+func (f *fakeStore) updateCalls() []updateCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]updateCall(nil), f.updates...)
 }
 
 func (f *fakeStore) answerCalls() []answerCall {
@@ -168,6 +200,30 @@ func (f *fakeStore) answerCalls() []answerCall {
 type errFake string
 
 func (e errFake) Error() string { return string(e) }
+
+// fakeLocal — localLister поверх карт fakeStore (плейсхолдеры + реальные
+// файлы): локальное перечисление каталога без реального диска — для тестов,
+// где «диск» изображён в fakeStore (классификация design.md D6.5).
+type fakeLocal struct{ s *fakeStore }
+
+func (f fakeLocal) ListNames(localDir string) ([]string, error) {
+	f.s.mu.Lock()
+	defer f.s.mu.Unlock()
+	seen := map[string]bool{}
+	var names []string
+	for _, m := range []map[string]bool{f.s.local, f.s.localReal} {
+		for p := range m {
+			if filepath.Dir(p) == localDir {
+				n := filepath.Base(p)
+				if !seen[n] {
+					seen[n] = true
+					names = append(names, n)
+				}
+			}
+		}
+	}
+	return names, nil
+}
 
 func newTestProvider(t *testing.T, root string, backend backendLister, store placeholderStore) (*Provider, *Index) {
 	t.Helper()
@@ -184,14 +240,16 @@ func newTestProvider(t *testing.T, root string, backend backendLister, store pla
 	return p, idx
 }
 
-// TestPopulateTopLevelFresh — верхний уровень: записи backend превращаются в
-// плейсхолдеры с метаданными backend и identity = inode LE 8 байт; индекс
-// получает соответствие inode → путь.
+// TestPopulateTopLevelFresh — верхний уровень: записи hub создаются
+// convert-примитивом (design.md D6.4, задача 2.8) — реальная запись на диске
+// (размер Truncate'ом, mtime Chtimes'ом) + конверсия с identity = inode
+// LE 8 байт; файл конвертируется с DEHYDRATE|MARK_IN_SYNC, каталог —
+// MARK_IN_SYNC; индекс получает соответствие inode → путь.
 func TestPopulateTopLevelFresh(t *testing.T) {
 	root := t.TempDir()
 	backend := &fakeBackend{dirs: map[string][]BackendEntry{
 		"/": {
-			{Name: "doc.pdf", Inode: 0x1122334455667788, Size: 12345, MtimeSec: 1700000000, MtimeNsec: 5},
+			{Name: "doc.pdf", Inode: 0x1122334455667788, Size: 12345, MtimeSec: 1700000000, MtimeNsec: 500},
 			{Name: "sub", Inode: 99, Size: 0, MtimeSec: 1700000123, IsDir: true},
 		},
 	}}
@@ -201,35 +259,53 @@ func TestPopulateTopLevelFresh(t *testing.T) {
 	if err := populateTopLevel(context.Background(), p); err != nil {
 		t.Fatalf("populateTopLevel: %v", err)
 	}
-	calls := store.createCalls()
-	if len(calls) != 1 {
-		t.Fatalf("Create вызван %d раз, ожидается 1", len(calls))
+	// Поштучные конверсии: по одной на запись, без батчей.
+	converts := store.convertCalls()
+	if len(converts) != 2 {
+		t.Fatalf("конверсий %d, ожидается 2 (по одной на запись)", len(converts))
 	}
-	call := calls[0]
-	if call.basePath != root {
-		t.Errorf("базовый каталог %q, ожидается %q", call.basePath, root)
+	// Файл: identity = inode LE 8 байт, флаги MARK_IN_SYNC|DEHYDRATE
+	// (явная дегидратация обязательна — design.md D6.4).
+	file := converts[0]
+	if file.path != filepath.Join(root, "doc.pdf") {
+		t.Errorf("путь конверсии %q, ожидается %q", file.path, filepath.Join(root, "doc.pdf"))
 	}
-	if len(call.names) != 2 {
-		t.Fatalf("создано %d записей, ожидается 2", len(call.names))
+	if file.isDir {
+		t.Error("doc.pdf сконвертирован как каталог")
 	}
-	if call.names[0] != "doc.pdf" || call.names[1] != "sub" {
-		t.Errorf("имена записей: %v", call.names)
+	if file.ino != 0x1122334455667788 {
+		t.Errorf("identity файла = %#x, ожидается inode", file.ino)
 	}
-	// FileIdentity = inode, 8 байт LE (инвариант design.md D6).
-	if call.identies[0] != 0x1122334455667788 {
-		t.Errorf("identity файла = %#x, ожидается inode", call.identies[0])
+	if file.flags != cfapi.ConvertFlagMarkInSync|cfapi.ConvertFlagDehydrate {
+		t.Errorf("флаги файла = %#x, ожидается MARK_IN_SYNC|DEHYDRATE", file.flags)
 	}
-	// Размер из backend.
-	if call.sizes[0] != 12345 || call.sizes[1] != 0 {
-		t.Errorf("размеры записей: %v, ожидается [12345 0]", call.sizes)
+	// Каталог: MARK_IN_SYNC без DEHYDRATE.
+	dir := converts[1]
+	if !dir.isDir || dir.ino != 99 || dir.path != filepath.Join(root, "sub") {
+		t.Errorf("конверсия каталога: %+v, ожидается sub/ino 99/isDir", dir)
 	}
-	// Каталог — атрибут DIRECTORY; файл — нет.
-	if !call.isDirs[1] || call.isDirs[0] {
-		t.Errorf("флаги каталога: файл=%v каталог=%v, ожидается false/true", call.isDirs[0], call.isDirs[1])
+	if dir.flags != cfapi.ConvertFlagMarkInSync {
+		t.Errorf("флаги каталога = %#x, ожидается MARK_IN_SYNC", dir.flags)
 	}
-	// Метаданные mtime должны отличаться между записями (из backend).
-	if call.flags[0] != placeholderCreateFlags {
-		t.Errorf("flags = %#x, ожидается %#x (см. пробу U2)", call.flags[0], placeholderCreateFlags)
+	// Реальная запись файла на диске: размер из backend (SetEndOfFile) и
+	// mtime из backend (SetFileTime) — без записи данных.
+	fi, err := os.Stat(filepath.Join(root, "doc.pdf"))
+	if err != nil {
+		t.Fatalf("stat doc.pdf: %v", err)
+	}
+	if fi.Size() != 12345 {
+		t.Errorf("размер файла %d, ожидается 12345 (логический EOF)", fi.Size())
+	}
+	if want := time.Unix(1700000000, 500); !fi.ModTime().Equal(want) {
+		t.Errorf("mtime файла %v, ожидается %v (из backend)", fi.ModTime(), want)
+	}
+	// Каталог создан на диске.
+	fi, err = os.Stat(filepath.Join(root, "sub"))
+	if err != nil || !fi.IsDir() {
+		t.Errorf("sub: stat = %v, ожидается каталог", err)
+	}
+	if n := len(store.updateCalls()); n != 0 {
+		t.Errorf("fallback-обновлений %d, ожидается 0 (convert(DEHYDRATE) принят)", n)
 	}
 	if p, ok := idx.Path(0x1122334455667788); !ok || p != "/doc.pdf" {
 		t.Errorf("idx.Path = (%q, %v), ожидается /doc.pdf", p, ok)
@@ -269,12 +345,9 @@ func TestPopulateTopLevelConflict(t *testing.T) {
 		t.Fatalf("populateTopLevel: %v", err)
 	}
 
-	calls := store.createCalls()
-	if len(calls) != 1 {
-		t.Fatalf("Create вызван %d раз, ожидается 1", len(calls))
-	}
-	if len(calls[0].names) != 1 || calls[0].names[0] != "fresh.bin" {
-		t.Fatalf("конфликтующая запись попала в CfCreatePlaceholders: %v", calls[0].names)
+	converts := store.convertCalls()
+	if len(converts) != 1 || converts[0].path != filepath.Join(root, "fresh.bin") {
+		t.Fatalf("конверсии %v, ожидается ровно одна по fresh.bin (конфликт пропущен)", converts)
 	}
 	after, err := os.Stat(local)
 	if err != nil {
@@ -299,12 +372,20 @@ type stateAwareStore struct {
 	state placeholderStore
 }
 
-func (s *stateAwareStore) Create(baseDirPath string, infos []cfapi.CFPlaceholderCreateInfo, createFlags uint32, entriesProcessed *uint32) error {
-	return s.store.Create(baseDirPath, infos, createFlags, entriesProcessed)
+func (s *stateAwareStore) Convert(path string, isDir bool, identity []byte, flags uint32) error {
+	return s.store.Convert(path, isDir, identity, flags)
 }
 
-func (s *stateAwareStore) AnswerFetchPlaceholders(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, status cfapi.NTStatus, infos []cfapi.CFPlaceholderCreateInfo, total int64) error {
-	return s.store.AnswerFetchPlaceholders(conn, transferKey, requestKey, status, infos, total)
+func (s *stateAwareStore) Update(path string, fsMetadata cfapi.CFFileMetadata, flags uint32) error {
+	return s.store.Update(path, fsMetadata, flags)
+}
+
+func (s *stateAwareStore) StandardInfo(path string) (*cfapi.CFPlaceholderStandardInfo, error) {
+	return s.store.StandardInfo(path)
+}
+
+func (s *stateAwareStore) AnswerFetchPlaceholders(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, status cfapi.NTStatus, infos []cfapi.CFPlaceholderCreateInfo, total int64, entriesProcessed uint32) error {
+	return s.store.AnswerFetchPlaceholders(conn, transferKey, requestKey, status, infos, total, entriesProcessed)
 }
 
 func (s *stateAwareStore) StateOf(path string) (bool, bool, error) {
@@ -322,25 +403,23 @@ func TestPopulateTopLevelRestartNoDuplicates(t *testing.T) {
 	// Путь существует и является плейсхолдером (создан предыдущим запуском).
 	store := &fakeStore{local: map[string]bool{filepath.Join(root, "old.bin"): true}, localReal: map[string]bool{}}
 	p, idx := newTestProvider(t, root, backend, store)
+	// «Диск» — в fakeStore: локальное перечисление по его картам.
+	p.local = fakeLocal{store}
 
 	if err := populateTopLevel(context.Background(), p); err != nil {
 		t.Fatalf("populateTopLevel: %v", err)
 	}
-	// Плейсхолдер уже на диске — CfCreatePlaceholders не вызывается вовсе
-	// (и уж точно не с записью old.bin).
-	for i, call := range store.createCalls() {
-		for _, n := range call.names {
-			if n == "old.bin" {
-				t.Errorf("вызов Create #%d передал существующий плейсхолдер повторно: %v (дубль)", i, call.names)
-			}
-		}
+	// Плейсхолдер уже на диске — создание не повторяется вовсе: конверсий
+	// нет (и уж точно не по old.bin).
+	if n := len(store.convertCalls()); n != 0 {
+		t.Errorf("существующий плейсхолдер сконвертирован повторно: %d вызовов (дубль)", n)
 	}
 	if p, ok := idx.Path(42); !ok || p != "/old.bin" {
 		t.Errorf("idx.Path(42) = (%q, %v), ожидается /old.bin", p, ok)
 	}
 }
 
-// TestHandleFetchPlaceholdersChildren — дети каталога при первом обращении:
+// TestHandleFetchPlaceholdersChildren — fallback FETCH_PLACEHOLDERS:
 // воркер отвечает TRANSFER_PLACEHOLDERS с записями каталога, индекс
 // пополняется, каталог задания переводится из локального пути в fs-путь.
 func TestHandleFetchPlaceholdersChildren(t *testing.T) {
@@ -451,8 +530,9 @@ func TestHandleFetchPlaceholdersBackendError(t *testing.T) {
 }
 
 // TestRunPopulationDrainsQueue — воркер разбирает очередь диспетчера:
-// задание для пути вне sync root (fsPathOf → "/") обслуживается по каталогу
-// "/" и завершается ровно одним ответом.
+// задание с путём вне sync root (fsPathOf → "", FileID не резолвится)
+// обслуживается fallback-веткой по каталогу "/" и завершается ровно одним
+// ответом.
 func TestRunPopulationDrainsQueue(t *testing.T) {
 	root := t.TempDir()
 	backend := &fakeBackend{dirs: map[string][]BackendEntry{
@@ -502,25 +582,22 @@ func TestRunPopulationDrainsQueue(t *testing.T) {
 	}
 }
 
-// failingCreateStore — Create возвращает полную ошибку, статусы записей
-// (Result) не трогает — недостоверны, как у реального фильтра.
-type failingCreateStore struct {
+// failingConvertStore — convert-примитив отказывает всегда (симуляция
+// отказа CfConvertToPlaceholder).
+type failingConvertStore struct {
 	fakeStore
-	createErr error
+	convertErr error
 }
 
-func (f *failingCreateStore) Create(baseDirPath string, infos []cfapi.CFPlaceholderCreateInfo, createFlags uint32, entriesProcessed *uint32) error {
-	_ = baseDirPath
-	_ = infos
-	if entriesProcessed != nil {
-		*entriesProcessed = 0
-	}
-	return f.createErr
+func (f *failingConvertStore) Convert(path string, isDir bool, identity []byte, flags uint32) error {
+	return f.convertErr
 }
 
-// TestPopulateTopLevelCreateFailureNoIndex — полный отказ CfCreatePlaceholders:
-// записи не считаются созданными (честный счётчик), в индекс не попадают;
-// уже существовавшие на диске плейсхолдеры того же каталога индексируются.
+// TestPopulateTopLevelCreateFailureNoIndex — отказ конверсии (design.md
+// D6.4 «Отказ конверсии записи»): запись не доведена до конечного
+// состояния — в индекс не попадает, созданная реальная запись удалена
+// (откат), существовавшие на диске плейсхолдеры того же каталога
+// индексируются.
 func TestPopulateTopLevelCreateFailureNoIndex(t *testing.T) {
 	root := t.TempDir()
 	backend := &fakeBackend{dirs: map[string][]BackendEntry{
@@ -530,20 +607,27 @@ func TestPopulateTopLevelCreateFailureNoIndex(t *testing.T) {
 		},
 	}}
 	// old.bin — плейсхолдер предыдущего запуска; new.bin — новая запись.
-	store := &failingCreateStore{
-		fakeStore: fakeStore{local: map[string]bool{filepath.Join(root, "old.bin"): true}, localReal: map[string]bool{}},
-		createErr: errFake("fake: CfCreatePlaceholders отказал целиком"),
+	store := &failingConvertStore{
+		fakeStore:  fakeStore{local: map[string]bool{filepath.Join(root, "old.bin"): true}, localReal: map[string]bool{}},
+		convertErr: errFake("fake: CfConvertToPlaceholder отказал"),
 	}
 	p, idx := newTestProvider(t, root, backend, store)
+	// «Диск» — в fakeStore: локальное перечисление по его картам.
+	p.local = fakeLocal{&store.fakeStore}
 
 	if err := populateTopLevel(context.Background(), p); err != nil {
 		t.Fatalf("populateTopLevel: %v", err)
 	}
 	if _, ok := idx.Path(21); ok {
-		t.Error("запись с отказавшим Create попала в индекс")
+		t.Error("запись с отказавшей конверсией попала в индекс")
 	}
 	if p, ok := idx.Path(22); !ok || p != "/old.bin" {
 		t.Errorf("существующий плейсхолдер потерян из индекса: (%q, %v), ожидается /old.bin", p, ok)
+	}
+	// Откат: реальный файл new.bin удалён — ни неконвертированных записей,
+	// ни гидратированных нулей не остаётся (design.md D6.4).
+	if _, err := os.Stat(filepath.Join(root, "new.bin")); !os.IsNotExist(err) {
+		t.Errorf("созданный файл не удалён при откате: stat err = %v", err)
 	}
 }
 
@@ -556,21 +640,302 @@ type slowAnswerStore struct {
 	once    sync.Once
 }
 
-func (s *slowAnswerStore) AnswerFetchPlaceholders(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, status cfapi.NTStatus, infos []cfapi.CFPlaceholderCreateInfo, total int64) error {
+func (s *slowAnswerStore) AnswerFetchPlaceholders(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, status cfapi.NTStatus, infos []cfapi.CFPlaceholderCreateInfo, total int64, entriesProcessed uint32) error {
 	s.once.Do(func() { close(s.entered) })
 	time.Sleep(s.hold)
-	return s.fakeStore.AnswerFetchPlaceholders(conn, transferKey, requestKey, status, infos, total)
+	return s.fakeStore.AnswerFetchPlaceholders(conn, transferKey, requestKey, status, infos, total, entriesProcessed)
 }
 
-// TestFSPathOf — перевод локального пути под sync root в fs-путь.
+// TestHandleFetchPlaceholdersIncludesExistingCompleteBatch — канонический
+// «batch complete»-ответ (проба 4, 27.11): массив несёт ВСЕ записи каталога
+// (fresh + existing; фильтр отвечает existing per-entry ALREADY_EXISTS —
+// классификатор отличает от отказа), EntriesProcessed =
+// PlaceholderTotalCount = полное число записей — иначе population не
+// завершается (create пендится вечно: «0 из 1»).
+func TestHandleFetchPlaceholdersIncludesExistingCompleteBatch(t *testing.T) {
+	root := t.TempDir()
+	backend := &fakeBackend{dirs: map[string][]BackendEntry{
+		"/sub": {
+			{Name: "a.txt", Inode: 7, Size: 3, MtimeSec: 4},
+			{Name: "b.bin", Inode: 8, Size: 4, MtimeSec: 5}, // уже плейсхолдер на диске
+		},
+	}}
+	store := &fakeStore{
+		local: map[string]bool{filepath.Join(root, "sub", "b.bin"): true},
+		// Фильтр на существующую запись отвечает ALREADY_EXISTS.
+		answerResults: map[string]cfapi.HRESULT{"b.bin": errorAlreadyExistsResult},
+	}
+	p, idx := newTestProvider(t, root, backend, store)
+
+	job := &cfapi.FetchPlaceholdersJob{
+		ConnectionKey: cfapi.ConnectionKey{Internal: 1},
+		TransferKey:   cfapi.TransferKey(21),
+		RequestKey:    cfapi.RequestKey(22),
+		Path:          filepath.Join(root, "sub"),
+	}
+	handleFetchPlaceholders(context.Background(), p, job)
+
+	answers := store.answerCalls()
+	if len(answers) != 1 {
+		t.Fatalf("ответов %d, ожидается 1", len(answers))
+	}
+	a := answers[0]
+	if a.status != cfapi.StatusSuccess {
+		t.Errorf("статус 0x%08x, ожидается SUCCESS", uint32(a.status))
+	}
+	// Массив: fresh + existing (batch complete).
+	if len(a.names) != 2 || a.names[0] != "a.txt" || a.names[1] != "b.bin" {
+		t.Fatalf("в ответе %v, ожидается [a.txt b.bin]", a.names)
+	}
+	// total = processed = полное число записей каталога — иначе population
+	// не завершается (create пендится).
+	if a.total != 2 {
+		t.Errorf("total = %d, ожидается 2 (полный backend-листинг)", a.total)
+	}
+	if a.processed != 2 {
+		t.Errorf("processed = %d, ожидается 2 (== count при single-shot; processed >= total завершает population)", a.processed)
+	}
+	// ALREADY_EXISTS от фильтра — не отказ: обе записи в индексе.
+	for ino, want := range map[uint64]string{7: "/sub/a.txt", 8: "/sub/b.bin"} {
+		if p, ok := idx.Path(ino); !ok || p != want {
+			t.Errorf("idx.Path(%d) = (%q, %v), ожидается %s", ino, p, ok, want)
+		}
+	}
+}
+
+// TestHandleFetchPlaceholdersTotalIsFullBackendCount — PlaceholderTotalCount
+// = EntriesProcessed = полное число записей backend каталога (fresh +
+// existing + конфликты): population завершается по processed >= total; EOF =
+// «никогда» (проба 27.11: два FETCH с дельтой 60 c). Конфликт входит в
+// total/processed (иначе счётчик не дойдёт до total), но НЕ в массив.
+func TestHandleFetchPlaceholdersTotalIsFullBackendCount(t *testing.T) {
+	root := t.TempDir()
+	backend := &fakeBackend{dirs: map[string][]BackendEntry{
+		"/mix": {
+			{Name: "fresh.txt", Inode: 91, Size: 1, MtimeSec: 1},
+			{Name: "known.bin", Inode: 92, Size: 2, MtimeSec: 2},    // existing-плейсхолдер
+			{Name: "conflict.log", Inode: 93, Size: 3, MtimeSec: 3}, // локальный не-плейсхолдер
+		},
+	}}
+	store := &fakeStore{
+		local:     map[string]bool{filepath.Join(root, "mix", "known.bin"): true},
+		localReal: map[string]bool{filepath.Join(root, "mix", "conflict.log"): true},
+	}
+	p, idx := newTestProvider(t, root, backend, store)
+
+	job := &cfapi.FetchPlaceholdersJob{Path: filepath.Join(root, "mix"), TransferKey: 90}
+	handleFetchPlaceholders(context.Background(), p, job)
+
+	answers := store.answerCalls()
+	if len(answers) != 1 {
+		t.Fatalf("ответов %d, ожидается 1", len(answers))
+	}
+	a := answers[0]
+	// total и processed — полное число записей каталога, включая конфликт.
+	if a.total != 3 {
+		t.Errorf("total = %d, ожидается 3 (fresh + existing + конфликт)", a.total)
+	}
+	if a.processed != 3 {
+		t.Errorf("processed = %d, ожидается 3 (processed >= total завершает population)", a.processed)
+	}
+	// В массиве fresh + existing; конфликт исключён (инвариант — локальный
+	// файл не перезаписывается).
+	if len(a.names) != 2 || a.names[0] != "fresh.txt" || a.names[1] != "known.bin" {
+		t.Errorf("в массиве %v, ожидается [fresh.txt known.bin]", a.names)
+	}
+	// existing — в индекс; конфликт — нет.
+	if _, ok := idx.Path(92); !ok {
+		t.Error("existing не попал в индекс")
+	}
+	if _, ok := idx.Path(93); ok {
+		t.Error("конфликт попал в индекс")
+	}
+}
+
+// TestHandleFetchPlaceholdersEmptyDirectoryPopulated — existing-only каталог
+// несёт запись в batch-ответе (count=total=processed=1); истинно пустой
+// каталог — count=total=processed=0, SUCCESS: population завершается сразу.
+func TestHandleFetchPlaceholdersEmptyDirectoryPopulated(t *testing.T) {
+	root := t.TempDir()
+	backend := &fakeBackend{dirs: map[string][]BackendEntry{
+		"/full": {{Name: "only.bin", Inode: 41, Size: 1, MtimeSec: 1}}, // весь каталог — existing
+		"/void": {},                                                    // истинно пустой в backend
+	}}
+	store := &fakeStore{
+		local:         map[string]bool{filepath.Join(root, "full", "only.bin"): true},
+		localReal:     map[string]bool{},
+		answerResults: map[string]cfapi.HRESULT{"only.bin": errorAlreadyExistsResult},
+	}
+	p, idx := newTestProvider(t, root, backend, store)
+
+	// Ожидания по каталогам: /full — одна backend-запись (existing) в
+	// batch-ответе; /void — истинно пустой: count=total=processed=0.
+	cases := []struct {
+		dir           string
+		wantNames     []string
+		wantTotal     int64
+		wantProcessed uint32
+	}{
+		{"/full", []string{"only.bin"}, 1, 1},
+		{"/void", nil, 0, 0},
+	}
+	for i, tc := range cases {
+		job := &cfapi.FetchPlaceholdersJob{
+			ConnectionKey: cfapi.ConnectionKey{Internal: 1},
+			TransferKey:   cfapi.TransferKey(50 + i),
+			RequestKey:    cfapi.RequestKey(60 + i),
+			Path:          filepath.Join(root, tc.dir),
+		}
+		handleFetchPlaceholders(context.Background(), p, job)
+	}
+	answers := store.answerCalls()
+	if len(answers) != 2 {
+		t.Fatalf("ответов %d, ожидается 2 (по одному на каталог)", len(answers))
+	}
+	for i, tc := range cases {
+		a := answers[i]
+		if a.status != cfapi.StatusSuccess {
+			t.Errorf("каталог %s: статус 0x%08x, ожидается SUCCESS (населено)", tc.dir, uint32(a.status))
+		}
+		if len(a.names) != len(tc.wantNames) {
+			t.Fatalf("каталог %s: в ответе %v, ожидается %v", tc.dir, a.names, tc.wantNames)
+		}
+		for j, n := range tc.wantNames {
+			if a.names[j] != n {
+				t.Errorf("каталог %s: запись %q, ожидается %q", tc.dir, a.names[j], n)
+			}
+		}
+		if a.total != tc.wantTotal || a.processed != tc.wantProcessed {
+			t.Errorf("каталог %s: total=%d processed=%d, ожидается %d/%d (population завершается сразу)", tc.dir, a.total, a.processed, tc.wantTotal, tc.wantProcessed)
+		}
+	}
+	// ALREADY_EXISTS на existing — не отказ: запись в индексе.
+	if p, ok := idx.Path(41); !ok || p != "/full/only.bin" {
+		t.Errorf("idx.Path(41) = (%q, %v), ожидается /full/only.bin", p, ok)
+	}
+}
+
+// TestHandleFetchPlaceholdersReadsFilterResults — per-entry Result нашего
+// массива после ответа читается: отказ фильтра на запись исключает её из
+// индекса (симуляция записи Result — в fakeStore, как делает фильтр).
+func TestHandleFetchPlaceholdersReadsFilterResults(t *testing.T) {
+	root := t.TempDir()
+	backend := &fakeBackend{dirs: map[string][]BackendEntry{
+		"/sub": {
+			{Name: "ok.txt", Inode: 71, Size: 1, MtimeSec: 1},
+			{Name: "bad.bin", Inode: 72, Size: 2, MtimeSec: 2},
+		},
+	}}
+	store := &fakeStore{
+		local:     map[string]bool{},
+		localReal: map[string]bool{},
+		answerResults: map[string]cfapi.HRESULT{
+			"bad.bin": cfapi.HRESULT(-2147024809), // 0x80070057 E_INVALIDARG
+		},
+	}
+	p, idx := newTestProvider(t, root, backend, store)
+
+	job := &cfapi.FetchPlaceholdersJob{Path: filepath.Join(root, "sub"), TransferKey: 80}
+	handleFetchPlaceholders(context.Background(), p, job)
+
+	if p, ok := idx.Path(71); !ok || p != "/sub/ok.txt" {
+		t.Errorf("idx.Path(71) = (%q, %v), ожидается /sub/ok.txt", p, ok)
+	}
+	if _, ok := idx.Path(72); ok {
+		t.Error("запись с отказом фильтра (Result != 0) попала в индекс")
+	}
+}
+
+// TestClassifyPlaceholderResult — классификация per-entry Result (ответы
+// FETCH_PLACEHOLDERS): 0 = создана, ALREADY_EXISTS = уже была, прочее = отказ.
+func TestClassifyPlaceholderResult(t *testing.T) {
+	cases := []struct {
+		res  cfapi.HRESULT
+		want placeholderResultKind
+	}{
+		{0, resultCreated},
+		{errorAlreadyExistsResult, resultExists},
+		{cfapi.HRESULT(-2147024809), resultFailed}, // 0x80070057
+		{cfapi.HRESULT(-1), resultFailed},
+	}
+	for _, tc := range cases {
+		if got := classifyPlaceholderResult(tc.res); got != tc.want {
+			t.Errorf("classifyPlaceholderResult(%d) = %v, ожидается %v", int64(tc.res), got, tc.want)
+		}
+	}
+}
+
+// TestHandleFetchPlaceholdersDerivesViaFileIdentity — регресс живой пробы
+// U2 («nested companies»): NormalizedPath вне корня (fsPathOf → "") —
+// каталог деривируется через FileIdentity (наш inode), а не fallback'ом по
+// корню: отвечаются записи "/sub", а не корневые.
+func TestHandleFetchPlaceholdersDerivesViaFileIdentity(t *testing.T) {
+	root := t.TempDir()
+	backend := &fakeBackend{dirs: map[string][]BackendEntry{
+		"/sub": {{Name: "c.txt", Inode: 12, Size: 1}},
+	}}
+	store := &fakeStore{local: map[string]bool{}, localReal: map[string]bool{}}
+	p, idx := newTestProvider(t, root, backend, store)
+	// Резолвер подменяет meta-подъём (fs в тесте нет): inode каталога → путь.
+	idx.SetResolver(func(ctx context.Context, ino uint64) (string, bool) {
+		if ino == 99 {
+			return "/sub", true
+		}
+		return "", false
+	})
+
+	job := &cfapi.FetchPlaceholdersJob{
+		ConnectionKey: cfapi.ConnectionKey{Internal: 1},
+		TransferKey:   cfapi.TransferKey(31),
+		RequestKey:    cfapi.RequestKey(32),
+		Path:          `C:\elsewhere`,
+		FileID:        99,
+	}
+	handleFetchPlaceholders(context.Background(), p, job)
+
+	answers := store.answerCalls()
+	if len(answers) != 1 {
+		t.Fatalf("ответов %d, ожидается 1", len(answers))
+	}
+	if len(answers[0].names) != 1 || answers[0].names[0] != "c.txt" {
+		t.Fatalf("записи ответа %v, ожидается [c.txt] — записи каталога /sub, не корня", answers[0].names)
+	}
+	if p, ok := idx.Path(12); !ok || p != "/sub/c.txt" {
+		t.Errorf("idx.Path(12) = (%q, %v), ожидается /sub/c.txt", p, ok)
+	}
+}
+
+// TestFSPathOf — перевод локального пути в fs-путь: полный путь с томом и
+// БЕЗ тома (формат NormalizedPath на живом фильтре, проба U2), другой
+// регистр, относительный путь, пустой и мусор (вне корня, побег, чужой
+// префикс-каталог — "").
 func TestFSPathOf(t *testing.T) {
-	root := `C:\Users\u\AgioDrive`
-	p := New(root, "v", nil, nil)
+	p := New(`C:\Users\u\AgioDrive`, "v", nil, nil)
 	cases := []struct{ in, want string }{
-		{root, "/"},
-		{root + `\a`, "/a"},
-		{root + `\a\b.txt`, "/a/b.txt"},
-		{`C:\elsewhere`, "/"},
+		// Полный путь под sync root (с буквой диска).
+		{`C:\Users\u\AgioDrive`, "/"},
+		{`C:\Users\u\AgioDrive\`, "/"},
+		{`C:\Users\u\AgioDrive\companies`, "/companies"},
+		{`C:\Users\u\AgioDrive\companies\deep`, "/companies/deep"},
+		// Без буквы диска — фактический формат NormalizedPath на живом
+		// фильтре (VolumeDosName-relative, ведущий разделитель).
+		{`\Users\u\AgioDrive`, "/"},
+		{`\Users\u\AgioDrive\companies`, "/companies"},
+		{`\Users\u\AgioDrive\companies\deep`, "/companies/deep"},
+		// Удвоенные ведущие разделители и прямой слэш — после Clean.
+		{`//Users/u/AgioDrive/companies`, "/companies"},
+		// Другой регистр: Windows FS регистронезависим.
+		{`c:\users\u\agiodrive\COMPANIES`, "/companies"},
+		{`\USERS\U\AGIODRIVE\companies`, "/companies"},
+		// Относительный путь — относительно корня.
+		{"companies", "/companies"},
+		{"companies/deep", "/companies/deep"},
+		// Не парсится — "" (воркер падает в резолв через FileIdentity).
+		{"", ""},
+		{`C:\elsewhere`, ""},
+		{`C:\Users\u\AgioDriveEvil`, ""},
+		{`C:\Users\u\AgioDrive\..\secret`, ""},
+		{`..\outside`, ""},
 	}
 	for _, tc := range cases {
 		if got := p.fsPathOf(tc.in); got != tc.want {
@@ -590,5 +955,58 @@ func TestFSJoinLocalJoin(t *testing.T) {
 	}
 	if localJoin(`C:\root`, "/") != `C:\root` {
 		t.Errorf("localJoin корня = %q", localJoin(`C:\root`, "/"))
+	}
+}
+
+// TestPopulateDirectoryExistingByIndexNoJournal — задача 2.9: existing по
+// индексу (имя есть, inode известен, путь совпадает) — skip без Warn и без
+// записи в журнал; изменившийся путь в индексе — «изменившееся», строка
+// пишется (design.md D6.7).
+func TestPopulateDirectoryExistingByIndexNoJournal(t *testing.T) {
+	root := t.TempDir()
+	entries := []BackendEntry{{Name: "same.bin", Inode: 60, Size: 1, MtimeSec: 1}}
+	backend := &fakeBackend{dirs: map[string][]BackendEntry{"/kept": entries}}
+	store := &simStore{fakeStore: fakeStore{
+		local:     map[string]bool{filepath.Join(root, "kept", "same.bin"): true},
+		localReal: map[string]bool{},
+	}}
+	p, idx := newTestProvider(t, root, backend, store)
+	p.local = mapLocal{store}
+
+	hook := &logCapture{}
+	logger.AddHook(hook)
+
+	// Индекс уже знает запись с тем же путём (предыдущий walk).
+	if err := idx.Put(60, "/kept/same.bin"); err != nil {
+		t.Fatalf("idx.Put: %v", err)
+	}
+	rows := journalLines(t, idx)
+
+	res := populateDirectory(p, "/kept", entries)
+
+	if res.skipped != 1 || res.createdFiles != 0 || res.conflicts != 0 {
+		t.Errorf("skipped=%d created=%d conflicts=%d, ожидается 1/0/0 (existing по индексу)", res.skipped, res.createdFiles, res.conflicts)
+	}
+	if n := journalLines(t, idx); n != rows {
+		t.Errorf("existing по индексу добавил строки журнала: %d → %d, ожидается без изменений", rows, n)
+	}
+	if n := hook.count("walk conflict"); n != 0 {
+		t.Errorf("existing по индексу дал Warn о конфликте: %d, ожидается 0", n)
+	}
+
+	// Путь в индексе отличается — «изменившееся»: skip, но строка пишется.
+	if err := idx.Put(60, "/kept/renamed.bin"); err != nil {
+		t.Fatalf("idx.Put: %v", err)
+	}
+	rows = journalLines(t, idx)
+	res = populateDirectory(p, "/kept", entries)
+	if res.skipped != 1 {
+		t.Errorf("skipped = %d, ожидается 1", res.skipped)
+	}
+	if n := journalLines(t, idx); n != rows+1 {
+		t.Errorf("изменившийся путь не записан в журнал: %d → %d, ожидается +1", rows, n)
+	}
+	if got, ok := idx.Path(60); !ok || got != "/kept/same.bin" {
+		t.Errorf("idx.Path(60) = (%q, %v), ожидается /kept/same.bin (актуализация индекса)", got, ok)
 	}
 }

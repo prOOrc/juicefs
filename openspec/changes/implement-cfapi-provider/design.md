@@ -216,7 +216,7 @@ Namespace sync root строится целиком из метаданных hu
 
 **6.7. Индекс и журнал.** Запись после каждой порции, только новые/изменившиеся записи: повторный walk на неизменном hub добавляет 0 строк.
 
-**6.8. Лог** (стабильные форматы для grep): `walk: dirs=%d files=%d skipped=%d conflicts=%d failed=%d pending=%d elapsed=%s` (Info, не чаще раза в 5с); `walk complete: ...` — ровно один раз; `walk cancelled: ...` — при остановке; `walk conflict: <dir>: skipped %d hub entries, e.g. %v`; `walk failed: <dir>: %v (subtree skipped)`.
+**6.8. Лог** (стабильные форматы для grep): `walk: dirs=%d files=%d skipped=%d conflicts=%d failed=%d pending=%d elapsed=%s` (Info, не чаще раза в 5с); `walk complete: ...` — ровно один раз; `walk cancelled: ...` — при остановке; `walk conflict: <dir>: skipped %d hub entries, e.g. %v`; `walk failed: <dir>: %v (subtree skipped)`; `walk entry failed: <dir>: skipped %d, e.g. %v` (групповой Warn по записям, ≤10 имён); `walk quarantine: <path>` (sharing violation при откате).
 
 **6.9. Non-goals этапа 2**: resume-cursor, приоритет recently-used, удаление stale-плейсхолдеров (U16), актуализация namespace в сессии (U17), walk-статус в `status`. Решения — после M1.
 

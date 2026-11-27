@@ -514,6 +514,28 @@ type CFSyncRootBasicInfo struct {
 	SyncRootFileId int64
 }
 
+// CFSyncRootStandardInfo — CF_SYNC_ROOT_STANDARD_INFO (cfapi.h:1067): ответ
+// CfGetSyncRootInfoByPath(CF_SYNC_ROOT_INFO_STANDARD) — фактические политики
+// зарегистрированного sync root (гидрация, наполнение, in-sync, hardlink),
+// статус провайдера и описание. Отдельного класса POLICIES в CfAPI нет:
+// CF_SYNC_ROOT_INFO_CLASS эталонного header (cfapi.h:1027) содержит только
+// BASIC/STANDARD/PROVIDER, поэтому STANDARD — единственный readback политик;
+// PlaceholderManagementPolicy фильтр не отдаёт (задаётся только при
+// регистрации, cfapi.h:237 CF_SYNC_POLICIES) — фактическое значение видно
+// лишь поведением фильтра (матрица проб).
+type CFSyncRootStandardInfo struct {
+	SyncRootFileId         int64
+	HydrationPolicy        CFHydrationPolicy
+	PopulationPolicy       CFPopulationPolicy
+	InSyncPolicy           uint32      // CF_INSYNC_POLICY
+	HardLinkPolicy         uint32      // CF_HARDLINK_POLICY
+	ProviderStatus         uint32      // CF_SYNC_PROVIDER_STATUS
+	ProviderName           [256]uint16 // WCHAR[CF_MAX_PROVIDER_NAME_LENGTH + 1]
+	ProviderVersion        [256]uint16
+	SyncRootIdentityLength uint32
+	SyncRootIdentity       [1]byte // BYTE[1]: хвост переменной длины
+}
+
 // CFPlaceholderStandardInfo — CF_PLACEHOLDER_STANDARD_INFO.
 type CFPlaceholderStandardInfo struct {
 	OnDiskDataSize     int64
