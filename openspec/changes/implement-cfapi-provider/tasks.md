@@ -60,13 +60,13 @@ DoD этапа: сценарии «Pin файла и чтение без про�
 
 ## 5. Выгрузка новых и изменённых файлов
 
-- [ ] 5.1 Сверить write-API `pkg/fs` (`Create`, `Write`, `Flush`, `Fsync`, каталогные операции) в `pkg/fs/fs.go`. Отсутствующий метод добавляется в `pkg/fs` по образцу существующих; решение — в design.md. Файлы: design.md, при необходимости `pkg/fs/fs.go` (+тест в `pkg/fs/`). Проверка: `go test ./pkg/fs`; запись решения в design.md.
-- [ ] 5.2 Thunk NOTIFY_FILE_CLOSE_COMPLETION и классификация файла. Проба U6; при необходимости — журнал ReadDirectoryChangesW. Файлы: `pkg/cfapi/callbacks.go`, `pkg/cfprovider/ingest.go`. Проверка: `go test ./pkg/cfapi ./pkg/cfprovider`.
-- [ ] 5.3 Пул выгрузки: чтение с `FILE_SHARE_READ`, запись блоками, `Flush`, преобразование или обновление плейсхолдера. Пробы U7, U8. Файлы: `pkg/cfprovider/ingest.go`, `pkg/cfprovider/ingest_test.go`. Проверка: `go test ./pkg/cfprovider`.
-- [ ] 5.4 Объединение заданий по пути с задержкой 2 с. Файлы: `pkg/cfprovider/ingest.go`, `pkg/cfprovider/ingest_test.go`. Проверка: `go test ./pkg/cfprovider`.
-- [ ] 5.5 Write-back выключен; проба U11 по очистке staging. Файлы: `pkg/cfprovider/ingest.go`, design.md. Проверка: сценарий «Видимость версии»; запись результата U11.
-- [ ] 5.6 Флаг `--read-only`. Файлы: `cmd/clouddrive.go`. Проверка: ручной сценарий «Файл в режиме без записи».
-- [ ] 5.7 `status <путь>`: плейсхолдер и состояние in-sync. Файлы: `cmd/clouddrive.go`. Проверка: ручной прогон сценариев «Новый файл», «Изменённый плейсхолдер».
+- [x] 5.1 Сверить write-API `pkg/fs` (`Create`, `Write`, `Flush`, `Fsync`, каталогные операции) в `pkg/fs/fs.go`. Отсутствующий метод добавляется в `pkg/fs` по образцу существующих; решение — в design.md. Файлы: design.md, при необходимости `pkg/fs/fs.go` (+тест в `pkg/fs/`). Проверка: `go test ./pkg/fs`; запись решения в design.md.
+- [x] 5.2 Thunk NOTIFY_FILE_CLOSE_COMPLETION и классификация файла. Проба U6; при необходимости — журнал ReadDirectoryChangesW. Файлы: `pkg/cfapi/callbacks.go`, `pkg/cfprovider/ingest.go`. Проверка: `go test ./pkg/cfapi ./pkg/cfprovider`.
+- [x] 5.3 Пул выгрузки: чтение с `FILE_SHARE_READ`, запись блоками, `Flush`, преобразование или обновление плейсхолдера. Пробы U7, U8. Файлы: `pkg/cfprovider/ingest.go`, `pkg/cfprovider/ingest_test.go`. Проверка: `go test ./pkg/cfprovider`.
+- [x] 5.4 Объединение заданий по пути с задержкой 2 с. Файлы: `pkg/cfprovider/ingest.go`, `pkg/cfprovider/ingest_test.go`. Проверка: `go test ./pkg/cfprovider`.
+- [x] 5.5 Write-back выключен; проба U11 по очистке staging. Файлы: `pkg/cfprovider/ingest.go`, design.md. Проверка: сценарий «Видимость версии»; запись результата U11.
+- [x] 5.6 Флаг `--read-only`. Файлы: `cmd/clouddrive.go`. Проверка: ручной сценарий «Файл в режиме без записи».
+- [x] 5.7 (уточнение отображения FULL-in-sync placeholder — state=NO_STATES честно; STANDARD-запрос при 0 — follow-up 5.8)`status <путь>`: плейсхолдер и состояние in-sync. Файлы: `cmd/clouddrive.go`. Проверка: ручной прогон сценариев «Новый файл», «Изменённый плейсхолдер».
 
 DoD этапа: сценарии «Новый файл», «Изменённый плейсхолдер», «Обрыв выгрузки», «Видимость версии», «Файл в режиме без записи» пройдены.
 

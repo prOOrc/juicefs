@@ -18,18 +18,20 @@
  */
 
 // Тесты пула выгрузки (задачи 5.2–5.4): классификация close-уведомлений,
-// выгрузка нового файла (convert БЕЗ дегидратации после подтверждённого
-// Flush), изменённый плейсхолдер (SetInSync после Flush), пропуск in-sync,
-// отказ Flush без финализации (write-back выключен), коалисинг по пути с
-// injectable часами, повтор при отказе в совместном доступе, сквозной
-// прогон очереди диспетчера. cldapi.dll не вызывается — ingestStore и
-// ingestBackend подменные (инвариант «Движок проверяется без CfAPI»).
+// выгрузка нового файла с заменой на дегидратированный плейсхолдер после
+// подтверждённого Flush (U18-α replace-after-upload — конверсия user-файла
+// из подключённого serve-процесса отвергается фильтром), изменённый
+// плейсхолдер (SetInSync после Flush), пропуск in-sync, отказ Flush без
+// финализации (write-back выключен), коалисинг по пути с injectable часами,
+// повтор при отказе в совместном доступе, занятость файла при удалении на
+// финализации, отказ/гонка пересоздания, сквозной прогон очереди диспетчера.
+// cldapi.dll не вызывается — ingestStore, ingestBackend, placeholderStore и
+// remover подменные (инвариант «Движок проверяется без CfAPI»).
 package cfprovider
 
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -184,41 +186,42 @@ func (f *fakeIngestFile) Close(ctx meta.Context) syscall.Errno {
 
 func (f *fakeIngestFile) Inode() meta.Ino { return meta.Ino(f.ino) }
 
-// convertFileCall — фиксация конверсии нового файла в плейсхолдер.
-type convertFileCall struct {
-	path  string
-	ino   uint64
-	flags uint32
-}
-
-// fakeIngestStore — подменный ingestStore: состояния путей в карте,
-// SetInSync/ConvertFile фиксируются (успех переводит состояние в
-// placeholder|in-sync — модель фильтра).
+// fakeIngestStore — подменный ingestStore: STANDARD-состояния путей в карте
+// (запись без entry — plain-файл, запрос отвечает ошибкой — модель фильтра),
+// SetInSync фиксируется (успех переводит состояние в placeholder|in-sync —
+// модель фильтра).
 type fakeIngestStore struct {
-	mu         sync.Mutex
-	log        *opLog
-	states     map[string]uint32
-	stateErr   error
-	setSyncErr error
-	convertErr error
-	// convertFailures — первые N попыток ConvertFile отвечают convertErr
-	// (retry-конверсия после закрытия записи, живой ретест этапа 5).
-	convertFailures int
-	setSyncs        []string
-	converts        []convertFileCall
+	mu          sync.Mutex
+	log         *opLog
+	states      map[string]uint32
+	standard    map[string]*cfapi.CFPlaceholderStandardInfo
+	standardErr error
+	setSyncErr  error
+	setSyncs    []string
 }
 
 func newFakeIngestStore(log *opLog) *fakeIngestStore {
-	return &fakeIngestStore{log: log, states: map[string]uint32{}}
+	return &fakeIngestStore{log: log, states: map[string]uint32{}, standard: map[string]*cfapi.CFPlaceholderStandardInfo{}}
 }
 
-func (s *fakeIngestStore) PlaceholderState(path string) (uint32, error) {
+func (s *fakeIngestStore) StandardInfo(path string) (*cfapi.CFPlaceholderStandardInfo, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.stateErr != nil {
-		return 0, s.stateErr
+	if s.standardErr != nil {
+		return nil, s.standardErr
 	}
-	return s.states[path], nil
+	if info, ok := s.standard[path]; ok {
+		return info, nil
+	}
+	// Нет записи — у пути нет плейсхолдерности (plain-файл).
+	return nil, errFake("fake: not a cloud file")
+}
+
+// setStandard помечает путь плейсхолдером с заданным CF_IN_SYNC_STATE.
+func (s *fakeIngestStore) setStandard(path string, inSync uint32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.standard[path] = &cfapi.CFPlaceholderStandardInfo{InSyncState: inSync}
 }
 
 func (s *fakeIngestStore) SetInSync(path string) error {
@@ -230,24 +233,6 @@ func (s *fakeIngestStore) SetInSync(path string) error {
 	}
 	s.setSyncs = append(s.setSyncs, path)
 	s.states[path] |= cfapi.PlaceholderStatePlaceholder | cfapi.PlaceholderStateInSync
-	return nil
-}
-
-func (s *fakeIngestStore) ConvertFile(path string, identity []byte, flags uint32) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var ino uint64
-	if len(identity) >= 8 {
-		ino = binary.LittleEndian.Uint64(identity)
-	}
-	s.log.add(fmt.Sprintf("convert:%s:%d:0x%x", path, ino, flags))
-	// Пытка фиксируется и при отказе (подсчёт попыток retry-конверсии).
-	s.converts = append(s.converts, convertFileCall{path: path, ino: ino, flags: flags})
-	if s.convertFailures > 0 {
-		s.convertFailures--
-		return s.convertErr
-	}
-	s.states[path] = cfapi.PlaceholderStatePlaceholder | cfapi.PlaceholderStateInSync
 	return nil
 }
 
@@ -306,8 +291,11 @@ func (t fakeTimer) Stop() {}
 func (t fakeTimer) Reset(time.Duration) {}
 
 // newIngestTestProvider — провайдер с подменными store/backend и короткими
-// задержками (коалисинг 5 мс, retry 1 мс): Start не вызывается.
-func newIngestTestProvider(t *testing.T) (*Provider, *fakeIngestBackend, *fakeIngestStore, *Index, *opLog) {
+// задержками (коалисинг 5 мс, retry 1 мс): Start не вызывается. Финализация
+// U18-α (пересоздание) идёт через p.store (placeholderStore —
+// createEntry-примитив walk на реальном диске); fstore — общая подмена
+// store, remover — osRemover (реальное os.Remove).
+func newIngestTestProvider(t *testing.T) (*Provider, *fakeIngestBackend, *fakeIngestStore, *fakeStore, *Index, *opLog) {
 	t.Helper()
 	idx, err := NewIndex(t.TempDir())
 	if err != nil {
@@ -321,11 +309,32 @@ func newIngestTestProvider(t *testing.T) (*Provider, *fakeIngestBackend, *fakeIn
 	p.idx = idx
 	p.istore = store
 	p.ibackend = backend
+	p.store = &fakeStore{local: map[string]bool{}, localReal: map[string]bool{}}
 	p.ingestDelay = 5 * time.Millisecond
 	p.ingestRetryDelay = time.Millisecond
 	p.ingestMaxRetryDelay = 4 * time.Millisecond
 	p.ingestWorkers = 1
-	return p, backend, store, idx, log
+	return p, backend, store, p.store.(*fakeStore), idx, log
+}
+
+// recreatingRemover — localRemover, который после успешного удаления
+// мгновенно создаёт обычный файл по тому же пути (детерминированная
+// симуляция гонки «пользователь пересоздал файл» между удалением и
+// пересозданием, U18-α: EEXIST-ветка recreateUploaded).
+type recreatingRemover struct {
+	inner   localRemover
+	path    string
+	content []byte
+}
+
+func (r recreatingRemover) Remove(p string) error {
+	if err := r.inner.Remove(p); err != nil {
+		return err
+	}
+	if strings.EqualFold(p, r.path) {
+		return os.WriteFile(p, r.content, 0o644)
+	}
+	return nil
 }
 
 // recvTask ждёт задание из канала коалисера (воркеры асинхронны).
@@ -350,35 +359,40 @@ func assertNoTask(t *testing.T, ch <-chan ingestTask) {
 	}
 }
 
-// TestIngestNewFileConvertsToPlaceholder — спека «Новый файл»: содержимое
-// выгружено в backend байт-в-байт, Flush подтверждает версию, ПОСЛЕ него
-// файл конвертирован в плейсхолдер флагом MARK_IN_SYNC БЕЗ DEHYDRATE
-// (данные остаются локально полными), identity — inode backend, индекс
-// получил соответствие inode → путь, локальный файл не изменён.
-func TestIngestNewFileConvertsToPlaceholder(t *testing.T) {
-	p, backend, store, idx, log := newIngestTestProvider(t)
+// TestIngestNewFileRecreatedAsPlaceholder — спека «Новый файл» + U18-α
+// replace-after-upload: содержимое выгружено в backend байт-в-байт, Flush
+// подтверждает версию, ПОСЛЕ него локальный файл удалён и пересоздан
+// createEntry-примитивом walk (тот же, что в walk — конверсия user-файла
+// из подключённого serve фильтр отвергает, U18): конверсия флагами
+// MARK_IN_SYNC|DEHYDRATE с identity = inode backend, размер и mtime —
+// локальной записи, индекс получил соответствие inode → путь, содержимое
+// на диске заменено (дегидратирован по замыслу — контент в backend).
+func TestIngestNewFileRecreatedAsPlaceholder(t *testing.T) {
+	p, backend, _, fstore, idx, log := newIngestTestProvider(t)
 	local := filepath.Join(p.root, "new.txt")
 	data := patternBytes(5000)
 	if err := os.WriteFile(local, data, 0o644); err != nil {
 		t.Fatalf("write local: %v", err)
 	}
+	mt, err := os.Stat(local)
+	if err != nil {
+		t.Fatalf("stat local: %v", err)
+	}
+	mtime0 := mt.ModTime()
 
 	p.runIngest(context.Background(), ingestTask{fsPath: "/new.txt", local: local, key: "/new.txt"})
 
 	if got := backend.content("/new.txt"); !bytes.Equal(got, data) {
 		t.Fatalf("содержимое backend не совпало с локальным (%d vs %d байт)", len(got), len(data))
 	}
-	// Порядок операций: create → write… → truncate → flush → convert →
-	// close (defer).
+	// Порядок операций backend: create → write… → truncate → flush → close
+	// (defer); конверсия пересоздания фиксируется в fstore, не в opLog.
 	kinds := log.kinds()
 	if len(kinds) == 0 || kinds[0] != "create" || kinds[len(kinds)-1] != "close" {
 		t.Fatalf("порядок операций %v, ожидается create…close", kinds)
 	}
-	if kinds[len(kinds)-2] != "convert" {
-		t.Fatalf("последняя операция перед close = %s, ожидается convert: %v", kinds[len(kinds)-2], kinds)
-	}
-	if kinds[len(kinds)-3] != "flush" {
-		t.Fatalf("convert выполнен до Flush: %v (write-back выключен — финализация только после Flush)", kinds)
+	if kinds[len(kinds)-2] != "flush" {
+		t.Fatalf("замена выполнена до Flush: %v (write-back выключен — финализация только после Flush)", kinds)
 	}
 	for _, k := range kinds {
 		if k == "insync" || k == "open" {
@@ -395,37 +409,55 @@ func TestIngestNewFileConvertsToPlaceholder(t *testing.T) {
 	if writes != 1 {
 		t.Errorf("записей = %d, ожидается 1 (5000 байт < BlockSize)", writes)
 	}
-	// Конверсия: флаги MARK_IN_SYNC без DEHYDRATE, identity — inode backend.
-	converts := store.converts
+	// Пересоздание: ровно одна конверсия — флаги MARK_IN_SYNC|DEHYDRATE,
+	// identity — inode backend.
+	ino := backend.inodeOf("/new.txt")
+	converts := fstore.convertCalls()
 	if len(converts) != 1 {
 		t.Fatalf("конверсий = %d, ожидается 1", len(converts))
 	}
-	ino := backend.inodeOf("/new.txt")
-	if converts[0].flags != cfapi.ConvertFlagMarkInSync {
-		t.Errorf("флаги конверсии = 0x%x, ожидается MARK_IN_SYNC (0x%x) без DEHYDRATE", converts[0].flags, cfapi.ConvertFlagMarkInSync)
+	if converts[0].flags != cfapi.ConvertFlagMarkInSync|cfapi.ConvertFlagDehydrate {
+		t.Errorf("флаги конверсии = 0x%x, ожидается MARK_IN_SYNC|DEHYDRATE (0x%x)", converts[0].flags, cfapi.ConvertFlagMarkInSync|cfapi.ConvertFlagDehydrate)
 	}
 	if converts[0].ino != ino {
 		t.Errorf("identity конверсии = %d, ожидается inode backend %d", converts[0].ino, ino)
 	}
+	if converts[0].path != local {
+		t.Errorf("путь конверсии = %q, ожидается %q", converts[0].path, local)
+	}
 	if got, ok := idx.Path(ino); !ok || got != "/new.txt" {
 		t.Errorf("idx.Path(%d) = (%q, %v), ожидается /new.txt", ino, got, ok)
 	}
-	// Локальный файл остался без изменений (инвариант выгрузки).
-	if got, err := os.ReadFile(local); err != nil || !bytes.Equal(got, data) {
-		t.Errorf("локальный файл изменён: %v", err)
+	// Локальная запись заменена плейсхолдер-структурой: размер выгруженной
+	// версии (SetEndOfFile), mtime локальной записи сохранён (SetFileTime).
+	fi, err := os.Stat(local)
+	if err != nil {
+		t.Fatalf("stat recreated: %v", err)
 	}
-	// Модель фильтра: путь стал плейсхолдером in-sync.
-	if st := store.stateOf(local); st != cfapi.PlaceholderStatePlaceholder|cfapi.PlaceholderStateInSync {
-		t.Errorf("состояние локального пути = 0x%x, ожидается placeholder|in-sync", st)
+	if fi.Size() != int64(len(data)) {
+		t.Errorf("размер пересозданной записи = %d, ожидается %d", fi.Size(), len(data))
+	}
+	if fi.ModTime().Unix() != mtime0.Unix() {
+		t.Errorf("mtime пересозданной записи = %v, ожидается %v", fi.ModTime(), mtime0)
+	}
+	// Дегидратирован по замыслу: содержимое на диске не хранится
+	// (SetEndOfFile — достоверные нули; контент — в backend, гидрация при
+	// доступе — пул FETCH_DATA).
+	if got, rerr := os.ReadFile(local); rerr != nil || !bytes.Equal(got, make([]byte, len(data))) {
+		t.Errorf("пересозданная запись не дегидратирована: %d байт данных на диске, err=%v", len(got), rerr)
+	}
+	// Модель фильтра: путь стал плейсхолдером.
+	if !fstore.local[local] {
+		t.Error("пересозданный путь не отмечен плейсхолдером в модели store")
 	}
 }
 
 // TestIngestModifiedPlaceholder — спека «Изменённый плейсхолдер»: запись
 // backend открыта на запись (Create → EEXIST → OpenWrite), сжатие локальной
 // версией доведено Truncate'ом, Flush подтверждает, SetInSync после Flush,
-// конверсии нет (файл уже плейсхолдер).
+// пересоздания нет (файл уже плейсхолдер), локальная запись не тронута.
 func TestIngestModifiedPlaceholder(t *testing.T) {
-	p, backend, store, idx, log := newIngestTestProvider(t)
+	p, backend, store, fstore, idx, log := newIngestTestProvider(t)
 	local := filepath.Join(p.root, "doc.txt")
 	data := []byte("short")
 	if err := os.WriteFile(local, data, 0o644); err != nil {
@@ -435,7 +467,7 @@ func TestIngestModifiedPlaceholder(t *testing.T) {
 	backend.files["/doc.txt"] = []byte("very old content")
 	backend.inodes["/doc.txt"] = 42
 	backend.mu.Unlock()
-	store.setState(local, cfapi.PlaceholderStatePlaceholder) // вне in-sync
+	store.setStandard(local, cfapi.InSyncStateNotInSync) // плейсхолдер вне in-sync
 
 	p.runIngest(context.Background(), ingestTask{fsPath: "/doc.txt", local: local, key: "/doc.txt"})
 
@@ -465,8 +497,8 @@ func TestIngestModifiedPlaceholder(t *testing.T) {
 	if !foundTruncate {
 		t.Errorf("Truncate(%d) не зафиксирован: %v (сжатие должно быть доведено)", len(data), log.snapshot())
 	}
-	if len(store.converts) != 0 {
-		t.Errorf("конверсия выполнена для существующего плейсхолдера: %v", store.converts)
+	if n := len(fstore.convertCalls()); n != 0 {
+		t.Errorf("пересоздание выполнено для существующего плейсхолдера: %d конверсий", n)
 	}
 	if len(store.setSyncs) != 1 || store.setSyncs[0] != local {
 		t.Errorf("SetInSync = %v, ожидается [%s]", store.setSyncs, local)
@@ -474,17 +506,21 @@ func TestIngestModifiedPlaceholder(t *testing.T) {
 	if got, ok := idx.Path(42); !ok || got != "/doc.txt" {
 		t.Errorf("idx.Path(42) = (%q, %v), ожидается /doc.txt", got, ok)
 	}
+	// Локальная запись не тронута (SetInSync-ветка без замены).
+	if got, err := os.ReadFile(local); err != nil || !bytes.Equal(got, data) {
+		t.Errorf("локальный файл изменён: %v", err)
+	}
 }
 
 // TestIngestInSyncSkipped — плейсхолдер in-sync (создан walk-ом или уже
 // выгружен) не выгружается повторно: backend не затрагивается.
 func TestIngestInSyncSkipped(t *testing.T) {
-	p, backend, store, _, log := newIngestTestProvider(t)
+	p, backend, store, _, _, log := newIngestTestProvider(t)
 	local := filepath.Join(p.root, "synced.txt")
 	if err := os.WriteFile(local, []byte("data"), 0o644); err != nil {
 		t.Fatalf("write local: %v", err)
 	}
-	store.setState(local, cfapi.PlaceholderStatePlaceholder|cfapi.PlaceholderStateInSync)
+	store.setStandard(local, cfapi.InSyncStateInSync)
 
 	p.runIngest(context.Background(), ingestTask{fsPath: "/synced.txt", local: local, key: "/synced.txt"})
 
@@ -503,7 +539,7 @@ func TestIngestInSyncSkipped(t *testing.T) {
 // отменяется без операций backend (сценарий «Удаление локального файла до
 // выгрузки»; удаление подтверждённой версии — этап 6).
 func TestIngestMissingLocalSkipped(t *testing.T) {
-	p, backend, _, _, log := newIngestTestProvider(t)
+	p, backend, _, _, _, log := newIngestTestProvider(t)
 
 	p.runIngest(context.Background(), ingestTask{fsPath: "/gone.txt", local: filepath.Join(p.root, "gone.txt"), key: "/gone.txt"})
 
@@ -519,10 +555,11 @@ func TestIngestMissingLocalSkipped(t *testing.T) {
 }
 
 // TestIngestFlushFailureNoFinalize — write-back выключен (инвариант,
-// design.md D9): отказ Flush не финализирует плейсхолдер (ни convert, ни
-// SetInSync), индекс не получает запись, локальный файл не изменён.
+// design.md D9): отказ Flush не финализирует плейсхолдер (ни замены, ни
+// SetInSync), индекс не получает запись, локальный файл не изменён и не
+// удалён (инвариант U18-α: файл не теряется ДО успешного Flush).
 func TestIngestFlushFailureNoFinalize(t *testing.T) {
-	p, backend, store, idx, log := newIngestTestProvider(t)
+	p, backend, store, _, idx, log := newIngestTestProvider(t)
 	local := filepath.Join(p.root, "fail.txt")
 	data := patternBytes(100)
 	if err := os.WriteFile(local, data, 0o644); err != nil {
@@ -556,14 +593,18 @@ func TestIngestFlushFailureNoFinalize(t *testing.T) {
 	if got, err := os.ReadFile(local); err != nil || !bytes.Equal(got, data) {
 		t.Errorf("локальный файл изменён: %v", err)
 	}
+	if _, err := os.Stat(local); err != nil {
+		t.Errorf("локальный файл отсутствует после отказавшего Flush: %v", err)
+	}
 }
 
 // TestIngestExistingBackendAdoptsLocalPlainFile — имя занято в backend
 // (гонка с другим клиентом), локальный файл обычный: содержимое пишется
-// поверх существующей записи, после Flush локальный файл конвертируется
-// (adopt), identity — inode существующей записи.
+// поверх существующей записи, после Flush локальный файл заменён
+// дегидратированным плейсхолдером (U18-α), identity — inode существующей
+// записи.
 func TestIngestExistingBackendAdoptsLocalPlainFile(t *testing.T) {
-	p, backend, store, idx, log := newIngestTestProvider(t)
+	p, backend, _, fstore, idx, log := newIngestTestProvider(t)
 	local := filepath.Join(p.root, "race.txt")
 	data := []byte("mine now")
 	if err := os.WriteFile(local, data, 0o644); err != nil {
@@ -579,34 +620,43 @@ func TestIngestExistingBackendAdoptsLocalPlainFile(t *testing.T) {
 	if got := backend.content("/race.txt"); !bytes.Equal(got, data) {
 		t.Fatalf("содержимое backend = %q, ожидается %q", got, data)
 	}
-	if len(store.converts) != 1 || store.converts[0].ino != 77 {
-		t.Fatalf("конверсия = %+v, ожидается convert с identity 77", store.converts)
+	if len(fstore.convertCalls()) != 1 || fstore.convertCalls()[0].ino != 77 {
+		t.Fatalf("конверсия = %+v, ожидается convert с identity 77", fstore.convertCalls())
+	}
+	if flags := fstore.convertCalls()[0].flags; flags != cfapi.ConvertFlagMarkInSync|cfapi.ConvertFlagDehydrate {
+		t.Errorf("флаги конверсии = 0x%x, ожидается MARK_IN_SYNC|DEHYDRATE", flags)
 	}
 	if got, ok := idx.Path(77); !ok || got != "/race.txt" {
 		t.Errorf("idx.Path(77) = (%q, %v), ожидается /race.txt", got, ok)
 	}
 	kinds := log.kinds()
-	if len(kinds) < 2 || kinds[len(kinds)-2] != "convert" || kinds[len(kinds)-1] != "close" {
-		t.Errorf("порядок операций %v, ожидается …convert close", kinds)
+	if len(kinds) < 2 || kinds[0] != "open" || kinds[len(kinds)-1] != "close" {
+		t.Errorf("порядок операций %v, ожидается open…close", kinds)
+	}
+	// Замена: локальная запись — плейсхолдер-структура (размер версии).
+	if fi, err := os.Stat(local); err != nil || fi.Size() != int64(len(data)) {
+		t.Errorf("пересозданная запись: size=%d err=%v, ожидается %d", fi.Size(), err, len(data))
 	}
 }
 
 // TestIngestClassifyCloseRouting — классификация close-уведомлений
-// (задача 5.2): обычный файл и изменённый плейсхолдер ставятся в очередь,
-// in-sync/каталоги/вне корня/ошибки состояния — игнорируются; путь
-// NormalizedPath без буквы диска распознаётся (fsPathOf, живая проба U2).
+// (задача 5.2): plain-файл и изменённый плейсхолдер ставятся в очередь,
+// in-sync/каталоги/вне корня — игнорируются; путь NormalizedPath без буквы
+// диска распознаётся (fsPathOf, живая проба U2). Состояние — честный
+// CF_PLACEHOLDER_STANDARD_INFO (после convert-DEHYDRATE FileBasicInfo-
+// эвристика возвращает 0 для реального плейсхолдера — живой ретест 27.11).
 func TestIngestClassifyCloseRouting(t *testing.T) {
-	p, _, store, _, _ := newIngestTestProvider(t)
+	p, _, store, _, _, _ := newIngestTestProvider(t)
 
 	plain := filepath.Join(p.root, "plain.txt")
 	if err := os.WriteFile(plain, []byte("x"), 0o644); err != nil {
 		t.Fatalf("write local: %v", err)
 	}
-	// Явно state=0 (NO_STATES — файл не плейсхолдер; живая проба этапа 5:
-	// CfGetPlaceholderStateFromFileInfo вернул INVALID для plain-файла,
-	// cfapi.PlaceholderStateByPath приводит его к 0): новый файл → to-upload.
-	store.setState(plain, 0)
-	task, ok := p.classifyNotifyClose(&cfapi.NotifyFileCloseCompletionJob{Path: p.root + `\plain.txt`, FileSize: 1})
+	// Нет STANDARD-записи — у файла нет плейсхолдерности (plain-файл,
+	// живой ретест 27.11: FileBasicInfo-эвристика после convert-DEHYDRATE
+	// ненадёжна — классификация отвечает CfGetPlaceholderInfo): новый файл
+	// → to-upload.
+	task, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: p.root + `\plain.txt`, FileSize: 1})
 	if !ok || task.fsPath != "/plain.txt" || task.local != plain || task.key != "/plain.txt" {
 		t.Fatalf("plain файл (state=0) не поставлен в очередь: ok=%v task=%+v", ok, task)
 	}
@@ -617,8 +667,8 @@ func TestIngestClassifyCloseRouting(t *testing.T) {
 	if err := os.WriteFile(modified, []byte("y"), 0o644); err != nil {
 		t.Fatalf("write local: %v", err)
 	}
-	store.setState(modified, cfapi.PlaceholderStatePlaceholder)
-	task, ok = p.classifyNotifyClose(&cfapi.NotifyFileCloseCompletionJob{Path: noVol + `\modified.txt`})
+	store.setStandard(modified, cfapi.InSyncStateNotInSync)
+	task, ok = p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: noVol + `\modified.txt`})
 	if !ok || task.fsPath != "/modified.txt" {
 		t.Fatalf("путь без диска не распознан: ok=%v task=%+v (normalized=%q)", ok, task, noVol+`\modified.txt`)
 	}
@@ -628,17 +678,17 @@ func TestIngestClassifyCloseRouting(t *testing.T) {
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if _, ok := p.classifyNotifyClose(&cfapi.NotifyFileCloseCompletionJob{Path: dir}); ok {
+	if _, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: dir}); ok {
 		t.Error("каталог поставлен в очередь выгрузки")
 	}
 
 	// Корень игнорируется.
-	if _, ok := p.classifyNotifyClose(&cfapi.NotifyFileCloseCompletionJob{Path: p.root}); ok {
+	if _, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: p.root}); ok {
 		t.Error("корень sync root поставлен в очередь")
 	}
 
 	// Вне sync root игнорируется.
-	if _, ok := p.classifyNotifyClose(&cfapi.NotifyFileCloseCompletionJob{Path: `C:\elsewhere\other.txt`}); ok {
+	if _, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: `C:\elsewhere\other.txt`}); ok {
 		t.Error("путь вне sync root поставлен в очередь")
 	}
 
@@ -647,34 +697,48 @@ func TestIngestClassifyCloseRouting(t *testing.T) {
 	if err := os.WriteFile(synced, []byte("z"), 0o644); err != nil {
 		t.Fatalf("write local: %v", err)
 	}
-	store.setState(synced, cfapi.PlaceholderStatePlaceholder|cfapi.PlaceholderStateInSync)
-	if _, ok := p.classifyNotifyClose(&cfapi.NotifyFileCloseCompletionJob{Path: synced}); ok {
-		t.Error("in-sync плейсхолдер поставлен в очередь")
+	store.setStandard(synced, cfapi.InSyncStateInSync)
+	for i := 0; i < 3; i++ {
+		// Повторные close-completion по пересозданной записи (живой ретест
+		// 27.11): placeholder+in-sync → ignore, 0 повторных PUT.
+		if _, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: synced}); ok {
+			t.Error("in-sync плейсхолдер поставлен в очередь (повторный PUT)")
+		}
 	}
+}
 
-	// Ошибка состояния — игнор (Warn).
-	store.mu.Lock()
-	store.stateErr = errFake("fake: cldapi недоступна")
-	store.mu.Unlock()
-	if _, ok := p.classifyNotifyClose(&cfapi.NotifyFileCloseCompletionJob{Path: plain}); ok {
-		t.Error("путь с недоступным состоянием поставлен в очередь")
+// TestIngestClassifyQueryErrorAsPlain — отказ STANDARD-запроса (не
+// sharing violation — те повторяются в placeholderSyncState) трактуется
+// как plain-файл → to-upload (живая семантика фикса U6-эвристики).
+func TestIngestClassifyQueryErrorAsPlain(t *testing.T) {
+	p, backend, store, _, _, _ := newIngestTestProvider(t)
+	local := filepath.Join(p.root, "qerr.txt")
+	if err := os.WriteFile(local, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write local: %v", err)
 	}
 	store.mu.Lock()
-	store.stateErr = nil
+	store.standardErr = errFake("fake: cldapi недоступна")
 	store.mu.Unlock()
+	task, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: local})
+	if !ok || task.fsPath != "/qerr.txt" {
+		t.Fatalf("отказ STANDARD-запроса не поставил plain-файл в очередь: ok=%v task=%+v", ok, task)
+	}
+	if backend.creates != 0 {
+		t.Errorf("классификация не должна трогать backend: creates=%d", backend.creates)
+	}
 }
 
 // TestIngestReadOnlyIgnoresClose — спека «Режим без записи» (задача 5.6):
 // --read-only игнорирует все close-уведомления.
 func TestIngestReadOnlyIgnoresClose(t *testing.T) {
-	p, backend, _, _, log := newIngestTestProvider(t)
+	p, backend, _, _, _, log := newIngestTestProvider(t)
 	p.readOnly = true
 	local := filepath.Join(p.root, "ro.txt")
 	if err := os.WriteFile(local, []byte("x"), 0o644); err != nil {
 		t.Fatalf("write local: %v", err)
 	}
 	for i := 0; i < 3; i++ {
-		if _, ok := p.classifyNotifyClose(&cfapi.NotifyFileCloseCompletionJob{Path: local}); ok {
+		if _, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: local}); ok {
 			t.Fatal("read-only поставил задание в очередь")
 		}
 	}
@@ -757,7 +821,7 @@ func TestIngestCoalescing(t *testing.T) {
 // локального файла в совместном доступе — задание повторяется, выгрузка
 // завершается после освобождения файла.
 func TestIngestSharingViolationRetries(t *testing.T) {
-	p, backend, _, _, _ := newIngestTestProvider(t)
+	p, backend, _, _, _, _ := newIngestTestProvider(t)
 	local := filepath.Join(p.root, "busy.txt")
 	data := []byte("eventual upload")
 	if err := os.WriteFile(local, data, 0o644); err != nil {
@@ -793,10 +857,11 @@ func TestIngestSharingViolationRetries(t *testing.T) {
 }
 
 // TestIngestPoolEndToEnd — сквозной прогон: close-уведомление из очереди
-// диспетчера → маршрутизатор → коалисер → воркер → backend + in-sync;
-// остановка (закрытие stop) завершает все горутины пула.
+// диспетчера → маршрутизатор → коалисер → воркер → backend + замена на
+// плейсхолдер (U18-α); остановка (закрытие stop) завершает все горутины
+// пула.
 func TestIngestPoolEndToEnd(t *testing.T) {
-	p, backend, store, _, _ := newIngestTestProvider(t)
+	p, backend, store, _, idx, _ := newIngestTestProvider(t)
 	d := cfapi.NewDispatcher(cfapi.DefaultQueueOptions())
 	p.dispatch = d
 	local := filepath.Join(p.root, "pool.txt")
@@ -817,9 +882,16 @@ func TestIngestPoolEndToEnd(t *testing.T) {
 		t.Fatalf("enqueue: %v", err)
 	}
 	waitFor(t, func() bool { return bytes.Equal(backend.content("/pool.txt"), data) })
+	// Замена (U18-α): плейсхолдер пересоздан, индекс получил запись.
 	waitFor(t, func() bool {
-		return store.stateOf(local)&cfapi.PlaceholderStateInSync != 0
+		got, ok := idx.Path(backend.inodeOf("/pool.txt"))
+		return ok && got == "/pool.txt"
 	})
+	// Пересоздание порождает события watcher'а; на живом фильтре
+	// плейсхолдер in-sync игнорируется классификатором — та же модель
+	// в подменном store (иначе цикл повторных выгрузок идентичного
+	// контента до конца теста).
+	store.setStandard(local, cfapi.InSyncStateInSync)
 
 	// Остановка: горутины пула завершаются (wg пуст).
 	p.stopMu.Lock()
@@ -829,83 +901,214 @@ func TestIngestPoolEndToEnd(t *testing.T) {
 	p.wg.Wait()
 }
 
-// TestIngestConvertRetryAfterClose — живой ретест этапа 5: фильтр короткое
-// время не принимает convert после закрытия записи (0x8007017c), «на
-// холодную» тот же convert проходит. Первые две попытки отвергнуты,
-// третья успешна: файл доведён до плейсхолдера (index/state), содержимое
-// выгружено; промежуточные отказы — Debug, не Warn.
-func TestIngestConvertRetryAfterClose(t *testing.T) {
-	p, backend, store, idx, _ := newIngestTestProvider(t)
-	p.convertRetryDelays = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}
-	local := filepath.Join(p.root, "retry.txt")
+// TestIngestRemoveBusyRetriesAfterUpload — U18-α: пользователь переоткрыл
+// файл (чужой хендл без FILE_SHARE_DELETE) сразу после выгрузки: удаление
+// невозможно — повтор с нарастающей паузой до ограничения попыток, задание
+// снимается с Warn «pending (file busy)»; контент выгружен, локальный файл
+// НЕ удалён. Освобождение файла и следующий close завершают замену.
+func TestIngestRemoveBusyRetriesAfterUpload(t *testing.T) {
+	p, backend, _, fstore, idx, _ := newIngestTestProvider(t)
+	local := filepath.Join(p.root, "busy.txt")
+	data := []byte("uploaded content")
+	if err := os.WriteFile(local, data, 0o644); err != nil {
+		t.Fatalf("write local: %v", err)
+	}
+	// Чужой хендл: чтение разрешено (выгрузка пройдёт), DELETE — нет
+	// (os.Remove получит sharing violation).
+	path16, err := windows.UTF16PtrFromString(local)
+	if err != nil {
+		t.Fatalf("utf16: %v", err)
+	}
+	h, err := windows.CreateFile(path16, windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil, windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL, 0)
+	if err != nil {
+		t.Skipf("не удалось взять читающий хендл без DELETE-share (окружение): %v", err)
+	}
+	hook := &logCapture{}
+	logger.AddHook(hook)
+	task := ingestTask{fsPath: "/busy.txt", local: local, key: "/busy.txt"}
+
+	p.runIngest(context.Background(), task)
+	if err := windows.CloseHandle(h); err != nil {
+		t.Fatalf("close holder handle: %v", err)
+	}
+
+	// Контент выгружен (Flush подтверждён), файл не удалён, пересоздания
+	// не было, задание снято (Warn; занятость — не отказ пересоздания).
+	if got := backend.content("/busy.txt"); !bytes.Equal(got, data) {
+		t.Fatalf("содержимое backend = %q, ожидается %q", got, data)
+	}
+	if got, err := os.ReadFile(local); err != nil || !bytes.Equal(got, data) {
+		t.Fatalf("локальный файл изменён/удалён при занятости: %v", err)
+	}
+	if n := len(fstore.convertCalls()); n != 0 {
+		t.Errorf("пересоздание выполнено при занятом файле: %d конверсий", n)
+	}
+	if n := hook.count("pending (file busy), content uploaded, will retry on next close/restart"); n != 1 {
+		t.Errorf("строк Warn «pending (file busy)»: %d, ожидается 1", n)
+	}
+	if p.ingestFailed.Load() != 0 {
+		t.Errorf("failed = %d, ожидается 0 (занятость — не отказ пересоздания)", p.ingestFailed.Load())
+	}
+	if _, ok := idx.Path(backend.inodeOf("/busy.txt")); ok {
+		t.Error("индекс получил запись при занятом файле")
+	}
+
+	// Следующий close (файл свободен) — замена завершается.
+	p.runIngest(context.Background(), task)
+	converts := fstore.convertCalls()
+	if len(converts) != 1 {
+		t.Fatalf("после освобождения файла конверсий = %d, ожидается 1", len(converts))
+	}
+	if flags := converts[0].flags; flags != cfapi.ConvertFlagMarkInSync|cfapi.ConvertFlagDehydrate {
+		t.Errorf("флаги конверсии = 0x%x, ожидается MARK_IN_SYNC|DEHYDRATE", flags)
+	}
+	if got, ok := idx.Path(backend.inodeOf("/busy.txt")); !ok || got != "/busy.txt" {
+		t.Errorf("idx.Path = (%q, %v), ожидается /busy.txt", got, ok)
+	}
+}
+
+// TestIngestRecreateFailureKeepsBackend — отказ пересоздания (U18-α):
+// createEntry откатывает созданную запись (ни старого файла, ни
+// неконвертированной записи — восстановление без данных невозможно),
+// failed++, Warn; контент выгружен в backend — не теряется, повторит
+// следующий close/рестарт; индекс не получил запись.
+func TestIngestRecreateFailureKeepsBackend(t *testing.T) {
+	p, backend, _, _, idx, _ := newIngestTestProvider(t)
+	local := filepath.Join(p.root, "recreate-fail.txt")
+	data := patternBytes(64)
+	if err := os.WriteFile(local, data, 0o644); err != nil {
+		t.Fatalf("write local: %v", err)
+	}
+	p.store = &convertFailStore{
+		fakeStore: fakeStore{local: map[string]bool{}, localReal: map[string]bool{}},
+		failPaths: map[string]error{local: errFake("fake: convert failed")},
+	}
+	hook := &logCapture{}
+	logger.AddHook(hook)
+
+	p.runIngest(context.Background(), ingestTask{fsPath: "/recreate-fail.txt", local: local, key: "/recreate-fail.txt"})
+
+	// Контент в backend (fake-состояние) — ничего не потеряно.
+	if got := backend.content("/recreate-fail.txt"); !bytes.Equal(got, data) {
+		t.Fatalf("содержимое backend не совпало с локальным (контент должен быть выгружен)")
+	}
+	// failed++ и Warn.
+	if p.ingestFailed.Load() != 1 {
+		t.Errorf("failed = %d, ожидается 1 (отказ пересоздания)", p.ingestFailed.Load())
+	}
+	if n := hook.count("recreate placeholder"); n != 1 {
+		t.Errorf("строк Warn о пересоздании: %d, ожидается 1", n)
+	}
+	// Откат createEntry: ни старого файла, ни неконвертированной записи.
+	if _, err := os.Stat(local); !os.IsNotExist(err) {
+		t.Errorf("сбойная запись не удалена: stat err = %v", err)
+	}
+	if _, ok := idx.Path(backend.inodeOf("/recreate-fail.txt")); ok {
+		t.Error("индекс получил запись при отказе пересоздания")
+	}
+}
+
+// TestIngestRecreateExistsConflict — EEXIST при пересоздании (U18-α:
+// пользователь пересоздал обычный файл между удалением и созданием):
+// переклассификация как в walk — конфликт; файл пользователя не тронут,
+// индекс не получил запись, повторной конверсии не было, контент выгружен.
+func TestIngestRecreateExistsConflict(t *testing.T) {
+	p, backend, _, fstore, idx, _ := newIngestTestProvider(t)
+	local := filepath.Join(p.root, "clash.txt")
+	data := []byte("uploaded content")
+	if err := os.WriteFile(local, data, 0o644); err != nil {
+		t.Fatalf("write local: %v", err)
+	}
+	// После успешного удаления путь мгновенно занят пересозданным файлом
+	// пользователя (детерминированная симуляция гонки «между remove и
+	// create» — подмена remover'а); модель фильтра: обычный файл.
+	p.remover = recreatingRemover{inner: osRemover{}, path: local, content: []byte("user remade")}
+	fstore.localReal[local] = true
+
+	p.runIngest(context.Background(), ingestTask{fsPath: "/clash.txt", local: local, key: "/clash.txt"})
+
+	if got := backend.content("/clash.txt"); !bytes.Equal(got, data) {
+		t.Fatalf("содержимое backend не совпало с локальным")
+	}
+	if got, err := os.ReadFile(local); err != nil || !bytes.Equal(got, []byte("user remade")) {
+		t.Errorf("файл пользователя изменён: %q, %v", got, err)
+	}
+	if _, ok := idx.Path(backend.inodeOf("/clash.txt")); ok {
+		t.Error("конфликт попал в индекс")
+	}
+	if n := len(fstore.convertCalls()); n != 0 {
+		t.Errorf("EEXIST-ветка конвертировала запись: %d вызовов", n)
+	}
+}
+
+// TestIngestRecreateExistsAdoptsOwnPlaceholder — EEXIST при пересоздании на
+// СВОЁМ плейсхолдере (гонка с параллельным walk, U18-α): переклассификация
+// как в walk восстанавливает запись в индекс без конверсии и дегидратации.
+func TestIngestRecreateExistsAdoptsOwnPlaceholder(t *testing.T) {
+	p, backend, _, fstore, idx, _ := newIngestTestProvider(t)
+	local := filepath.Join(p.root, "adopt.txt")
+	data := []byte("uploaded content")
+	if err := os.WriteFile(local, data, 0o644); err != nil {
+		t.Fatalf("write local: %v", err)
+	}
+	p.remover = recreatingRemover{inner: osRemover{}, path: local, content: []byte("user remade")}
+	// Модель фильтра: путь уже наш плейсхолдер (создан параллельным walk),
+	// дегидратированный (OnDiskDataSize 0 — дефолт подменного store).
+	fstore.local[local] = true
+
+	p.runIngest(context.Background(), ingestTask{fsPath: "/adopt.txt", local: local, key: "/adopt.txt"})
+
+	ino := backend.inodeOf("/adopt.txt")
+	if got, ok := idx.Path(ino); !ok || got != "/adopt.txt" {
+		t.Errorf("idx.Path(%d) = (%q, %v), ожидается /adopt.txt (переклассифицирован в existing)", ino, got, ok)
+	}
+	if n := len(fstore.convertCalls()); n != 0 {
+		t.Errorf("переклассификация сконвертировала запись: %d вызовов", n)
+	}
+	if n := len(fstore.updateCalls()); n != 0 {
+		t.Errorf("переклассификация дегидратировала запись: %d вызовов", n)
+	}
+	if got := backend.content("/adopt.txt"); !bytes.Equal(got, data) {
+		t.Errorf("содержимое backend не совпало с локальным")
+	}
+}
+
+// TestIngestSelfEventSuppression — супрессия собственных событий watcher'а
+// (U18-α replace-after-upload, живой ретест 27.11: remove+create
+// финализацией классифицировались «plain → upload» — петля повторных
+// выгрузок). Событие в окне (10 c от финализации) — ignore, backend не
+// тронут; после истечения окна — честная классификация по STANDARD
+// (fake: нет записи → plain → to-upload). Часы injectable.
+func TestIngestSelfEventSuppression(t *testing.T) {
+	p, backend, _, _, _, _ := newIngestTestProvider(t)
+	clock := newFakeClock(time.Unix(0, 0))
+	p.clock = clock
+	local := filepath.Join(p.root, "self.txt")
 	data := patternBytes(100)
 	if err := os.WriteFile(local, data, 0o644); err != nil {
 		t.Fatalf("write local: %v", err)
 	}
-	store.mu.Lock()
-	store.convertErr = errFake("fake: 0x8007017c (convert rejected after close)")
-	store.convertFailures = 2
-	store.mu.Unlock()
 
-	p.runIngest(context.Background(), ingestTask{fsPath: "/retry.txt", local: local, key: "/retry.txt"})
+	// Полный цикл выгрузки с replace-after-upload: финализация ставит окно
+	// супрессии на путь.
+	p.runIngest(context.Background(), ingestTask{fsPath: "/self.txt", local: local, key: "/self.txt"})
 
-	if len(store.converts) != 3 {
-		t.Fatalf("попыток convert = %d, ожидается 3 (2 отказа + успех)", len(store.converts))
-	}
-	ino := backend.inodeOf("/retry.txt")
-	if got, ok := idx.Path(ino); !ok || got != "/retry.txt" {
-		t.Errorf("idx.Path(%d) = (%q, %v), ожидается /retry.txt", ino, got, ok)
-	}
-	if st := store.stateOf(local); st != cfapi.PlaceholderStatePlaceholder|cfapi.PlaceholderStateInSync {
-		t.Errorf("состояние локального пути = 0x%x, ожидается placeholder|in-sync", st)
-	}
-	if got := backend.content("/retry.txt"); !bytes.Equal(got, data) {
-		t.Errorf("содержимое backend не совпало с локальным")
-	}
-	if flags := store.converts[len(store.converts)-1].flags; flags != cfapi.ConvertFlagMarkInSync {
-		t.Errorf("флаги успешной конверсии = 0x%x, ожидается MARK_IN_SYNC", flags)
-	}
-}
-
-// TestIngestConvertRetryExhausted — все попытки отвергнуты: Warn
-// «conversion pending», содержимое выгружено (не fatal), плейсхолдер НЕ
-// выставлен, индекс не получил запись — конверсию повторит следующий
-// watcher-MODIFIED либо рестарт.
-func TestIngestConvertRetryExhausted(t *testing.T) {
-	p, backend, store, idx, log := newIngestTestProvider(t)
-	p.convertRetryDelays = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}
-	local := filepath.Join(p.root, "pending.txt")
-	data := patternBytes(50)
-	if err := os.WriteFile(local, data, 0o644); err != nil {
-		t.Fatalf("write local: %v", err)
-	}
-	store.mu.Lock()
-	store.convertErr = errFake("fake: 0x8007017c (convert rejected after close)")
-	store.convertFailures = 100
-	store.mu.Unlock()
-
-	p.runIngest(context.Background(), ingestTask{fsPath: "/pending.txt", local: local, key: "/pending.txt"})
-
-	// 1 немедленная + 3 повтора.
-	if len(store.converts) != len(p.convertRetryDelays)+1 {
-		t.Fatalf("попыток convert = %d, ожидается %d", len(store.converts), len(p.convertRetryDelays)+1)
-	}
-	if st := store.stateOf(local); st != 0 {
-		t.Errorf("состояние локального пути = 0x%x, ожидается 0 (вне in-sync)", st)
-	}
-	if got, ok := idx.Path(backend.inodeOf("/pending.txt")); ok {
-		t.Errorf("индекс получил запись при неудавшейся конверсии: %q", got)
-	}
-	if got := backend.content("/pending.txt"); !bytes.Equal(got, data) {
-		t.Errorf("содержимое backend не совпало с локальным (выгрузка не должна пострадать от отказа convert)")
-	}
-	foundFlush := false
-	for _, k := range log.kinds() {
-		if k == "flush" {
-			foundFlush = true
+	job := &cfapi.NotifyFileCloseCompletionJob{Path: local}
+	// Собственные события recreate (в окне) — ignore, 0 повторных PUT.
+	for i := 0; i < 3; i++ {
+		if _, ok := p.classifyNotifyClose(context.Background(), job); ok {
+			t.Fatal("собственное событие в окне супрессии поставлено в очередь (петля повторных выгрузок)")
 		}
 	}
-	if !foundFlush {
-		t.Errorf("Flush не зафиксирован: %v", log.snapshot())
+	if n := backend.creates; n != 1 {
+		t.Errorf("попыток Create = %d, ожидается 1 (исходная выгрузка; дубликатов нет)", n)
+	}
+
+	// После истечения окна — честная классификация: решение по STANDARD
+	// (в подмене нет записи → plain → to-upload; на живом фильтре
+	// пересозданный плейсхолдер ответил бы in-sync → ignore).
+	clock.advance(selfEventSuppressWindow + time.Second)
+	if _, ok := p.classifyNotifyClose(context.Background(), job); !ok {
+		t.Fatal("после истечения окна классификация не вернула честное решение")
 	}
 }

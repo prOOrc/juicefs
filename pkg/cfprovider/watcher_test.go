@@ -128,7 +128,7 @@ func TestParseNotifyEventsBadTail(t *testing.T) {
 // watcher не начнёт доставлять (следующие фазы идут при уже работающем
 // чтении и детерминированы).
 func TestWatcherRealDirectory(t *testing.T) {
-	p, _, _, _, _ := newIngestTestProvider(t)
+	p, _, _, _, _, _ := newIngestTestProvider(t)
 	db := newIngestDebouncer(50*time.Millisecond, wallClock{}) // debounce гасит пачку ADDED+MODIFIED
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
