@@ -45,6 +45,7 @@ import (
 
 	"github.com/juicedata/juicefs/pkg/cfapi"
 	"github.com/juicedata/juicefs/pkg/fs"
+	"github.com/juicedata/juicefs/pkg/vfs"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 )
@@ -79,7 +80,11 @@ type fsFetchBackend struct {
 }
 
 func (b fsFetchBackend) Open(ctx meta.Context, path string) (fetchFile, syscall.Errno) {
-	return b.fsys.Open(ctx, path, 0)
+	// flags != 0 обязателен: fs.open с нулевыми флагами пропускает meta-Open,
+	// и на зашифрованном томе Open-ответ не доставляет FEK — чтение AGDF-блоков
+	// падает EIO (живой кейс 27.11 facility-маунта: FETCH читал файлы без FEK).
+	// MODE_MASK_R без W — fs.open открывает O_RDONLY и выполняет meta-Open.
+	return b.fsys.Open(ctx, path, vfs.MODE_MASK_R)
 }
 
 // startFetchPool запускает пул гидратации: p.fetchWorkers воркеров очереди
@@ -151,7 +156,9 @@ func (p *Provider) fetchOverflowDrain(ctx context.Context, d *cfapi.Dispatcher, 
 				continue
 			}
 			logger.Warnf("FETCH_DATA queue overflow: fileID=%d off=%d len=%d; answering request canceled", job.FileID, job.RequiredOffset, job.RequiredLength)
-			if err := p.store.TransferData(job.ConnectionKey, job.TransferKey, job.RequestKey, cfapi.StatusCloudFileRequestCanceled, job.RequiredOffset, 0, nil); err != nil {
+			// Отказ тоже несёт запрошенный диапазон (см. handleFetchData:
+			// Length=0 отвергается фильтром).
+			if err := p.store.TransferData(job.ConnectionKey, job.TransferKey, job.RequestKey, cfapi.StatusCloudFileRequestCanceled, job.RequiredOffset, job.RequiredLength, nil); err != nil {
 				logger.Warnf("FETCH_DATA overflow answer: %v", err)
 			}
 			d.Complete(job)
@@ -182,7 +189,18 @@ func handleFetchData(ctx context.Context, p *Provider, job *cfapi.FetchDataJob) 
 	if length > 0 && length <= int64(len(buf)) {
 		buf = buf[:length] // буфер начинается на странице-выровненной базе; срез — ровно передаваемые данные
 	}
-	if err := p.store.TransferData(job.ConnectionKey, job.TransferKey, job.RequestKey, status, job.RequiredOffset, length, buf); err != nil {
+	// Отказ гидрации: в ответе ОБЯЗАН стоять ЗАПРОШЕННЫЙ диапазон — Length=0
+	// фильтр отвергает ERROR_CLOUD_FILE_INVALID_REQUEST (0x8007017c, живой
+	// кейс 27.11 facility-маунта: отказ ответа не завершал гидратацию, файл
+	// застревал в re-fetch-цикле, открытые на него CreateFile подвисали).
+	// Паттерн сэмпла MS CloudMirror (FileCopierWithProgress.cpp:78-84):
+	// Buffer=NULL, Offset=RequiredFileOffset, Length=RequiredLength,
+	// CompletionStatus=код отказа — читающий процесс получает ошибку сразу.
+	answerLength := length
+	if status != cfapi.StatusSuccess {
+		answerLength = job.RequiredLength
+	}
+	if err := p.store.TransferData(job.ConnectionKey, job.TransferKey, job.RequestKey, status, job.RequiredOffset, answerLength, buf); err != nil {
 		logger.Warnf("FETCH_DATA fileID=%d: transfer status=%#x: %v", job.FileID, uint32(status), err)
 	}
 	// Замер M2 (design.md D11, задача 3.5): длительность и байты задания.

@@ -234,8 +234,11 @@ func TestFetchCancelBeforeStart(t *testing.T) {
 	if calls[0].status != cfapi.StatusCloudFileRequestCanceled {
 		t.Errorf("status = %#x, ожидается CLOUD_FILE_REQUEST_CANCELED", uint32(calls[0].status))
 	}
-	if calls[0].length != 0 || len(calls[0].data) != 0 {
-		t.Errorf("ответ отмены несёт данные: length=%d data=%d", calls[0].length, len(calls[0].data))
+	// Отказ/отмена несёт ЗАПРОШЕННЫЙ диапазон без данных (Length=0 фильтр
+	// отвергает ERROR_CLOUD_FILE_INVALID_REQUEST — живой кейс 27.11; сэмпл
+	// CloudMirror передаёт RequiredLength).
+	if calls[0].length != int64(1<<20) || len(calls[0].data) != 0 {
+		t.Errorf("ответ отмены: length=%d data=%d, want RequiredLength=1MiB без данных", calls[0].length, len(calls[0].data))
 	}
 	if backend.opens() != 0 {
 		t.Errorf("файл открыт при отменённом задании: %d", backend.opens())
@@ -277,8 +280,10 @@ func TestFetchCancelMidRead(t *testing.T) {
 	if calls[0].status != cfapi.StatusCloudFileRequestCanceled {
 		t.Errorf("status = %#x, ожидается CLOUD_FILE_REQUEST_CANCELED", uint32(calls[0].status))
 	}
-	if calls[0].length != 0 {
-		t.Errorf("ответ отмены несёт length=%d, ожидается 0", calls[0].length)
+	// Отмена несёт запрошенный диапазон без данных (Length=0 фильтр
+	// отвергает — см. handleFetchData).
+	if calls[0].length != int64(10<<20) {
+		t.Errorf("ответ отмены несёт length=%d, ожидается RequiredLength=10MiB", calls[0].length)
 	}
 	if f := backend.file(); f.calls != 1 {
 		t.Errorf("вызовов Pread = %d, ожидается 1 (отмена между порциями)", f.calls)
@@ -507,8 +512,8 @@ func TestFetchOverflowAnswer(t *testing.T) {
 		switch c.status {
 		case cfapi.StatusCloudFileRequestCanceled:
 			canceled++
-			if c.transferKey != dropped.TransferKey || c.length != 0 {
-				t.Errorf("ответ отмены: keys=%d/%d length=%d", c.transferKey, c.requestKey, c.length)
+			if c.transferKey != dropped.TransferKey || c.length != int64(len(data)) {
+				t.Errorf("ответ отмены: keys=%d/%d length=%d, want RequiredLength=%d", c.transferKey, c.requestKey, c.length, len(data))
 			}
 		case cfapi.StatusSuccess:
 			success++
