@@ -259,6 +259,7 @@ Namespace sync root строится целиком из метаданных hu
 | M1 create-путь (walk, convert на фильтре) | ≥10k ops/s | 4.2k×1 / 8.1k×4 воркера | **2948 ops/s** (5027 записей / 1.705s, первый walk bench10k) | Warn — ниже цели; узкое место = NTFS-дисковые примитивы (4 syscall/файл) + помехи Defender (728 FETCH_DATA во время walk), НЕ язык |
 | M1 рестарт (классификация skip, тёплый Defender) | ≥10k ops/s | 40.5k | **35 188 ops/s** (5032 / 143ms) | ✓ PASS (3.5× цели); холодный рестарт под Defender-шторм (10000 FETCH_DATA): 1104 ops/s — шум окружения задокументирован |
 | M2 streaming (движок, юнит) | ≥80% линии | 18–87 GB/s | 8MB/0.130s через полный фильтр+FETCH_DATA pipeline; движок на порядки выше линии канала — упирается в S3 | ✓ PASS (движок не узкое место) |
+| M2-матрица (живой фильтр 27.11 23:55, 64×16MiB=1GiB FETCH-гидрация, локальный storage-стенд) | pool-масштабирование | workers=1 → 458 MB/s; workers=8 → 7.7 GB/s; workers=64 → 22.4 GB/s агрегатно | 2.13: пул воркеров масштабирует гидрацию линейно до насыщения storage; на facility-канале потолок — линия S3 (см. выше) | ✓ PASS |
 | M3 GC-паузы >10 мс | 0 | 0 из 10 (юнит-нагрузка) | GC 8 циклов @1% CPU (gctrace), аномальных пауз нет | ✓ PASS |
 | M3 alloc rate hot path | ≈0 после прогрева | пул 2 alloc/cycle (closure), данные вне Go-кучи; fetch 431B/16 alloc на 128KiB задание | live heap 286MB после 20k walk + 256MB fetch (юнит-M3); hot path fetch ≈0.003% payload | ✓ PASS (walk-аллокации — индекс/журнал, не hot path) |
 

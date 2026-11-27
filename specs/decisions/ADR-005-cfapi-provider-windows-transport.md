@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | draft (прототип `implement-cfapi-provider` до верификации; в accepted — по итогам DoD прототипа) |
+| Статус | accepted (27.11: DoD 57/57, гейт D11 — Go остаётся; владелец подтвердил прототип живьём — facility-маунт vector-stage: OIDC+STS+walk+upload+чтение AGDF через FETCH, кросс-машинная видимость Mac↔Windows; change `implement-cfapi-provider` заархивирован) |
 | Дата | 2026-11-26 |
 | Контекст | Решение владельца о V3 (нативные плейсхолдеры Windows, pin/hydrate, устойчивость к офлайну); сравнение трёх технологий (Go syscall / C# P/Invoke / C++ native) на базе исследования сэмпла Microsoft CloudMirror, клиента agio-drive (master a67b6ac) и форка (agio-drive-v2); вердикт конвейера explorer→architect 2026-11-26 |
 | Связанные | ADR-004 (data-plane креденшелы — не меняются), SRS-001 (криптоцепочка — инвариант), `implement-cfapi-provider` (прототип), follow-up `implement-cfapi-drive-integration`, домен `domain-windows-mount` (линия WinFSP — живёт параллельно) |
@@ -98,6 +98,9 @@ Go остаётся в линии V3.** Пути ускорения create-пу�
 - cldflt.sys работает только на NTFS; корень — папка на NTFS-томе (решение В4).
 - Ограничения прототипа фиксируются в proposal Non-Goals: конфликт нескольких писателей,
   реактивное обновление дерева, офлайн-доступ к дегидратированным файлам, shell-расширения.
-- В accepted после DoD прототипа **и языкового гейта D11** (замеры M1/M2/M3); при провале
-  ключевых проб (U1–U13) или провале целей замеров — пересмотр решения с повторным
-  сравнением альтернатив (Rust/C++ по фреймингу «клиент протокола хаба»).
+- **ACCEPTED 27.11**: DoD 57/57, гейт D11 (M2/M3 PASS, M1-create Warn — узкое место NTFS+Defender,
+  не язык; тёплый рестарт 3.5× PASS), вердикт «Go остаётся»; владелец подтвердил прототип живым
+  facility-маунтом (vector-stage) с кросс-машинной видимостью. Ключевые живые находки, укрепившие
+  решение: errno-перевод Linux↔Windows (serverErrno), FEK-доставка через meta-Open (fs.Open flags),
+  FETCH-fail RequiredLength — всё в стеке прототипа, документировано в design.md U-таблице и
+  follow-up `implement-cfapi-drive-integration`.

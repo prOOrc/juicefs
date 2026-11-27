@@ -1,4 +1,4 @@
-# scripts/dod-cycles.ps1 — задача 7.5: десять циклов «запуск — чтение —
+﻿# scripts/dod-cycles.ps1 — задача 7.5: десять циклов «запуск — чтение —
 # запись — удаление — остановка» на живом sync root (spec domain-cfapi-provider).
 # Число горутин — pprof debug-агента serve (127.0.0.1:6060, cmd/main.go:
 # стартует агент на 6060..6099, если не передан --no-agent); занятость
@@ -56,11 +56,18 @@ for ($i = 1; $i -le $Cycles; $i++) {
     Write-Host "=== Цикл $i / $Cycles ==="
 
     # 1. Запуск serve (свежий лог на цикл; debug-агент — по умолчанию включён).
-    if (Test-Path $LogFile) {
-        Remove-Item $LogFile -Force
+    # Хендл лога предыдущего serve может освобождаться с задержкой после
+    # Stop-Process — ретрай удаления (живой прогон 27.11: цикл 3 упал на гонке).
+    for ($retry = 0; $retry -lt 10; $retry++) {
+        try {
+            if (Test-Path $LogFile) { Remove-Item $LogFile -Force -ErrorAction Stop }
+            break
+        } catch {
+            Start-Sleep -Milliseconds 500
+        }
     }
     $serve = Start-Process -FilePath $JuicefsExe `
-        -ArgumentList (@("clouddrive", "serve", $Meta, "--log-id", "cycles") + $ExtraServeArgs) `
+        -ArgumentList (@("clouddrive", "serve", $Meta, "--root", $Root, "--log-id", "cycles") + $ExtraServeArgs) `
         -RedirectStandardError $LogFile -PassThru -NoNewWindow
     if (-not (Wait-Ready)) {
         throw "цикл ${i}: маркер готовности не появился за 120с (см. $LogFile)"
