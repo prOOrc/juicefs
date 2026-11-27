@@ -908,7 +908,10 @@ func cloudDriveHash(c *cli.Context) error {
 		// процесса, не root): права доступа backend применяются честно.
 		mctx := meta.WrapWithCancel(context.Background(), uint32(os.Getpid()), uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
 		defer mctx.Cancel()
-		f, errno := stack.fsys.Open(mctx, p, 0)
+		// MODE_MASK_R (не 0): fs.open пропускает meta-Open при нулевых флагах —
+		// на зашифрованном томе без него Open-ответ не несёт FEK и Pread падает
+		// EIO (живой кейс 27.11).
+		f, errno := stack.fsys.Open(mctx, p, vfs.MODE_MASK_R)
 		if errno != 0 {
 			return fmt.Errorf("open %s: %v", p, errno)
 		}
