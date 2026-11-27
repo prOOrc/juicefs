@@ -1,5 +1,7 @@
 # domain-cfapi-provider Specification
 
+## Requirements
+
 ### Requirement: Провайдер синхронизации на Cloud Files API
 
 Система SHALL предоставлять провайдер синхронизации Windows Cloud Files API в процессе Go: биндинг к `cldapi.dll` в пакете `pkg/cfapi` и движок в пакете `pkg/cfprovider`. Движок SHALL обращаться к `cldapi.dll` только через интерфейс, объявленный в `pkg/cfapi`, чтобы проверяться на подменной реализации без зарегистрированного sync root.
