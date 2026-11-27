@@ -30,11 +30,18 @@
 // содержимое пишется в backend через write-API pkg/fs порциями не больше
 // BlockSize из format, Truncate доводит длину, Flush — атомарное
 // подтверждение версии (write-back выключен, задача 5.5); ТОЛЬКО после
-// успешного Flush новый файл конвертируется в плейсхолдер с identity =
-// inode backend БЕЗ дегидратации (данные остаются локально полными — спека
-// «Новый файл»), изменённый плейсхолдер помечается in-sync
-// (CfSetInSyncState; inSync=TrackNone при регистрации — состояние
-// переключает провайдер).
+// успешного Flush локальный user-файл заменяется дегидратированным
+// плейсхолдером (U18-α replace-after-upload): конверсия user-файла из
+// подключённого serve-процесса отвергается фильтром (INVALID_REQUEST при
+// population=ALWAYS_FULL, живой ретест 27.11), поэтому имя удаляется и
+// пересоздаётся createEntry-примитивом walk (design.md D6.4 — на своих
+// файлах конверсия доказана): identity = inode backend, DEHYDRATE|MARK_IN_SYNC
+// (контент идентичен только что выгруженному backend-у; гидрация при
+// доступе — пул этапа 3). Инвариант (design.md D8, уточнение U18-α):
+// локальный user-файл не теряется ДО успешного Flush; после Flush он
+// заменяется дегидратированным плейсхолдером. Изменённый плейсхолдер
+// помечается in-sync (CfSetInSyncState; inSync=TrackNone при регистрации —
+// состояние переключает провайдер).
 //
 // Изоляция пулов (design.md D3): пул выгрузки НЕ обслуживает FETCH_DATA —
 // тот приходит отдельному пулу гидратации; чтение локального
@@ -60,10 +67,10 @@ package cfprovider
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"io"
 	"os"
+	"path"
 	"strings"
 	"sync"
 	"syscall"
@@ -86,13 +93,13 @@ const DefaultIngestWorkers = 2
 // файл; повторные закрытия не вызывают выгрузку).
 const ingestDebounceDelay = 2 * time.Second
 
-// convertRetryDelaysDefault — паузы повторов конверсии после закрытия
-// записи (живой ретест этапа 5: convert сразу после close отвергается
-// фильтром с 0x8007017c, «на холодную» тот же convert проходит): первая
-// попытка немедленно, затем повторы через 500 мс / 2 c / 5 c — суммарное
-// окно ~7.5 c. Отказ последней попытки — Warn (содержимое выгружено;
-// конверсию повторит следующий watcher-MODIFIED либо рестарт).
-var convertRetryDelaysDefault = []time.Duration{500 * time.Millisecond, 2 * time.Second, 5 * time.Second}
+// ingestRemoveAttempts — ограничение повторов удаления локального файла
+// после успешного Flush (U18-α replace-after-upload): пользователь мог
+// переоткрыть файл (хендл без FILE_SHARE_DELETE — удаление невозможно).
+// Попытки с нарастающей паузой ingestRetryDelay → ingestMaxRetryDelay;
+// исчерпание — Warn «pending (file busy)», задание снимается: контент
+// выгружен, повторит следующий close/рестарт.
+const ingestRemoveAttempts = 5
 
 // ingestFile — открытый на запись файл backend: минимальная поверхность
 // *fs.File, нужная выгрузке. Реальная реализация — *fs.File
@@ -143,17 +150,35 @@ func (b fsIngestBackend) OpenWrite(ctx meta.Context, path string) (ingestFile, s
 }
 
 // ingestStore — CfAPI-операции плейсхолдеров write-пути (design.md D8/U8):
-// классификация состояния, пометка in-sync, конверсия нового файла.
-// Реальная реализация — osStore; подменная — в тестах.
+// классификация состояния, пометка in-sync изменённого плейсхолдера.
+// Пересоздание нового файла — createEntry-примитив через placeholderStore
+// (U18-α). Реальная реализация — osStore; подменная — в тестах.
 type ingestStore interface {
-	// PlaceholderState — CF_PLACEHOLDER_STATE локального пути.
-	PlaceholderState(path string) (uint32, error)
+	// StandardInfo — CF_PLACEHOLDER_STANDARD_INFO локальной записи
+	// (CfGetPlaceholderInfo): честное состояние плейсхолдера после
+	// convert-DEHYDRATE — фильтр чистит basic-атрибуты, и FileBasicInfo-
+	// эвристика (CF_PLACEHOLDER_STATE) возвращает 0 для реального
+	// плейсхолдера → повторные выгрузки того же контента (write
+	// amplification, живой ретест 27.11). Ошибка запроса — у записи нет
+	// плейсхолдерности (plain-файл).
+	StandardInfo(path string) (*cfapi.CFPlaceholderStandardInfo, error)
 	// SetInSync — CfSetInSyncState(InSyncStateInSync) по пути.
 	SetInSync(path string) error
-	// ConvertFile — конверсия РЕАЛЬНОГО файла в плейсхолдер (файл, не
-	// каталог; identity удерживает вызывающий до возврата).
-	ConvertFile(path string, fileIdentity []byte, convertFlags uint32) error
 }
+
+// localRemover — удаление локального пути на финализации выгрузки
+// (U18-α replace-after-upload: имя освобождается для пересоздания
+// createEntry-примитивом). Реальная реализация — osRemover (os.Remove);
+// подменная — в тестах (симуляция занятости и «пользователь пересоздал
+// файл» между удалением и пересозданием).
+type localRemover interface {
+	Remove(path string) error
+}
+
+// osRemover — localRemover на os.Remove.
+type osRemover struct{}
+
+func (osRemover) Remove(path string) error { return os.Remove(path) }
 
 // ingestTimer — таймер коалисера: минимальная поверхность time.Timer,
 // подменяемая в тестах (канал срабатывания тестируемый).
@@ -325,12 +350,69 @@ func (db *ingestDebouncer) run(ctx context.Context, stop chan struct{}) {
 	}
 }
 
-// classifyNotifyClose — классификация NOTIFY_FILE_CLOSE_COMPLETION
-// (задача 5.2, design.md D8 шаг 1): файл без плейсхолдера и плейсхолдер вне
-// in-sync ставятся в очередь выгрузки; плейсхолдер in-sync, каталоги и пути
-// вне sync root игнорируются. --read-only (спека «Режим без записи»)
-// игнорирует всё с однократным логом.
-func (p *Provider) classifyNotifyClose(job *cfapi.NotifyFileCloseCompletionJob) (ingestTask, bool) {
+// selfEventSuppressWindow — окно супрессии собственных событий watcher'а
+// после replace-after-upload финализации (U18-α): remove+create+следовые
+// close записи укладываются с запасом (живой ретест 27.11: петля
+// «upload → recreate → plain → upload» каждые 2-3 c без супрессии).
+const selfEventSuppressWindow = 10 * time.Second
+
+// selfEventSuppressed — стоит ли окно супрессии собственных событий на ключ
+// (lower fsPath); until — дедлайн (диагностика тестов).
+func (p *Provider) selfEventSuppressed(key string) (suppressed bool, until time.Time) {
+	p.selfEventMu.Lock()
+	defer p.selfEventMu.Unlock()
+	until, ok := p.selfEventUntil[key]
+	return ok && p.clock.Now().Before(until), until
+}
+
+// markSelfEvent ставит окно супрессии собственных событий на ключ
+// (lower fsPath) от текущего времени часов провайдера (injectable — тесты).
+func (p *Provider) markSelfEvent(key string) {
+	p.selfEventMu.Lock()
+	defer p.selfEventMu.Unlock()
+	p.selfEventUntil[key] = p.clock.Now().Add(selfEventSuppressWindow)
+}
+
+// placeholderSyncState — честное состояние записи sync root через
+// CF_PLACEHOLDER_STANDARD_INFO (CfGetPlaceholderInfo): isPlaceholder —
+// у записи есть плейсхолдерность, inSync — она помечена синхронизированной.
+// После convert-DEHYDRATE фильтр чистит basic-атрибуты — FileBasicInfo-
+// эвристика (CF_PLACEHOLDER_STATE) возвращает 0 для РЕАЛЬНОГО плейсхолдера,
+// что давало повторные выгрузки того же контента (write amplification,
+// живой ретест 27.11); STANDARD-запрос работает и там. Отказ запроса —
+// у записи нет плейсхолдерности (plain-файл, new file). Отказ из-за
+// занятости (sharing violation — писатель держит запись) — повтор с
+// нарастающей паузой до ingestMaxRetryDelay: писатель закроет запись.
+func (p *Provider) placeholderSyncState(ctx context.Context, local string) (isPlaceholder, inSync bool, err error) {
+	delay := p.ingestRetryDelay
+	for attempt := 1; ; attempt++ {
+		info, qerr := p.istore.StandardInfo(local)
+		if qerr == nil {
+			return true, info.InSyncState == cfapi.InSyncStateInSync, nil
+		}
+		if !isSharingViolation(qerr) {
+			return false, false, qerr
+		}
+		if ctx.Err() != nil {
+			return false, false, qerr
+		}
+		logger.Debugf("ingest %s: local record busy (attempt %d): %v; retrying in %s", local, attempt, qerr, delay)
+		if !sleepCtx(ctx, p.stopChan(), delay) {
+			return false, false, qerr
+		}
+		delay *= 2
+		if delay > p.ingestMaxRetryDelay {
+			delay = p.ingestMaxRetryDelay
+		}
+	}
+}
+
+// classifyNotifyClose — классификация NOTIFY_FILE_CLOSE_COMPLETION и
+// watcher-событий (единая точка; задача 5.2, design.md D8 шаг 1): файл без
+// плейсхолдера и плейсхолдер вне in-sync ставятся в очередь выгрузки;
+// плейсхолдер in-sync, каталоги и пути вне sync root игнорируются.
+// --read-only (спека «Режим без записи») игнорирует всё с однократным логом.
+func (p *Provider) classifyNotifyClose(ctx context.Context, job *cfapi.NotifyFileCloseCompletionJob) (ingestTask, bool) {
 	if p.readOnly {
 		p.readOnlyOnce.Do(func() {
 			logger.Info("read-only mode: local changes are not uploaded to the volume (--read-only)")
@@ -342,31 +424,37 @@ func (p *Provider) classifyNotifyClose(job *cfapi.NotifyFileCloseCompletionJob) 
 		logger.Debugf("close completion %q: outside sync root, ignored", job.Path)
 		return ingestTask{}, false
 	}
+	// Супрессия собственных событий (U18-α replace-after-upload): remove/
+	// create записи финализацией — события watcher'а на САМОГО себя; в окне
+	// отсутствия/пересоздания STANDARD-запрос отвечал «plain → upload» →
+	// самоподдерживающаяся петля повторных выгрузок (живой ретест 27.11).
+	if suppressed, _ := p.selfEventSuppressed(strings.ToLower(fsPath)); suppressed {
+		logger.Debugf("close completion %s: self event suppressed (recreate window)", fsPath)
+		return ingestTask{}, false
+	}
 	local := localJoin(p.root, fsPath)
 	if fi, err := os.Stat(local); err == nil && fi.IsDir() {
 		// Каталоги — этап 6 (создание/переименование/удаление каталогов,
 		// design.md D5): close-completion каталогов выгрузке не подлежит.
 		return ingestTask{}, false
 	}
-	state, err := p.istore.PlaceholderState(local)
-	if err != nil {
-		// Только реальный отказ API (open/GetFileInformation — cfapi
-		// трактует INVALID как NO_STATES): задание не ставится.
-		logger.Warnf("close completion %s: placeholder state: %v; ignored", fsPath, err)
-		return ingestTask{}, false
-	}
-	// Классификация по состоянию (design.md D8 шаг 1, живая проба этапа 5):
-	// 0/NO_STATES — не плейсхолдер, новый файл пользователя → to-upload;
+	// Классификация по честному STANDARD-состоянию (см. placeholderSyncState):
+	// отказ запроса — plain-файл, новый файл пользователя → to-upload;
 	// placeholder+in-sync — выгружать нечего (создан walk-ом/уже выгружен) →
 	// ignore; placeholder без in-sync — изменённый → to-upload.
-	switch {
-	case state&cfapi.PlaceholderStatePlaceholder == 0:
-		logger.Debugf("close completion %s: state=0x%x plain file -> upload", fsPath, state)
-	case state&cfapi.PlaceholderStateInSync != 0:
-		logger.Debugf("close completion %s: state=0x%x placeholder in sync -> ignore", fsPath, state)
+	isPlaceholder, inSync, err := p.placeholderSyncState(ctx, local)
+	if err != nil {
+		logger.Debugf("close completion %s: no placeholder record (%v) -> plain file -> upload", fsPath, err)
+		return ingestTask{fsPath: fsPath, local: local, key: strings.ToLower(fsPath)}, true
+	}
+	if isPlaceholder && inSync {
+		logger.Debugf("close completion %s: placeholder in sync -> ignore", fsPath)
 		return ingestTask{}, false
-	default:
-		logger.Debugf("close completion %s: state=0x%x placeholder modified -> upload", fsPath, state)
+	}
+	if isPlaceholder {
+		logger.Debugf("close completion %s: placeholder modified -> upload", fsPath)
+	} else {
+		logger.Debugf("close completion %s: plain file -> upload", fsPath)
 	}
 	return ingestTask{fsPath: fsPath, local: local, key: strings.ToLower(fsPath)}, true
 }
@@ -386,7 +474,7 @@ func (p *Provider) ingestRouter(ctx context.Context, db *ingestDebouncer, d *cfa
 				continue
 			}
 			logger.Debugf("NOTIFY_FILE_CLOSE_COMPLETION: path=%q size=%d flags=%#x", job.Path, job.FileSize, job.Flags)
-			if task, ok := p.classifyNotifyClose(job); ok {
+			if task, ok := p.classifyNotifyClose(ctx, job); ok {
 				db.submit(task)
 			}
 		}
@@ -416,18 +504,27 @@ func (p *Provider) ingestWorker(ctx context.Context, in <-chan ingestTask, stop 
 // открывается на чтение (повтор при отказе в совместном доступе),
 // содержимое пишется в backend порциями не больше BlockSize, Truncate
 // доводит длину, Flush подтверждает версию атомарно; только после
-// успешного Flush — финализация плейсхолдера (finalizeIngest).
+// успешного Flush — финализация (finalizeIngest): заменой на плейсхолдер
+// (U18-α) либо пометкой in-sync изменённого плейсхолдера.
 func (p *Provider) runIngest(ctx context.Context, task ingestTask) {
 	started := time.Now()
 	// Повторная классификация на момент обработки: за задержку коалисинга
 	// состояние могло измениться (выгружено параллельным заданием, сверткой,
-	// файл удалён/переименован пользователем).
-	state, err := p.istore.PlaceholderState(task.local)
-	if err != nil {
-		logger.Warnf("ingest %s: placeholder state: %v; skipped", task.fsPath, err)
-		return
+	// файл удалён/переименован пользователем) — тот же честный
+	// STANDARD-запрос, что и в классификации (см. placeholderSyncState).
+	isPlaceholder, inSync, serr := p.placeholderSyncState(ctx, task.local)
+	if serr != nil {
+		if ctx.Err() != nil {
+			// Остановка во время повтора занятой записи — задание снимается
+			// (недоведённое повторится следующим событием/рестартом).
+			return
+		}
+		// Отказ запроса — у записи нет плейсхолдерности (plain-файл):
+		// выгружаем как новый (семантика классификации).
+		logger.Debugf("ingest %s: no placeholder record (%v) -> uploading as new file", task.fsPath, serr)
+		isPlaceholder, inSync = false, false
 	}
-	if state&cfapi.PlaceholderStatePlaceholder != 0 && state&cfapi.PlaceholderStateInSync != 0 {
+	if isPlaceholder && inSync {
 		logger.Debugf("ingest %s: already in sync, skipped", task.fsPath)
 		return
 	}
@@ -515,50 +612,75 @@ func (p *Provider) runIngest(ctx context.Context, task ingestTask) {
 		logger.Warnf("ingest %s: flush: %v (version not confirmed; local file untouched)", task.fsPath, errno)
 		return
 	}
-	// Локальный хендл закрывается ДО финализации: во время convert/update
-	// у записи не остаётся других открытых хендлов serve (диагноз «файл
-	// залочен, пока serve жив»).
+	// Локальный хендл закрывается ДО финализации: пересоздание начинается
+	// с удаления файла (U18-α), а собственный хендл без FILE_SHARE_DELETE
+	// сделал бы удаление невозможным (0x80070020); во время convert/update
+	// у записи также не остаётся других открытых хендлов serve (диагноз
+	// «файл залочен, пока serve жив»).
 	if err := src.Close(); err != nil {
 		logger.Debugf("ingest %s: close local: %v", task.fsPath, err)
 	}
 	srcClosed = true
-	p.finalizeIngest(ctx, task, state, f, size)
+	p.finalizeIngest(ctx, task, isPlaceholder, f, size, fi.ModTime())
 	logger.Debugf("ingest done: %s bytes=%d dur=%s", task.fsPath, size, time.Since(started).Truncate(time.Microsecond))
 }
 
 // finalizeIngest доводит локальную запись до конечного состояния (design.md
 // D8 шаг 5) ПОСЛЕ подтверждённого Flush: изменённый плейсхолдер —
-// CfSetInSyncState(InSyncStateInSync); новый файл — конверсия в плейсхолдер
-// с identity = inode backend (U8) флагом MARK_IN_SYNC и БЕЗ DEHYDRATE —
-// данные остаются локально полными (инвариант выгрузки: локальный файл
-// не затирается). Конверсия — с повторами (см. convertRetryDelaysDefault):
-// живой ретест этапа 5 показал, что фильтр короткое время после закрытия
-// записи не принимает convert (0x8007017c), «на холодную» тот же convert
-// проходит. Индекс актуализируется при изменении пути (D6.7).
-func (p *Provider) finalizeIngest(ctx context.Context, task ingestTask, state uint32, f ingestFile, size int64) {
+// CfSetInSyncState(InSyncStateInSync); новый user-файл — замена на
+// дегидратированный плейсхолдер (U18-α replace-after-upload): локальное
+// имя удаляется и пересоздаётся createEntry-примитивом walk (design.md
+// D6.4) с identity = inode backend (U8) флагами MARK_IN_SYNC|DEHYDRATE —
+// конверсия user-файла из подключённого serve-процесса отвергается
+// фильтром (U18, INVALID_REQUEST при population=ALWAYS_FULL), а на своих
+// файлах примитив работает; контент к этому моменту выгружен, гидрация
+// при доступе — пул FETCH_DATA этапа 3. Отказ пересоздания — Warn,
+// failed++, задание снимается: контент в backend не теряется, повторит
+// следующий close/рестарт (восстановление удалённого файла данными
+// невозможно — инвариант: файл не удаляется до успешного Flush).
+// EEXIST при пересоздании (пользователь пересоздал файл между удалением
+// и созданием) — переклассификация как в walk (classifyOccupied).
+// Индекс актуализируется при изменении пути (D6.7).
+func (p *Provider) finalizeIngest(ctx context.Context, task ingestTask, isPlaceholder bool, f ingestFile, size int64, mtime time.Time) {
 	ino := uint64(f.Inode())
-	if state&cfapi.PlaceholderStatePlaceholder != 0 {
+	if isPlaceholder {
 		if err := p.istore.SetInSync(task.local); err != nil {
 			logger.Warnf("ingest %s: mark in sync: %v (content uploaded; state pending)", task.fsPath, err)
 			return
 		}
 	} else {
-		identity := make([]byte, 8)
-		binary.LittleEndian.PutUint64(identity, ino)
-		var cerr error
-		for attempt := 0; ; attempt++ {
-			cerr = p.istore.ConvertFile(task.local, identity, cfapi.ConvertFlagMarkInSync)
-			if cerr == nil || attempt >= len(p.convertRetryDelays) {
-				break
-			}
-			logger.Debugf("ingest %s: convert rejected (attempt %d): %v; retrying in %s", task.fsPath, attempt+1, cerr, p.convertRetryDelays[attempt])
-			if !sleepCtx(ctx, p.stopChan(), p.convertRetryDelays[attempt]) {
-				logger.Debugf("ingest %s: stopped between convert retries (content uploaded; conversion pending)", task.fsPath)
-				return
-			}
+		// U18-α replace-after-upload: удалить локальный файл и пересоздать
+		// его createEntry-примитивом (тот же, что walk) — дегидратированный
+		// плейсхолдер с размером/mtime локальной записи. Перед удалением —
+		// окно супрессии собственных событий watcher'а (remove/create на
+		// себя): без него classify в окне отсутствия/пересоздания отвечает
+		// «plain → upload» — самоподдерживающаяся петля (живой ретест).
+		// Окно истекает естественно; при отказе пересоздания остаётся до
+		// истечения — следующий close решит честно.
+		p.markSelfEvent(strings.ToLower(task.fsPath))
+		if !p.removeUploadedLocal(ctx, task) {
+			return
 		}
-		if cerr != nil {
-			logger.Warnf("ingest %s: convert to placeholder: %v after %d attempts (content uploaded; conversion pending)", task.fsPath, cerr, len(p.convertRetryDelays)+1)
+		kind, rerr := p.recreateUploaded(task, ino, size, mtime)
+		switch kind {
+		case resultCreated:
+		// Пересоздан — индекс и финальная строка ниже (общий хвост).
+		case resultExists:
+			// Имя снова занято (пользователь пересоздал файл между
+			// удалением и созданием): переклассификация как в walk
+			// (design.md D6.4) — наш плейсхолдер восстанавливается в
+			// индекс, не-плейсхолдер — конфликт (файл не трогается);
+			// повторного создания нет. Контент выгружен.
+			logger.Debugf("ingest %s: recreated name occupied after upload; reclassifying", task.fsPath)
+			var examples []string
+			classifyOccupied(p, &dirPopulation{dir: path.Dir(task.fsPath)}, BackendEntry{
+				Name:  path.Base(task.fsPath),
+				Inode: ino,
+			}, task.fsPath, task.local, false, &examples)
+			return
+		default:
+			p.ingestFailed.Add(1)
+			logger.Warnf("ingest %s: recreate placeholder: %v (content uploaded; will retry on next close/restart)", task.fsPath, rerr)
 			return
 		}
 	}
@@ -568,6 +690,57 @@ func (p *Provider) finalizeIngest(ctx context.Context, task ingestTask, state ui
 		}
 	}
 	logger.Infof("ingest %s: uploaded %d bytes, in sync", task.fsPath, size)
+}
+
+// removeUploadedLocal удаляет локальный файл после подтверждённого Flush
+// (U18-α replace-after-upload). Занятость (пользователь переоткрыл файл —
+// хендл без FILE_SHARE_DELETE) — повтор с нарастающей паузой
+// ingestRetryDelay → ingestMaxRetryDelay, до ingestRemoveAttempts попыток;
+// исчерпание — Warn, задание снимается: контент выгружен, повторит
+// следующий close/рестарт. Файл, исчезнувший до удаления, — не ошибка:
+// пересоздавать нечего (передача удаления подтверждённой версии в backend
+// — этап 6, design.md D9).
+func (p *Provider) removeUploadedLocal(ctx context.Context, task ingestTask) bool {
+	delay := p.ingestRetryDelay
+	for attempt := 1; ; attempt++ {
+		err := p.remover.Remove(task.local)
+		if err == nil {
+			return true
+		}
+		if os.IsNotExist(err) {
+			logger.Debugf("ingest %s: local file already gone after upload (content in backend); recreate skipped", task.fsPath)
+			return false
+		}
+		if attempt >= ingestRemoveAttempts || !isSharingViolation(err) {
+			logger.Warnf("ingest %s: pending (file busy), content uploaded, will retry on next close/restart: %v", task.fsPath, err)
+			return false
+		}
+		logger.Debugf("ingest %s: local file busy after upload (attempt %d): %v; retrying in %s", task.fsPath, attempt, err, delay)
+		if !sleepCtx(ctx, p.stopChan(), delay) {
+			logger.Infof("ingest %s: stopped while local file busy after upload (content in backend; will retry on next close/restart)", task.fsPath)
+			return false
+		}
+		delay *= 2
+		if delay > p.ingestMaxRetryDelay {
+			delay = p.ingestMaxRetryDelay
+		}
+	}
+}
+
+// recreateUploaded пересоздаёт выгруженный файл плейсхолдером
+// createEntry-примитивом (U18-α; design.md D6.4): CREATE_NEW →
+// SetEndOfFile(size) → SetFileTime(mtime локальной записи) →
+// convert(MARK_IN_SYNC|DEHYDRATE). Размер и mtime — локальной записи
+// (источник только что выгруженной версии); identity — inode backend.
+func (p *Provider) recreateUploaded(task ingestTask, ino uint64, size int64, mtime time.Time) (placeholderResultKind, error) {
+	return createEntry(p, path.Dir(task.fsPath), BackendEntry{
+		Name:      path.Base(task.fsPath),
+		Inode:     ino,
+		Size:      size,
+		MtimeSec:  mtime.Unix(),
+		MtimeNsec: uint32(mtime.Nanosecond()),
+		IsDir:     false,
+	})
 }
 
 // openLocalSharedRead открывает локальный файл источника только на чтение.

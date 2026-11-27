@@ -80,27 +80,41 @@ type Provider struct {
 	bufs         *cfapi.BufferPool
 
 	// Пул выгрузки (этап 5, design.md D8/D9): istore — CfAPI-операции
-	// плейсхолдеров write-пути (PlaceholderState/SetInSync/ConvertFile),
-	// ibackend — write-API pkg/fs (ставится WithData); ingestWorkers
-	// воркеров разбирают очередь коалисера (объединение уведомлений по
-	// пути с задержкой ingestDelay; часы clock — injectable для тестов).
+	// плейсхолдеров write-пути (PlaceholderState/SetInSync), ibackend —
+	// write-API pkg/fs (ставится WithData); ingestWorkers воркеров
+	// разбирают очередь коалисера (объединение уведомлений по пути с
+	// задержкой ingestDelay; часы clock — injectable для тестов).
 	// Повтор открытия занятого локального файла — ingestRetryDelay →
-	// ingestMaxRetryDelay (design.md D8 шаг 3). Повтор конверсии после
-	// закрытия записи — convertRetryDelays (живой ретест этапа 5: фильтр
-	// короткое время не принимает convert — 0x8007017c; тесты сокращают).
-	// readOnly (--read-only serve) отключает выгрузку: классификация
-	// close-уведомлений игнорирует всё с однократным логом (спека «Режим
-	// без записи»).
+	// ingestMaxRetryDelay (design.md D8 шаг 3); та же база — повторы
+	// удаления занятого файла на финализации (U18-α replace-after-upload,
+	// до ingestRemoveAttempts попыток; remover — точка подмены в тестах).
+	// ingestFailed — задания, снятые после отказа пересоздания
+	// плейсхолдера (диагностика, аналог walk failed; контент выгружен —
+	// повторит следующий close/рестарт). readOnly (--read-only serve)
+	// отключает выгрузку: классификация close-уведомлений игнорирует всё
+	// с однократным логом (спека «Режим без записи»).
 	istore              ingestStore
 	ibackend            ingestBackend
+	remover             localRemover
 	ingestWorkers       int
 	ingestDelay         time.Duration
 	ingestRetryDelay    time.Duration
 	ingestMaxRetryDelay time.Duration
-	convertRetryDelays  []time.Duration
+	ingestFailed        atomic.Int64
 	clock               ingestClock
 	readOnly            bool
 	readOnlyOnce        sync.Once
+
+	// Супрессия собственных событий watcher'а (U18-α replace-after-upload):
+	// финализация удаляет и пересоздаёт локальную запись — remove/create
+	// события watcher'а на САМОГО себя классифицировались как «plain →
+	// upload» (в окне отсутствия/пересоздания записи) и создавали
+	// самоподдерживающуюся петлю повторных выгрузок (живой ретест 27.11).
+	// Перед remove финализация ставит дедлайн на ключ (lower fsPath);
+	// classify до истечения дедлайна событие игнорирует. Записи истекают
+	// естественно и вручную не удаляются (рост ограничен числом выгрузок).
+	selfEventMu    sync.Mutex
+	selfEventUntil map[string]time.Time
 
 	// Старт пула выгрузки (StartIngest из serve после маркера готовности;
 	// guard — как у walk): ingestMu/ingestStarted.
@@ -163,11 +177,12 @@ func New(root, volume string, api cfapi.SyncRootAPI, dispatch cfapi.CallbackDisp
 		fetchWorkers:         DefaultFetchWorkers,
 		bufs:                 cfapi.NewBufferPool(DefaultFetchWorkers),
 		istore:               osStore{},
+		remover:              osRemover{},
 		ingestWorkers:        DefaultIngestWorkers,
 		ingestDelay:          ingestDebounceDelay,
 		ingestRetryDelay:     500 * time.Millisecond,
 		ingestMaxRetryDelay:  30 * time.Second,
-		convertRetryDelays:   append([]time.Duration(nil), convertRetryDelaysDefault...),
+		selfEventUntil:       make(map[string]time.Time),
 		clock:                wallClock{},
 		retryDelay:           2 * time.Second,
 		readyCh:              make(chan struct{}),

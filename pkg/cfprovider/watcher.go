@@ -229,7 +229,7 @@ func (p *Provider) runFileWatcher(ctx context.Context, db *ingestDebouncer, stop
 			// classifyNotifyClose (strip корня fsPathOf без учёта регистра,
 			// игнор каталогов и in-sync плейсхолдеров, --read-only).
 			job := &cfapi.NotifyFileCloseCompletionJob{Path: filepath.Join(p.root, name)}
-			if task, ok := p.classifyNotifyClose(job); ok {
+			if task, ok := p.classifyNotifyClose(ctx, job); ok {
 				logger.Debugf("watcher %s: %s -> upload queue", p.root, task.fsPath)
 				db.submit(task)
 			}

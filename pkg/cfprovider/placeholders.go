@@ -358,29 +358,15 @@ func (osStore) Convert(path string, isDir bool, fileIdentity []byte, convertFlag
 	return cfapi.ConvertToPlaceholderByPath(path, isDir, fileIdentity, convertFlags)
 }
 
-// PlaceholderState — CF_PLACEHOLDER_STATE пути (файлы и каталоги):
-// биты Placeholder/InSync/Partial для классификации close-уведомлений
-// (design.md D8) и `status <путь>` (задача 5.7). cldapi.dll вызывается
-// через cfapi.PlaceholderStateByPath (инвариант «Движок проверяется без
-// CfAPI» — в тестах подменный ingestStore).
-func (osStore) PlaceholderState(path string) (uint32, error) {
-	return cfapi.PlaceholderStateByPath(path)
-}
-
 // SetInSync — пометка плейсхолдера синхронизированным по пути
 // (CfSetInSyncState(InSyncStateInSync); write-путь выгрузки, design.md D8:
 // при inSync=TrackNone фильтр сам состояние не переключает — обязанность
-// провайдера после подтверждённого Flush).
+// провайдера после подтверждённого Flush). cfapi.PlaceholderStateByPath
+// (FileBasicInfo-эвристика) классификацией больше не используется — после
+// convert-DEHYDRATE фильтр чистит basic-атрибуты и она возвращает 0 для
+// реального плейсхолдера (живой ретест 27.11); осталась для `status <путь>`.
 func (osStore) SetInSync(path string) error {
 	return cfapi.SetInSyncStateByPath(path, cfapi.InSyncStateInSync)
-}
-
-// ConvertFile — конверсия РЕАЛЬНОГО файла в плейсхолдер (файл, не каталог):
-// write-путь выгрузки нового файла (design.md D8/U8) — convertFlags без
-// DEHYDRATE, локальные данные остаются на диске (гидратированный
-// плейсхолдер); identity удерживает вызывающий байт-срез до возврата.
-func (osStore) ConvertFile(path string, fileIdentity []byte, convertFlags uint32) error {
-	return cfapi.ConvertToPlaceholderByPath(path, false, fileIdentity, convertFlags)
 }
 
 func (osStore) Update(path string, fsMetadata cfapi.CFFileMetadata, updateFlags uint32) error {
