@@ -39,7 +39,7 @@ func (m *grpcMeta) Init(format *Format, force bool) error {
 		return err
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	return nil
 }
@@ -53,7 +53,7 @@ func (m *grpcMeta) Load(checkVersion bool) (*Format, error) {
 		return nil, err
 	}
 	if resp.GetErrno() != 0 {
-		return nil, syscall.Errno(resp.GetErrno())
+		return nil, serverErrno(resp.GetErrno())
 	}
 	m.mu.Lock()
 	m.format = ProtoToFormat(resp.Format)
@@ -76,7 +76,7 @@ func (m *grpcMeta) NewSession(record bool) error {
 	}
 	if resp.GetErrno() != 0 {
 		logger.Errorf("NewSession errno: %d", resp.GetErrno())
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	m.sid = resp.GetSid()
 	logger.Infof("NewSession succeeded, sid=%d", m.sid)
@@ -148,7 +148,7 @@ func (m *grpcMeta) GetSession(sid uint64, detail bool) (*Session, error) {
 		return nil, err
 	}
 	if resp.GetErrno() != 0 {
-		return nil, syscall.Errno(resp.GetErrno())
+		return nil, serverErrno(resp.GetErrno())
 	}
 	return ProtoToSession(resp.Session), nil
 }
@@ -162,7 +162,7 @@ func (m *grpcMeta) ListSessions() ([]*Session, error) {
 		return nil, err
 	}
 	if resp.GetErrno() != 0 {
-		return nil, syscall.Errno(resp.GetErrno())
+		return nil, serverErrno(resp.GetErrno())
 	}
 	sessions := make([]*Session, len(resp.Sessions))
 	for i, s := range resp.Sessions {
@@ -210,7 +210,7 @@ func (m *grpcMeta) ScanChangelog(ctx Context, last int64, handler func(ver int64
 			return err
 		}
 		if resp.GetErrno() != 0 {
-			return syscall.Errno(resp.GetErrno())
+			return serverErrno(resp.GetErrno())
 		}
 		for _, entry := range resp.Entries {
 			if err := handler(entry.Ver, entry.Data); err != nil {

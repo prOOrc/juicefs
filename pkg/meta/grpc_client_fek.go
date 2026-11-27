@@ -67,7 +67,7 @@ func (m *grpcMeta) openOnce(ctx Context, inode Ino, flags uint32, cachedFekVersi
 		return nil, grpcStatusToErrno(err)
 	}
 	if resp.GetErrno() != 0 {
-		return nil, syscall.Errno(resp.GetErrno())
+		return nil, serverErrno(resp.GetErrno())
 	}
 	return resp, 0
 }
