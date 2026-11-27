@@ -34,6 +34,8 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/juicedata/juicefs/pkg/cfapi"
 )
 
 // align4 — выравнивание размера записи FILE_NOTIFY_INFORMATION на 4 байта
@@ -139,7 +141,7 @@ func TestWatcherRealDirectory(t *testing.T) {
 		defer close(dbDone)
 		db.run(ctx, stop)
 	}()
-	p.startFileWatcher(ctx, db, stop)
+	p.startFileWatcher(ctx, db, cfapi.NewDispatcher(cfapi.DefaultQueueOptions()), stop)
 
 	// Создание + запись (с повтором до старта чтения watcher'а).
 	local := filepath.Join(p.root, "watched.txt")
@@ -201,4 +203,72 @@ func TestWatcherRealDirectory(t *testing.T) {
 		t.Fatal("watcher не завершился за 5 c после отмены")
 	}
 	<-dbDone
+}
+
+// --- Фикс-итерация 1 (ревью этапа 6) ---
+
+// TestRouteWatcherDirEventPairs — fix-1.1: пары OLD→NEW по СМЕЖНОСТИ
+// (OLD сохраняется, следующий NEW с тем же родителем — пара): пара даёт
+// DirectoryRenamed (не Created); одиночный NEW (старт watcher'а посреди
+// переименования) — DirectoryCreated; файловый NEW снимает голову очереди
+// (file-OLD пару не собирает) — следующее dir-переименование парится честно.
+func TestRouteWatcherDirEventPairs(t *testing.T) {
+	p, _, _, _, _, _ := newIngestTestProvider(t)
+	d := cfapi.NewDispatcher(cfapi.DefaultQueueOptions())
+
+	// Пара: OLD + NEW с тем же родителем → DirectoryRenamed.
+	p.noteDirRenameOld(filepath.Join(p.root, "odir"))
+	p.routeWatcherDirEvent(d, windows.FILE_ACTION_RENAMED_NEW_NAME, filepath.Join(p.root, "ndir"))
+	select {
+	case job := <-d.DirectoryRenamed():
+		if filepath.Base(job.SourcePath) != "odir" || filepath.Base(job.TargetPath) != "ndir" {
+			t.Fatalf("пара = %q -> %q, ожидается odir -> ndir", job.SourcePath, job.TargetPath)
+		}
+	default:
+		t.Fatal("пара OLD+NEW не дала DirectoryRenamed")
+	}
+	select {
+	case job := <-d.DirectoryCreated():
+		t.Fatalf("лишний DirectoryCreated: %q (пара маршрутизируется как rename)", job.Path)
+	default:
+	}
+
+	// Одиночный NEW (OLD не пойман) → DirectoryCreated.
+	p.routeWatcherDirEvent(d, windows.FILE_ACTION_RENAMED_NEW_NAME, filepath.Join(p.root, "freshdir"))
+	select {
+	case job := <-d.DirectoryCreated():
+		if filepath.Base(job.Path) != "freshdir" {
+			t.Fatalf("Created = %q, ожидается freshdir", job.Path)
+		}
+	default:
+		t.Fatal("неспаренный NEW не маршрутизирован как создание")
+	}
+
+	// Файловый NEW снимает голову очереди (цикл watcher'а вызывает
+	// dropDirRenameOld для NEW-файлов): file-OLD пару не собирает, и
+	// последующая dir-пара не склеивается с чужим OLD.
+	p.noteDirRenameOld(filepath.Join(p.root, "fileA")) // file-OLD
+	p.dropDirRenameOld()                               // NEW-файл: голова снята
+	p.noteDirRenameOld(filepath.Join(p.root, "d1"))
+	p.routeWatcherDirEvent(d, windows.FILE_ACTION_RENAMED_NEW_NAME, filepath.Join(p.root, "d2"))
+	select {
+	case job := <-d.DirectoryRenamed():
+		if filepath.Base(job.SourcePath) != "d1" {
+			t.Fatalf("после file-NEW пара склеилась с чужим OLD: %q -> %q", job.SourcePath, job.TargetPath)
+		}
+	default:
+		t.Fatal("dir-пара после file-NEW не собралась")
+	}
+
+	// Разные родители (несмежное OLD из сброса очереди) — NEW как создание.
+	p.noteDirRenameOld(filepath.Join(p.root, "x1", "olddir"))
+	p.routeWatcherDirEvent(d, windows.FILE_ACTION_RENAMED_NEW_NAME, filepath.Join(p.root, "x2", "newdir"))
+	select {
+	case job := <-d.DirectoryCreated():
+		if filepath.Base(job.Path) != "newdir" {
+			t.Fatalf("Created = %q, ожидается newdir", job.Path)
+		}
+	default:
+		t.Fatal("NEW с чужим родителем не маршрутизирован как создание")
+	}
 }

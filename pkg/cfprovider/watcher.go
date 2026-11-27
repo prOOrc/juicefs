@@ -47,6 +47,13 @@
 // события; к моменту срабатывания debounce (2 c) convert уже пометил их
 // in-sync — повторная классификация в runIngest их отбрасывает.
 //
+// Этап 6: watcher — также источник операций распространения. REMOVED —
+// отмена выгрузки при удалении локального файла (задача 6.5; распространение
+// удаления известных плейсхолдеров — NOTIFY_* фильтра, U6: NOTIFY стреляют
+// по плейсхолдер-операциям); dir-события (ADDED, RENAMED_OLD/NEW_NAME) —
+// очереди Directory* диспетчера — запасной механизм U9 для точки D5
+// «Создание каталога» (OS-callback'а нет) и переименований plain-каталогов.
+//
 // cldapi.dll не вызывается (инвариант «Движок проверяется без CfAPI»);
 // ReadDirectoryChangesW — kernel32, тестируется на реальном каталоге.
 package cfprovider
@@ -54,6 +61,7 @@ package cfprovider
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"syscall"
 	"time"
@@ -82,9 +90,10 @@ const watcherNotifyFilter = windows.FILE_NOTIFY_CHANGE_FILE_NAME |
 
 // watchUploadAction — действие к выгрузке (winnt.h FILE_ACTION_*): ADDED —
 // новый файл; MODIFIED — изменены содержимое/метаданные; RENAMED_NEW_NAME —
-// переименован в новое имя. REMOVED и RENAMED_OLD_NAME не выгружаются:
-// передача удаления/переименования в backend — этап 6 (design.md D5);
-// локальная запись не трогается.
+// переименован в новое имя. REMOVED не выгружается: отмена выгрузки
+// (задача 6.5) и распространение удаления — через notifyDeletePath
+// (NOTIFY_* фильтра); RENAMED_OLD_NAME — сопоставление пары dir-событий
+// (задача 6.1).
 func watchUploadAction(action uint32) bool {
 	switch action {
 	case windows.FILE_ACTION_ADDED, windows.FILE_ACTION_MODIFIED, windows.FILE_ACTION_RENAMED_NEW_NAME:
@@ -104,13 +113,21 @@ type fileNotifyInformation struct {
 // fileNotifyInfoHeaderSize — размер заголовка FILE_NOTIFY_INFORMATION.
 const fileNotifyInfoHeaderSize = int(unsafe.Sizeof(fileNotifyInformation{})) // 12
 
-// parseNotifyEvents разбирает NextEntryOffset-цепочку FILE_NOTIFY_INFORMATION
-// из буфера ReadDirectoryChangesW и возвращает относительные имена записей,
-// подлежащих выгрузке (watchUploadAction). Битый хвост (обрезанная запись,
-// некорректный offset) останавливает разбор — событие теряется, но цикл не
-// зависает и не выходит за буфер.
-func parseNotifyEvents(buf []byte) []string {
-	var names []string
+// watchEvent — событие FILE_NOTIFY_INFORMATION: имя относительно корня и
+// действие (winnt.h FILE_ACTION_*).
+type watchEvent struct {
+	name   string
+	action uint32
+}
+
+// parseNotifyEventsAll разбирает NextEntryOffset-цепочку
+// FILE_NOTIFY_INFORMATION из буфера ReadDirectoryChangesW и возвращает ВСЕ
+// события (задачи 6.1/6.5: REMOVED — отмена выгрузки; dir-события —
+// маршрутизация в диспетчер). Битый хвост (обрезанная запись, некорректный
+// offset) останавливает разбор — событие теряется, но цикл не зависает и не
+// выходит за буфер.
+func parseNotifyEventsAll(buf []byte) []watchEvent {
+	var events []watchEvent
 	for offset := 0; offset+fileNotifyInfoHeaderSize <= len(buf); {
 		info := (*fileNotifyInformation)(unsafe.Pointer(&buf[offset]))
 		nameStart := offset + fileNotifyInfoHeaderSize
@@ -118,9 +135,12 @@ func parseNotifyEvents(buf []byte) []string {
 		if nameEnd > len(buf) {
 			break // обрезанная запись (частично заполненный буфер)
 		}
-		if watchUploadAction(info.Action) && info.FileNameLength >= 2 {
+		if info.FileNameLength >= 2 {
 			n := int(info.FileNameLength) / 2
-			names = append(names, windows.UTF16ToString((*[1 << 16]uint16)(unsafe.Pointer(&buf[nameStart]))[:n:n]))
+			events = append(events, watchEvent{
+				name:   windows.UTF16ToString((*[1 << 16]uint16)(unsafe.Pointer(&buf[nameStart]))[:n:n]),
+				action: info.Action,
+			})
 		}
 		if info.NextEntryOffset == 0 {
 			break // конец цепочки
@@ -130,25 +150,121 @@ func parseNotifyEvents(buf []byte) []string {
 		}
 		offset += int(info.NextEntryOffset)
 	}
+	return events
+}
+
+// parseNotifyEvents — имена записей, подлежащих выгрузке
+// (watchUploadAction); фильтр поверх parseNotifyEventsAll.
+func parseNotifyEvents(buf []byte) []string {
+	var names []string
+	for _, ev := range parseNotifyEventsAll(buf) {
+		if watchUploadAction(ev.action) {
+			names = append(names, ev.name)
+		}
+	}
 	return names
 }
 
 // startFileWatcher запускает watcher'а (после маркера, рядом с пулом
 // выгрузки — startIngestPool; один на корень: guard StartIngest).
-func (p *Provider) startFileWatcher(ctx context.Context, db *ingestDebouncer, stop chan struct{}) {
+// d — диспетчер для dir-событий (запасной механизм U9, задача 6.1).
+func (p *Provider) startFileWatcher(ctx context.Context, db *ingestDebouncer, d *cfapi.Dispatcher, stop chan struct{}) {
 	p.wg.Add(1)
 	go func() {
 		defer p.wg.Done()
-		p.runFileWatcher(ctx, db, stop)
+		p.runFileWatcher(ctx, db, d, stop)
 	}()
 }
 
+// noteDirRenameOld запоминает OLD_NAME-событие в FIFO-очередь ожидания.
+// Пары OLD→NEW приходят ПОДРЯД в одном блоке FILE_NOTIFY_INFORMATION: OLD
+// сохраняется, СЛЕДУЮЩИЙ NEW_NAME с тем же родителем образует пару
+// (матч по равенству путей невозможен — old != new). Тип исчезнувшего пути
+// до NEW неизвестен (stat по старому пути уже пуст) — FILE-OLD тоже
+// попадает в очередь, но пары не собирает: NEW-файл снимает голову
+// (dropDirRenameOld), файловые переименования ведутся NOTIFY-каналом
+// фильтра и выгрузкой NEW-имени. Очередь ограничена: переименования за
+// пределы корня NEW не получают — при переполнении сбрасывается (потерянная
+// пара — создание в backend, восполняется сверкой).
+func (p *Provider) noteDirRenameOld(full string) {
+	p.dirRenameMu.Lock()
+	defer p.dirRenameMu.Unlock()
+	if len(p.dirRenamePending) >= p.dirRenameOldLimit {
+		p.dirRenamePending = nil
+		logger.Debugf("watcher %s: dir rename pending reset (limit %d)", p.root, p.dirRenameOldLimit)
+	}
+	p.dirRenamePending = append(p.dirRenamePending, full)
+}
+
+// takeDirRenameOld — спаривание по смежности: голова очереди OLD с тем же
+// родителем, что у NEW-пути, — пара (переименование); голова с чужим
+// родителем (несмежное событие — сброс очереди/гонка) отбрасывается, NEW
+// трактуется как создание.
+func (p *Provider) takeDirRenameOld(newFull string) (string, bool) {
+	p.dirRenameMu.Lock()
+	defer p.dirRenameMu.Unlock()
+	if len(p.dirRenamePending) == 0 {
+		return "", false // старт watcher'а посреди переименования — создание
+	}
+	old := p.dirRenamePending[0]
+	p.dirRenamePending = p.dirRenamePending[1:]
+	if filepath.Dir(old) != filepath.Dir(newFull) {
+		return "", false
+	}
+	return old, true
+}
+
+// dropDirRenameOld снимает голову очереди ожидания: NEW-событие оказалось
+// файлом — его OLD пару не собирает (иначе файловый OLD спарился бы со
+// следующим dir-переименованием).
+func (p *Provider) dropDirRenameOld() {
+	p.dirRenameMu.Lock()
+	if n := len(p.dirRenamePending); n > 0 {
+		p.dirRenamePending = p.dirRenamePending[1:]
+	}
+	p.dirRenameMu.Unlock()
+}
+
+// routeWatcherDirEvent — dir-события watcher'а → очереди Directory*
+// диспетчера (запасной механизм U9, задача 6.1): ADDED — создание каталога
+// (Mkdir в backend, спека «Новый каталог»); RENAMED_NEW_NAME —
+// переименование каталога (пара по смежности с OLD_NAME; неспаренный NEW —
+// старт watcher'а посреди переименования/сброс очереди — трактуется как
+// создание: notifyDirCreate усыновит существующую запись). Переполнение
+// очереди — событие теряется с Debug (восполняется сверкой/рестартом).
+func (p *Provider) routeWatcherDirEvent(d *cfapi.Dispatcher, action uint32, full string) {
+	if d == nil {
+		return
+	}
+	switch action {
+	case windows.FILE_ACTION_ADDED:
+		if err := d.OnNotifyDirectoryCreated(&cfapi.NotifyDirectoryCreatedJob{Path: full}); err != nil {
+			logger.Debugf("watcher %s: dir create %s dropped (queue full): %v", p.root, full, err)
+		}
+	case windows.FILE_ACTION_RENAMED_NEW_NAME:
+		if old, ok := p.takeDirRenameOld(full); ok {
+			if err := d.OnNotifyDirectoryRenamed(&cfapi.NotifyDirectoryRenamedJob{SourcePath: old, TargetPath: full}); err != nil {
+				logger.Debugf("watcher %s: dir rename %s dropped (queue full): %v", p.root, full, err)
+			}
+			return
+		}
+		logger.Debugf("watcher %s: dir rename old name missing for %s; routing as create", p.root, full)
+		if err := d.OnNotifyDirectoryCreated(&cfapi.NotifyDirectoryCreatedJob{Path: full}); err != nil {
+			logger.Debugf("watcher %s: dir create %s dropped (queue full): %v", p.root, full, err)
+		}
+	default:
+		// MODIFIED каталогов не обрабатывается (каталоги не выгружаются).
+	}
+}
+
 // runFileWatcher — цикл watcher'а: overlapped ReadDirectoryChangesW на корне
-// sync root (WatchSubtree=true), события → классификация → коалисер.
+// sync root (WatchSubtree=true), события → маршрутизация: REMOVED — отмена
+// выгрузки (задача 6.5); dir-события — очереди Directory* диспетчера (U9,
+// задача 6.1); прочие файловые — классификация → коалисер.
 // Отмена — CancelIoEx по ctx/stop: операция завершается OPERATION_ABORTED
 // (GetOverlappedResult), event взводится, цикл выходит, handle закрывается.
 // Все структуры I/O — в куче (Overlapped переживёт завершение операции).
-func (p *Provider) runFileWatcher(ctx context.Context, db *ingestDebouncer, stop chan struct{}) {
+func (p *Provider) runFileWatcher(ctx context.Context, db *ingestDebouncer, d *cfapi.Dispatcher, stop chan struct{}) {
 	root16, err := windows.UTF16PtrFromString(p.root)
 	if err != nil {
 		logger.Warnf("watcher %s: path: %v; local changes are detected by close notifications only", p.root, err)
@@ -255,14 +371,42 @@ func (p *Provider) runFileWatcher(ctx context.Context, db *ingestDebouncer, stop
 		if nbytes == 0 || int(nbytes) > len(buf) {
 			continue // пустой ответ либо некорректная длина — не разбираем
 		}
-		for _, name := range parseNotifyEvents(buf[:nbytes]) {
-			if name == "" {
+		for _, ev := range parseNotifyEventsAll(buf[:nbytes]) {
+			if ev.name == "" {
 				continue
 			}
-			// Единая точка с NOTIFY-джобами: полный локальный путь →
-			// classifyNotifyClose (strip корня fsPathOf без учёта регистра,
-			// игнор каталогов и in-sync плейсхолдеров, --read-only).
-			job := &cfapi.NotifyFileCloseCompletionJob{Path: filepath.Join(p.root, name)}
+			// Единая точка маршрутизации: полный локальный путь.
+			full := filepath.Join(p.root, ev.name)
+			switch {
+			case ev.action == windows.FILE_ACTION_REMOVED:
+				// Задача 6.5: отмена выгрузки при удалении локального файла
+				// (удаление известных плейсхолдеров — NOTIFY_* фильтра).
+				p.handleLocalRemoved(full)
+				continue
+			case ev.action == windows.FILE_ACTION_RENAMED_OLD_NAME:
+				// Пара OLD→NEW приходит ПОДРЯД в одном блоке: OLD сохраняется
+				// в очередь ожидания, спаривание — по СЛЕДУЮЩЕМУ NEW с тем же
+				// родителем (тип исчезнувшего пути определит NEW: dir-NEW →
+				// DirectoryRenamed, file-NEW → dropDirRenameOld).
+				p.noteDirRenameOld(full)
+				continue
+			}
+			if fi, err := os.Stat(full); err == nil && fi.IsDir() {
+				p.routeWatcherDirEvent(d, ev.action, full)
+				continue
+			}
+			if ev.action == windows.FILE_ACTION_RENAMED_NEW_NAME {
+				// Файловое переименование: его OLD пары не собирает.
+				p.dropDirRenameOld()
+			}
+			// Файлы: выгрузка (как в этапе 5; RENAMED_OLD_NAME отсечён выше).
+			if !watchUploadAction(ev.action) {
+				continue
+			}
+			// Единая точка с NOTIFY-джобами: classifyNotifyClose (strip корня
+			// fsPathOf без учёта регистра, игнор in-sync плейсхолдеров,
+			// --read-only).
+			job := &cfapi.NotifyFileCloseCompletionJob{Path: full}
 			if task, ok := p.classifyNotifyClose(ctx, job); ok {
 				logger.Debugf("watcher %s: %s -> upload queue", p.root, task.fsPath)
 				db.submit(task)

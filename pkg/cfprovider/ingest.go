@@ -43,6 +43,29 @@
 // помечается in-sync (CfSetInSyncState; inSync=TrackNone при регистрации —
 // состояние переключает провайдер).
 //
+// Распространение пользовательских операций (этап 6, задачи 6.1–6.2,
+// design.md D5/D9): удаление, переименование и создание каталогов передаются
+// в backend ТОЛЬКО для записей, известных провайдеру как плейсхолдеры
+// (inode в индексе по FileID/пути); неизвестные и локальные plain-файлы
+// пользователя — никогда; удаление sync root — никогда (однократный Warn).
+// Источники: очереди NOTIFY_FILE_RENAMED/NOTIFY_FILE_DELETED диспетчера
+// (файл/каталог по *_IS_DIRECTORY-флагам — thunk'и) и запасной механизм U9
+// для точки «Создание каталога» (watcher подаёт dir-события в очереди
+// Directory*). Индекс ведёт rename-семантику: пере-резолв inode через
+// backend Stat нового пути, каталог — RenamePrefix потомков, удаление —
+// надгробия журнала. Неуспешные операции (недоступный hub) — в журнал
+// ops.journal (задача 6.3, journal.go): replayer повторяет с нарастающей
+// паузой 1с→30с до успеха, в том числе после перезапуска serve.
+//
+// Отмена выгрузки при удалении локального файла (задача 6.5, design.md D9):
+// REMOVED watcher'а → handleLocalRemoved — активной выгрузке ставится флаг
+// отмены: до подтверждения Flush задание снимается (версии в backend нет);
+// после подтверждения — в журнал ставится удаление по inode. Реальное окно
+// удаления ограничено шарингом os.Open (без FILE_SHARE_DELETE удаление
+// блокируется, пока провайдер читает) — флаг закрывает гонку доставки
+// события и окна debounce/финализации; файл, исчезнувший до удаления на
+// финализации, тоже даёт удаление по inode.
+//
 // Изоляция пулов (design.md D3): пул выгрузки НЕ обслуживает FETCH_DATA —
 // тот приходит отдельному пулу гидратации; чтение локального
 // файла-плейсхолдера с частичной гидрацией триггерит FETCH_DATA на фильтре,
@@ -54,7 +77,8 @@
 // Write-back выключен (инвариант design.md): задание считается выполненным
 // только после завершённого Flush. До Flush локальный файл только читается
 // и не изменяется; отказ Flush оставляет плейсхолдер вне in-sync — задание
-// повторится следующим close-уведомлением либо сверкой при старте (D9).
+// повторится следующим close-уведомлением, журналом либо сверкой при старте
+// (D9).
 //
 // U11 (задача 5.5): staging-файлы chunk store при падении процесса во время
 // Flush остаются в CacheDir (pkg/chunk/staging); провайдер их не чистит —
@@ -67,12 +91,15 @@ package cfprovider
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -127,13 +154,27 @@ type ingestFile interface {
 var _ ingestFile = (*fs.File)(nil)
 
 // ingestBackend — write-API pkg/fs: минимальная поверхность fs.FileSystem,
-// нужная выгрузке. Реальная реализация — fsIngestBackend; подменная — в
-// тестах (инвариант «Движок проверяется без CfAPI»).
+// нужная выгрузке (этап 5) и распространению пользовательских операций
+// (этап 6: удаление/переименование/создание каталога). Реальная реализация —
+// fsIngestBackend; подменная — в тестах (инвариант «Движок проверяется без
+// CfAPI»).
 type ingestBackend interface {
 	// Create создаёт новую запись backend (O_EXCL; занятое имя — EEXIST).
 	Create(ctx meta.Context, path string) (ingestFile, syscall.Errno)
 	// OpenWrite открывает существующую запись backend на запись.
 	OpenWrite(ctx meta.Context, path string) (ingestFile, syscall.Errno)
+	// Rename переименовывает запись backend (этап 6: rename-семантика meta
+	// сохраняет inode — индекс сверяется через Stat нового пути).
+	Rename(ctx meta.Context, oldpath, newpath string) syscall.Errno
+	// Delete удаляет файл backend (fs.Unlink).
+	Delete(ctx meta.Context, path string) syscall.Errno
+	// Rmdir удаляет пустой каталог backend.
+	Rmdir(ctx meta.Context, path string) syscall.Errno
+	// Mkdir создаёт каталог backend.
+	Mkdir(ctx meta.Context, path string) syscall.Errno
+	// Stat возвращает inode и тип записи backend (пере-резолв inode после
+	// rename/mkdir — точки D5 этапа 6).
+	Stat(ctx meta.Context, path string) (ino uint64, isDir bool, errno syscall.Errno)
 }
 
 // fsIngestBackend — ingestBackend на fs.FileSystem этапа 2 (WithData).
@@ -147,6 +188,30 @@ func (b fsIngestBackend) Create(ctx meta.Context, path string) (ingestFile, sysc
 
 func (b fsIngestBackend) OpenWrite(ctx meta.Context, path string) (ingestFile, syscall.Errno) {
 	return b.fsys.Open(ctx, path, vfs.MODE_MASK_W)
+}
+
+func (b fsIngestBackend) Rename(ctx meta.Context, oldpath, newpath string) syscall.Errno {
+	return b.fsys.Rename(ctx, oldpath, newpath, 0)
+}
+
+func (b fsIngestBackend) Delete(ctx meta.Context, path string) syscall.Errno {
+	return b.fsys.Unlink(ctx, path)
+}
+
+func (b fsIngestBackend) Rmdir(ctx meta.Context, path string) syscall.Errno {
+	return b.fsys.Rmdir(ctx, path)
+}
+
+func (b fsIngestBackend) Mkdir(ctx meta.Context, path string) syscall.Errno {
+	return b.fsys.Mkdir(ctx, path, 0o755, 0)
+}
+
+func (b fsIngestBackend) Stat(ctx meta.Context, path string) (uint64, bool, syscall.Errno) {
+	fi, errno := b.fsys.Stat(ctx, path)
+	if errno != 0 {
+		return 0, false, errno
+	}
+	return uint64(fi.Inode()), fi.IsDir(), 0
 }
 
 // ingestStore — CfAPI-операции плейсхолдеров write-пути (design.md D8/U8):
@@ -220,6 +285,121 @@ type ingestTask struct {
 	fsPath string // "/a/b"
 	local  string // <root>\a\b
 	key    string // ключ коалисинга — fsPath в нижнем регистре (Windows-семантика)
+}
+
+// uploadHandle — ручка активной выгрузки для отмены (задача 6.5, design.md
+// D9 «Удаление локального файла с незавершённой выгрузкой»): watcher-событие
+// REMOVED ставит флаг; runIngest проверяет его между порциями записи и сразу
+// после подтверждённого Flush (версия уже в backend — журнал: удаление по
+// inode).
+type uploadHandle struct {
+	cancel atomic.Bool
+}
+
+// uploadLocks — сериализация выгрузок одного пути: источников заданий два
+// (watcher/NOTIFY и replayer журнала), параллельный runIngest одного пути
+// писал бы двумя хендлами чересполосно в одну запись backend; второй запуск
+// после первого переклассифицируется (in-sync — skip).
+func (p *Provider) uploadPathLock(key string) func() {
+	v, _ := p.uploadLocks.LoadOrStore(key, &sync.Mutex{})
+	mu := v.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
+}
+
+// trackUpload регистрирует активную выгрузку по ключу пути.
+func (p *Provider) trackUpload(key string, h *uploadHandle) {
+	p.activeMu.Lock()
+	p.activeUploads[key] = h
+	p.activeMu.Unlock()
+}
+
+// untrackUpload снимает выгрузку с учёта (идентичность ручки: повторная
+// выгрузка того же пути не удаляет чужую регистрацию).
+func (p *Provider) untrackUpload(key string, h *uploadHandle) {
+	p.activeMu.Lock()
+	if p.activeUploads[key] == h {
+		delete(p.activeUploads, key)
+	}
+	p.activeMu.Unlock()
+}
+
+// handleLocalRemoved — событие REMOVED watcher'а (задача 6.5):
+//   - выгрузка пути в полёте — флаг отмены: до Flush задание просто
+//     снимается (версия не подтверждена); после Flush runIngest ставит в
+//     журнал удаление по inode (design.md D9);
+//   - активной выгрузки нет, но в журнале ждёт выгрузка этого пути
+//     (задание снято занятостью файла или остановкой serve) — локальный
+//     файл удалён, ожидающая выгрузка заменяется удалением: подтверждённая
+//     версия подлежит удалению, отсутствие записи в backend исполняется
+//     как ENOENT-успех.
+//
+// Собственные события финализации (replace-after-upload: remove+recreate,
+// U18-α) отсекаются окном супрессии (markSelfEvent ставит его ДО remove).
+func (p *Provider) handleLocalRemoved(localPath string) {
+	fsPath := p.fsPathOf(localPath)
+	if fsPath == "" || fsPath == "/" {
+		return
+	}
+	key := strings.ToLower(fsPath)
+	if suppressed, _ := p.selfEventSuppressed(key); suppressed {
+		logger.Debugf("watcher %s: removed during recreate window (self event), ignored", fsPath)
+		return
+	}
+	p.activeMu.Lock()
+	h, active := p.activeUploads[key]
+	p.activeMu.Unlock()
+	if active {
+		h.cancel.Store(true)
+		logger.Debugf("watcher %s: removed during upload; cancellation requested", fsPath)
+		return
+	}
+	if p.readOnly || p.journal == nil {
+		return
+	}
+	if p.journal.HasPending(OpUpload, fsPath) {
+		// inode — из индекса, если запись известна (исполнение удаления
+		// почистит индекс; не известна — 0, индекс не трогается, fix-1.4).
+		var ino uint64
+		if p.idx != nil {
+			if found, ok := p.idx.LookupPath(fsPath); ok {
+				ino = found
+			}
+		}
+		if err := p.journal.ReplaceUploadWithDelete(fsPath, ino); err != nil {
+			logger.Warnf("watcher %s: journal replace upload with delete: %v", fsPath, err)
+		} else {
+			logger.Debugf("watcher %s: removed with pending upload; delete queued instead", fsPath)
+		}
+	}
+}
+
+// journalAdd — nil-безопасная запись операции в журнал провайдера (журнал
+// может отсутствовать: режим без каталога состояния, часть тестов).
+func (p *Provider) journalAdd(op JournalOp) {
+	if p.journal == nil {
+		return
+	}
+	if err := p.journal.Add(op); err != nil {
+		logger.Warnf("journal %s %s: %v", op.Type, op.Path, err)
+	}
+}
+
+// queueUpload ставит задание выгрузки в коалисер пула; пул ещё не поднят
+// (верхний уровень до маркера) либо очередь полна — задание в журнал
+// (replayer исполнит его с пулом; дедупликация по ключу).
+func (p *Provider) queueUpload(task ingestTask) {
+	p.ingestMu.Lock()
+	db := p.ingestDb
+	p.ingestMu.Unlock()
+	if db != nil {
+		select {
+		case db.reqs <- task:
+			return
+		default:
+		}
+	}
+	p.journalAdd(JournalOp{Type: OpUpload, Path: task.fsPath})
 }
 
 // ingestDebouncer — объединение заданий по пути (задача 5.4, design.md D8
@@ -423,9 +603,7 @@ func (p *Provider) placeholderSyncState(ctx context.Context, local string) (isPl
 // --read-only (спека «Режим без записи») игнорирует всё с однократным логом.
 func (p *Provider) classifyNotifyClose(ctx context.Context, job *cfapi.NotifyFileCloseCompletionJob) (ingestTask, bool) {
 	if p.readOnly {
-		p.readOnlyOnce.Do(func() {
-			logger.Info("read-only mode: local changes are not uploaded to the volume (--read-only)")
-		})
+		p.readOnlyNotice()
 		return ingestTask{}, false
 	}
 	fsPath := p.fsPathOf(job.Path)
@@ -468,9 +646,12 @@ func (p *Provider) classifyNotifyClose(ctx context.Context, job *cfapi.NotifyFil
 	return ingestTask{fsPath: fsPath, local: local, key: strings.ToLower(fsPath)}, true
 }
 
-// ingestRouter — маршрутизатор close-уведомлений (design.md D8 шаг 1):
-// задания очереди CloseCompletion диспетчера классифицируются и ставятся в
-// коалисер. NOTIFY-задания не требуют ответа CfExecute — Complete не нужен.
+// ingestRouter — маршрутизатор NOTIFY-очередей диспетчера (design.md D5/D8):
+// CloseCompletion — классификация выгрузки (этап 5); переименования и
+// удаления (файлы и каталоги по *_IS_DIRECTORY-флагам) и создание каталогов
+// (запасной механизм U9 — watcher) — распространение в backend ТОЛЬКО
+// известных плейсхолдеров (этап 6, задачи 6.1–6.2). NOTIFY-задания не
+// требуют ответа CfExecute — Complete не нужен.
 func (p *Provider) ingestRouter(ctx context.Context, db *ingestDebouncer, d *cfapi.Dispatcher, stop chan struct{}) {
 	for {
 		select {
@@ -486,8 +667,342 @@ func (p *Provider) ingestRouter(ctx context.Context, db *ingestDebouncer, d *cfa
 			if task, ok := p.classifyNotifyClose(ctx, job); ok {
 				db.submit(task)
 			}
+		case job := <-d.FileRenamed():
+			if job == nil {
+				continue
+			}
+			logger.Debugf("NOTIFY_FILE_RENAMED: %q -> %q", job.SourcePath, job.TargetPath)
+			p.notifyRenamePaths(ctx, job.SourcePath, job.TargetPath, job.FileID, false)
+		case job := <-d.FileDeleted():
+			if job == nil {
+				continue
+			}
+			logger.Debugf("NOTIFY_FILE_DELETED: path=%q", job.Path)
+			p.notifyDeletePath(job.Path, job.FileID, false)
+		case job := <-d.DirectoryCreated():
+			if job == nil {
+				continue
+			}
+			logger.Debugf("NOTIFY_DIRECTORY_CREATED: path=%q", job.Path)
+			p.notifyDirCreate(ctx, job.Path)
+		case job := <-d.DirectoryRenamed():
+			if job == nil {
+				continue
+			}
+			logger.Debugf("NOTIFY_DIRECTORY_RENAMED: %q -> %q", job.SourcePath, job.TargetPath)
+			p.notifyRenamePaths(ctx, job.SourcePath, job.TargetPath, 0, true)
+		case job := <-d.DirectoryDeleted():
+			if job == nil {
+				continue
+			}
+			logger.Debugf("NOTIFY_DIRECTORY_DELETED: path=%q", job.Path)
+			p.notifyDeletePath(job.Path, 0, true)
 		}
 	}
+}
+
+// readOnlyNotice — однократный лог режима без записи для notify-операций
+// (спека «Режим без записи»: локальные изменения не передаются в backend).
+func (p *Provider) readOnlyNotice() {
+	p.readOnlyOnce.Do(func() {
+		logger.Info("read-only mode: local changes are not uploaded to the volume (--read-only)")
+	})
+}
+
+// knownPlaceholder — известен ли провайдеру путь как плейсхолдер (задача
+// 6.2, спека «Распространение удалений...»: передача только для записей,
+// известных как плейсхолдеры): inode в индексе (по FileID уведомления либо
+// по пути). Неизвестные записи и локальные plain-файлы пользователя в
+// backend не передаются никогда.
+func (p *Provider) knownPlaceholder(fileID uint64, fsPath string) (uint64, bool) {
+	if fileID != 0 {
+		if _, ok := p.idx.Path(fileID); ok {
+			return fileID, true
+		}
+	}
+	return p.idx.LookupPath(fsPath)
+}
+
+// backendHasEntry — существует ли запись backend по пути (проверка ложного
+// ENOENT при rename: цель есть — запись валидна).
+func (p *Provider) backendHasEntry(mctx meta.Context, fsPath string) bool {
+	_, _, err := p.ibackend.Stat(mctx, fsPath)
+	return err == 0
+}
+
+// propagateDelete — удаление известного плейсхолдера в backend (задачи
+// 6.1–6.2): fs.Unlink (файл) / fs.Rmdir (каталог); ENOENT — записи уже нет
+// (исполнено). Успех — индекс чистится (каталог — с потомками).
+func (p *Provider) propagateDelete(mctx meta.Context, fsPath string, ino uint64, isDir bool) syscall.Errno {
+	var eno syscall.Errno
+	if isDir {
+		eno = p.ibackend.Rmdir(mctx, fsPath)
+	} else {
+		eno = p.ibackend.Delete(mctx, fsPath)
+	}
+	if eno != 0 && eno != syscall.ENOENT {
+		return eno
+	}
+	if err := p.idx.Delete(ino); err != nil {
+		logger.Warnf("delete %s: index: %v", fsPath, err)
+	}
+	if isDir {
+		if _, err := p.idx.DeletePrefix(fsPath); err != nil {
+			logger.Warnf("delete %s: index prefix: %v", fsPath, err)
+		}
+	}
+	return 0
+}
+
+// notifyDeletePath — NOTIFY_FILE_DELETED / NOTIFY_DIRECTORY_DELETED (задачи
+// 6.1–6.2): известный плейсхолдер → удаление в backend; sync root — никогда
+// (однократный Warn); неизвестное/локальное — игнор. Недоступный hub →
+// журнал (спека «Удаление офлайн»), replayer повторяет до успеха.
+func (p *Provider) notifyDeletePath(localPath string, fileID uint64, isDir bool) {
+	if p.readOnly {
+		p.readOnlyNotice()
+		return
+	}
+	if p.ibackend == nil || p.idx == nil {
+		return // режим этапа 1 (без data path) — распространять нечем
+	}
+	fsPath := p.fsPathOf(localPath)
+	if fsPath == "" {
+		logger.Debugf("delete %q: outside sync root, ignored", localPath)
+		return
+	}
+	if fsPath == "/" {
+		// Инвариант design.md: удаление sync root никогда не передаётся в
+		// backend — serve при следующем старте пересоздаёт каталог.
+		p.syncRootWarnOnce.Do(func() {
+			logger.Warnf("sync root %s deletion is never propagated to the backend", p.root)
+		})
+		return
+	}
+	ino, known := p.knownPlaceholder(fileID, fsPath)
+	if !known {
+		logger.Debugf("delete %s: not a known placeholder; ignored (local entries are never propagated)", fsPath)
+		return
+	}
+	if p.journal != nil && p.journal.HasPending(OpDelete, fsPath) {
+		return // повтор уже ведёт replayer
+	}
+	mctx := meta.WrapWithCancel(context.Background(), uint32(os.Getpid()), uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
+	defer mctx.Cancel()
+	eno := p.propagateDelete(mctx, fsPath, ino, isDir)
+	switch {
+	case eno == 0:
+		logger.Debugf("delete %s: removed from backend", fsPath)
+	case permanentJournalErrno(eno):
+		// Решение оркестратора (fix-1.5, data-safe): индекс НЕ снимать —
+		// снятие воскрешало бы запись (walk пересоздавал плейсхолдер без
+		// backend-данных); намерение удаления фиксируется логом, повтор —
+		// следующая сверка (пересечение с U15/U16 — решение за владельцем).
+		logger.Warnf("delete %s: %v (delete denied; entry kept in backend and index, will retry on next reconcile)", fsPath, eno)
+	default:
+		// Недоступный hub и прочие транзиентные — журнал (спека «Удаление
+		// офлайн»: повтор с нарастающей паузой до успеха).
+		logger.Warnf("delete %s: %v; queued for retry", fsPath, eno)
+		p.journalAdd(JournalOp{Type: OpDelete, Path: fsPath, Ino: ino, IsDir: isDir})
+	}
+}
+
+// propagateRename — переименование известного плейсхолдера в backend и
+// проводка индекса: inode нового пути пере-резолвится через backend Stat
+// нового пути (rename в meta сохраняет inode — сверяется); каталог — пути
+// потомков (RenamePrefix). ENOENT старой записи — ошибка перманентная
+// (запись снята другим клиентом/журналом), индекс чистится.
+func (p *Provider) propagateRename(mctx meta.Context, oldFsPath, newFsPath string, ino uint64, isDir bool) syscall.Errno {
+	eno := p.ibackend.Rename(mctx, oldFsPath, newFsPath)
+	if eno != 0 {
+		return eno
+	}
+	if err := p.indexAfterBackendRename(mctx, oldFsPath, newFsPath, ino, isDir); err != nil {
+		logger.Warnf("rename %s -> %s: index: %v", oldFsPath, newFsPath, err)
+	}
+	return 0
+}
+
+// notifyRenamePaths — NOTIFY_FILE_RENAMED / NOTIFY_DIRECTORY_RENAMED (задачи
+// 6.1–6.2): известный плейсхолдер → переименование в backend, индекс — на
+// новый путь (inode сохраняется/пере-резолвится); sync root и неизвестные
+// записи — игнор (plain-файл пользователя по новому пути выгрузит
+// классификация watcher-события RENAMED_NEW_NAME). Плейсхолдер вне in-sync
+// после переименования (модификация в окне коалисинга — задание по старому
+// пути снимется) ставится в выгрузку по новому пути. Недоступный hub →
+// журнал (replayer повторяет rename целиком).
+func (p *Provider) notifyRenamePaths(ctx context.Context, sourcePath, targetPath string, fileID uint64, isDir bool) {
+	if p.readOnly {
+		p.readOnlyNotice()
+		return
+	}
+	if p.ibackend == nil || p.idx == nil {
+		return
+	}
+	oldFsPath := p.fsPathOf(sourcePath)
+	newFsPath := p.fsPathOf(targetPath)
+	if oldFsPath == "" || newFsPath == "" {
+		logger.Debugf("rename %q -> %q: outside sync root, ignored", sourcePath, targetPath)
+		return
+	}
+	if oldFsPath == "/" || newFsPath == "/" {
+		p.syncRootWarnOnce.Do(func() {
+			logger.Warnf("sync root %s operations are never propagated to the backend", p.root)
+		})
+		return
+	}
+	if oldFsPath == newFsPath {
+		return // no-op переименование (потерянная пара dir-событий)
+	}
+	ino, known := p.knownPlaceholder(fileID, oldFsPath)
+	if !known {
+		logger.Debugf("rename %s -> %s: not a known placeholder; ignored", oldFsPath, newFsPath)
+		return
+	}
+	if p.journal != nil && p.journal.HasPending(OpRename, oldFsPath) {
+		return // повтор уже ведёт replayer
+	}
+	mctx := meta.WrapWithCancel(ctx, uint32(os.Getpid()), uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
+	defer mctx.Cancel()
+	eno := p.propagateRename(mctx, oldFsPath, newFsPath, ino, isDir)
+	switch {
+	case eno == 0:
+		logger.Debugf("rename %s -> %s: renamed in backend", oldFsPath, newFsPath)
+	case eno == syscall.ENOENT && p.backendHasEntry(mctx, newFsPath):
+		// Ложный ENOENT (гонка: переименование успел исполнить другой
+		// источник/клиент) — цель существует: индекс переносим, валидную
+		// запись не сносим (fix-1.8).
+		logger.Debugf("rename %s -> %s: ENOENT raced, target exists; keeping entry", oldFsPath, newFsPath)
+		if err := p.indexAfterBackendRename(mctx, oldFsPath, newFsPath, ino, isDir); err != nil {
+			logger.Warnf("rename %s -> %s: index: %v", oldFsPath, newFsPath, err)
+		}
+	case eno == syscall.ENOENT:
+		logger.Warnf("rename %s -> %s: backend entry is gone; dropped", oldFsPath, newFsPath)
+		if err := p.idx.Delete(ino); err != nil {
+			logger.Warnf("rename %s: index: %v", oldFsPath, err)
+		}
+		if isDir {
+			if _, err := p.idx.DeletePrefix(oldFsPath); err != nil {
+				logger.Warnf("rename %s: index prefix: %v", oldFsPath, err)
+			}
+		}
+	case permanentJournalErrno(eno) || eno == syscall.ENOTEMPTY || eno == syscall.EEXIST:
+		logger.Warnf("rename %s -> %s: %v (permanent; dropped)", oldFsPath, newFsPath, eno)
+	default:
+		logger.Warnf("rename %s -> %s: %v; queued for retry", oldFsPath, newFsPath, eno)
+		p.journalAdd(JournalOp{Type: OpRename, Path: oldFsPath, NewPath: newFsPath, Ino: ino, IsDir: isDir})
+		return
+	}
+	if isDir {
+		return // каталоги не выгружаются
+	}
+	// Изменённый плейсхолдер, переименованный в окне коалисинга: задание по
+	// старому пути снимется (файла нет) — выгрузка по новому пути.
+	newLocal := localJoin(p.root, newFsPath)
+	if info, err := p.istore.StandardInfo(newLocal); err == nil && info.InSyncState != cfapi.InSyncStateInSync {
+		if task, ok := p.classifyNotifyClose(ctx, &cfapi.NotifyFileCloseCompletionJob{Path: targetPath}); ok {
+			p.queueUpload(task)
+		}
+	}
+}
+
+// propagateDirCreate — распространение создания каталога в backend (спека
+// «Новый каталог»): Mkdir (EEXIST — запись уже есть, не ошибка), inode —
+// через backend Stat, локальный каталог конвертируется в плейсхолдер
+// (MARK_IN_SYNC — как в create-примитиве walk, design.md D6.4) и попадает
+// в индекс.
+func (p *Provider) propagateDirCreate(ctx context.Context, fsPath string) error {
+	local := localJoin(p.root, fsPath)
+	fi, err := os.Stat(local)
+	if err != nil {
+		return err
+	}
+	if !fi.IsDir() {
+		return permanentOpErrorf("%s is not a directory", local)
+	}
+	mctx := meta.WrapWithCancel(ctx, uint32(os.Getpid()), uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
+	defer mctx.Cancel()
+	eno := p.ibackend.Mkdir(mctx, fsPath)
+	if eno != 0 && eno != syscall.EEXIST {
+		return eno
+	}
+	ino, _, serr := p.ibackend.Stat(mctx, fsPath)
+	if serr != 0 {
+		return serr
+	}
+	// Наш плейсхолдер уже на диске (гонка с walk: его конверсия могла
+	// отстать от индекса) — усыновление без повторной конверсии.
+	if exists, isPh, serr := p.store.StateOf(local); serr == nil && exists && isPh {
+		if err := p.idx.Put(ino, fsPath); err != nil {
+			logger.Warnf("mkdir %s: index: %v", fsPath, err)
+		}
+		return nil
+	}
+	if _, known := p.idx.Path(ino); known {
+		// Конверсия — от walk (createEntry), inode уже его: не конвертируем
+		// повторно (повторная конверсия плейсхолдера отвергается фильтром).
+		if err := p.idx.Put(ino, fsPath); err != nil {
+			logger.Warnf("mkdir %s: index: %v", fsPath, err)
+		}
+		return nil
+	}
+	identity := make([]byte, 8)
+	binary.LittleEndian.PutUint64(identity, ino)
+	if cerr := p.store.Convert(local, true, identity, cfapi.ConvertFlagMarkInSync); cerr != nil {
+		return fmt.Errorf("convert %s: %w", fsPath, cerr)
+	}
+	if err := p.idx.Put(ino, fsPath); err != nil {
+		logger.Warnf("mkdir %s: index: %v", fsPath, err)
+	}
+	return nil
+}
+
+// notifyDirCreate — создание каталога в sync root (задача 6.1, точка D5
+// «Создание каталога»; источник — запасной механизм U9: watcher подаёт
+// dir-события ADDED в очередь DirectoryCreated диспетчера): walk-созданные
+// каталоги (индекс) и каталоги в повторе журнала — skip; новый каталог →
+// backend Mkdir + convert + индекс; недоступный hub → журнал (replayer).
+func (p *Provider) notifyDirCreate(ctx context.Context, localPath string) {
+	if p.readOnly {
+		p.readOnlyNotice()
+		return
+	}
+	if p.ibackend == nil || p.idx == nil {
+		return
+	}
+	fsPath := p.fsPathOf(localPath)
+	if fsPath == "" || fsPath == "/" {
+		logger.Debugf("dir create %q: outside sync root, ignored", localPath)
+		return
+	}
+	if _, known := p.idx.LookupPath(fsPath); known {
+		logger.Debugf("dir create %s: known placeholder (walk), skipped", fsPath)
+		return
+	}
+	if p.journal != nil && p.journal.HasPending(OpMkdir, fsPath) {
+		return // повтор уже ведёт replayer
+	}
+	err := p.propagateDirCreate(ctx, fsPath)
+	switch {
+	case err == nil:
+		logger.Infof("ingest %s: directory created, in sync", fsPath)
+	case errors.Is(err, os.ErrNotExist), isPermanentOpError(err):
+		logger.Debugf("dir create %s: %v; dropped", fsPath, err)
+	case permanentJournalErrno(errToErrno(err)):
+		logger.Warnf("dir create %s: %v (permanent; dropped)", fsPath, err)
+	default:
+		logger.Warnf("dir create %s: %v; queued for retry", fsPath, err)
+		p.journalAdd(JournalOp{Type: OpMkdir, Path: fsPath})
+	}
+}
+
+// errToErrno — errno из цепочки ошибки (для классификации перманентности).
+func errToErrno(err error) syscall.Errno {
+	var eno syscall.Errno
+	if errors.As(err, &eno) {
+		return eno
+	}
+	return 0
 }
 
 // ingestWorker — воркер пула выгрузки: задание из коалисера → runIngest.
@@ -515,8 +1030,26 @@ func (p *Provider) ingestWorker(ctx context.Context, in <-chan ingestTask, stop 
 // доводит длину, Flush подтверждает версию атомарно; только после
 // успешного Flush — финализация (finalizeIngest): заменой на плейсхолдер
 // (U18-α) либо пометкой in-sync изменённого плейсхолдера.
-func (p *Provider) runIngest(ctx context.Context, task ingestTask) {
+//
+// Неуспешные операции пишутся в журнал (задача 6.3, design.md D9): отказ
+// записи/Truncate/Flush (недоступный hub — спека «Отложенные операции при
+// недоступном hub»), занятость файла на replace-after-upload — повтор
+// replayer'ом с нарастающей паузой, в том числе после перезапуска.
+// Возврат ошибки — для replayer'а (журнала): nil — исполнено/исполнение
+// не требуется; opPermanentError — снять с учёта; прочее — повторить.
+// Воркеры пула результат игнорируют (повтор — следующий close/журнал).
+//
+// Отмена при удалении локального файла в окне выгрузки (задача 6.5): флаг
+// uploadHandle проверяется между порциями (версия не подтверждена —
+// задание просто снимается) и сразу после Flush (версия подтверждена,
+// локальная запись удалена пользователем — журнал: удаление по inode).
+func (p *Provider) runIngest(ctx context.Context, task ingestTask) error {
 	started := time.Now()
+	unlock := p.uploadPathLock(task.key)
+	defer unlock()
+	h := &uploadHandle{}
+	p.trackUpload(task.key, h)
+	defer p.untrackUpload(task.key, h)
 	// Повторная классификация на момент обработки: за задержку коалисинга
 	// состояние могло измениться (выгружено параллельным заданием, сверткой,
 	// файл удалён/переименован пользователем) — тот же честный
@@ -526,7 +1059,7 @@ func (p *Provider) runIngest(ctx context.Context, task ingestTask) {
 		if ctx.Err() != nil {
 			// Остановка во время повтора занятой записи — задание снимается
 			// (недоведённое повторится следующим событием/рестартом).
-			return
+			return nil
 		}
 		// Отказ запроса — у записи нет плейсхолдерности (plain-файл):
 		// выгружаем как новый (семантика классификации).
@@ -535,17 +1068,18 @@ func (p *Provider) runIngest(ctx context.Context, task ingestTask) {
 	}
 	if isPlaceholder && inSync {
 		logger.Debugf("ingest %s: already in sync, skipped", task.fsPath)
-		return
+		return nil
 	}
 	src, fi, err := p.openLocalSharedRead(ctx, task.local)
 	if err != nil {
 		// Файл удалён до выгрузки (или нечитаем): задание отменяется —
-		// удаление в backend для подтверждённых версий — этап 6 (design.md
-		// D9, сценарий «Удаление локального файла до выгрузки»).
+		// задание не ставится в журнал (выгружать нечего); защита
+		// подтверждённых версий — REMOVED/ReplaceUploadWithDelete (6.5).
 		if ctx.Err() == nil {
 			logger.Warnf("ingest %s: open local: %v; skipped", task.fsPath, err)
+			return permanentOpErrorf("local file %s is gone", task.fsPath)
 		}
-		return
+		return nil
 	}
 	// Закрыть ДО финализации (defer-страховка — для ранних выходов): convert/
 	// update плейсхолдера не должен видеть лишних открытых хендлов процесса
@@ -557,9 +1091,15 @@ func (p *Provider) runIngest(ctx context.Context, task ingestTask) {
 		}
 	}()
 	if fi.IsDir() {
-		return
+		return nil
 	}
 	size := fi.Size()
+	if h.cancel.Load() {
+		// Удаление в окне коалисинга/повтора занятости (задача 6.5):
+		// версия не подтверждена — просто снимаем задание.
+		logger.Debugf("ingest %s: canceled (local file removed), version not confirmed", task.fsPath)
+		return nil
+	}
 
 	mctx := meta.WrapWithCancel(ctx, uint32(os.Getpid()), uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
 	defer mctx.Cancel()
@@ -568,14 +1108,16 @@ func (p *Provider) runIngest(ctx context.Context, task ingestTask) {
 	if errno != 0 {
 		if errno != syscall.EEXIST {
 			logger.Warnf("ingest %s: create backend entry: %v; skipped", task.fsPath, errno)
-			return
+			p.journalAdd(JournalOp{Type: OpUpload, Path: task.fsPath})
+			return errno
 		}
 		// Имя занято в backend (гонка с другим клиентом либо наш плейсхолдер
 		// без индексной записи — утерянный журнал): содержимое пишется
 		// поверх существующей записи; финализация — по локальному состоянию.
 		if f, errno = p.ibackend.OpenWrite(mctx, task.fsPath); errno != 0 {
 			logger.Warnf("ingest %s: open backend entry: %v; skipped", task.fsPath, errno)
-			return
+			p.journalAdd(JournalOp{Type: OpUpload, Path: task.fsPath})
+			return errno
 		}
 	}
 	defer func() {
@@ -591,13 +1133,21 @@ func (p *Provider) runIngest(ctx context.Context, task ingestTask) {
 			// Остановка: версия не подтверждена — рестарт повторит выгрузку
 			// (design.md D9 «Обрыв выгрузки»: backend не содержит частичной
 			// версии; локальный файл не тронут).
-			return
+			return nil
+		}
+		if h.cancel.Load() {
+			// Удаление в окне выгрузки до Flush (задача 6.5): версия не
+			// подтверждена — задание снимается без журнала; удаление
+			// существовавшей версии донесёт NOTIFY_FILE_DELETED (плейсхолдер).
+			logger.Infof("ingest %s: canceled (local file removed before flush)", task.fsPath)
+			return nil
 		}
 		n, rerr := io.ReadFull(src, buf)
 		if n > 0 {
 			if _, werrno := f.Pwrite(mctx, buf[:n], off); werrno != 0 {
 				logger.Warnf("ingest %s: write backend: %v; skipped", task.fsPath, werrno)
-				return
+				p.journalAdd(JournalOp{Type: OpUpload, Path: task.fsPath})
+				return werrno
 			}
 			off += int64(n)
 		}
@@ -608,18 +1158,34 @@ func (p *Provider) runIngest(ctx context.Context, task ingestTask) {
 			break
 		}
 		logger.Warnf("ingest %s: read local: %v; skipped", task.fsPath, rerr)
-		return
+		return rerr
+	}
+	if h.cancel.Load() {
+		// Удаление в окне выгрузки до подтверждения (задача 6.5): версия не
+		// подтверждена — задание снимается без журнала.
+		logger.Infof("ingest %s: canceled (local file removed before flush)", task.fsPath)
+		return nil
 	}
 	if errno := f.Truncate(mctx, uint64(size)); errno != 0 {
 		logger.Warnf("ingest %s: truncate backend to %d: %v; skipped", task.fsPath, size, errno)
-		return
+		p.journalAdd(JournalOp{Type: OpUpload, Path: task.fsPath})
+		return errno
 	}
 	// Атомарная фиксация (design.md D9, спека «Видимость версии»): версия
 	// файла видна в backend ровно после Flush; финализация ниже — только
 	// при успехе (write-back выключен, задача 5.5).
 	if errno := f.Flush(mctx); errno != 0 {
 		logger.Warnf("ingest %s: flush: %v (version not confirmed; local file untouched)", task.fsPath, errno)
-		return
+		p.journalAdd(JournalOp{Type: OpUpload, Path: task.fsPath})
+		return errno
+	}
+	// Версия подтверждена (flushed): далее удаление локальной записи — уже
+	// не «отмена», а удаление подтверждённой версии (журнал по inode).
+	if h.cancel.Load() {
+		ino := uint64(f.Inode())
+		logger.Infof("ingest %s: upload confirmed, local file deleted by user; delete queued by inode %d", task.fsPath, ino)
+		p.journalAdd(JournalOp{Type: OpDelete, Path: task.fsPath, Ino: ino})
+		return nil
 	}
 	// Локальный хендл закрывается ДО финализации: пересоздание начинается
 	// с удаления файла (U18-α), а собственный хендл без FILE_SHARE_DELETE
@@ -632,6 +1198,7 @@ func (p *Provider) runIngest(ctx context.Context, task ingestTask) {
 	srcClosed = true
 	p.finalizeIngest(ctx, task, isPlaceholder, f, size, fi.ModTime())
 	logger.Debugf("ingest done: %s bytes=%d dur=%s", task.fsPath, size, time.Since(started).Truncate(time.Microsecond))
+	return nil
 }
 
 // finalizeIngest доводит локальную запись до конечного состояния (design.md
@@ -667,7 +1234,7 @@ func (p *Provider) finalizeIngest(ctx context.Context, task ingestTask, isPlaceh
 		// Окно истекает естественно; при отказе пересоздания остаётся до
 		// истечения — следующий close решит честно.
 		p.markSelfEvent(strings.ToLower(task.fsPath))
-		if !p.removeUploadedLocal(ctx, task) {
+		if !p.removeUploadedLocal(ctx, task, ino) {
 			return
 		}
 		kind, rerr := p.recreateUploaded(task, ino, size, mtime)
@@ -706,11 +1273,11 @@ func (p *Provider) finalizeIngest(ctx context.Context, task ingestTask, isPlaceh
 // (U18-α replace-after-upload). Занятость (пользователь переоткрыл файл —
 // хендл без FILE_SHARE_DELETE) — повтор с нарастающей паузой
 // ingestRetryDelay → ingestMaxRetryDelay, до ingestRemoveAttempts попыток;
-// исчерпание — Warn, задание снимается: контент выгружен, повторит
-// следующий close/рестарт. Файл, исчезнувший до удаления, — не ошибка:
-// пересоздавать нечего (передача удаления подтверждённой версии в backend
-// — этап 6, design.md D9).
-func (p *Provider) removeUploadedLocal(ctx context.Context, task ingestTask) bool {
+// исчерпание — Warn, задание снимается, в журнал ставится выгрузка
+// (задача 6.3/D9: replayer повторит и завершит замену; контент выгружен).
+// Файл, исчезнувший до удаления (пользователь удалил подтверждённую
+// версию, задача 6.5), — журнал: удаление по inode; пересоздавать нечего.
+func (p *Provider) removeUploadedLocal(ctx context.Context, task ingestTask, ino uint64) bool {
 	delay := p.ingestRetryDelay
 	for attempt := 1; ; attempt++ {
 		err := p.remover.Remove(task.local)
@@ -718,16 +1285,19 @@ func (p *Provider) removeUploadedLocal(ctx context.Context, task ingestTask) boo
 			return true
 		}
 		if os.IsNotExist(err) {
-			logger.Debugf("ingest %s: local file already gone after upload (content in backend); recreate skipped", task.fsPath)
+			logger.Debugf("ingest %s: local file already gone after upload (deleted by user); delete queued by inode %d", task.fsPath, ino)
+			p.journalAdd(JournalOp{Type: OpDelete, Path: task.fsPath, Ino: ino})
 			return false
 		}
 		if attempt >= ingestRemoveAttempts || !isSharingViolation(err) {
 			logger.Warnf("ingest %s: pending (file busy), content uploaded, will retry on next close/restart: %v", task.fsPath, err)
+			p.journalAdd(JournalOp{Type: OpUpload, Path: task.fsPath})
 			return false
 		}
 		logger.Debugf("ingest %s: local file busy after upload (attempt %d): %v; retrying in %s", task.fsPath, attempt, err, delay)
 		if !sleepCtx(ctx, p.stopChan(), delay) {
 			logger.Infof("ingest %s: stopped while local file busy after upload (content in backend; will retry on next close/restart)", task.fsPath)
+			p.journalAdd(JournalOp{Type: OpUpload, Path: task.fsPath})
 			return false
 		}
 		delay *= 2
@@ -850,16 +1420,20 @@ func (p *Provider) StartIngest(ctx context.Context) bool {
 	return true
 }
 
-// startIngestPool запускает маршрутизатор close-уведомлений, коалисер и
-// воркеров выгрузки (задачи 5.2–5.4). stop — снимок канала остановки
-// (паттерн пулов: Stop закрывает канал и зануляет его под stopMu —
-// захваченный закрытый канал читаем навсегда).
+// startIngestPool запускает маршрутизатор NOTIFY-очередей, коалисер, воркеров
+// выгрузки (задачи 5.2–5.4), watcher (U6) и replayer журнала операций
+// (задача 6.3). stop — снимок канала остановки (паттерн пулов: Stop закрывает
+// канал и зануляет его под stopMu — захваченный закрытый канал читаем
+// навсегда).
 func (p *Provider) startIngestPool(ctx context.Context, d *cfapi.Dispatcher) {
 	stop := p.stopChan()
 	if stop == nil {
 		return
 	}
 	db := newIngestDebouncer(p.ingestDelay, p.clock)
+	p.ingestDbMu.Lock()
+	p.ingestDb = db
+	p.ingestDbMu.Unlock()
 	logger.Debugf("ingest pool started: workers=%d delay=%s queue=%d",
 		p.ingestWorkers, p.ingestDelay, d.QueueCapacity().CloseCompletion)
 	p.wg.Add(1)
@@ -882,6 +1456,11 @@ func (p *Provider) startIngestPool(ctx context.Context, d *cfapi.Dispatcher) {
 	// Watcher ReadDirectoryChangesW (design.md U6, живая трассировка 27.11):
 	// основной детектор user-изменений (фильтр не доставляет
 	// NOTIFY_FILE_CLOSE_COMPLETION для plain-файлов); NOTIFY-канал остаётся
-	// для плейсхолдер-операций. Оба источника сходятся в один коалисер.
-	p.startFileWatcher(ctx, db, stop)
+	// для плейсхолдер-операций. Оба источника сходятся в один коалисер;
+	// dir-события watcher подаёт в очереди Directory* диспетчера (запасной
+	// механизм U9, задача 6.1), REMOVED — в отмену выгрузки (задача 6.5).
+	p.startFileWatcher(ctx, db, d, stop)
+	// Replayer журнала операций (задача 6.3): повтор невыполненных операций
+	// с нарастающей паузой, в том числе накопленных до запуска.
+	p.startJournalReplay(ctx, stop)
 }
