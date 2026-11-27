@@ -323,11 +323,16 @@ func notifyFileCloseCompletionCallback(info *CFCallbackInfo, params *CFCallbackP
 }
 
 // notifyRenameCallback — thunk NOTIFY_RENAME: маршрутизация файл/каталог по
-// CF_CALLBACK_RENAME_FLAG_IS_DIRECTORY.
+// CF_CALLBACK_RENAME_FLAG_IS_DIRECTORY. След вызова фильтром (трассировка
+// U19: без него «нет NOTIFY_RENAME в логе» ничего не доказывает — ретест
+// отличает «фильтр не вызвал callback» от «задание потерялось дальше»;
+// документированное отступление D5 — как в close-completion, только копии
+// полей, I/O на стеке callback'а нет).
 func notifyRenameCallback(info *CFCallbackInfo, params *CFCallbackParameters) uintptr {
 	p := params.RenameParams()
 	source := utf16ToString(info.NormalizedPath)
 	target := utf16ToString(p.TargetPath)
+	logger.Debugf("NOTIFY_RENAME callback: %q -> %q isDir=%v flags=%#x", source, target, p.Flags&CallbackRenameFlagIsDirectory != 0, p.Flags)
 	if d := dispatch(); d != nil {
 		if p.Flags&CallbackRenameFlagIsDirectory != 0 {
 			_ = d.OnNotifyDirectoryRenamed(&NotifyDirectoryRenamedJob{
@@ -354,10 +359,12 @@ func notifyRenameCallback(info *CFCallbackInfo, params *CFCallbackParameters) ui
 }
 
 // notifyDeleteCallback — thunk NOTIFY_DELETE: маршрутизация файл/каталог по
-// CF_CALLBACK_DELETE_FLAG_IS_DIRECTORY.
+// CF_CALLBACK_DELETE_FLAG_IS_DIRECTORY. След вызова фильтром (трассировка
+// U19 — см. notifyRenameCallback).
 func notifyDeleteCallback(info *CFCallbackInfo, params *CFCallbackParameters) uintptr {
 	p := params.DeleteParams()
 	path := utf16ToString(info.NormalizedPath)
+	logger.Debugf("NOTIFY_DELETE callback: path=%q isDir=%v flags=%#x", path, p.Flags&CallbackDeleteFlagIsDirectory != 0, p.Flags)
 	if d := dispatch(); d != nil {
 		if p.Flags&CallbackDeleteFlagIsDirectory != 0 {
 			_ = d.OnNotifyDirectoryDeleted(&NotifyDirectoryDeletedJob{

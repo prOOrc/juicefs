@@ -338,15 +338,31 @@ func (f *fakeIngestFile) Inode() meta.Ino { return meta.Ino(f.ino) }
 // fakeIngestStore — подменный ingestStore: STANDARD-состояния путей в карте
 // (запись без entry — plain-файл, запрос отвечает ошибкой — модель фильтра),
 // SetInSync фиксируется (успех переводит состояние в placeholder|in-sync —
-// модель фильтра).
+// модель фильтра). Ответы на blocked-уведомления (U19) — ackDelete/ackRename
+// фиксируются (ровно один на job, статус).
 type fakeIngestStore struct {
 	mu          sync.Mutex
 	log         *opLog
 	states      map[string]uint32
 	standard    map[string]*cfapi.CFPlaceholderStandardInfo
 	standardErr error
-	setSyncErr  error
-	setSyncs    []string
+	// standardGate/standardGatePath — симуляция блокирующего STANDARD-запроса
+	// (pending-delete, U19): StandardInfo блокируется на gate для пути
+	// standardGatePath (пустой — для всех), пока тест не закроет канал.
+	standardGate     chan struct{}
+	standardGatePath string
+	setSyncErr       error
+	setSyncs         []string
+	deleteAcks       []fakeAck
+	renameAcks       []fakeAck
+}
+
+// fakeAck — фиксация ответа на blocked-уведомление (U19).
+type fakeAck struct {
+	conn        cfapi.ConnectionKey
+	transferKey cfapi.TransferKey
+	requestKey  cfapi.RequestKey
+	status      cfapi.NTStatus
 }
 
 func newFakeIngestStore(log *opLog) *fakeIngestStore {
@@ -354,6 +370,12 @@ func newFakeIngestStore(log *opLog) *fakeIngestStore {
 }
 
 func (s *fakeIngestStore) StandardInfo(path string) (*cfapi.CFPlaceholderStandardInfo, error) {
+	s.mu.Lock()
+	gate, gatePath := s.standardGate, s.standardGatePath
+	s.mu.Unlock()
+	if gate != nil && (gatePath == "" || gatePath == path) {
+		<-gate // pending-delete: CreateFile блокируется (U19)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.standardErr != nil {
@@ -383,6 +405,46 @@ func (s *fakeIngestStore) SetInSync(path string) error {
 	s.setSyncs = append(s.setSyncs, path)
 	s.states[path] |= cfapi.PlaceholderStatePlaceholder | cfapi.PlaceholderStateInSync
 	return nil
+}
+
+func (s *fakeIngestStore) AnswerDelete(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, flags uint32, status cfapi.NTStatus) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.deleteAcks = append(s.deleteAcks, fakeAck{conn: conn, transferKey: transferKey, requestKey: requestKey, status: status})
+	return nil
+}
+
+func (s *fakeIngestStore) AnswerRename(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, flags uint32, status cfapi.NTStatus) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.renameAcks = append(s.renameAcks, fakeAck{conn: conn, transferKey: transferKey, requestKey: requestKey, status: status})
+	return nil
+}
+
+// deleteAckCount/lastDeleteAck/renameAckCount/lastRenameAck — синхронизация
+// тестов (ровно один ack на job, статус исхода).
+func (s *fakeIngestStore) deleteAckCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.deleteAcks)
+}
+
+func (s *fakeIngestStore) lastDeleteAck() fakeAck {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.deleteAcks[len(s.deleteAcks)-1]
+}
+
+func (s *fakeIngestStore) renameAckCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.renameAcks)
+}
+
+func (s *fakeIngestStore) lastRenameAck() fakeAck {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.renameAcks[len(s.renameAcks)-1]
 }
 
 func (s *fakeIngestStore) stateOf(path string) uint32 {
@@ -1316,6 +1378,14 @@ func TestIngestRecreateExistsAdoptsHydratedHonestMetadata(t *testing.T) {
 // --- Этап 6: распространение операций (задачи 6.1–6.2), отмена выгрузки
 // --- (задача 6.5), журнал (задача 6.3).
 
+// Тестовые ключи blocked-уведомлений (U19): обработчик обязана ответить
+// ровно один раз — факт и статус фиксирует fakeIngestStore.
+var (
+	testConn     = cfapi.ConnectionKey{Internal: 7}
+	testTransfer = cfapi.TransferKey(8)
+	testRequest  = cfapi.RequestKey(9)
+)
+
 // notifyJournalTestProvider — провайдер этапа 6 с журналом (без replayer —
 // исполнение операций вызывается синхронно из теста).
 func notifyJournalTestProvider(t *testing.T) (*Provider, *fakeIngestBackend, *fakeIngestStore, *fakeStore, *Index, *Journal, *opLog) {
@@ -1332,9 +1402,9 @@ func notifyJournalTestProvider(t *testing.T) (*Provider, *fakeIngestBackend, *fa
 
 // TestNotifyDeleteKnownPlaceholder — удаление известного плейсхолдера
 // доходит до backend (спека «Удаление плейсхолдера»), индекс чистится,
-// журнал не нужен (исполнено сразу).
+// ровно один ACK_DELETE со статусом успеха (U19: без него rm висит).
 func TestNotifyDeleteKnownPlaceholder(t *testing.T) {
-	p, backend, _, _, idx, j, _ := notifyJournalTestProvider(t)
+	p, backend, store, _, idx, j, _ := notifyJournalTestProvider(t)
 	if err := idx.Put(42, "/del.txt"); err != nil {
 		t.Fatalf("idx.Put: %v", err)
 	}
@@ -1343,7 +1413,7 @@ func TestNotifyDeleteKnownPlaceholder(t *testing.T) {
 	backend.inodes["/del.txt"] = 42
 	backend.mu.Unlock()
 
-	p.notifyDeletePath(filepath.Join(p.root, "del.txt"), 42, false)
+	p.notifyDeletePath(filepath.Join(p.root, "del.txt"), 42, false, testConn, testTransfer, testRequest)
 
 	if backend.deletes != 1 {
 		t.Fatalf("deletes = %d, ожидается 1", backend.deletes)
@@ -1357,18 +1427,29 @@ func TestNotifyDeleteKnownPlaceholder(t *testing.T) {
 	if n := len(j.Ops()); n != 0 {
 		t.Errorf("журнал = %+v, ожидается пусто (исполнено сразу)", j.Ops())
 	}
+	// РОВНО ОДИН ack на job со статусом успеха и ключами уведомления (U19).
+	if n := store.deleteAckCount(); n != 1 {
+		t.Fatalf("ack'ов = %d, ожидается ровно 1", n)
+	}
+	ack := store.lastDeleteAck()
+	if ack.status != cfapi.StatusSuccess {
+		t.Errorf("ack status = 0x%x, ожидается StatusSuccess", ack.status)
+	}
+	if ack.conn != testConn || ack.transferKey != testTransfer || ack.requestKey != testRequest {
+		t.Errorf("ack ключи = %+v, ожидаются тестовые", ack)
+	}
 }
 
 // TestNotifyDeleteUnknownIgnored — неизвестная запись (локальный plain-файл
 // пользователя, инвариант задачи 6.2) в backend не передаётся никогда.
 func TestNotifyDeleteUnknownIgnored(t *testing.T) {
-	p, backend, _, _, _, j, _ := notifyJournalTestProvider(t)
+	p, backend, store, _, _, j, _ := notifyJournalTestProvider(t)
 	local := filepath.Join(p.root, "plain-user.txt")
 	if err := os.WriteFile(local, []byte("user data"), 0o644); err != nil {
 		t.Fatalf("write local: %v", err)
 	}
 
-	p.notifyDeletePath(local, 0, false)
+	p.notifyDeletePath(local, 0, false, testConn, testTransfer, testRequest)
 
 	if backend.deletes != 0 {
 		t.Errorf("deletes = %d, ожидается 0 (неизвестная запись)", backend.deletes)
@@ -1379,12 +1460,19 @@ func TestNotifyDeleteUnknownIgnored(t *testing.T) {
 	if _, err := os.Stat(local); err != nil {
 		t.Errorf("локальный файл пользователя затронут: %v", err)
 	}
+	// Неизвестное (plain) — ack Success: локальное удаление не блокируется.
+	if n := store.deleteAckCount(); n != 1 {
+		t.Fatalf("ack'ов = %d, ожидается ровно 1", n)
+	}
+	if ack := store.lastDeleteAck(); ack.status != cfapi.StatusSuccess {
+		t.Errorf("ack status = 0x%x, ожидается StatusSuccess (не блокировать пользователя)", ack.status)
+	}
 }
 
 // TestNotifyDeleteSyncRootNever — инвариант (спека «Удаление sync root»):
 // удаление sync root НИКОГДА не передаётся в backend; Warn однократный.
 func TestNotifyDeleteSyncRootNever(t *testing.T) {
-	p, backend, _, _, _, j, _ := notifyJournalTestProvider(t)
+	p, backend, store, _, _, j, _ := notifyJournalTestProvider(t)
 	hook := &logCapture{}
 	logger.AddHook(hook)
 	if err := p.idx.Put(1, "/"); err != nil {
@@ -1396,7 +1484,7 @@ func TestNotifyDeleteSyncRootNever(t *testing.T) {
 	backend.mu.Unlock()
 
 	for i := 0; i < 3; i++ {
-		p.notifyDeletePath(p.root, 1, i == 2) // и как файл, и как каталог
+		p.notifyDeletePath(p.root, 1, i == 2, testConn, testTransfer, testRequest) // и как файл, и как каталог
 	}
 	if backend.deletes != 0 || backend.rmdirs != 0 {
 		t.Errorf("backend затронут: deletes=%d rmdirs=%d, ожидается 0/0", backend.deletes, backend.rmdirs)
@@ -1407,13 +1495,22 @@ func TestNotifyDeleteSyncRootNever(t *testing.T) {
 	if n := hook.count("never propagated to the backend"); n != 1 {
 		t.Errorf("строк Warn «never propagated»: %d, ожидается 1 (однократный)", n)
 	}
+	// Каждый вызов — ровно один ack Success (rm корня не блокируется).
+	if n := store.deleteAckCount(); n != 3 {
+		t.Errorf("ack'ов = %d, ожидается 3 (по одному на уведомление)", n)
+	}
+	if ack := store.lastDeleteAck(); ack.status != cfapi.StatusSuccess {
+		t.Errorf("ack status = 0x%x, ожидается StatusSuccess", ack.status)
+	}
 }
 
-// TestNotifyDeleteOfflineJournals — спека «Удаление офлайн»: hub недоступен
-// — операция в журнале, индекс не тронут (walk не воскресит запись);
-// исполнение ветки replayer'а доводит до backend.
-func TestNotifyDeleteOfflineJournals(t *testing.T) {
-	p, backend, _, _, idx, j, _ := notifyJournalTestProvider(t)
+// TestNotifyDeleteOfflineAcksError — U19 (blocked-style) + спека «Удаление
+// офлайн»: hub недоступен — ack с кодом отказа (rm пользователя завершается
+// ошибкой, локальная запись ОСТАЁТСЯ — состояние консистентно), backend и
+// индекс не тронуты, журнала нет (повтор — rm пользователя после
+// восстановления; «после повтора» ls не содержит запись).
+func TestNotifyDeleteOfflineAcksError(t *testing.T) {
+	p, backend, store, _, idx, j, _ := notifyJournalTestProvider(t)
 	if err := idx.Put(43, "/off.txt"); err != nil {
 		t.Fatalf("idx.Put: %v", err)
 	}
@@ -1423,27 +1520,29 @@ func TestNotifyDeleteOfflineJournals(t *testing.T) {
 	backend.deleteErr = syscall.EIO // hub недоступен
 	backend.mu.Unlock()
 
-	p.notifyDeletePath(filepath.Join(p.root, "off.txt"), 43, false)
+	p.notifyDeletePath(filepath.Join(p.root, "off.txt"), 43, false, testConn, testTransfer, testRequest)
 
-	ops := j.Ops()
-	if len(ops) != 1 || ops[0].Type != OpDelete || ops[0].Ino != 43 {
-		t.Fatalf("журнал = %+v, ожидается delete /off.txt ino=43", ops)
+	// Ровно один ack с кодом отказа (EIO → StatusIODeviceError); ключи job
+	// доставлены без изменений.
+	if n := store.deleteAckCount(); n != 1 {
+		t.Fatalf("ack'ов = %d, ожидается ровно 1", n)
+	}
+	ack := store.lastDeleteAck()
+	if ack.status != cfapi.StatusFromErrno(syscall.EIO) {
+		t.Errorf("ack status = 0x%x, ожидается StatusFromErrno(EIO) 0x%x", ack.status, cfapi.StatusFromErrno(syscall.EIO))
+	}
+	if ack.conn != testConn || ack.transferKey != testTransfer || ack.requestKey != testRequest {
+		t.Errorf("ack ключи = %+v, ожидаются тестовые", ack)
+	}
+	// Backend и индекс не тронуты (rm не удался — расхождения нет).
+	if len(backend.content("/off.txt")) == 0 {
+		t.Error("backend-запись удалена при недоступном hub")
 	}
 	if _, ok := idx.Path(43); !ok {
-		t.Fatal("индекс потерял запись (walk воскресил бы удалённое)")
+		t.Error("индекс потерял запись")
 	}
-	// Восстановление: исполнение операции.
-	backend.mu.Lock()
-	backend.deleteErr = 0
-	backend.mu.Unlock()
-	if err := p.executeJournalOp(context.Background(), ops[0]); err != nil {
-		t.Fatalf("executeJournalOp: %v", err)
-	}
-	if len(backend.content("/off.txt")) != 0 {
-		t.Error("backend-запись не удалена после восстановления")
-	}
-	if _, ok := idx.Path(43); ok {
-		t.Error("индекс не почищен после восстановления")
+	if n := len(j.Ops()); n != 0 {
+		t.Errorf("журнал = %+v, ожидается пуст (локальный rm не удался — распространять нечего)", j.Ops())
 	}
 }
 
@@ -1462,7 +1561,7 @@ func TestNotifyRenameKnownPlaceholder(t *testing.T) {
 	backend.mu.Unlock()
 	store.setStandard(filepath.Join(p.root, "new.txt"), cfapi.InSyncStateInSync)
 
-	p.notifyRenamePaths(context.Background(), filepath.Join(p.root, "old.txt"), filepath.Join(p.root, "new.txt"), 9, false)
+	p.notifyRenamePaths(context.Background(), filepath.Join(p.root, "old.txt"), filepath.Join(p.root, "new.txt"), 9, false, testConn, testTransfer, testRequest)
 
 	if backend.renames != 1 {
 		t.Fatalf("renames = %d, ожидается 1", backend.renames)
@@ -1479,12 +1578,19 @@ func TestNotifyRenameKnownPlaceholder(t *testing.T) {
 	if n := len(j.Ops()); n != 0 {
 		t.Errorf("журнал = %+v, ожидается пусто", j.Ops())
 	}
+	// РОВНО ОДИН ACK_RENAME со статусом успеха (U19: без него mv висит).
+	if n := store.renameAckCount(); n != 1 {
+		t.Fatalf("ack'ов = %d, ожидается ровно 1", n)
+	}
+	if ack := store.lastRenameAck(); ack.status != cfapi.StatusSuccess {
+		t.Errorf("ack status = 0x%x, ожидается StatusSuccess", ack.status)
+	}
 }
 
 // TestNotifyRenameUnknownIgnored — переименование не-плейсхолдера в backend
-// не передаётся (задача 6.2).
+// не передаётся (задача 6.2); ack Success — локальный mv не блокируется.
 func TestNotifyRenameUnknownIgnored(t *testing.T) {
-	p, backend, _, _, _, j, _ := notifyJournalTestProvider(t)
+	p, backend, store, _, _, j, _ := notifyJournalTestProvider(t)
 	if err := os.WriteFile(filepath.Join(p.root, "u1.txt"), []byte("a"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -1492,7 +1598,7 @@ func TestNotifyRenameUnknownIgnored(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	p.notifyRenamePaths(context.Background(), filepath.Join(p.root, "u1.txt"), filepath.Join(p.root, "u2.txt"), 0, false)
+	p.notifyRenamePaths(context.Background(), filepath.Join(p.root, "u1.txt"), filepath.Join(p.root, "u2.txt"), 0, false, testConn, testTransfer, testRequest)
 
 	if backend.renames != 0 {
 		t.Errorf("renames = %d, ожидается 0", backend.renames)
@@ -1500,12 +1606,20 @@ func TestNotifyRenameUnknownIgnored(t *testing.T) {
 	if n := len(j.Ops()); n != 0 {
 		t.Errorf("журнал = %+v, ожидается пусто", j.Ops())
 	}
+	if n := store.renameAckCount(); n != 1 {
+		t.Fatalf("ack'ов = %d, ожидается ровно 1", n)
+	}
+	if ack := store.lastRenameAck(); ack.status != cfapi.StatusSuccess {
+		t.Errorf("ack status = 0x%x, ожидается StatusSuccess", ack.status)
+	}
 }
 
-// TestNotifyRenameOfflineJournals — hub недоступен: операция rename в
-// журнале; исполнение доводит backend и индекс.
-func TestNotifyRenameOfflineJournals(t *testing.T) {
-	p, backend, _, _, idx, j, _ := notifyJournalTestProvider(t)
+// TestNotifyRenameOfflineAcksError — U19 (blocked-style): hub недоступен —
+// ack с кодом отказа (mv пользователя завершается ошибкой, запись остаётся
+// на старом имени локально и в backend — состояние консистентно), журнал
+// пуст (повтор — mv пользователя после восстановления).
+func TestNotifyRenameOfflineAcksError(t *testing.T) {
+	p, backend, store, _, idx, j, _ := notifyJournalTestProvider(t)
 	if err := idx.Put(11, "/r1.txt"); err != nil {
 		t.Fatalf("idx.Put: %v", err)
 	}
@@ -1515,20 +1629,23 @@ func TestNotifyRenameOfflineJournals(t *testing.T) {
 	backend.renameErr = syscall.EIO
 	backend.mu.Unlock()
 
-	p.notifyRenamePaths(context.Background(), filepath.Join(p.root, "r1.txt"), filepath.Join(p.root, "r2.txt"), 11, false)
+	p.notifyRenamePaths(context.Background(), filepath.Join(p.root, "r1.txt"), filepath.Join(p.root, "r2.txt"), 11, false, testConn, testTransfer, testRequest)
 
-	ops := j.Ops()
-	if len(ops) != 1 || ops[0].Type != OpRename || ops[0].NewPath != "/r2.txt" {
-		t.Fatalf("журнал = %+v, ожидается rename /r1.txt -> /r2.txt", ops)
+	if n := store.renameAckCount(); n != 1 {
+		t.Fatalf("ack'ов = %d, ожидается ровно 1", n)
 	}
-	backend.mu.Lock()
-	backend.renameErr = 0
-	backend.mu.Unlock()
-	if err := p.executeJournalOp(context.Background(), ops[0]); err != nil {
-		t.Fatalf("executeJournalOp: %v", err)
+	if ack := store.lastRenameAck(); ack.status != cfapi.StatusFromErrno(syscall.EIO) {
+		t.Errorf("ack status = 0x%x, ожидается StatusFromErrno(EIO)", ack.status)
 	}
-	if got, ok := idx.Path(11); !ok || got != "/r2.txt" {
-		t.Errorf("idx.Path(11) = (%q, %v), ожидается /r2.txt", got, ok)
+	// Backend и индекс не тронуты (mv не удался).
+	if len(backend.content("/r1.txt")) == 0 || len(backend.content("/r2.txt")) != 0 {
+		t.Error("backend-запись переименована при недоступном hub")
+	}
+	if got, ok := idx.Path(11); !ok || got != "/r1.txt" {
+		t.Errorf("idx.Path(11) = (%q, %v), ожидается /r1.txt", got, ok)
+	}
+	if n := len(j.Ops()); n != 0 {
+		t.Errorf("журнал = %+v, ожидается пуст (локальный mv не удался)", j.Ops())
 	}
 }
 
@@ -1627,7 +1744,7 @@ func TestNotifyDirCreateOfflineJournals(t *testing.T) {
 // TestNotifyDirDelete — удаление каталога-плейсхолдера: Rmdir в backend,
 // индекс чистится с потомками (DeletePrefix).
 func TestNotifyDirDelete(t *testing.T) {
-	p, backend, _, _, idx, _, _ := notifyJournalTestProvider(t)
+	p, backend, store, _, idx, _, _ := notifyJournalTestProvider(t)
 	if err := idx.Put(5, "/gone-dir"); err != nil {
 		t.Fatalf("idx.Put: %v", err)
 	}
@@ -1639,7 +1756,7 @@ func TestNotifyDirDelete(t *testing.T) {
 	backend.inodes["/gone-dir"] = 5
 	backend.mu.Unlock()
 
-	p.notifyDeletePath(filepath.Join(p.root, "gone-dir"), 0, true)
+	p.notifyDeletePath(filepath.Join(p.root, "gone-dir"), 0, true, testConn, testTransfer, testRequest)
 
 	if backend.rmdirs != 1 {
 		t.Fatalf("rmdirs = %d, ожидается 1", backend.rmdirs)
@@ -1653,12 +1770,19 @@ func TestNotifyDirDelete(t *testing.T) {
 	if _, ok := idx.Path(6); ok {
 		t.Error("потомок каталога не снят с индекса (DeletePrefix)")
 	}
+	// Каталог идёт через тот же ACK_DELETE (NOTIFY_DELETE + IS_DIRECTORY).
+	if n := store.deleteAckCount(); n != 1 {
+		t.Fatalf("ack'ов = %d, ожидается ровно 1", n)
+	}
+	if ack := store.lastDeleteAck(); ack.status != cfapi.StatusSuccess {
+		t.Errorf("ack status = 0x%x, ожидается StatusSuccess", ack.status)
+	}
 }
 
 // TestNotifyDirRename — переименование каталога-плейсхолдера: backend
 // rename, пути потомков в индексе переносит RenamePrefix.
 func TestNotifyDirRename(t *testing.T) {
-	p, backend, _, _, idx, _, _ := notifyJournalTestProvider(t)
+	p, backend, store, _, idx, _, _ := notifyJournalTestProvider(t)
 	backend.mu.Lock()
 	backend.dirs["/odir"] = true
 	backend.inodes["/odir"] = 5
@@ -1670,7 +1794,7 @@ func TestNotifyDirRename(t *testing.T) {
 		t.Fatalf("idx.Put: %v", err)
 	}
 
-	p.notifyRenamePaths(context.Background(), filepath.Join(p.root, "odir"), filepath.Join(p.root, "ndir"), 0, true)
+	p.notifyRenamePaths(context.Background(), filepath.Join(p.root, "odir"), filepath.Join(p.root, "ndir"), 0, true, testConn, testTransfer, testRequest)
 
 	if backend.renames != 1 {
 		t.Fatalf("renames = %d, ожидается 1", backend.renames)
@@ -1683,6 +1807,13 @@ func TestNotifyDirRename(t *testing.T) {
 	}
 	if got, ok := idx.Path(6); !ok || got != "/ndir/kid.txt" {
 		t.Errorf("idx.Path(6) = (%q, %v), ожидается /ndir/kid.txt", got, ok)
+	}
+	// Каталог-rename идёт через тот же ACK_RENAME (NOTIFY_RENAME + IS_DIRECTORY).
+	if n := store.renameAckCount(); n != 1 {
+		t.Fatalf("ack'ов = %d, ожидается ровно 1", n)
+	}
+	if ack := store.lastRenameAck(); ack.status != cfapi.StatusSuccess {
+		t.Errorf("ack status = 0x%x, ожидается StatusSuccess", ack.status)
 	}
 }
 
@@ -1882,12 +2013,76 @@ func TestNotifyRenameFalseENOENTKeepsEntry(t *testing.T) {
 		t.Fatalf("idx.Put: %v", err)
 	}
 
-	p.notifyRenamePaths(context.Background(), filepath.Join(p.root, "src.txt"), filepath.Join(p.root, "done.txt"), 12, false)
+	p.notifyRenamePaths(context.Background(), filepath.Join(p.root, "src.txt"), filepath.Join(p.root, "done.txt"), 12, false, testConn, testTransfer, testRequest)
 
 	if got, ok := idx.Path(12); !ok || got != "/done.txt" {
 		t.Fatalf("idx.Path(12) = (%q, %v), ожидается /done.txt (запись сохранена)", got, ok)
 	}
 	if n := len(j.Ops()); n != 0 {
 		t.Errorf("журнал = %+v, ожидается пусто (исполнено)", j.Ops())
+	}
+}
+
+// TestClassifyStateQueryTimeoutKeepsRouterAlive — U19 (живая трассировка
+// 27.11): STANDARD-запрос по записи в pending-delete блокируется в
+// CreateFile навсегда и без потолка убивал горутину-роутер (все уведомления
+// и выгрузка стояли). Классификация с блокированным STANDARD по таймауту
+// возвращает plain → to-upload, РОУТЕР ПРОДОЛЖАЕТ: следующий job
+// обрабатывается (второй файл выходит из коалисера).
+func TestClassifyStateQueryTimeoutKeepsRouterAlive(t *testing.T) {
+	p, _, store, _, _, _ := newIngestTestProvider(t)
+	p.stateQueryTimeout = 50 * time.Millisecond
+	stuck := filepath.Join(p.root, "stuck.txt")
+	if err := os.WriteFile(stuck, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write stuck: %v", err)
+	}
+	next := filepath.Join(p.root, "next.txt")
+	if err := os.WriteFile(next, []byte("y"), 0o644); err != nil {
+		t.Fatalf("write next: %v", err)
+	}
+	gate := make(chan struct{})
+	store.mu.Lock()
+	store.standardGate = gate
+	store.standardGatePath = stuck // блокируется ТОЛЬКО pending-delete путь
+	store.mu.Unlock()
+	defer close(gate) // освободить горутину запроса (леак прототипа — по возврату из syscall)
+
+	// Роутер + коалисер: два close-уведомления, оба должны дойти до out.
+	d := cfapi.NewDispatcher(cfapi.DefaultQueueOptions())
+	db := newIngestDebouncer(5*time.Millisecond, wallClock{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stop := make(chan struct{})
+	routerDone := make(chan struct{})
+	go func() {
+		defer close(routerDone)
+		p.ingestRouter(ctx, db, d, stop)
+	}()
+	dbDone := make(chan struct{})
+	go func() {
+		defer close(dbDone)
+		db.run(ctx, stop)
+	}()
+	defer func() {
+		close(stop)
+		<-routerDone
+		<-dbDone
+	}()
+
+	if err := d.OnNotifyFileCloseCompletion(&cfapi.NotifyFileCloseCompletionJob{Path: stuck}); err != nil {
+		t.Fatalf("enqueue stuck: %v", err)
+	}
+	// Первый job: STANDARD блокирован → таймаут 50мс → plain → to-upload.
+	task := recvTask(t, db.out)
+	if task.fsPath != "/stuck.txt" {
+		t.Fatalf("задание = %+v, ожидается /stuck.txt (таймаут → plain → upload)", task)
+	}
+	// РОУТЕР ЖИВ: следующий job (обычный plain-файл) обрабатывается.
+	if err := d.OnNotifyFileCloseCompletion(&cfapi.NotifyFileCloseCompletionJob{Path: next}); err != nil {
+		t.Fatalf("enqueue next: %v", err)
+	}
+	task = recvTask(t, db.out)
+	if task.fsPath != "/next.txt" {
+		t.Fatalf("второе задание = %+v, ожидается /next.txt (роутер не должен быть мёртв)", task)
 	}
 }

@@ -100,6 +100,7 @@ type Provider struct {
 	ingestDelay         time.Duration
 	ingestRetryDelay    time.Duration
 	ingestMaxRetryDelay time.Duration
+	stateQueryTimeout   time.Duration // потолок STANDARD-запроса (U19; injectable — тесты)
 	ingestFailed        atomic.Int64
 	clock               ingestClock
 	readOnly            bool
@@ -203,6 +204,7 @@ func New(root, volume string, api cfapi.SyncRootAPI, dispatch cfapi.CallbackDisp
 		ingestDelay:          ingestDebounceDelay,
 		ingestRetryDelay:     500 * time.Millisecond,
 		ingestMaxRetryDelay:  30 * time.Second,
+		stateQueryTimeout:    stateQueryTimeout,
 		selfEventUntil:       make(map[string]time.Time),
 		clock:                wallClock{},
 		journalRetryBase:     journalRetryBase,

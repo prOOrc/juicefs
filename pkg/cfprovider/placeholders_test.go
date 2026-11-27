@@ -222,6 +222,16 @@ func (f *fakeStore) SetInSync(path string) error {
 	return nil
 }
 
+// AnswerDelete/AnswerRename — no-op заглушки ACK-ответов (U19) для
+// ingestStore-интерфейса в walk-тестах; факты ack проверяются fakeIngestStore.
+func (f *fakeStore) AnswerDelete(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, flags uint32, status cfapi.NTStatus) error {
+	return nil
+}
+
+func (f *fakeStore) AnswerRename(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, flags uint32, status cfapi.NTStatus) error {
+	return nil
+}
+
 func (f *fakeStore) convertCalls() []convertCall {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -292,6 +302,8 @@ func newTestProvider(t *testing.T, root string, backend backendLister, store pla
 	if s, ok := store.(interface {
 		StandardInfo(string) (*cfapi.CFPlaceholderStandardInfo, error)
 		SetInSync(string) error
+		AnswerDelete(cfapi.ConnectionKey, cfapi.TransferKey, cfapi.RequestKey, uint32, cfapi.NTStatus) error
+		AnswerRename(cfapi.ConnectionKey, cfapi.TransferKey, cfapi.RequestKey, uint32, cfapi.NTStatus) error
 	}); ok {
 		p.istore = s
 	}

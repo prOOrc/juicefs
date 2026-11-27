@@ -126,6 +126,56 @@ func AnswerFetchPlaceholders(conn ConnectionKey, transferKey TransferKey, reques
 	return CfExecute(&opInfo, &opParams)
 }
 
+// AnswerDelete отвечает на уведомление NOTIFY_DELETE (design.md D5, этап 6;
+// живая проба U19 27.11: удаление blocked-style — операция пользователя
+// не завершается, пока провайдер не ответит): CF_OPERATION_TYPE_ACK_DELETE.
+// Флаги CF_OPERATION_ACK_DELETE_FLAG_NONE; CompletionStatus — StatusSuccess
+// (удаление доведено) либо код отказа (фильтр завершает удаление ошибкой);
+// каталоги идут через тот же колбэк с флагом *_IS_DIRECTORY — отдельной
+// ack-операции для них нет (header: union-ветка AckDelete одна).
+// ParamSize — размер union'а целиком (см. AnswerFetchPlaceholders).
+//
+// Ответ обязателен на каждое уведомление ровно один раз — иначе rm в
+// вызывающем процессе остаётся подвешенным (U19).
+func AnswerDelete(conn ConnectionKey, transferKey TransferKey, requestKey RequestKey, flags uint32, status NTStatus) error {
+	opInfo := CFOperationInfo{
+		StructSize:    uint32(unsafe.Sizeof(CFOperationInfo{})),
+		Type:          OperationTypeAckDelete,
+		ConnectionKey: conn,
+		TransferKey:   transferKey,
+		RequestKey:    requestKey,
+	}
+	opParams := CFOperationParameters{
+		ParamSize: uint32(unsafe.Sizeof(CFOperationParameters{})),
+	}
+	p := opParams.OperationAckDelete()
+	p.Flags = flags
+	p.CompletionStatus = status
+	return CfExecute(&opInfo, &opParams)
+}
+
+// AnswerRename отвечает на уведомление NOTIFY_RENAME (design.md D5, этап 6;
+// blocked-style — как NOTIFY_DELETE, U19): CF_OPERATION_TYPE_ACK_RENAME,
+// флаги CF_OPERATION_ACK_RENAME_FLAG_NONE. Файл и каталог — тот же колбэк
+// (флаг *_IS_DIRECTORY), одна ack-операция. Ответ обязателен ровно один раз
+// на уведомление — иначе mv подвешен.
+func AnswerRename(conn ConnectionKey, transferKey TransferKey, requestKey RequestKey, flags uint32, status NTStatus) error {
+	opInfo := CFOperationInfo{
+		StructSize:    uint32(unsafe.Sizeof(CFOperationInfo{})),
+		Type:          OperationTypeAckRename,
+		ConnectionKey: conn,
+		TransferKey:   transferKey,
+		RequestKey:    requestKey,
+	}
+	opParams := CFOperationParameters{
+		ParamSize: uint32(unsafe.Sizeof(CFOperationParameters{})),
+	}
+	p := opParams.OperationAckRename()
+	p.Flags = flags
+	p.CompletionStatus = status
+	return CfExecute(&opInfo, &opParams)
+}
+
 // CfOpenFileWithOplock открывает запись sync root хендлом, пригодным для
 // Cf-операций плейсхолдеров (cfapi.h:765): protected-хендл держит oplock
 // фильтра и переживает дегидратацию/гидрацию записи. Флаги —
