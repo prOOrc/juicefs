@@ -287,7 +287,7 @@ fsys := fs.NewFileSystem(vfsConf, m, store, nil) // pkg/fs/fs.go:180, pkg/vfs/vf
 |---|---|
 | `fs.NewFileSystem(conf, m, store, registry)` — `pkg/fs/fs.go:180` | path-based API: `Open` (:401), `Stat` (:467), `Readdir` (:1524), `File.Pread` (:1377); write-API сверяется на шаге 5.1 |
 | `meta.NewClient("grpc://…")` — `pkg/meta/grpc_client.go:325` | URI query: `oidc-issuer`, обязательный `oidc-client-id`, `tls=1`, `tls-ca`; Bearer — `oidc.TokenManager` (`pkg/oidc/token_manager.go:89`) |
-| STS — `cmd/render_mount.go:346-381`, `cmd/sts_refresher.go:219` | `platformNodeSTSProvider` / `newSTSRefresher`; креды object storage как в mount |
+| STS — пользовательский путь mount (`cmd/mount.go:743-793`), провайдеры `cmd/sts_refresher.go` | `platformSTSProvider` (StsProxyService той же meta-связи, identity из OIDC-сессии, ADR-003/В2) + `newSTSRefresher` + self-provision working_dir; render-node путь (`platformNodeSTSProvider` из `render_mount.go`) остаётся только у render-mount |
 | `chunk.NewCachedStore` — `pkg/chunk/cached_store.go:1006`, `createStorage` — `cmd/format.go:240` | chunk store поверх S3; bucket/параметры из format |
 | Маркер готовности — паттерн `pkg/winfsp/winfs.go:1205-1218` | `OK, <имя тома> is ready` — контракт для будущего supervisor'а agio-drive |
 
