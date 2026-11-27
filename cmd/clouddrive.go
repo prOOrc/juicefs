@@ -54,8 +54,7 @@ import (
 // Константы регистрации AgioDrive (design.md D4). id провайдера в имени
 // ключа Explorer — строка, аккаунт — Agio. GUID провайдера — постоянный
 // идентификатор CfAPI-регистрации. Ветка реестра — HKCU (проба U1; HKLM —
-// только если проба покажет необходимость). pin/unpin добавляются задачей
-// 4.1, status <путь> — задачей 5.7.
+// только если проба покажет необходимость). status <путь> — задачей 5.7.
 const (
 	cloudDriveDisplayName  = "AgioDrive"
 	cloudDriveProviderID   = "AgioDrive"
@@ -136,6 +135,15 @@ func cmdCloudDrive() *cli.Command {
 				Value: cfprovider.DefaultFetchWorkers,
 				Usage: "number of hydration workers for serve (FETCH_DATA pool size; parallel reads beyond the pool wait in the queue)",
 			},
+			&cli.BoolFlag{
+				// pin/unpin (задача 4.1): CF_SET_PIN_FLAG_RECURSE — состояние
+				// pin на всё поддерево каталога. На родителе (как все флаги
+				// этой команды): reorderOptions в cmd/main.go валидирует
+				// опции против флагов верхнеуровневой команды, значение
+				// читается действием подкоманды через parent-chain.
+				Name:  "recursive",
+				Usage: "for pin/unpin: apply the pin state to the whole directory subtree (CF_SET_PIN_FLAG_RECURSE; recursive pin hydrates the subtree as FETCH_DATA batches to the running serve)",
+			},
 		}, nodeSTSFlags()...),
 		Description: `
 Manage a Windows Cloud Files API (CfAPI) sync root backed by a JuiceFS volume.
@@ -155,6 +163,15 @@ $ juicefs clouddrive ls grpc://meta-proxy:9900?tls=1 /docs
 
 # SHA-256 of a backend file
 $ juicefs clouddrive hash grpc://meta-proxy:9900?tls=1 /docs/report.pdf
+
+# Pin a placeholder (downloads its content; requires a running serve)
+$ juicefs clouddrive pin docs/report.pdf
+
+# Pin a directory subtree recursively (FETCH_DATA batches to the running serve)
+$ juicefs clouddrive pin --recursive docs
+
+# Unpin (the filter dehydrates the placeholder and frees disk space)
+$ juicefs clouddrive unpin docs/report.pdf
 
 # Unregister the sync root
 $ juicefs clouddrive unregister`,
@@ -191,6 +208,18 @@ $ juicefs clouddrive unregister`,
 				ArgsUsage: "META-URL PATH",
 				Usage:     "Print SHA-256 of a backend file (hex)",
 				Action:    cloudDriveHash,
+			},
+			{
+				Name:      "pin",
+				ArgsUsage: "PATH",
+				Usage:     "Pin a file or directory in the sync root: the filter hydrates its content via FETCH_DATA to a running serve (requires running serve for hydration)",
+				Action:    cloudDrivePin,
+			},
+			{
+				Name:      "unpin",
+				ArgsUsage: "PATH",
+				Usage:     "Unpin a file or directory in the sync root: the filter dehydrates the placeholder and frees its disk space (works without serve)",
+				Action:    cloudDriveUnpin,
 			},
 		},
 	}
@@ -768,6 +797,83 @@ func cloudDriveHash(c *cli.Context) error {
 		fmt.Printf("%x  %s\n", digest.Sum(nil), p)
 		return nil
 	})
+}
+
+// cloudDrivePin — задача 4.1, спека «Pin и unpin»: CfSetPinState(Pinned)
+// по локальной записи sync root. Сам pin-state фильтр хранит персистентно
+// (переживает перезапуск провайдера); гидрация приходит FETCH_DATA к живому
+// соединению — сценарий «Pin файла и чтение без провайдера» требует
+// работающий serve на момент скачивания (после kill serve pinned-файл
+// читается целиком из локальных данных).
+func cloudDrivePin(c *cli.Context) error {
+	return cloudDriveSetPinState(c, cfapi.PinStatePinned, "pin")
+}
+
+// cloudDriveUnpin — спека «Unpin»: CfSetPinState(Unpinned); фильтр
+// дешидратирует плейсхолдер — занятый объём возвращается, запись остаётся
+// в каталоге. Callback NOTIFY_DEHYDRATE не зарегистрирован (design.md D5 —
+// не среди 9 OS-точек), поэтому уведомление протекает без ack (optional).
+func cloudDriveUnpin(c *cli.Context) error {
+	return cloudDriveSetPinState(c, cfapi.PinStateUnpinned, "unpin")
+}
+
+// cloudDriveSetPinState — общий каркас pin/unpin: локальный путь под корнем
+// sync root, флаг --recursive → CF_SET_PIN_FLAG_RECURSE, SetPinStateByPath.
+// Выполняется в CLI-процессе (не в serve): изоляция пулов design.md D3
+// не затрагивается — она ограничивает только воркеров провайдера (воркер
+// гидратации не должен сам вызывать CfSetPinState/CfHydratePlaceholder).
+func cloudDriveSetPinState(c *cli.Context, pinState uint32, verb string) error {
+	setup(c, 1)
+	path, err := cloudDriveLocalPath(c)
+	if err != nil {
+		return err
+	}
+	pinFlags := uint32(cfapi.SetPinFlagNone)
+	if c.Bool("recursive") {
+		pinFlags = cfapi.SetPinFlagRecurse
+	}
+	if err := cfapi.SetPinStateByPath(path, pinState, pinFlags); err != nil {
+		return fmt.Errorf("%s %s: %w (the path must be a placeholder inside the sync root; hydration requires a running `clouddrive serve`)", verb, path, err)
+	}
+	if pinFlags != cfapi.SetPinFlagNone && pinState == cfapi.PinStatePinned {
+		// Проба U5: рекурсивный pin каталога фильтр выполняет сам —
+		// FETCH_DATA приходит в serve пачкой на все файлы поддерева;
+		// очередь обслуживает пул гидратации (--hydration-workers).
+		logger.Infof("recursive pin %s issued: hydration arrives as FETCH_DATA batches to the running serve", path)
+	} else {
+		logger.Infof("%s %s (pin state %d)", verb, path, pinState)
+	}
+	return nil
+}
+
+// cloudDriveLocalPath разрешает аргумент pin/unpin в локальный путь
+// (плейсхолдер под корнем sync root): относительный — относительно --root
+// (ls/hash берут путь backend-тома, pin/unpin — локальную запись),
+// полный — принимается, если лежит под корнем.
+func cloudDriveLocalPath(c *cli.Context) (string, error) {
+	root := c.String("root")
+	p := strings.TrimSpace(c.Args().Get(0))
+	if p == "" {
+		return "", errors.New("PATH is required, e.g. docs/report.pdf (relative to the sync root) or the full local path")
+	}
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(root, p)
+	}
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve sync root %s: %w", root, err)
+	}
+	pAbs, err := filepath.Abs(p)
+	if err != nil {
+		return "", fmt.Errorf("resolve %s: %w", p, err)
+	}
+	// Rel сравнивает компоненты пути без учёта регистра на Windows;
+	// `..` означает выход за пределы корня.
+	rel, err := filepath.Rel(rootAbs, pAbs)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path %s is outside the sync root %s", p, root)
+	}
+	return pAbs, nil
 }
 
 // currentUserSIDStr — SID текущего пользователя (строкой), элемент имени
