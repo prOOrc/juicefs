@@ -360,19 +360,25 @@ func CfUpdatePlaceholder(fileHandle syscall.Handle, fsMetadata *CFFileMetadata, 
 
 // openPlaceholderHandle открывает существующую реальную запись для
 // Cf-операций по пути: CfConvertToPlaceholder (cfapi.h:808) и
-// CfUpdatePlaceholder (cfapi.h:835) принимают HANDLE. FILE_FLAG_BACKUP_SEMANTICS
-// обязателен для каталогов и безвреден для файлов; доступ на запись —
-// только файлам: каталог Windows с GENERIC_WRITE не открывает.
+// CfUpdatePlaceholder (cfapi.h:835) принимают HANDLE. ФЛАГИ ПО ЖИВОЙ
+// ДИАГНОСТИКЕ ЭТАПА 5 (27.11): для ФАЙЛОВ — БЕЗ FILE_FLAG_BACKUP_SEMANTICS
+// (convert/update на файловом хендле с BACKUP_SEMANTICS отвергается
+// фильтром с 0x8007017c; успешный контрольный probe открывал без него);
+// для КАТАЛОГОВ — BACKUP_SEMANTICS обязателен (иначе каталог не открыть).
+// Доступ на запись — только файлам: каталог Windows с GENERIC_WRITE не
+// открывает.
 func openPlaceholderHandle(path string, isDir bool) (syscall.Handle, error) {
 	path16, err := windows.UTF16PtrFromString(path)
 	if err != nil {
 		return 0, err
 	}
 	access := uint32(windows.GENERIC_READ | windows.GENERIC_WRITE)
+	flags := uint32(0)
 	if isDir {
 		access = windows.GENERIC_READ
+		flags = windows.FILE_FLAG_BACKUP_SEMANTICS
 	}
-	h, err := windows.CreateFile(path16, access, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
+	h, err := windows.CreateFile(path16, access, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil, windows.OPEN_EXISTING, flags, 0)
 	if err != nil {
 		return 0, fmt.Errorf("open %s: %w", path, err)
 	}

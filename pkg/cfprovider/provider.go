@@ -79,6 +79,34 @@ type Provider struct {
 	fetchWorkers int
 	bufs         *cfapi.BufferPool
 
+	// Пул выгрузки (этап 5, design.md D8/D9): istore — CfAPI-операции
+	// плейсхолдеров write-пути (PlaceholderState/SetInSync/ConvertFile),
+	// ibackend — write-API pkg/fs (ставится WithData); ingestWorkers
+	// воркеров разбирают очередь коалисера (объединение уведомлений по
+	// пути с задержкой ingestDelay; часы clock — injectable для тестов).
+	// Повтор открытия занятого локального файла — ingestRetryDelay →
+	// ingestMaxRetryDelay (design.md D8 шаг 3). Повтор конверсии после
+	// закрытия записи — convertRetryDelays (живой ретест этапа 5: фильтр
+	// короткое время не принимает convert — 0x8007017c; тесты сокращают).
+	// readOnly (--read-only serve) отключает выгрузку: классификация
+	// close-уведомлений игнорирует всё с однократным логом (спека «Режим
+	// без записи»).
+	istore              ingestStore
+	ibackend            ingestBackend
+	ingestWorkers       int
+	ingestDelay         time.Duration
+	ingestRetryDelay    time.Duration
+	ingestMaxRetryDelay time.Duration
+	convertRetryDelays  []time.Duration
+	clock               ingestClock
+	readOnly            bool
+	readOnlyOnce        sync.Once
+
+	// Старт пула выгрузки (StartIngest из serve после маркера готовности;
+	// guard — как у walk): ingestMu/ingestStarted.
+	ingestMu      sync.Mutex
+	ingestStarted bool
+
 	// Воркеры этапа 2: жизненный цикл внутренних горутин (наполнение,
 	// готовность, walk) — канал stop, закрывается в Stop; wg ждёт их
 	// завершения. Отдельный mutex: Stop держит p.mu во время wg.Wait —
@@ -134,6 +162,13 @@ func New(root, volume string, api cfapi.SyncRootAPI, dispatch cfapi.CallbackDisp
 		local:                osLocalLister{},
 		fetchWorkers:         DefaultFetchWorkers,
 		bufs:                 cfapi.NewBufferPool(DefaultFetchWorkers),
+		istore:               osStore{},
+		ingestWorkers:        DefaultIngestWorkers,
+		ingestDelay:          ingestDebounceDelay,
+		ingestRetryDelay:     500 * time.Millisecond,
+		ingestMaxRetryDelay:  30 * time.Second,
+		convertRetryDelays:   append([]time.Duration(nil), convertRetryDelaysDefault...),
+		clock:                wallClock{},
 		retryDelay:           2 * time.Second,
 		readyCh:              make(chan struct{}),
 		walkRetryDelay:       time.Second,
@@ -152,6 +187,7 @@ func (p *Provider) WithData(fsys *fs.FileSystem, idx *Index) *Provider {
 	if fsys != nil {
 		p.backend = NewBackendFS(fsys)
 		p.fbackend = fsFetchBackend{fsys: fsys}
+		p.ibackend = fsIngestBackend{fsys: fsys}
 		idx.SetResolver(func(ctx context.Context, ino uint64) (string, bool) {
 			return resolveInoMeta(ctx, p, ino)
 		})
@@ -175,6 +211,25 @@ func (p *Provider) WithFetchWorkers(n int) *Provider {
 		}
 		p.bufs = cfapi.NewBufferPool(n)
 	}
+	return p
+}
+
+// WithIngestWorkers задаёт размер пула выгрузки (design.md D8; дефолт
+// DefaultIngestWorkers; тесты сокращают до 1). Значения < 1 приводятся к 1.
+func (p *Provider) WithIngestWorkers(n int) *Provider {
+	if n < 1 {
+		n = 1
+	}
+	p.ingestWorkers = n
+	return p
+}
+
+// WithReadOnly включает режим без записи (флаг --read-only serve, спека
+// «Режим без записи», задача 5.6): классификация close-уведомлений
+// игнорирует всё — локальные изменения не передаются в backend; гидрация,
+// walk и pin не меняются. Локальные файлы остаются на диске без изменений.
+func (p *Provider) WithReadOnly(on bool) *Provider {
+	p.readOnly = on
 	return p
 }
 
@@ -297,6 +352,10 @@ func (p *Provider) Stop() error {
 	p.walkMu.Lock()
 	p.walkStarted = false
 	p.walkMu.Unlock()
+	// Пул выгрузки завершён — разрешён на следующем запуске.
+	p.ingestMu.Lock()
+	p.ingestStarted = false
+	p.ingestMu.Unlock()
 	if p.mutex != 0 {
 		// «Освобождение» mutex — закрытие единственного хендла: объект
 		// уничтожается, следующий экземпляр сможет его создать. ReleaseMutex

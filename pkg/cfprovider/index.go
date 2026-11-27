@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -164,6 +165,28 @@ func (ix *Index) Path(ino uint64) (string, bool) {
 	defer ix.mu.RUnlock()
 	p, ok := ix.byIno[ino]
 	return p, ok
+}
+
+// LookupPath — inode записи по пути (обратный поиск по карте; запись
+// `status <путь>`, задача 5.7). Пути сравниваются в нижнем регистре —
+// Windows-семантика, как в классификации walk (design.md D6.5).
+func (ix *Index) LookupPath(path string) (uint64, bool) {
+	low := strings.ToLower(path)
+	ix.mu.RLock()
+	defer ix.mu.RUnlock()
+	for ino, p := range ix.byIno {
+		if strings.ToLower(p) == low {
+			return ino, true
+		}
+	}
+	return 0, false
+}
+
+// IndexPathJournal — путь журнала индекса в каталоге состояния (команды CLI
+// проверяют существование журнала перед открытием индекса; `status <путь>`,
+// задача 5.7).
+func IndexPathJournal(stateDir string) string {
+	return filepath.Join(stateDir, indexJournalName)
 }
 
 // ResolveIno — путь по inode: карта, затем подъём по родителям через meta
