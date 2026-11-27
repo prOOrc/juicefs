@@ -24,7 +24,15 @@ import (
 	"syscall"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/juicedata/juicefs/pkg/utils"
 )
+
+// logger — следы цепочки NOTIFY (диагностика живой пробы этапа 5): в thunk
+// close-completion логируется факт вызова фильтром (путь), уровень Debug —
+// serve с --verbose/--log-level debug. Уровень Info по умолчанию следы
+// скрывает — живой ретест проводить с --verbose.
+var logger = utils.GetLogger("cfapi")
 
 // Thunk'и callback'ов (design.md D5). Ограничения syscall.NewCallback и
 // инвариант «thunk без ввода-вывода»: функция уровня пакета, без замыканий;
@@ -292,6 +300,10 @@ func cancelFetchPlaceholdersCallback(info *CFCallbackInfo, params *CFCallbackPar
 }
 
 // notifyFileCloseCompletionCallback — thunk NOTIFY_FILE_CLOSE_COMPLETION.
+// След вызова фильтром (живая проба этапа 5): Debugf до постановки в
+// очередь — это первая точка, по которой ретест отличает «фильтр не
+// вызвал callback» от «задание потерялось дальше»; форматирование —
+// только копированные поля, I/O на стеке callback'а по-прежнему нет.
 func notifyFileCloseCompletionCallback(info *CFCallbackInfo, params *CFCallbackParameters) uintptr {
 	p := params.CloseCompletionParams()
 	job := &NotifyFileCloseCompletionJob{
@@ -303,6 +315,7 @@ func notifyFileCloseCompletionCallback(info *CFCallbackInfo, params *CFCallbackP
 		FileID:        fileIDOf(info.FileIdentity, info.FileIdentityLength),
 		FileSize:      info.FileSize,
 	}
+	logger.Debugf("NOTIFY_FILE_CLOSE_COMPLETION callback: path=%q fileID=%d size=%d flags=%#x", job.Path, job.FileID, job.FileSize, job.Flags)
 	if d := dispatch(); d != nil {
 		_ = d.OnNotifyFileCloseCompletion(job)
 	}

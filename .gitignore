@@ -54,3 +54,5 @@ juicefs.egg-info/
 pkg/meta/jfs-load-dump/
 
 __debug*
+juicefs-pin.exe
+juicefs-up.exe

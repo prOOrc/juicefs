@@ -190,3 +190,25 @@ func TestIndexJournalFormat(t *testing.T) {
 		t.Errorf("строка журнала не содержит поля ino/path: %q", lines[0])
 	}
 }
+
+// TestIndexLookupPath — обратный поиск по пути (`status <путь>`, задача
+// 5.7): сравнение без учёта регистра (Windows-семантика), промах — false.
+func TestIndexLookupPath(t *testing.T) {
+	ix, err := NewIndex(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewIndex: %v", err)
+	}
+	defer ix.Close()
+	if err := ix.Put(42, "/Docs/Report.pdf"); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if ino, ok := ix.LookupPath("/docs/report.pdf"); !ok || ino != 42 {
+		t.Errorf("LookupPath в нижнем регистре = (%d, %v), ожидается (42, true)", ino, ok)
+	}
+	if ino, ok := ix.LookupPath("/DOCS/REPORT.PDF"); !ok || ino != 42 {
+		t.Errorf("LookupPath в верхнем регистре = (%d, %v), ожидается (42, true)", ino, ok)
+	}
+	if _, ok := ix.LookupPath("/docs/other.pdf"); ok {
+		t.Error("LookupPath нашёл несуществующий путь")
+	}
+}

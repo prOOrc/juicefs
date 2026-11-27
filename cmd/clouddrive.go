@@ -136,6 +136,14 @@ func cmdCloudDrive() *cli.Command {
 				Usage: "number of hydration workers for serve (FETCH_DATA pool size; parallel reads beyond the pool wait in the queue)",
 			},
 			&cli.BoolFlag{
+				// Режим без записи (serve, спека «Режим без записи», задача
+				// 5.6): close-уведомления игнорируются — локальные изменения
+				// не передаются в backend; файлы остаются на диске без
+				// изменений. Гидрация, walk и pin не меняются.
+				Name:  "read-only",
+				Usage: "for serve: do not upload local changes to the volume (notifications of file closes are ignored)",
+			},
+			&cli.BoolFlag{
 				// pin/unpin (задача 4.1): CF_SET_PIN_FLAG_RECURSE — состояние
 				// pin на всё поддерево каталога. На родителе (как все флаги
 				// этой команды): reorderOptions в cmd/main.go валидирует
@@ -187,9 +195,10 @@ $ juicefs clouddrive unregister`,
 				Action: cloudDriveUnregister,
 			},
 			{
-				Name:   "status",
-				Usage:  "Show sync root registration state",
-				Action: cloudDriveStatus,
+				Name:      "status",
+				ArgsUsage: "[PATH]",
+				Usage:     "Show sync root registration state; with PATH — placeholder state of the entry (placeholder/in-sync)",
+				Action:    cloudDriveStatus,
 			},
 			{
 				Name:      "serve",
@@ -374,6 +383,12 @@ func cloudDriveStatus(c *cli.Context) error {
 	setup(c, 0)
 	root := c.String("root")
 
+	// `status <путь>` (задача 5.7, сценарии «Новый файл»/«Изменённый
+	// плейсхолдер»): состояние записи sync root — плейсхолдер и in-sync.
+	if arg := strings.TrimSpace(c.Args().Get(0)); arg != "" {
+		return cloudDriveStatusPath(c, root, arg)
+	}
+
 	registered := "no"
 	keyPath := ""
 	if sid, err := currentUserSIDStr(); err == nil {
@@ -422,6 +437,97 @@ func cloudDriveStatus(c *cli.Context) error {
 		fmt.Printf("Policies:   %s\n", policiesLine)
 	}
 	fmt.Printf("Directory:  %s\n", directory)
+	return nil
+}
+
+// cloudDriveStatusPath — `status <путь>` (задача 5.7, спека «Выгрузка новых
+// и изменённых файлов»): CF_PLACEHOLDER_STATE локальной записи sync root
+// (cfapi.PlaceholderStateByPath) — плейсхолдер и in-sync; путь в стиле
+// индекса ("/a/b") и inode из журнала каталога состояния.
+func cloudDriveStatusPath(c *cli.Context, root, arg string) error {
+	path, err := cloudDriveResolveLocalPath(root, arg)
+	if err != nil {
+		return err
+	}
+	state, err := cfapi.PlaceholderStateByPath(path)
+	if err != nil {
+		return fmt.Errorf("placeholder state of %s: %w (the path must exist inside the sync root)", path, err)
+	}
+	// Путь в стиле индекса плейсхолдеров (журнал inode → путь, design.md D6).
+	indexPath := "/"
+	if rel, rerr := filepath.Rel(root, path); rerr == nil && rel != "." {
+		indexPath = "/" + filepath.ToSlash(rel)
+	}
+	indexLine := "n/a (pass --state-dir or --volume-name to look up)"
+	stateDir := c.String("state-dir")
+	if stateDir == "" && c.String("volume-name") != "" {
+		stateDir = cfprovider.DefaultStateDir(c.String("volume-name"))
+	}
+	if stateDir != "" {
+		if _, err := os.Stat(cfprovider.IndexPathJournal(stateDir)); err == nil {
+			if idx, ierr := cfprovider.NewIndex(stateDir); ierr == nil {
+				if ino, ok := idx.LookupPath(indexPath); ok {
+					indexLine = fmt.Sprintf("inode %d", ino)
+				} else {
+					indexLine = "not found"
+				}
+				_ = idx.Close()
+			} else {
+				indexLine = fmt.Sprintf("unavailable (%v)", ierr)
+			}
+		} else {
+			indexLine = "no journal"
+		}
+	}
+	var parts []string
+	if state&cfapi.PlaceholderStatePlaceholder != 0 {
+		parts = append(parts, "placeholder")
+		if state&cfapi.PlaceholderStateInSync != 0 {
+			parts = append(parts, "in-sync")
+		} else {
+			parts = append(parts, "modified (not in-sync)")
+		}
+		if state&cfapi.PlaceholderStatePartial != 0 {
+			parts = append(parts, "partial")
+		}
+	} else {
+		// state=0 НЕ означает «не плейсхолдер»: фильтр чистит спец-атрибуты
+		// у полностью синхронизированных записей (живой ретест этапа 5).
+		// Уточняем через CF_PLACEHOLDER_STANDARD_INFO (OnDiskDataSize) и
+		// логическую длину: ошибка запроса (STANDARD требует
+		// плейсхолдер-хендл, plain-файл вне sync root) — честное
+		// «not a placeholder», ошибка глотается.
+		if fi, ferr := os.Stat(path); ferr == nil {
+			if info, ierr := cfapi.PlaceholderStandardInfoByPath(path, fi.IsDir()); ierr == nil {
+				inSync := "in-sync state unknown"
+				switch info.InSyncState {
+				case cfapi.InSyncStateInSync:
+					inSync = "in-sync"
+				case cfapi.InSyncStateNotInSync:
+					inSync = "not in-sync"
+				}
+				switch {
+				case fi.Size() > 0 && info.OnDiskDataSize == 0:
+					parts = append(parts, "placeholder, dehydrated ("+inSync+")")
+				case fi.Size() > 0:
+					parts = append(parts, "placeholder, hydrated ("+inSync+")")
+				default:
+					parts = append(parts, "placeholder, empty ("+inSync+")")
+				}
+			} else {
+				parts = append(parts, "not a placeholder")
+			}
+		} else {
+			parts = append(parts, "not a placeholder")
+		}
+	}
+	if state&cfapi.PlaceholderStateSyncRoot != 0 {
+		parts = append(parts, "sync-root")
+	}
+	fmt.Printf("Path:       %s\n", path)
+	fmt.Printf("Index path: %s\n", indexPath)
+	fmt.Printf("Index:      %s\n", indexLine)
+	fmt.Printf("State:      %s (0x%08x)\n", strings.Join(parts, ", "), state)
 	return nil
 }
 
@@ -483,30 +589,32 @@ func cloudDriveServe(c *cli.Context) error {
 	// Реальный диспетчер очередей: заглушка-логгер (dispatch=nil) не
 	// обслуживает FETCH_PLACEHOLDERS — перечисление каталогов детьми
 	// повисло бы до таймаута фильтра. Пул гидратации — --hydration-workers
-	// (этап 3, замер M2).
-	provider := cfprovider.New(root, volume, nil, cfapi.NewDispatcher(cfapi.DefaultQueueOptions())).WithData(stack.fsys, idx).WithFetchWorkers(c.Int("hydration-workers"))
+	// (этап 3, замер M2); --read-only отключает выгрузку локальных
+	// изменений (задача 5.6).
+	provider := cfprovider.New(root, volume, nil, cfapi.NewDispatcher(cfapi.DefaultQueueOptions())).WithData(stack.fsys, idx).WithFetchWorkers(c.Int("hydration-workers")).WithReadOnly(c.Bool("read-only"))
 	if err := provider.Start(ctx); err != nil {
 		return err
 	}
 	logger.Infof("serving sync root %s (volume %s); press Ctrl+C to stop", root, volume)
 
-	// Такт 2 (design.md D6): фоновый walk hub — старт строго после маркера
-	// готовности (такт 1 заселил верхний уровень), goroutine с ctx serve
-	// (signal.NotifyContext: Ctrl+C отменяет). Остановка: cancel → воркеры
-	// дорабатывают текущий каталог, журнал сброшен → `walk cancelled:` —
-	// provider.Stop дожидается строки через wg (walk.go). Полнота
-	// namespace — строка `walk complete:` (design.md D6.2), прогресс —
-	// `walk:`.
-	walkStarted := make(chan struct{})
+	// Такт 2 (design.md D6): фоновый walk hub и пул выгрузки (design.md D8,
+	// задачи 5.2–5.4) — старт строго после маркера готовности (такт 1
+	// заселил верхний уровень), goroutine с ctx serve (signal.NotifyContext:
+	// Ctrl+C отменяет). Остановка: cancel → воркеры дорабатывают текущие
+	// задания, журнал сброшен → `walk cancelled:` — provider.Stop
+	// дожидается через wg (walk.go). Полнота namespace — строка
+	// `walk complete:` (design.md D6.2), прогресс — `walk:`.
+	poolStarted := make(chan struct{})
 	go func() {
-		defer close(walkStarted)
+		defer close(poolStarted)
 		if !provider.WaitReady(ctx) {
 			return
 		}
+		provider.StartIngest(ctx)
 		provider.StartWalk(ctx)
 	}()
 	defer func() {
-		<-walkStarted // Stop дождался walk; сигнальная горутина вышла
+		<-poolStarted // Stop дождался пулов; сигнальная горутина вышла
 	}()
 
 	<-ctx.Done()
@@ -851,8 +959,13 @@ func cloudDriveSetPinState(c *cli.Context, pinState uint32, verb string) error {
 // (ls/hash берут путь backend-тома, pin/unpin — локальную запись),
 // полный — принимается, если лежит под корнем.
 func cloudDriveLocalPath(c *cli.Context) (string, error) {
-	root := c.String("root")
-	p := strings.TrimSpace(c.Args().Get(0))
+	return cloudDriveResolveLocalPath(c.String("root"), c.Args().Get(0))
+}
+
+// cloudDriveResolveLocalPath разрешает путь записи sync root: относительный
+// — относительно root, полный — принимается, если лежит под корнем.
+func cloudDriveResolveLocalPath(root, p string) (string, error) {
+	p = strings.TrimSpace(p)
 	if p == "" {
 		return "", errors.New("PATH is required, e.g. docs/report.pdf (relative to the sync root) or the full local path")
 	}

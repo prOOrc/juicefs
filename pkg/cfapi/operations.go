@@ -156,6 +156,73 @@ func CfRevertPlaceholder(fileHandle syscall.Handle, revertFlags uint32, overlapp
 	return hresult(r, "CfRevertPlaceholder")
 }
 
+// PlaceholderStateByPath — CF_PLACEHOLDER_STATE записи sync root по пути
+// (cfapi.h CfGetPlaceholderStateFromFileInfo): атрибуты FileBasicInfo
+// (GetFileInformationByHandleEx) скармливаются функции напрямую, live-хендл
+// после запроса закрывается. Семантика результата (живая проба этапа 5,
+// 2026-11-27): NO_STATES=0 — файл не плейсхолдер (обычный файл пользователя
+// — ровно класс «новый файл на выгрузку»); INVALID=0xffffffff функция
+// вернула для свежесозданного plain-файла вместо NO_STATES — трактуется
+// так же, как NO_STATES (0, nil): в классификации close-уведомлений
+// (design.md D8) это «новый файл», а не отказ. Ошибкой остаётся только
+// реальный отказ API — открытие или GetFileInformationByHandleEx
+// (классификация close-уведомлений, design.md D8; `status <путь>`, 5.7).
+//
+// Открытие GENERIC_READ и запрос атрибутов данных не читают — FETCH_DATA
+// не вызывается; шаринг read+write+delete не мешает параллельной работе
+// пользователя.
+func PlaceholderStateByPath(path string) (uint32, error) {
+	path16, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return cfapiPlaceholderStateInvalid, err
+	}
+	h, err := windows.CreateFile(path16, windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
+	if err != nil {
+		return cfapiPlaceholderStateInvalid, fmt.Errorf("open %s: %w", path, err)
+	}
+	defer func() {
+		_ = windows.CloseHandle(h)
+	}()
+	var bi FileBasicInfo // FILE_BASIC_INFO — тот же layout, что CF_FS_METADATA.BasicInfo (structs.go)
+	buf := (*[unsafe.Sizeof(bi)]byte)(unsafe.Pointer(&bi))[:]
+	if err := windows.GetFileInformationByHandleEx(h, windows.FileBasicInfo, &buf[0], uint32(len(buf))); err != nil {
+		return cfapiPlaceholderStateInvalid, fmt.Errorf("GetFileInformationByHandleEx(%s): %w", path, err)
+	}
+	state := CfGetPlaceholderStateFromFileInfo(buf, FileInfoBasicInfo)
+	if state == cfapiPlaceholderStateInvalid {
+		// INVALID — «не удалось определить состояние» (cfapi.h); живая проба
+		// этапа 5 показала его для plain-файла, где ожидается NO_STATES.
+		// Для выгрузки это класс «новый файл» — возвращаем NO_STATES как
+		// валидный результат (семантика MS: 0 = не плейсхолдер), не отказ.
+		logger.Debugf("PlaceholderStateByPath(%s): INVALID from CfGetPlaceholderStateFromFileInfo; treating as plain file (NO_STATES)", path)
+		return PlaceholderStateNoStates, nil
+	}
+	return state, nil
+}
+
+// cfapiPlaceholderStateInvalid — CF_PLACEHOLDER_INVALID из cfapi.h (все
+// единицы): ошибка CfGetPlaceholderStateFromFileInfo.
+const cfapiPlaceholderStateInvalid = uint32(0xffffffff)
+
+// SetInSyncStateByPath — CfSetInSyncState по пути (write-путь выгрузки,
+// design.md D8: изменённый плейсхолдер после подтверждённого Flush
+// помечается синхронизированным; inSync=TrackNone при регистрации сам
+// состояние не переключает). inSyncState — CF_IN_SYNC_STATE
+// (InSyncStateInSync/InSyncStateNotInSync).
+func SetInSyncStateByPath(path string, inSyncState uint32) error {
+	var h syscall.Handle
+	if err := CfOpenFileWithOplock(path, OpenFileFlagNone, &h); err != nil {
+		return fmt.Errorf("CfOpenFileWithOplock(%s): %w", path, err)
+	}
+	defer func() {
+		_ = windows.CloseHandle(windows.Handle(h))
+	}()
+	if err := CfSetInSyncState(h, inSyncState, SetInSyncFlagNone, nil); err != nil {
+		return fmt.Errorf("CfSetInSyncState(%s, %d): %w", path, inSyncState, err)
+	}
+	return nil
+}
+
 // SetPinStateByPath — pin/unpin по пути (задача 4.1, cfapi.h:909):
 // CfOpenFileWithOplock → CfSetPinState → закрытие хендла. pinState —
 // CF_PIN_STATE (PinStatePinned/PinStateUnpinned/...), pinFlags —
