@@ -44,6 +44,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/fs"
 	"github.com/juicedata/juicefs/pkg/meta"
+	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juicedata/juicefs/pkg/version"
@@ -644,8 +645,7 @@ type cloudDriveStack struct {
 	blob      object.ObjectStorage
 	store     chunk.ChunkStore
 	fsys      *fs.FileSystem
-	km        meta.KeyManagerClient // nil без --sts-enabled
-	refresher *stsRefresher         // nil без --sts-enabled
+	refresher *stsRefresher // nil без --sts-enabled
 }
 
 // buildCloudDriveStack собирает data path. Последовательность и обработка
@@ -683,7 +683,11 @@ func buildCloudDriveStack(metaURI string, sts *stsNodeOptions) (*cloudDriveStack
 	}
 	logger.Infof("Data use %s", blob)
 
-	var km meta.KeyManagerClient
+	// STS-креды — пользовательский путь (как в mount, cmd/mount.go:743-793):
+	// короткоживущие креды через StsProxyService самой meta-связи, identity
+	// выводится прокси из OIDC-сессии (ADR-003, решение В2). Render-node путь
+	// (KeyManager + IAM-токен узла) остаётся только у render-mount: узлу
+	// рендер-фермы он нужен, workstation-клиенту — нет.
 	var refresher *stsRefresher
 	if sts != nil {
 		if !format.EncryptionEnabled {
@@ -691,23 +695,52 @@ func buildCloudDriveStack(metaURI string, sts *stsNodeOptions) (*cloudDriveStack
 			_ = metaCli.Shutdown()
 			return nil, errors.New("--sts-enabled requires an encrypted volume")
 		}
-		km, tp, err := openKeyManager(sts)
-		if err != nil {
+		if sts.companyID == "" {
 			object.Shutdown(blob)
 			_ = metaCli.Shutdown()
-			return nil, err
+			return nil, errors.New("--company-id is required with --sts-enabled")
 		}
-		nodeID := sts.nodeID
-		if nodeID == "" {
-			nodeID = defaultNodeID()
-		}
-		refresher, err = startNodeSTS(format, blob, sts.roleARN, km, tp, nodeID, sts.companyID)
-		if err != nil {
-			_ = km.Close()
+		if !strings.HasPrefix(metaURI, "grpc://") {
 			object.Shutdown(blob)
 			_ = metaCli.Shutdown()
-			return nil, err
+			return nil, errors.New("--sts-enabled requires a meta proxy (grpc) endpoint")
 		}
+		stsProxy, ok := metaCli.(interface {
+			StsProxyClient() pb.StsProxyServiceClient
+		})
+		if !ok {
+			object.Shutdown(blob)
+			_ = metaCli.Shutdown()
+			return nil, errors.New("--sts-enabled requires a meta proxy (grpc) endpoint")
+		}
+		holder, ok := blob.(*storageHolder)
+		if !ok {
+			object.Shutdown(blob)
+			_ = metaCli.Shutdown()
+			return nil, errors.New("sts: storage is not reloadable")
+		}
+		provider := &platformSTSProvider{
+			stsProxy:  stsProxy.StsProxyClient(),
+			companyID: sts.companyID,
+		}
+		// Маргон опроса привязан к meta-связи (design configure-sts-refresh-ttl
+		// D4); не-gRPC клиенты держат дефолт.
+		margin := meta.DefaultSTSRefreshMargin
+		if g, ok := metaCli.(interface {
+			STSRefreshMargin() float64
+		}); ok {
+			margin = g.STSRefreshMargin()
+		}
+		refresher = newSTSRefresher(provider, holder, margin)
+		if err := refresher.Start(context.Background()); err != nil {
+			object.Shutdown(blob)
+			_ = metaCli.Shutdown()
+			return nil, fmt.Errorf("sts: %w", err)
+		}
+		// Self-provision (implement-company-dir-self-provision): платформа
+		// доставляет working_dir компании в первом ответе — best-effort,
+		// отказ/отсутствие только Warn (как в mount).
+		ensureCompanyWorkingDir(metaCli, provider.WorkingDir())
 	}
 
 	store := chunk.NewCachedStore(blob, *chunkConf, nil)
@@ -715,9 +748,6 @@ func buildCloudDriveStack(metaURI string, sts *stsNodeOptions) (*cloudDriveStack
 	if err := metaCli.NewSession(true); err != nil {
 		if refresher != nil {
 			refresher.Stop()
-		}
-		if km != nil {
-			_ = km.Close()
 		}
 		object.Shutdown(blob)
 		_ = metaCli.Shutdown()
@@ -732,9 +762,6 @@ func buildCloudDriveStack(metaURI string, sts *stsNodeOptions) (*cloudDriveStack
 		if refresher != nil {
 			refresher.Stop()
 		}
-		if km != nil {
-			_ = km.Close()
-		}
 		_ = metaCli.CloseSession()
 		object.Shutdown(blob)
 		_ = metaCli.Shutdown()
@@ -747,14 +774,12 @@ func buildCloudDriveStack(metaURI string, sts *stsNodeOptions) (*cloudDriveStack
 		blob:      blob,
 		store:     store,
 		fsys:      fsys,
-		km:        km,
 		refresher: refresher,
 	}, nil
 }
 
-// Close освобождает ресурсы стека в обратном порядке создания:
-// refresher до KeyManager (обновляет креды через него), сессия meta до
-// хранилища — как в mount.
+// Close освобождает ресурсы стека в обратном порядке создания: refresher до
+// сессии meta — как в mount.
 func (s *cloudDriveStack) Close() {
 	if s == nil {
 		return
@@ -766,11 +791,6 @@ func (s *cloudDriveStack) Close() {
 	}
 	if s.refresher != nil {
 		s.refresher.Stop()
-	}
-	if s.km != nil {
-		if err := s.km.Close(); err != nil {
-			logger.Warnf("close keymanager client: %v", err)
-		}
 	}
 	if err := s.metaCli.CloseSession(); err != nil {
 		logger.Warnf("close session: %v", err)
