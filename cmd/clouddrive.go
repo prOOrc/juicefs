@@ -516,7 +516,11 @@ func cloudDriveStatusPath(c *cli.Context, root, arg string) error {
 					parts = append(parts, "placeholder, empty ("+inSync+")")
 				}
 			} else {
-				parts = append(parts, "not a placeholder")
+				// Ошибка запроса не глотается молча (задача 5.8): у
+				// плейсхолдера запрос STANDARD обязан проходить — честная
+				// причина (sharing/права/исчезновение файла) вместо
+				// вводящего в заблуждение «not a placeholder».
+				parts = append(parts, "placeholder state query failed ("+ierr.Error()+")")
 			}
 		} else {
 			parts = append(parts, "not a placeholder")
@@ -969,6 +973,13 @@ func cloudDriveSetPinState(c *cli.Context, pinState uint32, verb string) error {
 	pinFlags := uint32(cfapi.SetPinFlagNone)
 	if c.Bool("recursive") {
 		pinFlags = cfapi.SetPinFlagRecurse
+	}
+	// Предпроверка существования: без неё CfOpenFileWithOplock даёт голый
+	// HRESULT 0x80070002 без указания, что путь разрешился ВНУТРЬ другого
+	// корня (--root по умолчанию %USERPROFILE%\AgioDrive, а serve работал
+	// на другом корне — живой кейс 27.11).
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("%s %s: file does not exist under sync root %s (resolved path %s; pass --root matching the running serve)", verb, path, c.String("root"), path)
 	}
 	if err := cfapi.SetPinStateByPath(path, pinState, pinFlags); err != nil {
 		return fmt.Errorf("%s %s: %w (the path must be a placeholder inside the sync root; hydration requires a running `clouddrive serve`)", verb, path, err)
