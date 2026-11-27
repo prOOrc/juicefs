@@ -405,9 +405,11 @@ func (p *Provider) runFileWatcher(ctx context.Context, db *ingestDebouncer, d *c
 			}
 			// Единая точка с NOTIFY-джобами: classifyNotifyClose (strip корня
 			// fsPathOf без учёта регистра, игнор in-sync плейсхолдеров,
-			// --read-only).
+			// --read-only). fromWatcher=true — супрессия собственных событий
+			// финализации (remove+create U18-α) действует только здесь;
+			// callback-путь шлёт только настоящие правки пользователя.
 			job := &cfapi.NotifyFileCloseCompletionJob{Path: full}
-			if task, ok := p.classifyNotifyClose(ctx, job); ok {
+			if task, ok := p.classifyNotifyClose(ctx, job, true); ok {
 				logger.Debugf("watcher %s: %s -> upload queue", p.root, task.fsPath)
 				db.submit(task)
 			}

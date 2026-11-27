@@ -67,7 +67,7 @@ DoD этапа: сценарии «Pin файла и чтение без про�
 - [x] 5.5 Write-back выключен; проба U11 по очистке staging. Файлы: `pkg/cfprovider/ingest.go`, design.md. Проверка: сценарий «Видимость версии»; запись результата U11.
 - [x] 5.6 Флаг `--read-only`. Файлы: `cmd/clouddrive.go`. Проверка: ручной сценарий «Файл в режиме без записи».
 - [x] 5.7 (уточнение отображения FULL-in-sync placeholder — state=NO_STATES честно; STANDARD-запрос при 0 — follow-up 5.8)`status <путь>`: плейсхолдер и состояние in-sync. Файлы: `cmd/clouddrive.go`. Проверка: ручной прогон сценариев «Новый файл», «Изменённый плейсхолдер».
-- [ ] 5.8 (follow-up): `status <путь>` для FULL-in-sync placeholder — STANDARD-запрос при state=NO_STATES (сейчас печатается «not a placeholder», 27.11)
+- [x] 5.8 (follow-up, 27.11): закрыт двумя фиксами — (а) корень: `PlaceholderStandardInfoByPath` возвращала ERROR_MORE_DATA 0x800700EA на записях с непустой FileIdentity (буфер ровно sizeof; хвостовой FileIdentity[1] переменной длины, cfapi.h:1013) — классификатор провайдера читал (plain, not-in-sync) на каждом созданном плейсхолдере → петли перевыгрузок/ recreate и plain-остатки (AgioDrive7/probe-sync.txt); фикс: запас 4KiB + результат-указатель на голову буфера (срез make не бэкит структуру — второй регресс того же вечера, пойман живым прогоном AgioDrive8: классификатор ослеп к in-sync); (б) status UX: запрос при state=0 с честной ошибкой вместо «not a placeholder», живое подтверждение file.txt = placeholder,dehydrated,in-sync
 
 DoD этапа: сценарии «Новый файл», «Изменённый плейсхолдер», «Обрыв выгрузки», «Видимость версии», «Файл в режиме без записи» пройдены.
 

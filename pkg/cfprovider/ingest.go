@@ -654,7 +654,16 @@ func (p *Provider) boundedSyncState(ctx context.Context, local string) (isPlaceh
 // плейсхолдера и плейсхолдер вне in-sync ставятся в очередь выгрузки;
 // плейсхолдер in-sync, каталоги и пути вне sync root игнорируются.
 // --read-only (спека «Режим без записи») игнорирует всё с однократным логом.
-func (p *Provider) classifyNotifyClose(ctx context.Context, job *cfapi.NotifyFileCloseCompletionJob) (ingestTask, bool) {
+//
+// fromWatcher различает источник: окно супрессии собственных событий
+// (markSelfEvent, replace-after-upload) отсекает только события watcher —
+// он видит remove+create самой финализации. Фильтр не шлёт CLOSE_COMPLETION
+// на провайдерские CfCreatePlaceholders с MARK_IN_SYNC (запись создаётся
+// уже in-sync, dirty-состояния нет), поэтому callback-путь — ВСЕГДА
+// настоящая правка пользователя: супрессия здесь съедала бы реальные правки
+// в 10-секундном окне после выгрузки (живой кейс 27.11, AgioDrive8: правка
+// через 4с после replace не выгружалась до следующего события/рестарта).
+func (p *Provider) classifyNotifyClose(ctx context.Context, job *cfapi.NotifyFileCloseCompletionJob, fromWatcher bool) (ingestTask, bool) {
 	if p.readOnly {
 		p.readOnlyNotice()
 		return ingestTask{}, false
@@ -668,9 +677,11 @@ func (p *Provider) classifyNotifyClose(ctx context.Context, job *cfapi.NotifyFil
 	// create записи финализацией — события watcher'а на САМОГО себя; в окне
 	// отсутствия/пересоздания STANDARD-запрос отвечал «plain → upload» →
 	// самоподдерживающаяся петля повторных выгрузок (живой ретест 27.11).
-	if suppressed, _ := p.selfEventSuppressed(strings.ToLower(fsPath)); suppressed {
-		logger.Debugf("close completion %s: self event suppressed (recreate window)", fsPath)
-		return ingestTask{}, false
+	if fromWatcher {
+		if suppressed, _ := p.selfEventSuppressed(strings.ToLower(fsPath)); suppressed {
+			logger.Debugf("watcher close %s: self event suppressed (recreate window)", fsPath)
+			return ingestTask{}, false
+		}
 	}
 	local := localJoin(p.root, fsPath)
 	if fi, err := os.Stat(local); err == nil && fi.IsDir() {
@@ -718,7 +729,10 @@ func (p *Provider) ingestRouter(ctx context.Context, db *ingestDebouncer, d *cfa
 				continue
 			}
 			logger.Debugf("NOTIFY_FILE_CLOSE_COMPLETION: path=%q size=%d flags=%#x", job.Path, job.FileSize, job.Flags)
-			if task, ok := p.classifyNotifyClose(ctx, job); ok {
+			// Фильтр не шлёт CLOSE_COMPLETION на провайдерские
+			// MARK_IN_SYNC-создания: callback-путь — всегда правка
+			// пользователя, супрессия не применяется (fromWatcher=false).
+			if task, ok := p.classifyNotifyClose(ctx, job, false); ok {
 				db.submit(task)
 			}
 		case job := <-d.FileRenamed():
@@ -992,10 +1006,11 @@ func (p *Provider) notifyRenamePaths(ctx context.Context, sourcePath, targetPath
 		return // отказ — локальный mv будет откачен фильтром; каталоги не выгружаются
 	}
 	// Изменённый плейсхолдер, переименованный в окне коалисинга: задание по
-	// старому пути снимется (файла нет) — выгрузка по новому пути.
+	// старому пути снимется (файла нет) — выгрузка по новому пути
+	// (callback-семантика: супрессия не применяется).
 	newLocal := localJoin(p.root, newFsPath)
 	if info, err := p.istore.StandardInfo(newLocal); err == nil && info.InSyncState != cfapi.InSyncStateInSync {
-		if task, ok := p.classifyNotifyClose(ctx, &cfapi.NotifyFileCloseCompletionJob{Path: targetPath}); ok {
+		if task, ok := p.classifyNotifyClose(ctx, &cfapi.NotifyFileCloseCompletionJob{Path: targetPath}, false); ok {
 			p.queueUpload(task)
 		}
 	}

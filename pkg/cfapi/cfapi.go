@@ -428,13 +428,19 @@ func PlaceholderStandardInfoByPath(path string, isDir bool) (*CFPlaceholderStand
 	defer func() {
 		_ = windows.CloseHandle(windows.Handle(h))
 	}()
-	var info CFPlaceholderStandardInfo
-	buf := (*[unsafe.Sizeof(info)]byte)(unsafe.Pointer(&info))[:]
+	// Запас после хвостового FileIdentity[1] (cfapi.h:1013-1014): у записей
+	// с непустой identity API пишет её целиком и при буфере ровно sizeof
+	// структуры возвращает ERROR_MORE_DATA 0x800700EA (живой кейс 27.11 —
+	// `clouddrive status` после выгрузки). Буфер и структура — ОДНА память:
+	// результат — указатель на голову буфера (срез `make` не бэкит структуру —
+	// регресс 27.11: классификатор видел нулевой InSyncState на всех записях
+	// и ставил каждую в перевыгрузку).
+	buf := make([]byte, unsafe.Sizeof(CFPlaceholderStandardInfo{})+4<<10)
 	var returned uint32
 	if err := CfGetPlaceholderInfo(h, PlaceholderInfoStandard, buf, &returned); err != nil {
 		return nil, err
 	}
-	return &info, nil
+	return (*CFPlaceholderStandardInfo)(unsafe.Pointer(&buf[0])), nil
 }
 
 // CfGetPlaceholderInfo читает информацию о плейсхолдере; минимум —

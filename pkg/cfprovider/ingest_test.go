@@ -867,7 +867,7 @@ func TestIngestClassifyCloseRouting(t *testing.T) {
 	// живой ретест 27.11: FileBasicInfo-эвристика после convert-DEHYDRATE
 	// ненадёжна — классификация отвечает CfGetPlaceholderInfo): новый файл
 	// → to-upload.
-	task, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: p.root + `\plain.txt`, FileSize: 1})
+	task, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: p.root + `\plain.txt`, FileSize: 1}, false)
 	if !ok || task.fsPath != "/plain.txt" || task.local != plain || task.key != "/plain.txt" {
 		t.Fatalf("plain файл (state=0) не поставлен в очередь: ok=%v task=%+v", ok, task)
 	}
@@ -879,7 +879,7 @@ func TestIngestClassifyCloseRouting(t *testing.T) {
 		t.Fatalf("write local: %v", err)
 	}
 	store.setStandard(modified, cfapi.InSyncStateNotInSync)
-	task, ok = p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: noVol + `\modified.txt`})
+	task, ok = p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: noVol + `\modified.txt`}, false)
 	if !ok || task.fsPath != "/modified.txt" {
 		t.Fatalf("путь без диска не распознан: ok=%v task=%+v (normalized=%q)", ok, task, noVol+`\modified.txt`)
 	}
@@ -889,17 +889,17 @@ func TestIngestClassifyCloseRouting(t *testing.T) {
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if _, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: dir}); ok {
+	if _, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: dir}, false); ok {
 		t.Error("каталог поставлен в очередь выгрузки")
 	}
 
 	// Корень игнорируется.
-	if _, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: p.root}); ok {
+	if _, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: p.root}, false); ok {
 		t.Error("корень sync root поставлен в очередь")
 	}
 
 	// Вне sync root игнорируется.
-	if _, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: `C:\elsewhere\other.txt`}); ok {
+	if _, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: `C:\elsewhere\other.txt`}, false); ok {
 		t.Error("путь вне sync root поставлен в очередь")
 	}
 
@@ -912,7 +912,7 @@ func TestIngestClassifyCloseRouting(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		// Повторные close-completion по пересозданной записи (живой ретест
 		// 27.11): placeholder+in-sync → ignore, 0 повторных PUT.
-		if _, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: synced}); ok {
+		if _, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: synced}, false); ok {
 			t.Error("in-sync плейсхолдер поставлен в очередь (повторный PUT)")
 		}
 	}
@@ -930,7 +930,7 @@ func TestIngestClassifyQueryErrorAsPlain(t *testing.T) {
 	store.mu.Lock()
 	store.standardErr = errFake("fake: cldapi недоступна")
 	store.mu.Unlock()
-	task, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: local})
+	task, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: local}, false)
 	if !ok || task.fsPath != "/qerr.txt" {
 		t.Fatalf("отказ STANDARD-запроса не поставил plain-файл в очередь: ok=%v task=%+v", ok, task)
 	}
@@ -949,7 +949,7 @@ func TestIngestReadOnlyIgnoresClose(t *testing.T) {
 		t.Fatalf("write local: %v", err)
 	}
 	for i := 0; i < 3; i++ {
-		if _, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: local}); ok {
+		if _, ok := p.classifyNotifyClose(context.Background(), &cfapi.NotifyFileCloseCompletionJob{Path: local}, false); ok {
 			t.Fatal("read-only поставил задание в очередь")
 		}
 	}
@@ -1305,21 +1305,29 @@ func TestIngestSelfEventSuppression(t *testing.T) {
 	p.runIngest(context.Background(), ingestTask{fsPath: "/self.txt", local: local, key: "/self.txt"})
 
 	job := &cfapi.NotifyFileCloseCompletionJob{Path: local}
-	// Собственные события recreate (в окне) — ignore, 0 повторных PUT.
+	// Собственные события recreate (в окне, путь watcher'а) — ignore,
+	// 0 повторных PUT.
 	for i := 0; i < 3; i++ {
-		if _, ok := p.classifyNotifyClose(context.Background(), job); ok {
+		if _, ok := p.classifyNotifyClose(context.Background(), job, true); ok {
 			t.Fatal("собственное событие в окне супрессии поставлено в очередь (петля повторных выгрузок)")
 		}
 	}
 	if n := backend.creates; n != 1 {
 		t.Errorf("попыток Create = %d, ожидается 1 (исходная выгрузка; дубликатов нет)", n)
 	}
+	// Callback-путь (NOTIFY_FILE_CLOSE_COMPLETION) в окне НЕ супрессится:
+	// фильтр не шлёт close-completion на провайдерские MARK_IN_SYNC-создания,
+	// поэтому здесь всегда настоящая правка пользователя (фикс 27.11 —
+	// правка в 10-секундном окне не выпадала из выгрузки).
+	if _, ok := p.classifyNotifyClose(context.Background(), job, false); !ok {
+		t.Fatal("callback-путь супрессился в окне — правка пользователя терялась до следующего события")
+	}
 
 	// После истечения окна — честная классификация: решение по STANDARD
 	// (в подмене нет записи → plain → to-upload; на живом фильтре
 	// пересозданный плейсхолдер ответил бы in-sync → ignore).
 	clock.advance(selfEventSuppressWindow + time.Second)
-	if _, ok := p.classifyNotifyClose(context.Background(), job); !ok {
+	if _, ok := p.classifyNotifyClose(context.Background(), job, true); !ok {
 		t.Fatal("после истечения окна классификация не вернула честное решение")
 	}
 }
