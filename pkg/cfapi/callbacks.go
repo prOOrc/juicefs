@@ -57,6 +57,7 @@ type FetchDataJob struct {
 	OptionalOffset int64
 	OptionalLength int64
 	PriorityHint   uint8
+	Path           string      // NormalizedPath (инструментирование пробы U3); пуст — фильтр не прислал
 	Cancel         atomic.Bool // ставится OnCancelFetchData (реестр активных заданий)
 }
 
@@ -229,6 +230,7 @@ func fetchDataCallback(info *CFCallbackInfo, params *CFCallbackParameters) uintp
 		OptionalOffset: p.OptionalFileOffset,
 		OptionalLength: p.OptionalLength,
 		PriorityHint:   info.PriorityHint,
+		Path:           utf16ToString(info.NormalizedPath), // только копирование памяти
 	}
 	if d := dispatch(); d != nil {
 		// Очередь переполнена: диспетчер посчитал drop; возврат из VOID-callback

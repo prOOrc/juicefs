@@ -261,6 +261,96 @@ func TestDispatcherCancelFetchData(t *testing.T) {
 	d.Complete(job2)
 }
 
+// TestDispatcherCancelFetchDataRequestKey — контракт этапа 3 (design.md D7):
+// два конкурентных FETCH_DATA по одному файлу (общий TransferKey, разные
+// RequestKey) отменяются адресно по RequestKey; отмена с точным RequestKey
+// не задевает соседнее задание. Запас на непроверенную семантику: точный
+// промах при ровно одном активном задании с этим TransferKey отменяет его;
+// при нескольких — никто (чужой запрос не отменяется).
+func TestDispatcherCancelFetchDataRequestKey(t *testing.T) {
+	d := NewDispatcher(DefaultQueueOptions())
+
+	job1 := &FetchDataJob{TransferKey: 42, RequestKey: 1}
+	job2 := &FetchDataJob{TransferKey: 42, RequestKey: 2}
+	if err := d.OnFetchData(job1); err != nil {
+		t.Fatalf("OnFetchData job1: %v", err)
+	}
+	if err := d.OnFetchData(job2); err != nil {
+		t.Fatalf("OnFetchData job2: %v", err)
+	}
+	if d.ActiveFetch() != 2 {
+		t.Fatalf("ActiveFetch = %d, ожидается 2", d.ActiveFetch())
+	}
+	// Точная адресация: отменяется только задание с RequestKey 1.
+	if err := d.OnCancelFetchData(&CancelFetchDataJob{TransferKey: 42, RequestKey: 1}); err != nil {
+		t.Fatalf("OnCancelFetchData: %v", err)
+	}
+	if !job1.Cancel.Load() {
+		t.Error("отмена по RequestKey 1 не дошла до job1")
+	}
+	if job2.Cancel.Load() {
+		t.Error("отмена по RequestKey 1 задела job2 (другой RequestKey)")
+	}
+
+	// Точный промах при двух активных заданиях — никто не отменяется.
+	if err := d.OnCancelFetchData(&CancelFetchDataJob{TransferKey: 42, RequestKey: 99}); err != nil {
+		t.Fatalf("OnCancelFetchData с чужим RequestKey: %v", err)
+	}
+	if job2.Cancel.Load() {
+		t.Error("неоднозначная отмена (2 активных, чужой RequestKey) задела job2")
+	}
+
+	// Запас: после Complete job2 остаётся ровно одно активное задание с
+	// этим TransferKey — отмена с чужим RequestKey его отменяет.
+	d.Complete(job1)
+	if d.ActiveFetch() != 1 {
+		t.Fatalf("ActiveFetch после Complete job1 = %d, ожидается 1", d.ActiveFetch())
+	}
+	if err := d.OnCancelFetchData(&CancelFetchDataJob{TransferKey: 42, RequestKey: 99}); err != nil {
+		t.Fatalf("OnCancelFetchData одиночного: %v", err)
+	}
+	if !job2.Cancel.Load() {
+		t.Error("отмена одиночного активного задания (точный промах RequestKey) не сработала")
+	}
+	d.Complete(job2)
+	if d.ActiveFetch() != 0 {
+		t.Errorf("ActiveFetch после Complete job2 = %d, ожидается 0", d.ActiveFetch())
+	}
+}
+
+// TestDispatcherOverflowAnswersCanceled — U13 (этап 3): при переполнении
+// очереди FETCH_DATA задание не ставится, OnFetchData возвращает
+// ErrQueueFull, а задание попадает в очередь переполнения — воркер движка
+// ответит на него CfExecute'ом со статусом отмены (сам Dispatcher I/O
+// не выполняет).
+func TestDispatcherOverflowAnswersCanceled(t *testing.T) {
+	d := NewDispatcher(QueueOptions{FetchData: 1, FetchDataOverflow: 4})
+
+	enqueued := &FetchDataJob{TransferKey: 1, RequestKey: 1}
+	if err := d.OnFetchData(enqueued); err != nil {
+		t.Fatalf("первое задание должно встать в очередь: %v", err)
+	}
+	dropped := &FetchDataJob{TransferKey: 2, RequestKey: 2}
+	if err := d.OnFetchData(dropped); !errors.Is(err, ErrQueueFull) {
+		t.Fatalf("переполнение: err = %v, ожидается ErrQueueFull", err)
+	}
+	if d.Dropped() != 1 {
+		t.Errorf("Dropped = %d, ожидается 1", d.Dropped())
+	}
+	// Отброшенное задание снято с учёта и доступно потребителю переполнения.
+	if d.ActiveFetch() != 1 {
+		t.Errorf("ActiveFetch = %d, ожидается 1 (только постановленное)", d.ActiveFetch())
+	}
+	select {
+	case got := <-d.FetchDataOverflow():
+		if got != dropped {
+			t.Error("в очередь переполнения попало не отброшенное задание")
+		}
+	default:
+		t.Fatal("очередь переполнения пуста — отброшенное задание потеряно, ответа не будет")
+	}
+}
+
 // TestDispatcherCancelPlaceholders — отмена наполнения по реестру.
 func TestDispatcherCancelPlaceholders(t *testing.T) {
 	d := NewDispatcher(DefaultQueueOptions())

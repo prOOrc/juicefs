@@ -19,12 +19,58 @@
 
 // Обёртки CfExecute — операции провайдера (план задач: файл operations.go
 // наполняется этапами 3+ по потребности; на этапе 2 — ответ на
-// FETCH_PLACEHOLDERS, design.md D5/D6).
+// FETCH_PLACEHOLDERS, design.md D5/D6; на этапе 3 — ответ на FETCH_DATA).
 package cfapi
 
 import (
 	"unsafe"
 )
+
+// AnswerFetchData отвечает на задание FETCH_DATA операцией TRANSFER_DATA
+// (design.md D7): данные диапазона [offset, offset+length) плейсхолдера
+// передаются фильтру за один CfExecute. Семантика по cfapi.h (union
+// CF_OPERATION_PARAMETERS, ветка TransferData) и C-паттерну MS-сэмпла
+// CloudMirror (Utilities.cpp, ApplyTransferStateToFile):
+//
+//	opInfo.Type = CF_OPERATION_TYPE_TRANSFER_DATA (0)
+//	TransferData.Flags = NONE; CompletionStatus = status;
+//	TransferData.Buffer = LPCVOID buf (страница-выровненный VirtualAlloc
+//	из BufferPool — U4; nil допустим для ответа без данных);
+//	TransferData.Offset/Length — LARGE_INTEGER запрошенного диапазона.
+//	ParamSize = sizeof(CF_OPERATION_PARAMETERS) (union целиком — как в
+//	AnswerFetchPlaceholders, живые пробы U2 27.11).
+//
+// status — CompletionStatus: StatusSuccess с данными либо код отказа
+// (отмена — StatusCloudFileRequestCanceled, ошибки чтения — StatusFromErrno);
+// при неуспешном статусе буфер игнорируется фильтром — buf nil, length 0.
+// buf обязан начинаться на странице-выровненном адресе (BufferPool.Get).
+//
+// Ответ обязателен на каждое задание ровно один раз — иначе чтение
+// вызывающего процесса остаётся подвешенным до таймаута фильтра.
+func AnswerFetchData(conn ConnectionKey, transferKey TransferKey, requestKey RequestKey, status NTStatus, buf []byte, offset, length int64) error {
+	opInfo := CFOperationInfo{
+		StructSize:    uint32(unsafe.Sizeof(CFOperationInfo{})),
+		Type:          OperationTypeTransferData,
+		ConnectionKey: conn,
+		TransferKey:   transferKey,
+		RequestKey:    requestKey,
+	}
+	opParams := CFOperationParameters{
+		// ParamSize — размер union'а CF_OPERATION_PARAMETERS целиком
+		// (см. AnswerFetchPlaceholders: пробы U2 27.11; ветка TransferData
+		// = 32 байта, union — 40).
+		ParamSize: uint32(unsafe.Sizeof(CFOperationParameters{})),
+	}
+	p := opParams.OperationTransferData()
+	p.Flags = OperationTransferDataFlagNone
+	p.CompletionStatus = status
+	if len(buf) > 0 {
+		p.Buffer = unsafe.Pointer(&buf[0])
+	}
+	p.Offset = offset
+	p.Length = length
+	return CfExecute(&opInfo, &opParams)
+}
 
 // AnswerFetchPlaceholders отвечает на задание FETCH_PLACEHOLDERS операцией
 // TRANSFER_PLACEHOLDERS: записи создаются фильтром относительно каталога,
