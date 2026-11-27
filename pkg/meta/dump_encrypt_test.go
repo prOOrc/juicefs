@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	cekenc "github.com/juicedata/juicefs/pkg/agio/cek"
 	chunkenc "github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/redis/go-redis/v9"
@@ -183,7 +184,7 @@ func assertEncryptedRestore(t *testing.T, envA, envB *encryptTestEnv, inode Ino,
 			if s.Id == 0 {
 				continue // hole
 			}
-			cek, err := chunkenc.UnwrapCEK(openAttr.Fek, s.WrappedCEK, restored.DriveFileID, s.Id, openAttr.FekVersion)
+			cek, err := cekenc.UnwrapCEK(openAttr.Fek, s.WrappedCEK, restored.DriveFileID, s.Id, openAttr.FekVersion)
 			require.NoError(t, err, "slice %d must unwrap under the restored FEK", s.Id)
 			require.Equal(t, plains[s.Id], readEncSlice(t, store, s, cek), "slice %d content", s.Id)
 		}
@@ -234,9 +235,9 @@ func TestDumpLoad_Encrypted(t *testing.T) {
 	plains := make(map[uint64][]byte)
 	wrapAndWrite := func(id uint64, indx, pos uint32) {
 		t.Helper()
-		cek, err := chunkenc.NewCEK()
+		cek, err := cekenc.NewCEK()
 		require.NoError(t, err)
-		blob, err := chunkenc.WrapCEK(srcFek, cek, srcDFID, id, srcVer)
+		blob, err := cekenc.WrapCEK(srcFek, cek, srcDFID, id, srcVer)
 		require.NoError(t, err)
 		require.Equal(t, syscall.Errno(0), envA.client.Write(cctx, inode, indx, pos,
 			Slice{Id: id, Size: size, Len: size, WrappedCEK: blob, FekVersion: srcVer}, time.Now()))
@@ -358,7 +359,7 @@ func TestDumpLoad_Encrypted(t *testing.T) {
 		// into a non-Redis engine: the fixed 24-byte layout cannot represent
 		// the tail, and silently dropping it would lose the wrapped CEK.
 		cek, fek := randomKey32(t, 5), randomKey32(t, 6)
-		blob, err := chunkenc.WrapCEK(fek, cek, "dfid-failclosed", 103, 1)
+		blob, err := cekenc.WrapCEK(fek, cek, "dfid-failclosed", 103, 1)
 		require.NoError(t, err)
 		rec := marshalSliceCEK(0, 103, 4096, 0, 4096, blob)
 

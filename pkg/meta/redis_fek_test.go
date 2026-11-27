@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	chunkenc "github.com/juicedata/juicefs/pkg/chunk"
+	cekenc "github.com/juicedata/juicefs/pkg/agio/cek"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
@@ -125,7 +125,7 @@ func newRewrapTestEnv(t *testing.T) (*redisMeta, Ino, []byte, []byte, []byte, []
 	aadB := SliceCryptoAAD{DriveFileID: "dfid-dst", FekVersion: 7}
 
 	wrapA := func(cek []byte, sliceID uint64) []byte {
-		blob, err := chunkenc.WrapCEK(fekA, cek, aadA.DriveFileID, sliceID, aadA.FekVersion)
+		blob, err := cekenc.WrapCEK(fekA, cek, aadA.DriveFileID, sliceID, aadA.FekVersion)
 		require.NoError(t, err)
 		return blob
 	}
@@ -171,11 +171,11 @@ func TestRewrapSlices_RoundTrip(t *testing.T) {
 				continue // legacy slice — no CEK
 			}
 			require.NotEmpty(t, s.WrappedCEK)
-			cek, err := chunkenc.UnwrapCEK(fekB, s.WrappedCEK, aadB.DriveFileID, s.Id, aadB.FekVersion)
+			cek, err := cekenc.UnwrapCEK(fekB, s.WrappedCEK, aadB.DriveFileID, s.Id, aadB.FekVersion)
 			require.NoError(t, err, "slice %d must unwrap under the new FEK/AAD", s.Id)
 			require.Equal(t, wantCEKs[s.Id], cek)
 			// the old wrap is gone: the source FEK/AAD no longer opens the blob
-			_, err = chunkenc.UnwrapCEK(fekA, s.WrappedCEK, aadA.DriveFileID, s.Id, aadA.FekVersion)
+			_, err = cekenc.UnwrapCEK(fekA, s.WrappedCEK, aadA.DriveFileID, s.Id, aadA.FekVersion)
 			require.Error(t, err)
 		}
 	}
@@ -236,7 +236,7 @@ func TestRewrapSlices_Range(t *testing.T) {
 	var cs []Slice
 	require.Equal(t, syscall.Errno(0), rm.Read(ctx, inode, 1, &cs))
 	for _, s := range cs {
-		_, err := chunkenc.UnwrapCEK(fekB, s.WrappedCEK, aadB.DriveFileID, s.Id, aadB.FekVersion)
+		_, err := cekenc.UnwrapCEK(fekB, s.WrappedCEK, aadB.DriveFileID, s.Id, aadB.FekVersion)
 		require.NoError(t, err)
 	}
 	// chunk 0 still unwraps under the source AAD (its encrypted record is untouched)
@@ -245,7 +245,7 @@ func TestRewrapSlices_Range(t *testing.T) {
 		if len(s.WrappedCEK) == 0 {
 			continue
 		}
-		_, err := chunkenc.UnwrapCEK(fekA, s.WrappedCEK, aadA.DriveFileID, s.Id, aadA.FekVersion)
+		_, err := cekenc.UnwrapCEK(fekA, s.WrappedCEK, aadA.DriveFileID, s.Id, aadA.FekVersion)
 		require.NoError(t, err, "chunk 0 must keep the source wrap")
 	}
 }
@@ -379,7 +379,7 @@ func TestRewrapSlices_Conflict(t *testing.T) {
 
 	const recLen = 4096
 	wrapOld := func(cek []byte, id uint64) []byte {
-		blob, err := chunkenc.WrapCEK(oldFek, cek, srcAAD.DriveFileID, id, srcAAD.FekVersion)
+		blob, err := cekenc.WrapCEK(oldFek, cek, srcAAD.DriveFileID, id, srcAAD.FekVersion)
 		require.NoError(t, err)
 		return blob
 	}
@@ -453,7 +453,7 @@ func TestRewrapSlices_Conflict(t *testing.T) {
 		s := new(slice)
 		s.read([]byte(val))
 		require.NotEmpty(t, s.wrappedCEK)
-		_, err := chunkenc.UnwrapCEK(newFek, s.wrappedCEK, dstAAD.DriveFileID, s.id, dstAAD.FekVersion)
+		_, err := cekenc.UnwrapCEK(newFek, s.wrappedCEK, dstAAD.DriveFileID, s.id, dstAAD.FekVersion)
 		require.NoError(t, err, "slice %d must unwrap under the new FEK/AAD", s.id)
 	}
 }
@@ -469,7 +469,7 @@ func TestRewrapSlices_AlreadyRewrapped(t *testing.T) {
 	const recLen = 4096
 	cekOld, cekNew := randomKey32(t, 3), randomKey32(t, 4)
 	// record A under the old FEK/version (committed before the bump)
-	blobA, err := chunkenc.WrapCEK(oldFek, cekOld, srcAAD.DriveFileID, 3001, srcAAD.FekVersion)
+	blobA, err := cekenc.WrapCEK(oldFek, cekOld, srcAAD.DriveFileID, 3001, srcAAD.FekVersion)
 	require.NoError(t, err)
 	require.Equal(t, syscall.Errno(0), mWrite(t, rm, ctx, inode, 0, 0, Slice{Id: 3001, Size: recLen, Len: recLen, WrappedCEK: blobA, FekVersion: 1}))
 	// rotation bumps the version...
@@ -481,7 +481,7 @@ func TestRewrapSlices_AlreadyRewrapped(t *testing.T) {
 	}))
 	// ...and a writer that re-resolved mid-rotation commits record B already
 	// under the new FEK/version.
-	blobB, err := chunkenc.WrapCEK(newFek, cekNew, dstAAD.DriveFileID, 3002, dstAAD.FekVersion)
+	blobB, err := cekenc.WrapCEK(newFek, cekNew, dstAAD.DriveFileID, 3002, dstAAD.FekVersion)
 	require.NoError(t, err)
 	require.Equal(t, syscall.Errno(0), mWrite(t, rm, ctx, inode, 0, recLen, Slice{Id: 3002, Size: recLen, Len: recLen, WrappedCEK: blobB, FekVersion: 2}))
 
@@ -500,7 +500,7 @@ func TestRewrapSlices_AlreadyRewrapped(t *testing.T) {
 
 	sa := new(slice)
 	sa.read([]byte(after[0]))
-	cekOut, err := chunkenc.UnwrapCEK(newFek, sa.wrappedCEK, dstAAD.DriveFileID, sa.id, dstAAD.FekVersion)
+	cekOut, err := cekenc.UnwrapCEK(newFek, sa.wrappedCEK, dstAAD.DriveFileID, sa.id, dstAAD.FekVersion)
 	require.NoError(t, err)
 	require.Equal(t, cekOld, cekOut)
 
@@ -516,7 +516,7 @@ func TestRewrapSlices_AlreadyRewrapped(t *testing.T) {
 		}))
 
 		foreign := randomKey32(t, 99)
-		blobC, err := chunkenc.WrapCEK(foreign, randomKey32(t, 5), srcAAD.DriveFileID, 4001, srcAAD.FekVersion)
+		blobC, err := cekenc.WrapCEK(foreign, randomKey32(t, 5), srcAAD.DriveFileID, 4001, srcAAD.FekVersion)
 		require.NoError(t, err)
 		require.Equal(t, syscall.Errno(0), mWrite(t, rm, ctx, fIno, 0, 0, Slice{Id: 4001, Size: recLen, Len: recLen, WrappedCEK: blobC, FekVersion: 1}))
 
@@ -565,7 +565,7 @@ func TestRotation_ConcurrentWriter(t *testing.T) {
 				if a.FekVersion == 2 {
 					fek, aad = newFek, dstAAD
 				}
-				blob, err := chunkenc.WrapCEK(fek, randomKey32(t, byte(i)), aad.DriveFileID, id, a.FekVersion)
+				blob, err := cekenc.WrapCEK(fek, randomKey32(t, byte(i)), aad.DriveFileID, id, a.FekVersion)
 				if err != nil {
 					writerErr = err
 					return
@@ -623,7 +623,7 @@ func TestRotation_ConcurrentWriter(t *testing.T) {
 			s := new(slice)
 			s.read([]byte(val))
 			require.NotEmpty(t, s.wrappedCEK)
-			_, err := chunkenc.UnwrapCEK(newFek, s.wrappedCEK, dstAAD.DriveFileID, s.id, dstAAD.FekVersion)
+			_, err := cekenc.UnwrapCEK(newFek, s.wrappedCEK, dstAAD.DriveFileID, s.id, dstAAD.FekVersion)
 			require.NoError(t, err, "slice %d must unwrap under the new FEK/version", s.id)
 		}
 	}
@@ -639,7 +639,7 @@ func TestWrite_Fencing(t *testing.T) {
 
 	const recLen = 4096
 	wrap := func(cek []byte, id uint64, ver uint32) []byte {
-		blob, err := chunkenc.WrapCEK(oldFek, cek, srcAAD.DriveFileID, id, ver)
+		blob, err := cekenc.WrapCEK(oldFek, cek, srcAAD.DriveFileID, id, ver)
 		require.NoError(t, err)
 		return blob
 	}

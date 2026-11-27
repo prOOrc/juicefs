@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	chunkenc "github.com/juicedata/juicefs/pkg/chunk"
+	cekenc "github.com/juicedata/juicefs/pkg/agio/cek"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
@@ -82,7 +82,7 @@ func TestReencryptChunk_Refcount(t *testing.T) {
 	require.Equal(t, syscall.Errno(0), rm.NewSlice(ctx, &newID))
 	fek := randomKey32(t, 1)
 	cek := randomKey32(t, 2)
-	blob, err := chunkenc.WrapCEK(fek, cek, "dfid-reenc", newID, 1)
+	blob, err := cekenc.WrapCEK(fek, cek, "dfid-reenc", newID, 1)
 	require.NoError(t, err)
 
 	newSlice := Slice{Id: newID, Size: 2 * size, Off: 0, Len: 2 * size, WrappedCEK: blob}

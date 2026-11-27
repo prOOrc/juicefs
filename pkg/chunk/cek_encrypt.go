@@ -25,6 +25,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
+	cekenc "github.com/juicedata/juicefs/pkg/agio/cek"
 )
 
 // AGDF — encrypted block stored in object storage (master plan §4.1):
@@ -42,24 +44,15 @@ const (
 	chunkMagic   = "AGDF"
 	chunkVersion = byte(1)
 
-	// AGCK — CEK wrapped under the file's FEK (slice metadata):
-	// magic(4)|version(1)|nonce(12)|ciphertext(32)|tag(16) = 65 bytes.
-	cekMagic   = "AGCK"
-	cekVersion = byte(1)
-
 	agdfNonceLen = 12
 	agdfTagLen   = 16
-	cekSize      = 32 // CEK size in bytes (AES-256)
 
 	// agdfOverhead is the number of extra bytes an encrypted block adds over the
 	// plaintext: magic(4) + version(1) + nonce(12) + tag(16).
 	agdfOverhead = len(chunkMagic) + 1 + agdfNonceLen + agdfTagLen
 )
 
-var (
-	errAGDFMalformed = errors.New("agdf: malformed block")
-	errAGCKMalformed = errors.New("agck: malformed blob")
-)
+var errAGDFMalformed = errors.New("agdf: malformed block")
 
 func buildBlockAAD(sliceID uint64, blockIndex uint32) []byte {
 	aad := make([]byte, 12)
@@ -135,94 +128,33 @@ func DecryptBlock(cek, data []byte, sliceID uint64, blockIndex uint32) ([]byte, 
 	return plain, nil
 }
 
-// buildCEKAAD encodes the AAD binding a wrapped CEK to its file identity:
-//
-//	len(driveFileID):4 || driveFileID || sliceID:8 (big-endian) || fekVersion:4 (big-endian).
-//
-// Length-prefixed string fields keep the encoding unambiguous.
-func buildCEKAAD(driveFileID string, sliceID uint64, fekVersion uint32) []byte {
-	buf := make([]byte, 0, 4+len(driveFileID)+12)
-	buf = binary.BigEndian.AppendUint32(buf, uint32(len(driveFileID)))
-	buf = append(buf, driveFileID...)
-	buf = binary.BigEndian.AppendUint64(buf, sliceID)
-	buf = binary.BigEndian.AppendUint32(buf, fekVersion)
-	return buf
-}
+// The AGCK CEK wrap/unwrap primitive lives in the cgo-free package
+// github.com/juicedata/juicefs/pkg/agio/cek so that consumers building the
+// pkg/meta graph with CGO_ENABLED=0 do not pull in this package's cgo-only
+// compression dependencies. The identifiers below are thin re-exports kept for
+// existing callers of this package; the behavior is identical.
 
 // CEKSize is the size in bytes of a slice content-encryption key (AES-256).
-const CEKSize = cekSize
+const CEKSize = cekenc.CEKSize
 
 // NewCEK generates a fresh random slice CEK (NFR-SEC-9: unique per slice).
 func NewCEK() ([]byte, error) {
-	cek := make([]byte, cekSize)
-	if _, err := io.ReadFull(rand.Reader, cek); err != nil {
-		return nil, fmt.Errorf("agck: generate CEK: %w", err)
-	}
-	return cek, nil
+	return cekenc.NewCEK()
 }
 
 // WrapCEK wraps cek (32 bytes) under the file's FEK and returns an AGCK blob (65 bytes).
 func WrapCEK(fek, cek []byte, driveFileID string, sliceID uint64, fekVersion uint32) ([]byte, error) {
-	nonce := make([]byte, agdfNonceLen)
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, fmt.Errorf("agck: nonce: %w", err)
-	}
-	return WrapCEKWithNonce(fek, cek, driveFileID, sliceID, fekVersion, nonce)
+	return cekenc.WrapCEK(fek, cek, driveFileID, sliceID, fekVersion)
 }
 
 // WrapCEKWithNonce is the deterministic variant of WrapCEK pinned by the cross-repo
 // known-answer vectors (stage 9). Production code must use WrapCEK.
 func WrapCEKWithNonce(fek, cek []byte, driveFileID string, sliceID uint64, fekVersion uint32, nonce []byte) ([]byte, error) {
-	if len(nonce) != agdfNonceLen {
-		return nil, fmt.Errorf("agck: nonce must be %d bytes, got %d", agdfNonceLen, len(nonce))
-	}
-	if len(cek) != cekSize {
-		return nil, fmt.Errorf("agck: cek must be %d bytes, got %d", cekSize, len(cek))
-	}
-	block, err := aes.NewCipher(fek)
-	if err != nil {
-		return nil, fmt.Errorf("agck: aes cipher: %w", err)
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, fmt.Errorf("agck: gcm: %w", err)
-	}
-	sealed := gcm.Seal(nil, nonce, cek, buildCEKAAD(driveFileID, sliceID, fekVersion))
-	out := make([]byte, 0, len(cekMagic)+1+agdfNonceLen+len(sealed))
-	out = append(out, cekMagic...)
-	out = append(out, cekVersion)
-	out = append(out, nonce...)
-	return append(out, sealed...), nil
+	return cekenc.WrapCEKWithNonce(fek, cek, driveFileID, sliceID, fekVersion, nonce)
 }
 
 // UnwrapCEK unwraps an AGCK blob under the file's FEK. Any tampering or AAD mismatch
 // fails closed (NFR-SEC-11).
 func UnwrapCEK(fek []byte, wrapped []byte, driveFileID string, sliceID uint64, fekVersion uint32) ([]byte, error) {
-	if len(wrapped) != len(cekMagic)+1+agdfNonceLen+cekSize+agdfTagLen {
-		return nil, errAGCKMalformed
-	}
-	if !bytes.HasPrefix(wrapped, []byte(cekMagic)) {
-		return nil, errAGCKMalformed
-	}
-	if wrapped[len(cekMagic)] != cekVersion {
-		return nil, fmt.Errorf("agck: unsupported version %d", wrapped[len(cekMagic)])
-	}
-	nonce := wrapped[len(cekMagic)+1 : len(cekMagic)+1+agdfNonceLen]
-	sealed := wrapped[len(cekMagic)+1+agdfNonceLen:]
-	block, err := aes.NewCipher(fek)
-	if err != nil {
-		return nil, fmt.Errorf("agck: aes cipher: %w", err)
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, fmt.Errorf("agck: gcm: %w", err)
-	}
-	plain, err := gcm.Open(nil, nonce, sealed, buildCEKAAD(driveFileID, sliceID, fekVersion))
-	if err != nil {
-		return nil, fmt.Errorf("agck: unwrap failed (tampered or AAD mismatch): %w", err)
-	}
-	if len(plain) != cekSize {
-		return nil, fmt.Errorf("agck: unwrapped CEK must be %d bytes, got %d", cekSize, len(plain))
-	}
-	return plain, nil
+	return cekenc.UnwrapCEK(fek, wrapped, driveFileID, sliceID, fekVersion)
 }

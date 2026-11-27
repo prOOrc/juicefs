@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	cekenc "github.com/juicedata/juicefs/pkg/agio/cek"
 	chunkenc "github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/stretchr/testify/require"
@@ -78,12 +79,12 @@ func TestClone_Rewrap_NoS3Rewrite(t *testing.T) {
 	// Two chunks of encrypted slices: the slice records carry AGCK tails under
 	// the source FEK (the data itself lives in S3 — not needed for AC-7).
 	const size = ChunkSize
-	cek1, err := chunkenc.NewCEK()
+	cek1, err := cekenc.NewCEK()
 	require.NoError(t, err)
-	cek2, err := chunkenc.NewCEK()
+	cek2, err := cekenc.NewCEK()
 	require.NoError(t, err)
 	wrapSrc := func(cek []byte, id uint64) []byte {
-		blob, err := chunkenc.WrapCEK(srcFek, cek, srcDFID, id, srcVer)
+		blob, err := cekenc.WrapCEK(srcFek, cek, srcDFID, id, srcVer)
 		require.NoError(t, err)
 		return blob
 	}
@@ -128,7 +129,7 @@ func TestClone_Rewrap_NoS3Rewrite(t *testing.T) {
 		require.Equal(t, syscall.Errno(0), env.meta.Read(ctx, dstIno, indx, &cs))
 		require.Len(t, cs, 1)
 		s := cs[0]
-		cek, err := chunkenc.UnwrapCEK(dstFek, s.WrappedCEK, dstDFID, s.Id, dstVer)
+		cek, err := cekenc.UnwrapCEK(dstFek, s.WrappedCEK, dstDFID, s.Id, dstVer)
 		require.NoError(t, err, "dst slice %d must unwrap under the target FEK", s.Id)
 		require.Equal(t, wantCEKs[s.Id], cek)
 	}
@@ -138,7 +139,7 @@ func TestClone_Rewrap_NoS3Rewrite(t *testing.T) {
 		var cs []Slice
 		require.Equal(t, syscall.Errno(0), env.meta.Read(ctx, srcIno, indx, &cs))
 		s := cs[0]
-		cek, err := chunkenc.UnwrapCEK(srcFek, s.WrappedCEK, srcDFID, s.Id, srcVer)
+		cek, err := cekenc.UnwrapCEK(srcFek, s.WrappedCEK, srcDFID, s.Id, srcVer)
 		require.NoError(t, err, "src slice %d must still unwrap under the source FEK", s.Id)
 		require.Equal(t, wantCEKs[s.Id], cek)
 	}
@@ -289,14 +290,14 @@ func TestCopyFileRange_Encrypted(t *testing.T) {
 	srcFek, srcDFID, srcVer, err := gm.ResolveFileKey(cctx, srcIno)
 	require.NoError(t, err)
 
-	cekA, err := chunkenc.NewCEK()
+	cekA, err := cekenc.NewCEK()
 	require.NoError(t, err)
-	cekB, err := chunkenc.NewCEK()
+	cekB, err := cekenc.NewCEK()
 	require.NoError(t, err)
-	cekC, err := chunkenc.NewCEK()
+	cekC, err := cekenc.NewCEK()
 	require.NoError(t, err)
 	wrapSrc := func(cek []byte, id uint64) []byte {
-		blob, err := chunkenc.WrapCEK(srcFek, cek, srcDFID, id, srcVer)
+		blob, err := cekenc.WrapCEK(srcFek, cek, srcDFID, id, srcVer)
 		require.NoError(t, err)
 		return blob
 	}
@@ -336,7 +337,7 @@ func TestCopyFileRange_Encrypted(t *testing.T) {
 	for _, cs := range [][]Slice{cs0, cs1} {
 		for _, s := range cs {
 			require.NotEmpty(t, s.WrappedCEK)
-			cek, err := chunkenc.UnwrapCEK(dstFek, s.WrappedCEK, dstDFID, s.Id, dstVer)
+			cek, err := cekenc.UnwrapCEK(dstFek, s.WrappedCEK, dstDFID, s.Id, dstVer)
 			require.NoError(t, err, "dst slice %d must unwrap under the target FEK", s.Id)
 			require.Equal(t, wantCEK[s.Id], cek)
 		}
@@ -350,7 +351,7 @@ func TestCopyFileRange_Encrypted(t *testing.T) {
 			var cs []Slice
 			require.Equal(t, syscall.Errno(0), env.meta.Read(ctx, ino, indx, &cs))
 			for _, s := range cs {
-				cek, err := chunkenc.UnwrapCEK(fek, s.WrappedCEK, dfid, s.Id, ver)
+				cek, err := cekenc.UnwrapCEK(fek, s.WrappedCEK, dfid, s.Id, ver)
 				require.NoError(t, err)
 				out = append(out, readSliceData(t, store, s, cek)...)
 			}
@@ -395,14 +396,14 @@ func TestClone_Subset(t *testing.T) {
 	srcFek, srcDFID, srcVer, err := gm.ResolveFileKey(cctx, srcIno)
 	require.NoError(t, err)
 
-	cekA, err := chunkenc.NewCEK()
+	cekA, err := cekenc.NewCEK()
 	require.NoError(t, err)
-	cekB, err := chunkenc.NewCEK()
+	cekB, err := cekenc.NewCEK()
 	require.NoError(t, err)
-	cekC, err := chunkenc.NewCEK()
+	cekC, err := cekenc.NewCEK()
 	require.NoError(t, err)
 	wrapSrc := func(cek []byte, id uint64) []byte {
-		blob, err := chunkenc.WrapCEK(srcFek, cek, srcDFID, id, srcVer)
+		blob, err := cekenc.WrapCEK(srcFek, cek, srcDFID, id, srcVer)
 		require.NoError(t, err)
 		return blob
 	}
@@ -431,7 +432,7 @@ func TestClone_Subset(t *testing.T) {
 	var cs []Slice
 	require.Equal(t, syscall.Errno(0), env.meta.Read(ctx, dstIno, 0, &cs))
 	require.Len(t, cs, 1)
-	cek, err := chunkenc.UnwrapCEK(dstFek, cs[0].WrappedCEK, dstDFID, cs[0].Id, dstVer)
+	cek, err := cekenc.UnwrapCEK(dstFek, cs[0].WrappedCEK, dstDFID, cs[0].Id, dstVer)
 	require.NoError(t, err)
 	require.Equal(t, cekB, cek)
 
@@ -452,14 +453,14 @@ func TestClone_Subset(t *testing.T) {
 			}
 		}
 		require.NotEmpty(t, blob)
-		_, err = chunkenc.UnwrapCEK(dstFek, blob, dstDFID, id, dstVer)
+		_, err = cekenc.UnwrapCEK(dstFek, blob, dstDFID, id, dstVer)
 		require.Error(t, err, "source slice %d must not unwrap under the target FEK", id)
 	}
 
 	// The source is intact: all three chunks still read under its own FEK.
 	for indx := uint32(0); indx < 3; indx++ {
 		s := srcCS[indx][0]
-		cek, err := chunkenc.UnwrapCEK(srcFek, s.WrappedCEK, srcDFID, s.Id, srcVer)
+		cek, err := cekenc.UnwrapCEK(srcFek, s.WrappedCEK, srcDFID, s.Id, srcVer)
 		require.NoError(t, err)
 		data := readSliceData(t, store, s, cek)
 		want := byte(0xD1 + indx)

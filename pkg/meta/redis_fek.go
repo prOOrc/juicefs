@@ -22,7 +22,7 @@ import (
 	"syscall"
 	"time"
 
-	chunkenc "github.com/juicedata/juicefs/pkg/chunk"
+	cekenc "github.com/juicedata/juicefs/pkg/agio/cek"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -216,18 +216,18 @@ func rewrapSliceRecord(val string, srcFek, dstFek []byte, src, dst SliceCryptoAA
 	}
 	s := new(slice)
 	s.read([]byte(val))
-	cek, err := chunkenc.UnwrapCEK(srcFek, s.wrappedCEK, src.DriveFileID, s.id, src.FekVersion)
+	cek, err := cekenc.UnwrapCEK(srcFek, s.wrappedCEK, src.DriveFileID, s.id, src.FekVersion)
 	if err != nil {
 		// Mixed-version tolerance (design Addendum A1): a writer that re-resolved
 		// its FEK mid-rotation commits under the NEW version while rotation is
 		// still iterating. The fallback is safe because the GCM tag + AAD binding
 		// make it fail-closed: only a genuine (dstFek, dstAAD) record passes.
-		if _, err2 := chunkenc.UnwrapCEK(dstFek, s.wrappedCEK, dst.DriveFileID, s.id, dst.FekVersion); err2 == nil {
+		if _, err2 := cekenc.UnwrapCEK(dstFek, s.wrappedCEK, dst.DriveFileID, s.id, dst.FekVersion); err2 == nil {
 			return val, nil // already re-wrapped — leave byte-identical
 		}
 		return "", syscall.EIO // wrong FEK or tampered record — fail closed
 	}
-	newBlob, err := chunkenc.WrapCEK(dstFek, cek, dst.DriveFileID, s.id, dst.FekVersion)
+	newBlob, err := cekenc.WrapCEK(dstFek, cek, dst.DriveFileID, s.id, dst.FekVersion)
 	if err != nil {
 		return "", fmt.Errorf("rewrap: wrap CEK: %w", err)
 	}

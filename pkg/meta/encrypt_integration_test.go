@@ -35,7 +35,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	chunkenc "github.com/juicedata/juicefs/pkg/chunk"
+	cekenc "github.com/juicedata/juicefs/pkg/agio/cek"
 	kmpb "github.com/juicedata/juicefs/pkg/meta/keymanager_pb"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/oidc"
@@ -475,10 +475,10 @@ func TestEncryptedFirstSessionCEK(t *testing.T) {
 	// First-session write: the client wraps the slice CEK under the FEK from Create.
 	var sid uint64
 	require.Equal(t, syscall.Errno(0), env.client.NewSlice(cctx, &sid))
-	cek, err := chunkenc.NewCEK()
+	cek, err := cekenc.NewCEK()
 	require.NoError(t, err)
 	const size = 4096
-	blob, err := chunkenc.WrapCEK(attr.Fek, cek, attr.DriveFileID, sid, attr.FekVersion)
+	blob, err := cekenc.WrapCEK(attr.Fek, cek, attr.DriveFileID, sid, attr.FekVersion)
 	require.NoError(t, err)
 	require.Equal(t, syscall.Errno(0), env.client.Write(cctx, inode, 0, 0,
 		Slice{Id: sid, Size: size, Off: 0, Len: size, WrappedCEK: blob, FekVersion: attr.FekVersion}, time.Now()))
@@ -490,7 +490,7 @@ func TestEncryptedFirstSessionCEK(t *testing.T) {
 	require.Equal(t, syscall.Errno(0), env.client.Read(cctx, inode, 0, &cs))
 	require.Len(t, cs, 1)
 	require.NotEmpty(t, cs[0].WrappedCEK, "first-session slices must carry a wrapped CEK")
-	gotCEK, err := chunkenc.UnwrapCEK(attr.Fek, cs[0].WrappedCEK, attr.DriveFileID, cs[0].Id, attr.FekVersion)
+	gotCEK, err := cekenc.UnwrapCEK(attr.Fek, cs[0].WrappedCEK, attr.DriveFileID, cs[0].Id, attr.FekVersion)
 	require.NoError(t, err)
 	require.Equal(t, cek, gotCEK)
 
@@ -511,7 +511,7 @@ func TestEncryptedFirstSessionCEK(t *testing.T) {
 	cs = nil
 	require.Equal(t, syscall.Errno(0), env.client.Read(cctx, inode, 0, &cs))
 	require.Len(t, cs, 1)
-	_, err = chunkenc.UnwrapCEK(overwriteAttr.Fek, cs[0].WrappedCEK, overwriteAttr.DriveFileID, cs[0].Id, overwriteAttr.FekVersion)
+	_, err = cekenc.UnwrapCEK(overwriteAttr.Fek, cs[0].WrappedCEK, overwriteAttr.DriveFileID, cs[0].Id, overwriteAttr.FekVersion)
 	require.NoError(t, err, "old slices must stay readable after the overwrite create")
 }
 

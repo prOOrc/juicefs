@@ -28,6 +28,7 @@ import (
 	"os"
 	"testing"
 
+	cekenc "github.com/juicedata/juicefs/pkg/agio/cek"
 	"github.com/juicedata/juicefs/pkg/chunk"
 	"github.com/juicedata/juicefs/pkg/meta"
 )
@@ -147,14 +148,14 @@ func TestKnownAnswerVectors(t *testing.T) {
 		if len(want) != 65 {
 			t.Fatalf("AGCK vector blob = %d bytes, want 65", len(want))
 		}
-		got, err := chunk.WrapCEKWithNonce(fek, cek, v.AGCK.DriveFileID, v.AGCK.SliceID, v.AGCK.FekVersion, nonce)
+		got, err := cekenc.WrapCEKWithNonce(fek, cek, v.AGCK.DriveFileID, v.AGCK.SliceID, v.AGCK.FekVersion, nonce)
 		if err != nil {
 			t.Fatalf("WrapCEKWithNonce: %s", err)
 		}
 		if !bytes.Equal(got, want) {
 			t.Fatalf("AGCK wrap mismatch:\n got %x\nwant %x", got, want)
 		}
-		unwrapped, err := chunk.UnwrapCEK(fek, want, v.AGCK.DriveFileID, v.AGCK.SliceID, v.AGCK.FekVersion)
+		unwrapped, err := cekenc.UnwrapCEK(fek, want, v.AGCK.DriveFileID, v.AGCK.SliceID, v.AGCK.FekVersion)
 		if err != nil {
 			t.Fatalf("UnwrapCEK: %s", err)
 		}
