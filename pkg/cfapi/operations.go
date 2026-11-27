@@ -159,14 +159,15 @@ func CfRevertPlaceholder(fileHandle syscall.Handle, revertFlags uint32, overlapp
 // PlaceholderStateByPath — CF_PLACEHOLDER_STATE записи sync root по пути
 // (cfapi.h CfGetPlaceholderStateFromFileInfo): атрибуты FileBasicInfo
 // (GetFileInformationByHandleEx) скармливаются функции напрямую, live-хендл
-// после запроса закрывается. Семантика результата (живая проба этапа 5,
-// 2026-11-27): NO_STATES=0 — файл не плейсхолдер (обычный файл пользователя
-// — ровно класс «новый файл на выгрузку»); INVALID=0xffffffff функция
-// вернула для свежесозданного plain-файла вместо NO_STATES — трактуется
-// так же, как NO_STATES (0, nil): в классификации close-уведомлений
-// (design.md D8) это «новый файл», а не отказ. Ошибкой остаётся только
-// реальный отказ API — открытие или GetFileInformationByHandleEx
-// (классификация close-уведомлений, design.md D8; `status <путь>`, 5.7).
+// после запроса закрывается. Используется ТОЛЬКО `status <путь>` (5.7) —
+// классификация close-уведомлений/watcher-событий переведена на честный
+// CF_PLACEHOLDER_STANDARD_INFO (после convert-DEHYDRATE фильтр чистит
+// basic-атрибуты, и эта эвристика возвращает 0 для реального плейсхолдера —
+// живой ретест 27.11). Семантика результата (живая проба этапа 5,
+// 2026-11-27): NO_STATES=0 — файл не плейсхолдер; INVALID=0xffffffff
+// функция вернула для свежесозданного plain-файла вместо NO_STATES —
+// трактуется так же, как NO_STATES (0, nil), не отказ. Ошибкой остаётся
+// только реальный отказ API — открытие или GetFileInformationByHandleEx.
 //
 // Открытие GENERIC_READ и запрос атрибутов данных не читают — FETCH_DATA
 // не вызывается; шаринг read+write+delete не мешает параллельной работе

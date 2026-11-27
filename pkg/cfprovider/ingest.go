@@ -357,12 +357,21 @@ func (db *ingestDebouncer) run(ctx context.Context, stop chan struct{}) {
 const selfEventSuppressWindow = 10 * time.Second
 
 // selfEventSuppressed — стоит ли окно супрессии собственных событий на ключ
-// (lower fsPath); until — дедлайн (диагностика тестов).
+// (lower fsPath); until — дедлайн (диагностика тестов). Истекшая запись
+// удаляется лениво (при обращении) — карта не растёт сверх числа
+// выгрузок в окне.
 func (p *Provider) selfEventSuppressed(key string) (suppressed bool, until time.Time) {
 	p.selfEventMu.Lock()
 	defer p.selfEventMu.Unlock()
 	until, ok := p.selfEventUntil[key]
-	return ok && p.clock.Now().Before(until), until
+	if !ok {
+		return false, time.Time{}
+	}
+	if p.clock.Now().Before(until) {
+		return true, until
+	}
+	delete(p.selfEventUntil, key)
+	return false, until
 }
 
 // markSelfEvent ставит окно супрессии собственных событий на ключ
@@ -670,13 +679,14 @@ func (p *Provider) finalizeIngest(ctx context.Context, task ingestTask, isPlaceh
 			// удалением и созданием): переклассификация как в walk
 			// (design.md D6.4) — наш плейсхолдер восстанавливается в
 			// индекс, не-плейсхолдер — конфликт (файл не трогается);
-			// повторного создания нет. Контент выгружен.
-			logger.Debugf("ingest %s: recreated name occupied after upload; reclassifying", task.fsPath)
+			// повторного создания нет. Контент выгружен. ПОЛНЫЙ entry
+			// (size/mtime): усыновление гидратированного своего
+			// плейсхолдера вызывает ensureDehydrated → Update с
+			// метаданными записи — урезанный entry дегидратировал бы
+			// в нулевой размер/эпоху.
+			logger.Warnf("ingest %s: recreated name occupied after upload; reclassifying", task.fsPath)
 			var examples []string
-			classifyOccupied(p, &dirPopulation{dir: path.Dir(task.fsPath)}, BackendEntry{
-				Name:  path.Base(task.fsPath),
-				Inode: ino,
-			}, task.fsPath, task.local, false, &examples)
+			classifyOccupied(p, &dirPopulation{dir: path.Dir(task.fsPath)}, uploadedEntry(task, ino, size, mtime), task.fsPath, task.local, false, &examples)
 			return
 		default:
 			p.ingestFailed.Add(1)
@@ -733,14 +743,23 @@ func (p *Provider) removeUploadedLocal(ctx context.Context, task ingestTask) boo
 // convert(MARK_IN_SYNC|DEHYDRATE). Размер и mtime — локальной записи
 // (источник только что выгруженной версии); identity — inode backend.
 func (p *Provider) recreateUploaded(task ingestTask, ino uint64, size int64, mtime time.Time) (placeholderResultKind, error) {
-	return createEntry(p, path.Dir(task.fsPath), BackendEntry{
+	return createEntry(p, path.Dir(task.fsPath), uploadedEntry(task, ino, size, mtime))
+}
+
+// uploadedEntry — полная BackendEntry выгруженной записи (имя, inode,
+// размер и mtime локальной записи): один источник для recreateUploaded и
+// EEXIST-реклассификации — урезанный entry в classifyOccupied дегидратировал
+// бы усыновлённый плейсхолдер в нулевой размер/эпоху (ensureDehydrated →
+// Update(makeFsMetadata(e))).
+func uploadedEntry(task ingestTask, ino uint64, size int64, mtime time.Time) BackendEntry {
+	return BackendEntry{
 		Name:      path.Base(task.fsPath),
 		Inode:     ino,
 		Size:      size,
 		MtimeSec:  mtime.Unix(),
 		MtimeNsec: uint32(mtime.Nanosecond()),
 		IsDir:     false,
-	})
+	}
 }
 
 // openLocalSharedRead открывает локальный файл источника только на чтение.

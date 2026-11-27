@@ -101,9 +101,10 @@ type convertCall struct {
 
 // updateCall — фиксация fallback-дегидратации (CfUpdatePlaceholder).
 type updateCall struct {
-	path  string
-	size  int64
-	flags uint32
+	path          string
+	size          int64
+	flags         uint32
+	lastWriteTime int64 // LastWriteTime из CF_FS_METADATA (проверка честных метаданных)
 }
 
 type answerCall struct {
@@ -145,7 +146,7 @@ func (f *fakeStore) Convert(path string, isDir bool, identity []byte, flags uint
 func (f *fakeStore) Update(path string, fsMetadata cfapi.CFFileMetadata, flags uint32) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.updates = append(f.updates, updateCall{path: path, size: fsMetadata.FileSize, flags: flags})
+	f.updates = append(f.updates, updateCall{path: path, size: fsMetadata.FileSize, flags: flags, lastWriteTime: fsMetadata.BasicInfo.LastWriteTime})
 	return nil
 }
 

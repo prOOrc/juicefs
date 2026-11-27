@@ -56,6 +56,7 @@ import (
 	"errors"
 	"path/filepath"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -65,6 +66,10 @@ import (
 
 // watcherBufferSize — буфер ReadDirectoryChangesW (~64KB, design.md U6).
 const watcherBufferSize = 64 << 10
+
+// watcherCancelRetryInterval — пауза цикла CancelIoEx в горутине отмены:
+// закрывает окно «I/O не outstanding» между итерациями watcher'а.
+const watcherCancelRetryInterval = 50 * time.Millisecond
 
 // watcherNotifyFilter — маска событий: создание/удаление/переименование
 // имён, запись содержимого и изменение размера. DIR_NAME нужен, чтобы
@@ -167,9 +172,18 @@ func (p *Provider) runFileWatcher(ctx context.Context, db *ingestDebouncer, stop
 	defer windows.CloseHandle(event) //nolint:errcheck
 	ov := new(windows.Overlapped)
 	ov.HEvent = windows.Handle(event)
-	// Горутина отмены: ctx/stop → CancelIoEx — операция завершается
-	// OPERATION_ABORTED, event взводится, цикл корректно выходит. done —
-	// watcher завершился сам, отменять нечего.
+	// Горутина отмены (ctx/stop): CancelIoEx ПОВТОРЯЕТСЯ до подтверждения
+	// завершения watcher'а (done). Одиночный вызов ненадёжен: он может
+	// попасть в окно «I/O не outstanding» (основная горутина разбирает
+	// прошлые события / готовит следующий ReadDirectoryChanges) —
+	// ERROR_NOT_FOUND игнорируется, горутина отмены выходит, и уже
+	// выданный следующий ReadDirectoryChanges никто не отменяет →
+	// WaitForSingleObject(INFINITE) навсегда (в serve — не завершиться
+	// через wg.Wait; в тестах — редкий таймаут, живая диагностика 27.11).
+	// Цикл с паузой 50 мс закрывает окно: как только ReadDirectoryChanges
+	// становится outstanding, очередной CancelIoEx завершает его с
+	// OPERATION_ABORTED. Завершение цикла — только по done (watcher сам
+	// дошёл до выхода после успешной отмены либо по собственной ошибке).
 	go func() {
 		select {
 		case <-ctx.Done():
@@ -177,11 +191,31 @@ func (p *Provider) runFileWatcher(ctx context.Context, db *ingestDebouncer, stop
 		case <-done:
 			return
 		}
-		_ = windows.CancelIoEx(h, ov)
+		for {
+			_ = windows.CancelIoEx(h, ov)
+			select {
+			case <-done:
+				return
+			case <-time.After(watcherCancelRetryInterval):
+			}
+		}
 	}()
 	buf := make([]byte, watcherBufferSize)
 	logger.Debugf("watcher started: root=%s filter=0x%x buffer=%d", p.root, watcherNotifyFilter, watcherBufferSize)
 	for {
+		// Неблокирующая проверка отмены ПЕРЕД КАЖДЫМ ReadDirectoryChanges:
+		// между итерациями разбора событий ctx/stop могли сработать — без
+		// проверки следующий вызов outstanding-ом ушёл бы в ожидание до
+		// очередного CancelIoEx цикла отмены (см. горутину выше).
+		select {
+		case <-ctx.Done():
+			logger.Debugf("watcher %s: stopped (context canceled)", p.root)
+			return
+		case <-stop:
+			logger.Debugf("watcher %s: stopped", p.root)
+			return
+		default:
+		}
 		if err := windows.ResetEvent(event); err != nil {
 			logger.Warnf("watcher %s: reset event: %v; watcher stopped", p.root, err)
 			return

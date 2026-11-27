@@ -309,7 +309,7 @@ func newIngestTestProvider(t *testing.T) (*Provider, *fakeIngestBackend, *fakeIn
 	p.idx = idx
 	p.istore = store
 	p.ibackend = backend
-	p.store = &fakeStore{local: map[string]bool{}, localReal: map[string]bool{}}
+	p.store = &fakeStore{local: map[string]bool{}, localReal: map[string]bool{}, standard: map[string]*cfapi.CFPlaceholderStandardInfo{}}
 	p.ingestDelay = 5 * time.Millisecond
 	p.ingestRetryDelay = time.Millisecond
 	p.ingestMaxRetryDelay = 4 * time.Millisecond
@@ -1110,5 +1110,56 @@ func TestIngestSelfEventSuppression(t *testing.T) {
 	clock.advance(selfEventSuppressWindow + time.Second)
 	if _, ok := p.classifyNotifyClose(context.Background(), job); !ok {
 		t.Fatal("после истечения окна классификация не вернула честное решение")
+	}
+}
+
+// TestIngestRecreateExistsAdoptsHydratedHonestMetadata — ревью этапа 5
+// (мажор 2): EEXIST-усыновление СВОЕГО ГИДРАТИРОВАННОГО плейсхолдера
+// (OnDiskDataSize > 0) вызывает ensureDehydrated → Update с ПОЛНЫМИ
+// метаданными записи — size/mtime локальной версии на момент выгрузки
+// (урезанный entry дегидратировал бы в нулевой размер/эпоху).
+func TestIngestRecreateExistsAdoptsHydratedHonestMetadata(t *testing.T) {
+	p, backend, _, fstore, idx, _ := newIngestTestProvider(t)
+	local := filepath.Join(p.root, "adopt-hydrated.txt")
+	data := []byte("uploaded content")
+	if err := os.WriteFile(local, data, 0o644); err != nil {
+		t.Fatalf("write local: %v", err)
+	}
+	fi, err := os.Stat(local)
+	if err != nil {
+		t.Fatalf("stat local: %v", err)
+	}
+	modTime := fi.ModTime()
+	p.remover = recreatingRemover{inner: osRemover{}, path: local, content: []byte("user remade")}
+	// Модель фильтра: путь уже наш плейсхолдер, ГИДРАТИРОВАННЫЙ
+	// (OnDiskDataSize > 0) — ensureDehydrated обязан дегидратировать
+	// повторным Update с честными метаданными.
+	fstore.local[local] = true
+	fstore.standard[local] = &cfapi.CFPlaceholderStandardInfo{OnDiskDataSize: 12345}
+
+	p.runIngest(context.Background(), ingestTask{fsPath: "/adopt-hydrated.txt", local: local, key: "/adopt-hydrated.txt"})
+
+	updates := fstore.updateCalls()
+	if len(updates) != 1 {
+		t.Fatalf("Update вызовов = %d, ожидается 1 (дегидратация усыновлённого)", len(updates))
+	}
+	u := updates[0]
+	if u.path != local {
+		t.Errorf("Update path = %q, ожидается %q", u.path, local)
+	}
+	if u.size != int64(len(data)) {
+		t.Errorf("Update size = %d, ожидается %d (честный размер локальной версии)", u.size, len(data))
+	}
+	ft := windows.NsecToFiletime(modTime.Unix()*1e9 + int64(uint32(modTime.Nanosecond())))
+	wantLastWrite := int64(ft.HighDateTime)<<32 | int64(ft.LowDateTime)
+	if u.lastWriteTime != wantLastWrite {
+		t.Errorf("Update LastWriteTime = %d, ожидается %d (честный mtime локальной версии)", u.lastWriteTime, wantLastWrite)
+	}
+	if u.flags != cfapi.UpdateFlagDehydrate|cfapi.UpdateFlagMarkInSync {
+		t.Errorf("Update flags = 0x%x, ожидается DEHYDRATE|MARK_IN_SYNC", u.flags)
+	}
+	ino := backend.inodeOf("/adopt-hydrated.txt")
+	if got, ok := idx.Path(ino); !ok || got != "/adopt-hydrated.txt" {
+		t.Errorf("idx.Path(%d) = (%q, %v), ожидается /adopt-hydrated.txt (усыновлён)", ino, got, ok)
 	}
 }
