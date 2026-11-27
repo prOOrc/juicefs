@@ -23,7 +23,13 @@ import (
 	"errors"
 	"sync"
 	"sync/atomic"
+
+	"github.com/juicedata/juicefs/pkg/utils"
 )
+
+// dispatcherLogger — след постановки NOTIFY-заданий в очереди (трассировка
+// U19: средний хоп между thunk'ом и движком; только счётчики и лог, I/O нет).
+var dispatcherLogger = utils.GetLogger("cfapi")
 
 // CallbackDispatcher — интерфейс-разделитель между cfapi (thunk'и) и движком
 // провайдера (pkg/cfprovider). Движок либо потребляет очереди Dispatcher,
@@ -284,6 +290,7 @@ func (d *Dispatcher) OnNotifyFileCloseCompletion(job *NotifyFileCloseCompletionJ
 
 // OnNotifyFileRenamed ставит переименование файла в очередь.
 func (d *Dispatcher) OnNotifyFileRenamed(job *NotifyFileRenamedJob) error {
+	dispatcherLogger.Debugf("NOTIFY_FILE_RENAMED queued: %q -> %q", job.SourcePath, job.TargetPath)
 	select {
 	case d.fileRenamed <- job:
 		d.enqueued.Add(1)
@@ -296,6 +303,7 @@ func (d *Dispatcher) OnNotifyFileRenamed(job *NotifyFileRenamedJob) error {
 
 // OnNotifyFileDeleted ставит удаление файла в очередь.
 func (d *Dispatcher) OnNotifyFileDeleted(job *NotifyFileDeletedJob) error {
+	dispatcherLogger.Debugf("NOTIFY_FILE_DELETED queued: path=%q fileID=%d", job.Path, job.FileID)
 	select {
 	case d.fileDeleted <- job:
 		d.enqueued.Add(1)
@@ -321,6 +329,7 @@ func (d *Dispatcher) OnNotifyDirectoryCreated(job *NotifyDirectoryCreatedJob) er
 
 // OnNotifyDirectoryRenamed ставит переименование каталога в очередь.
 func (d *Dispatcher) OnNotifyDirectoryRenamed(job *NotifyDirectoryRenamedJob) error {
+	dispatcherLogger.Debugf("NOTIFY_DIRECTORY_RENAMED queued: %q -> %q", job.SourcePath, job.TargetPath)
 	select {
 	case d.directoryRenamed <- job:
 		d.enqueued.Add(1)
@@ -333,6 +342,7 @@ func (d *Dispatcher) OnNotifyDirectoryRenamed(job *NotifyDirectoryRenamedJob) er
 
 // OnNotifyDirectoryDeleted ставит удаление каталога в очередь.
 func (d *Dispatcher) OnNotifyDirectoryDeleted(job *NotifyDirectoryDeletedJob) error {
+	dispatcherLogger.Debugf("NOTIFY_DIRECTORY_DELETED queued: path=%q", job.Path)
 	select {
 	case d.directoryDeleted <- job:
 		d.enqueued.Add(1)

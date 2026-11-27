@@ -376,6 +376,18 @@ func (osStore) SetInSync(path string) error {
 	return cfapi.SetInSyncStateByPath(path, cfapi.InSyncStateInSync)
 }
 
+// AnswerDelete — ACK_DELETE на NOTIFY_DELETE (U19: blocked-style, rm
+// пользователя не завершается без ответа; каталоги — тот же колбэк с флагом
+// IS_DIRECTORY).
+func (osStore) AnswerDelete(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, flags uint32, status cfapi.NTStatus) error {
+	return cfapi.AnswerDelete(conn, transferKey, requestKey, flags, status)
+}
+
+// AnswerRename — ACK_RENAME на NOTIFY_RENAME (U19; blocked-style).
+func (osStore) AnswerRename(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, flags uint32, status cfapi.NTStatus) error {
+	return cfapi.AnswerRename(conn, transferKey, requestKey, flags, status)
+}
+
 func (osStore) Update(path string, fsMetadata cfapi.CFFileMetadata, updateFlags uint32) error {
 	return cfapi.UpdatePlaceholderByPath(path, &fsMetadata, updateFlags)
 }

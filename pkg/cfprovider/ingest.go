@@ -215,9 +215,11 @@ func (b fsIngestBackend) Stat(ctx meta.Context, path string) (uint64, bool, sysc
 }
 
 // ingestStore — CfAPI-операции плейсхолдеров write-пути (design.md D8/U8):
-// классификация состояния, пометка in-sync изменённого плейсхолдера.
-// Пересоздание нового файла — createEntry-примитив через placeholderStore
-// (U18-α). Реальная реализация — osStore; подменная — в тестах.
+// классификация состояния, пометка in-sync изменённого плейсхолдера и
+// ответы на blocked-уведомления (U19: ACK_DELETE/ACK_RENAME — без них rm/mv
+// пользователя висят). Пересоздание нового файла — createEntry-примитив
+// через placeholderStore (U18-α). Реальная реализация — osStore; подменная —
+// в тестах.
 type ingestStore interface {
 	// StandardInfo — CF_PLACEHOLDER_STANDARD_INFO локальной записи
 	// (CfGetPlaceholderInfo): честное состояние плейсхолдера после
@@ -229,6 +231,12 @@ type ingestStore interface {
 	StandardInfo(path string) (*cfapi.CFPlaceholderStandardInfo, error)
 	// SetInSync — CfSetInSyncState(InSyncStateInSync) по пути.
 	SetInSync(path string) error
+	// AnswerDelete — ACK_DELETE на уведомление NOTIFY_DELETE (U19; каталоги
+	// — тот же колбэк с флагом IS_DIRECTORY): ровно один ответ на уведомление,
+	// любой исход обработки.
+	AnswerDelete(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, flags uint32, status cfapi.NTStatus) error
+	// AnswerRename — ACK_RENAME на уведомление NOTIFY_RENAME (U19).
+	AnswerRename(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, flags uint32, status cfapi.NTStatus) error
 }
 
 // localRemover — удаление локального пути на финализации выгрузки
@@ -596,6 +604,51 @@ func (p *Provider) placeholderSyncState(ctx context.Context, local string) (isPl
 	}
 }
 
+// stateQueryTimeout — жёсткий потолок STANDARD-запроса (U19, живая
+// трассировка 27.11): запрос по записи в pending-delete (rm в полёте до
+// нашего ACK_DELETE) блокируется в CreateFile БЕСКОНЕЧНО и без потолка
+// убивал горутину-роутер — все уведомления и выгрузка стояли навсегда.
+const stateQueryTimeout = 3 * time.Second
+
+// errStateQueryTimeout — STANDARD-запрос не уложился в потолок: состояние
+// недоступно (pending-delete/зависший CreateFile) — классификация трактуется
+// как plain → to-upload; runIngest снимет задание по несчитываемому
+// локальному файлу, ack уйдёт, пользователь увидит результат своего rm.
+var errStateQueryTimeout = errors.New("cfprovider: state query timed out")
+
+// boundedSyncState — placeholderSyncState с потолком времени: запрос идёт в
+// отдельной горутине (таймаут отменяет её retry-цикл; одиночный вызов,
+// зависший в CreateFile syscall'а, вернуть нельзя — горутина освобождается
+// при ближайшем возврате/отмене ctx, прототип это принимает). Таймаут —
+// errStateQueryTimeout.
+func (p *Provider) boundedSyncState(ctx context.Context, local string) (isPlaceholder, inSync bool, err error) {
+	timeout := p.stateQueryTimeout
+	type stateResult struct {
+		isPh, inSync bool
+		err          error
+	}
+	ch := make(chan stateResult, 1)
+	qctx, cancel := context.WithCancel(ctx)
+	go func() {
+		isPh, inSync, qerr := p.placeholderSyncState(qctx, local)
+		ch <- stateResult{isPh: isPh, inSync: inSync, err: qerr}
+	}()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case r := <-ch:
+		cancel()
+		return r.isPh, r.inSync, r.err
+	case <-timer.C:
+		cancel()
+		logger.Debugf("state query %s: timed out after %s; treating as plain file", local, timeout)
+		return false, false, errStateQueryTimeout
+	case <-ctx.Done():
+		cancel()
+		return false, false, ctx.Err()
+	}
+}
+
 // classifyNotifyClose — классификация NOTIFY_FILE_CLOSE_COMPLETION и
 // watcher-событий (единая точка; задача 5.2, design.md D8 шаг 1): файл без
 // плейсхолдера и плейсхолдер вне in-sync ставятся в очередь выгрузки;
@@ -625,11 +678,12 @@ func (p *Provider) classifyNotifyClose(ctx context.Context, job *cfapi.NotifyFil
 		// design.md D5): close-completion каталогов выгрузке не подлежит.
 		return ingestTask{}, false
 	}
-	// Классификация по честному STANDARD-состоянию (см. placeholderSyncState):
+	// Классификация по честному STANDARD-состоянию (см. boundedSyncState:
+	// потолок времени — запрос по pending-delete блокируется навсегда, U19):
 	// отказ запроса — plain-файл, новый файл пользователя → to-upload;
 	// placeholder+in-sync — выгружать нечего (создан walk-ом/уже выгружен) →
 	// ignore; placeholder без in-sync — изменённый → to-upload.
-	isPlaceholder, inSync, err := p.placeholderSyncState(ctx, local)
+	isPlaceholder, inSync, err := p.boundedSyncState(ctx, local)
 	if err != nil {
 		logger.Debugf("close completion %s: no placeholder record (%v) -> plain file -> upload", fsPath, err)
 		return ingestTask{fsPath: fsPath, local: local, key: strings.ToLower(fsPath)}, true
@@ -672,13 +726,13 @@ func (p *Provider) ingestRouter(ctx context.Context, db *ingestDebouncer, d *cfa
 				continue
 			}
 			logger.Debugf("NOTIFY_FILE_RENAMED: %q -> %q", job.SourcePath, job.TargetPath)
-			p.notifyRenamePaths(ctx, job.SourcePath, job.TargetPath, job.FileID, false)
+			p.notifyRenamePaths(ctx, job.SourcePath, job.TargetPath, job.FileID, false, job.ConnectionKey, job.TransferKey, job.RequestKey)
 		case job := <-d.FileDeleted():
 			if job == nil {
 				continue
 			}
 			logger.Debugf("NOTIFY_FILE_DELETED: path=%q", job.Path)
-			p.notifyDeletePath(job.Path, job.FileID, false)
+			p.notifyDeletePath(job.Path, job.FileID, false, job.ConnectionKey, job.TransferKey, job.RequestKey)
 		case job := <-d.DirectoryCreated():
 			if job == nil {
 				continue
@@ -690,13 +744,13 @@ func (p *Provider) ingestRouter(ctx context.Context, db *ingestDebouncer, d *cfa
 				continue
 			}
 			logger.Debugf("NOTIFY_DIRECTORY_RENAMED: %q -> %q", job.SourcePath, job.TargetPath)
-			p.notifyRenamePaths(ctx, job.SourcePath, job.TargetPath, 0, true)
+			p.notifyRenamePaths(ctx, job.SourcePath, job.TargetPath, 0, true, job.ConnectionKey, job.TransferKey, job.RequestKey)
 		case job := <-d.DirectoryDeleted():
 			if job == nil {
 				continue
 			}
 			logger.Debugf("NOTIFY_DIRECTORY_DELETED: path=%q", job.Path)
-			p.notifyDeletePath(job.Path, 0, true)
+			p.notifyDeletePath(job.Path, 0, true, job.ConnectionKey, job.TransferKey, job.RequestKey)
 		}
 	}
 }
@@ -730,16 +784,27 @@ func (p *Provider) backendHasEntry(mctx meta.Context, fsPath string) bool {
 	return err == 0
 }
 
+// deleteOpName — имя backend-операции удаления для следа трассировки.
+func deleteOpName(isDir bool) string {
+	if isDir {
+		return "Rmdir"
+	}
+	return "Unlink"
+}
+
 // propagateDelete — удаление известного плейсхолдера в backend (задачи
 // 6.1–6.2): fs.Unlink (файл) / fs.Rmdir (каталог); ENOENT — записи уже нет
 // (исполнено). Успех — индекс чистится (каталог — с потомками).
 func (p *Provider) propagateDelete(mctx meta.Context, fsPath string, ino uint64, isDir bool) syscall.Errno {
+	// Трассировка U19: backend-хоп до/после (fs.Unlink/Rmdir → meta).
+	logger.Debugf("delete %s: backend %s...", fsPath, deleteOpName(isDir))
 	var eno syscall.Errno
 	if isDir {
 		eno = p.ibackend.Rmdir(mctx, fsPath)
 	} else {
 		eno = p.ibackend.Delete(mctx, fsPath)
 	}
+	logger.Debugf("delete %s: backend done, errno=%v", fsPath, eno)
 	if eno != 0 && eno != syscall.ENOENT {
 		return eno
 	}
@@ -755,10 +820,30 @@ func (p *Provider) propagateDelete(mctx meta.Context, fsPath string, ino uint64,
 }
 
 // notifyDeletePath — NOTIFY_FILE_DELETED / NOTIFY_DIRECTORY_DELETED (задачи
-// 6.1–6.2): известный плейсхолдер → удаление в backend; sync root — никогда
-// (однократный Warn); неизвестное/локальное — игнор. Недоступный hub →
-// журнал (спека «Удаление офлайн»), replayer повторяет до успеха.
-func (p *Provider) notifyDeletePath(localPath string, fileID uint64, isDir bool) {
+// 6.1–6.2; U19, живая проба 27.11: удаление blocked-style — rm пользователя
+// не завершается, пока провайдер не ответит ACK_DELETE; каталоги — тот же
+// OS-колбэк с флагом *_IS_DIRECTORY, отдельной ack-операции для них нет).
+// Известный плейсхолдер → удаление в backend; sync root — никогда
+// (однократный Warn); неизвестное/локальное — игнор. ЛЮБОЙ исход завершается
+// РОВНО ОДНИМ AnswerDelete (defer — инвариант): backend-успех (и ENOENT —
+// записи уже нет) → StatusSuccess, локальное удаление завершается; отказ
+// backend → код отказа — фильтр завершает rm ошибкой, локальная запись
+// остаётся, состояние консистентно, повтор — rm пользователя после
+// восстановления (спека «Удаление офлайн»: «после повтора» ls не содержит
+// запись); unknown/plain/sync-root/read-only — StatusSuccess (не блокировать
+// пользователя; удаление plain-файла — локальное, backend не трогается).
+func (p *Provider) notifyDeletePath(localPath string, fileID uint64, isDir bool, conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey) {
+	// Трассировка U19: вход задания и исход ack — по ним ретест отличает
+	// «фильтр не вызвал callback», «задание не дошло до движка» и «hang
+	// внутри обработки».
+	logger.Debugf("notify delete: path=%q fileID=%d isDir=%v", localPath, fileID, isDir)
+	status := cfapi.StatusSuccess
+	defer func() {
+		logger.Debugf("notify delete %q: handled; ACK_DELETE status=0x%x", localPath, status)
+		if err := p.istore.AnswerDelete(conn, transferKey, requestKey, cfapi.OperationAckDeleteFlagNone, status); err != nil {
+			logger.Warnf("ack delete %q: %v", localPath, err)
+		}
+	}()
 	if p.readOnly {
 		p.readOnlyNotice()
 		return
@@ -784,9 +869,6 @@ func (p *Provider) notifyDeletePath(localPath string, fileID uint64, isDir bool)
 		logger.Debugf("delete %s: not a known placeholder; ignored (local entries are never propagated)", fsPath)
 		return
 	}
-	if p.journal != nil && p.journal.HasPending(OpDelete, fsPath) {
-		return // повтор уже ведёт replayer
-	}
 	mctx := meta.WrapWithCancel(context.Background(), uint32(os.Getpid()), uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
 	defer mctx.Cancel()
 	eno := p.propagateDelete(mctx, fsPath, ino, isDir)
@@ -794,16 +876,13 @@ func (p *Provider) notifyDeletePath(localPath string, fileID uint64, isDir bool)
 	case eno == 0:
 		logger.Debugf("delete %s: removed from backend", fsPath)
 	case permanentJournalErrno(eno):
-		// Решение оркестратора (fix-1.5, data-safe): индекс НЕ снимать —
-		// снятие воскрешало бы запись (walk пересоздавал плейсхолдер без
-		// backend-данных); намерение удаления фиксируется логом, повтор —
-		// следующая сверка (пересечение с U15/U16 — решение за владельцем).
-		logger.Warnf("delete %s: %v (delete denied; entry kept in backend and index, will retry on next reconcile)", fsPath, eno)
+		// fix-1.5 (data-safe): индекс НЕ снимать; с ack-отказом rm
+		// завершается ошибкой и локальная запись остаётся — расхождения нет.
+		logger.Warnf("delete %s: %v (delete denied; entry kept in backend and index)", fsPath, eno)
+		status = cfapi.StatusFromErrno(eno)
 	default:
-		// Недоступный hub и прочие транзиентные — журнал (спека «Удаление
-		// офлайн»: повтор с нарастающей паузой до успеха).
-		logger.Warnf("delete %s: %v; queued for retry", fsPath, eno)
-		p.journalAdd(JournalOp{Type: OpDelete, Path: fsPath, Ino: ino, IsDir: isDir})
+		logger.Warnf("delete %s: %v; acknowledged with error (retry via user rm or next reconcile)", fsPath, eno)
+		status = cfapi.StatusFromErrno(eno)
 	}
 }
 
@@ -813,7 +892,10 @@ func (p *Provider) notifyDeletePath(localPath string, fileID uint64, isDir bool)
 // потомков (RenamePrefix). ENOENT старой записи — ошибка перманентная
 // (запись снята другим клиентом/журналом), индекс чистится.
 func (p *Provider) propagateRename(mctx meta.Context, oldFsPath, newFsPath string, ino uint64, isDir bool) syscall.Errno {
+	// Трассировка U19: backend-хоп до/после (fs.Rename → meta.Rename).
+	logger.Debugf("rename %s -> %s: backend Rename...", oldFsPath, newFsPath)
 	eno := p.ibackend.Rename(mctx, oldFsPath, newFsPath)
+	logger.Debugf("rename %s -> %s: backend done, errno=%v", oldFsPath, newFsPath, eno)
 	if eno != 0 {
 		return eno
 	}
@@ -824,14 +906,29 @@ func (p *Provider) propagateRename(mctx meta.Context, oldFsPath, newFsPath strin
 }
 
 // notifyRenamePaths — NOTIFY_FILE_RENAMED / NOTIFY_DIRECTORY_RENAMED (задачи
-// 6.1–6.2): известный плейсхолдер → переименование в backend, индекс — на
-// новый путь (inode сохраняется/пере-резолвится); sync root и неизвестные
-// записи — игнор (plain-файл пользователя по новому пути выгрузит
-// классификация watcher-события RENAMED_NEW_NAME). Плейсхолдер вне in-sync
-// после переименования (модификация в окне коалисинга — задание по старому
-// пути снимется) ставится в выгрузку по новому пути. Недоступный hub →
-// журнал (replayer повторяет rename целиком).
-func (p *Provider) notifyRenamePaths(ctx context.Context, sourcePath, targetPath string, fileID uint64, isDir bool) {
+// 6.1–6.2; U19: blocked-style — mv пользователя не завершается без
+// ACK_RENAME; каталоги — тот же OS-колбэк с флагом *_IS_DIRECTORY).
+// Известный плейсхолдер → переименование в backend, индекс — на новый путь
+// (inode сохраняется/пере-резолвится); sync root и неизвестные записи — игнор
+// (plain-файл пользователя по новому пути выгрузит классификация
+// watcher-события RENAMED_NEW_NAME). ЛЮБОЙ исход — РОВНО ОДИН AnswerRename
+// (defer): backend-успех и ложный ENOENT (гонка — цель уже существует,
+// fix-1.8) → StatusSuccess; отказ backend → код отказа — фильтр завершает mv
+// ошибкой, запись остаётся на старом имени (локально и в backend),
+// состояние консистентно, повтор — mv пользователя после восстановления.
+// Изменённый плейсхолдер вне in-sync ПОСЛЕ успешного переименования
+// (модификация в окне коалисинга — задание по старому пути снимется)
+// ставится в выгрузку по новому пути.
+func (p *Provider) notifyRenamePaths(ctx context.Context, sourcePath, targetPath string, fileID uint64, isDir bool, conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey) {
+	// Трассировка U19 — см. notifyDeletePath.
+	logger.Debugf("notify rename: %q -> %q fileID=%d isDir=%v", sourcePath, targetPath, fileID, isDir)
+	status := cfapi.StatusSuccess
+	defer func() {
+		logger.Debugf("notify rename %q -> %q: handled; ACK_RENAME status=0x%x", sourcePath, targetPath, status)
+		if err := p.istore.AnswerRename(conn, transferKey, requestKey, cfapi.OperationAckRenameFlagNone, status); err != nil {
+			logger.Warnf("ack rename %q -> %q: %v", sourcePath, targetPath, err)
+		}
+	}()
 	if p.readOnly {
 		p.readOnlyNotice()
 		return
@@ -859,9 +956,6 @@ func (p *Provider) notifyRenamePaths(ctx context.Context, sourcePath, targetPath
 		logger.Debugf("rename %s -> %s: not a known placeholder; ignored", oldFsPath, newFsPath)
 		return
 	}
-	if p.journal != nil && p.journal.HasPending(OpRename, oldFsPath) {
-		return // повтор уже ведёт replayer
-	}
 	mctx := meta.WrapWithCancel(ctx, uint32(os.Getpid()), uint32(utils.GetCurrentUID()), []uint32{uint32(utils.GetCurrentGID())})
 	defer mctx.Cancel()
 	eno := p.propagateRename(mctx, oldFsPath, newFsPath, ino, isDir)
@@ -871,7 +965,7 @@ func (p *Provider) notifyRenamePaths(ctx context.Context, sourcePath, targetPath
 	case eno == syscall.ENOENT && p.backendHasEntry(mctx, newFsPath):
 		// Ложный ENOENT (гонка: переименование успел исполнить другой
 		// источник/клиент) — цель существует: индекс переносим, валидную
-		// запись не сносим (fix-1.8).
+		// запись не сносим (fix-1.8); исход для пользователя успешный.
 		logger.Debugf("rename %s -> %s: ENOENT raced, target exists; keeping entry", oldFsPath, newFsPath)
 		if err := p.indexAfterBackendRename(mctx, oldFsPath, newFsPath, ino, isDir); err != nil {
 			logger.Warnf("rename %s -> %s: index: %v", oldFsPath, newFsPath, err)
@@ -886,15 +980,16 @@ func (p *Provider) notifyRenamePaths(ctx context.Context, sourcePath, targetPath
 				logger.Warnf("rename %s: index prefix: %v", oldFsPath, err)
 			}
 		}
+		status = cfapi.StatusObjectNameNotFound
 	case permanentJournalErrno(eno) || eno == syscall.ENOTEMPTY || eno == syscall.EEXIST:
 		logger.Warnf("rename %s -> %s: %v (permanent; dropped)", oldFsPath, newFsPath, eno)
+		status = cfapi.StatusFromErrno(eno)
 	default:
-		logger.Warnf("rename %s -> %s: %v; queued for retry", oldFsPath, newFsPath, eno)
-		p.journalAdd(JournalOp{Type: OpRename, Path: oldFsPath, NewPath: newFsPath, Ino: ino, IsDir: isDir})
-		return
+		logger.Warnf("rename %s -> %s: %v; acknowledged with error (retry via user mv)", oldFsPath, newFsPath, eno)
+		status = cfapi.StatusFromErrno(eno)
 	}
-	if isDir {
-		return // каталоги не выгружаются
+	if eno != 0 || isDir {
+		return // отказ — локальный mv будет откачен фильтром; каталоги не выгружаются
 	}
 	// Изменённый плейсхолдер, переименованный в окне коалисинга: задание по
 	// старому пути снимется (файла нет) — выгрузка по новому пути.
@@ -963,6 +1058,8 @@ func (p *Provider) propagateDirCreate(ctx context.Context, fsPath string) error 
 // каталоги (индекс) и каталоги в повторе журнала — skip; новый каталог →
 // backend Mkdir + convert + индекс; недоступный hub → журнал (replayer).
 func (p *Provider) notifyDirCreate(ctx context.Context, localPath string) {
+	// Трассировка U19 — см. notifyDeletePath (исходы логируются в ветках ниже).
+	logger.Debugf("notify dir create: path=%q", localPath)
 	if p.readOnly {
 		p.readOnlyNotice()
 		return
@@ -1053,8 +1150,8 @@ func (p *Provider) runIngest(ctx context.Context, task ingestTask) error {
 	// Повторная классификация на момент обработки: за задержку коалисинга
 	// состояние могло измениться (выгружено параллельным заданием, сверткой,
 	// файл удалён/переименован пользователем) — тот же честный
-	// STANDARD-запрос, что и в классификации (см. placeholderSyncState).
-	isPlaceholder, inSync, serr := p.placeholderSyncState(ctx, task.local)
+	// STANDARD-запрос под потолком времени (см. boundedSyncState, U19).
+	isPlaceholder, inSync, serr := p.boundedSyncState(ctx, task.local)
 	if serr != nil {
 		if ctx.Err() != nil {
 			// Остановка во время повтора занятой записи — задание снимается

@@ -190,12 +190,14 @@ func startReplay(t *testing.T, p *Provider) context.CancelFunc {
 	return cancel
 }
 
-// TestJournalReplayDeleteOffline — спека «Удаление офлайн»: известный
-// плейсхолдер удаляется при недоступном hub — операция в журнале, backend
-// не тронут; после восстановления (fake clock двигает паузу повтора)
-// backend-запись удалена, индекс чист, журнал пуст.
-func TestJournalReplayDeleteOffline(t *testing.T) {
-	p, backend, _, _, idx, j, _, clock := newJournalTestProvider(t)
+// TestJournalNotifyDeleteOfflineAcksError — U19 (blocked-style) + спека
+// «Удаление офлайн»: rm известного плейсхолдера при недоступном hub —
+// ровно один ACK_DELETE с кодом отказа (rm пользователя завершается
+// ошибкой, локальная запись остаётся), backend/индекс не тронуты, журнал
+// пуст (повтор — rm пользователя после восстановления; journal-delete
+// остаётся для reconcile-(б) и ReplaceUploadWithDelete — краш-окно).
+func TestJournalNotifyDeleteOfflineAcksError(t *testing.T) {
+	p, backend, store, _, idx, j, _, _ := newJournalTestProvider(t)
 	cancel := startReplay(t, p)
 	defer cancel()
 
@@ -208,35 +210,23 @@ func TestJournalReplayDeleteOffline(t *testing.T) {
 	backend.deleteErr = syscall.EIO // hub недоступен
 	backend.mu.Unlock()
 
-	p.notifyDeletePath(filepath.Join(p.root, "a.txt"), 42, false)
+	p.notifyDeletePath(filepath.Join(p.root, "a.txt"), 42, false, testConn, testTransfer, testRequest)
 
-	// Операция в журнале, backend не тронут, индекс не тронут (удалённый
-	// файл не resurrect'ится walk-ом — гард index-known).
-	if got := j.Len(); got != 1 {
-		t.Fatalf("Len журнала = %d, ожидается 1", got)
+	if n := store.deleteAckCount(); n != 1 {
+		t.Fatalf("ack'ов = %d, ожидается ровно 1", n)
 	}
-	op := j.Ops()[0]
-	if op.Type != OpDelete || op.Path != "/a.txt" || op.Ino != 42 {
-		t.Fatalf("op = %+v, ожидается delete /a.txt ino=42", op)
+	if ack := store.lastDeleteAck(); ack.status != cfapi.StatusFromErrno(syscall.EIO) {
+		t.Errorf("ack status = 0x%x, ожидается StatusFromErrno(EIO)", ack.status)
 	}
 	if len(backend.content("/a.txt")) == 0 {
 		t.Fatal("backend-запись удалена при недоступном hub")
 	}
 	if _, ok := idx.Path(42); !ok {
-		t.Fatal("индекс потерял запись до исполнения удаления")
+		t.Fatal("индекс потерял запись")
 	}
-
-	// Восстановление hub: пауза повтора (fake clock) → исполнено.
-	backend.mu.Lock()
-	backend.deleteErr = 0
-	backend.mu.Unlock()
-	clock.advance(time.Second)
-	waitFor(t, func() bool { return j.Len() == 0 })
-	waitFor(t, func() bool { return len(backend.content("/a.txt")) == 0 })
-	waitFor(t, func() bool {
-		_, ok := idx.Path(42)
-		return !ok
-	})
+	if got := j.Len(); got != 0 {
+		t.Fatalf("Len журнала = %d, ожидается 0 (локальный rm не удался — распространять нечего)", got)
+	}
 }
 
 // TestJournalReplayUploadOffline — спека «Создание офлайн»: выгрузка при
