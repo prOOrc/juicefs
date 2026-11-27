@@ -60,6 +60,10 @@ type QueueOptions struct {
 	DirectoryCreated  int // без OS-callback'а; источник — запасной механизм U9
 	DirectoryRenamed  int
 	DirectoryDeleted  int
+	// FetchDataOverflow — канал заданий FETCH_DATA, отброшенных при
+	// переполнении основной очереди (U13): движок отвечает на каждое
+	// StatusCloudFileRequestCanceled из воркера (не из thunk'а).
+	FetchDataOverflow int
 }
 
 // DefaultQueueOptions — ёмкости по умолчанию. Гидратация и уведомления —
@@ -75,17 +79,29 @@ func DefaultQueueOptions() QueueOptions {
 		DirectoryCreated:  256,
 		DirectoryRenamed:  512,
 		DirectoryDeleted:  512,
+		FetchDataOverflow: 256,
 	}
+}
+
+// fetchJobKey — ключ реестра активных заданий гидратации: пара
+// (TransferKey, RequestKey). Контракт этапа 3 (design.md D7): при двух
+// конкурентных FETCH_DATA по одному файлу (общий TransferKey, разные
+// RequestKey) отмена адресуется по RequestKey — реестр только по
+// TransferKey доходит отменой лишь до последнего задания.
+type fetchJobKey struct {
+	transfer TransferKey
+	request  RequestKey
 }
 
 // Dispatcher — реализация CallbackDispatcher на буферизованных очередях:
 // thunk'и ставят задания, воркеры движка разбирают по каналам-геттерам.
-// Отмена: реестр активных заданий по TransferKey — CANCEL_* ставит флаг
-// Cancel на задании, воркер проверяет его между порциями (design.md D7).
-// I/O (hub, диск, CfExecute) в Dispatcher отсутствует — только очереди
-// и счётчики.
+// Отмена: реестр активных заданий по паре (TransferKey, RequestKey) —
+// CANCEL_* ставит флаг Cancel на задании, воркер проверяет его между
+// порциями (design.md D7). I/O (hub, диск, CfExecute) в Dispatcher
+// отсутствует — только очереди и счётчики.
 type Dispatcher struct {
 	fetchData         chan *FetchDataJob
+	fetchDataOverflow chan *FetchDataJob
 	fetchPlaceholders chan *FetchPlaceholdersJob
 	closeCompletion   chan *NotifyFileCloseCompletionJob
 	fileRenamed       chan *NotifyFileRenamedJob
@@ -95,7 +111,7 @@ type Dispatcher struct {
 	directoryDeleted  chan *NotifyDirectoryDeletedJob
 
 	mu               sync.Mutex
-	activeFetch      map[TransferKey]*FetchDataJob         // ключ — TransferKey
+	activeFetch      map[fetchJobKey]*FetchDataJob         // ключ — (TransferKey, RequestKey)
 	activePopulation map[TransferKey]*FetchPlaceholdersJob // ключ — TransferKey
 
 	enqueued  atomic.Int64 // принятых заданий
@@ -114,6 +130,7 @@ func NewDispatcher(opts QueueOptions) *Dispatcher {
 	}
 	return &Dispatcher{
 		fetchData:         make(chan *FetchDataJob, minCap(opts.FetchData)),
+		fetchDataOverflow: make(chan *FetchDataJob, minCap(opts.FetchDataOverflow)),
 		fetchPlaceholders: make(chan *FetchPlaceholdersJob, minCap(opts.FetchPlaceholders)),
 		closeCompletion:   make(chan *NotifyFileCloseCompletionJob, minCap(opts.CloseCompletion)),
 		fileRenamed:       make(chan *NotifyFileRenamedJob, minCap(opts.FileRenamed)),
@@ -121,7 +138,7 @@ func NewDispatcher(opts QueueOptions) *Dispatcher {
 		directoryCreated:  make(chan *NotifyDirectoryCreatedJob, minCap(opts.DirectoryCreated)),
 		directoryRenamed:  make(chan *NotifyDirectoryRenamedJob, minCap(opts.DirectoryRenamed)),
 		directoryDeleted:  make(chan *NotifyDirectoryDeletedJob, minCap(opts.DirectoryDeleted)),
-		activeFetch:       make(map[TransferKey]*FetchDataJob),
+		activeFetch:       make(map[fetchJobKey]*FetchDataJob),
 		activePopulation:  make(map[TransferKey]*FetchPlaceholdersJob),
 	}
 }
@@ -130,6 +147,12 @@ func NewDispatcher(opts QueueOptions) *Dispatcher {
 
 // FetchData — очередь заданий гидратации.
 func (d *Dispatcher) FetchData() <-chan *FetchDataJob { return d.fetchData }
+
+// FetchDataOverflow — очередь отброшенных заданий гидратации (переполнение
+// FetchData, U13): воркер движка отвечает на каждое задание
+// STATUS_CLOUD_FILE_REQUEST_CANCELED через CfExecute — сам Dispatcher,
+// как и thunk, I/O не выполняет.
+func (d *Dispatcher) FetchDataOverflow() <-chan *FetchDataJob { return d.fetchDataOverflow }
 
 // FetchPlaceholders — очередь наполнения каталогов.
 func (d *Dispatcher) FetchPlaceholders() <-chan *FetchPlaceholdersJob { return d.fetchPlaceholders }
@@ -154,10 +177,15 @@ func (d *Dispatcher) DirectoryRenamed() <-chan *NotifyDirectoryRenamedJob { retu
 func (d *Dispatcher) DirectoryDeleted() <-chan *NotifyDirectoryDeletedJob { return d.directoryDeleted }
 
 // OnFetchData ставит задание гидратации в очередь; при переполнении
-// возвращает ErrQueueFull, не блокируя (дизайн D7, проба U13).
+// возвращает ErrQueueFull, не блокируя (дизайн D7, проба U13), а задание
+// переносится в очередь переполнения: воркер движка ответит на него
+// STATUS_CLOUD_FILE_REQUEST_CANCELED через CfExecute (из воркера, не из
+// thunk'а). Если и она переполнена, задание теряется окончательно — фильтр
+// завершит запрос по собственному таймауту.
 func (d *Dispatcher) OnFetchData(job *FetchDataJob) error {
+	key := fetchJobKey{transfer: job.TransferKey, request: job.RequestKey}
 	d.mu.Lock()
-	d.activeFetch[job.TransferKey] = job // регистрация до постановки: отмена возможна сразу
+	d.activeFetch[key] = job // регистрация до постановки: отмена возможна сразу
 	d.mu.Unlock()
 	select {
 	case d.fetchData <- job:
@@ -165,20 +193,47 @@ func (d *Dispatcher) OnFetchData(job *FetchDataJob) error {
 		return nil
 	default:
 		d.mu.Lock()
-		delete(d.activeFetch, job.TransferKey)
+		if cur, ok := d.activeFetch[key]; ok && cur == job {
+			delete(d.activeFetch, key)
+		}
 		d.mu.Unlock()
+		select {
+		case d.fetchDataOverflow <- job:
+		default:
+		}
 		d.dropped.Add(1)
 		return ErrQueueFull
 	}
 }
 
-// OnCancelFetchData ставит флаг отмены активному заданию с этим TransferKey.
-// Задание с незнакомым ключом (завершено или не было) — не ошибка: фильтр
-// может прислать отмену после завершения.
+// OnCancelFetchData ставит флаг отмены активному заданию с парой ключей
+// (TransferKey, RequestKey) — контракт этапа 3 (design.md D7: конкурентные
+// FETCH_DATA одного файла различаются RequestKey).
+//
+// Семантика RequestKey в CANCEL-колбэке живьём не подтверждена (проба U13
+// этапа 3), поэтому при точном промахе применяется запас: ровно одно
+// активное задание с этим TransferKey отменяется (однозначный случай —
+// один читатель файла); при нескольких активных заданиях никто не отменяется
+// — угадывание отменяло бы чужой пользовательский запрос. Задание с
+// незнакомым TransferKey (завершено или не было) — не ошибка: фильтр может
+// прислать отмену после завершения.
 func (d *Dispatcher) OnCancelFetchData(job *CancelFetchDataJob) error {
 	d.mu.Lock()
-	if active, ok := d.activeFetch[job.TransferKey]; ok {
+	key := fetchJobKey{transfer: job.TransferKey, request: job.RequestKey}
+	if active, ok := d.activeFetch[key]; ok {
 		active.Cancel.Store(true)
+	} else {
+		var single *FetchDataJob
+		matches := 0
+		for k, j := range d.activeFetch {
+			if k.transfer == job.TransferKey {
+				matches++
+				single = j
+			}
+		}
+		if matches == 1 {
+			single.Cancel.Store(true)
+		}
 	}
 	d.mu.Unlock()
 	d.cancelled.Add(1)
@@ -292,8 +347,9 @@ func (d *Dispatcher) OnNotifyDirectoryDeleted(job *NotifyDirectoryDeletedJob) er
 // завершения обработки (ровно один CfExecute на задание, design.md).
 func (d *Dispatcher) Complete(job *FetchDataJob) {
 	d.mu.Lock()
-	if cur, ok := d.activeFetch[job.TransferKey]; ok && cur == job {
-		delete(d.activeFetch, job.TransferKey)
+	key := fetchJobKey{transfer: job.TransferKey, request: job.RequestKey}
+	if cur, ok := d.activeFetch[key]; ok && cur == job {
+		delete(d.activeFetch, key)
 	}
 	d.mu.Unlock()
 }
@@ -321,6 +377,22 @@ func (d *Dispatcher) ActiveFetch() int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return len(d.activeFetch)
+}
+
+// QueueCapacity — ёмкости очередей диспетчера (диагностика; ёмкость канала
+// не изменяется после NewDispatcher).
+func (d *Dispatcher) QueueCapacity() QueueOptions {
+	return QueueOptions{
+		FetchData:         cap(d.fetchData),
+		FetchPlaceholders: cap(d.fetchPlaceholders),
+		CloseCompletion:   cap(d.closeCompletion),
+		FileRenamed:       cap(d.fileRenamed),
+		FileDeleted:       cap(d.fileDeleted),
+		DirectoryCreated:  cap(d.directoryCreated),
+		DirectoryRenamed:  cap(d.directoryRenamed),
+		DirectoryDeleted:  cap(d.directoryDeleted),
+		FetchDataOverflow: cap(d.fetchDataOverflow),
+	}
 }
 
 // ActivePlaceholders — число заданий наполнения в реестре активных.

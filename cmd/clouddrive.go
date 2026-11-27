@@ -127,6 +127,15 @@ func cmdCloudDrive() *cli.Command {
 				Value: int(cfapi.PlaceholderManagementPolicyCreateUnrestricted | cfapi.PlaceholderManagementPolicyConvertToUnrestricted | cfapi.PlaceholderManagementPolicyUpdateUnrestricted),
 				Usage: "CF_PLACEHOLDER_MANAGEMENT_POLICY mask for register (advanced; bit 0x1 = user-creates allowed, 0x2 = convert-to-placeholder allowed, 0x4 = placeholder edits allowed; 0 = provider does all, user-creates rejected)",
 			},
+			&cli.IntFlag{
+				// Пул гидратации (serve, design.md D7/D11 — задача 3.5, замер
+				// M2 при N=1/8/64 параллельных FETCH_DATA): число воркеров
+				// очереди FETCH_DATA; буферы TRANSFER_DATA — VirtualAlloc по
+				// 4 MiB порций, один буфер на задание.
+				Name:  "hydration-workers",
+				Value: cfprovider.DefaultFetchWorkers,
+				Usage: "number of hydration workers for serve (FETCH_DATA pool size; parallel reads beyond the pool wait in the queue)",
+			},
 		}, nodeSTSFlags()...),
 		Description: `
 Manage a Windows Cloud Files API (CfAPI) sync root backed by a JuiceFS volume.
@@ -444,8 +453,9 @@ func cloudDriveServe(c *cli.Context) error {
 
 	// Реальный диспетчер очередей: заглушка-логгер (dispatch=nil) не
 	// обслуживает FETCH_PLACEHOLDERS — перечисление каталогов детьми
-	// повисло бы до таймаута фильтра.
-	provider := cfprovider.New(root, volume, nil, cfapi.NewDispatcher(cfapi.DefaultQueueOptions())).WithData(stack.fsys, idx)
+	// повисло бы до таймаута фильтра. Пул гидратации — --hydration-workers
+	// (этап 3, замер M2).
+	provider := cfprovider.New(root, volume, nil, cfapi.NewDispatcher(cfapi.DefaultQueueOptions())).WithData(stack.fsys, idx).WithFetchWorkers(c.Int("hydration-workers"))
 	if err := provider.Start(ctx); err != nil {
 		return err
 	}

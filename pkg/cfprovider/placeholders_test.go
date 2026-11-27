@@ -79,6 +79,7 @@ type fakeStore struct {
 	converts  []convertCall
 	updates   []updateCall
 	answers   []answerCall
+	transfers []transferCall
 	local     map[string]bool // локальные пути, существующие как ПЛЕЙСХОЛДЕРЫ
 	localReal map[string]bool // локальные пути, существующие как ОБЫЧНЫЕ файлы
 	// standard — CF_PLACEHOLDER_STANDARD_INFO по путям (усыновление);
@@ -115,6 +116,19 @@ type answerCall struct {
 	processed   uint32
 }
 
+// transferCall — фиксация ответов FETCH_DATA (гидрация, этап 3): статус,
+// диапазон задания и копия данных (реальный буфер — VirtualAlloc вне
+// Go-кучи, в тестах копируется).
+type transferCall struct {
+	conn        cfapi.ConnectionKey
+	transferKey cfapi.TransferKey
+	requestKey  cfapi.RequestKey
+	status      cfapi.NTStatus
+	offset      int64
+	length      int64
+	data        []byte
+}
+
 func (f *fakeStore) Convert(path string, isDir bool, identity []byte, flags uint32) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -149,6 +163,20 @@ func (f *fakeStore) AnswerFetchPlaceholders(conn cfapi.ConnectionKey, transferKe
 		}
 	}
 	f.answers = append(f.answers, call)
+	return nil
+}
+
+// TransferData — фиксация ответов FETCH_DATA (гидрация, этап 3): данные
+// копируются (реальный буфер — VirtualAlloc вне Go-кучи).
+func (f *fakeStore) TransferData(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, status cfapi.NTStatus, offset, length int64, buf []byte) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	data := make([]byte, len(buf))
+	copy(data, buf)
+	f.transfers = append(f.transfers, transferCall{
+		conn: conn, transferKey: transferKey, requestKey: requestKey,
+		status: status, offset: offset, length: length, data: data,
+	})
 	return nil
 }
 
@@ -194,6 +222,12 @@ func (f *fakeStore) answerCalls() []answerCall {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]answerCall(nil), f.answers...)
+}
+
+func (f *fakeStore) transferCalls() []transferCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]transferCall(nil), f.transfers...)
 }
 
 // errFake — простая ошибка для подменных реализаций.
@@ -386,6 +420,10 @@ func (s *stateAwareStore) StandardInfo(path string) (*cfapi.CFPlaceholderStandar
 
 func (s *stateAwareStore) AnswerFetchPlaceholders(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, status cfapi.NTStatus, infos []cfapi.CFPlaceholderCreateInfo, total int64, entriesProcessed uint32) error {
 	return s.store.AnswerFetchPlaceholders(conn, transferKey, requestKey, status, infos, total, entriesProcessed)
+}
+
+func (s *stateAwareStore) TransferData(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, status cfapi.NTStatus, offset, length int64, buf []byte) error {
+	return s.store.TransferData(conn, transferKey, requestKey, status, offset, length, buf)
 }
 
 func (s *stateAwareStore) StateOf(path string) (bool, bool, error) {

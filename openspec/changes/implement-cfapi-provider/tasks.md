@@ -43,11 +43,11 @@ DoD этапа: сценарии «Верхний уровень», «Дочер
 
 ## 3. Гидратация и отмена
 
-- [ ] 3.1 Пул гидратации: очередь, буферы, `CfExecute(TRANSFER_DATA)`. Пробы U3, U4, U13. Файлы: `pkg/cfprovider/fetch.go`, `pkg/cfapi/operations.go`, `pkg/cfprovider/fetch_test.go`. Проверка: `go test ./pkg/cfprovider`.
-- [ ] 3.2 Разрешение inode → путь с подъёмом по родителям. Проба U12. Файлы: `pkg/cfprovider/index.go`, `pkg/cfprovider/index_test.go`. Проверка: `go test ./pkg/cfprovider`.
-- [ ] 3.3 CANCEL_FETCH_DATA: флаг отмены и ответ со статусом отмены. Файлы: `pkg/cfapi/callbacks.go`, `pkg/cfprovider/fetch.go`, `pkg/cfprovider/fetch_test.go`. Проверка: `go test ./pkg/cfprovider`.
-- [ ] 3.4 Ошибки backend: ответ кодом ошибки, процесс жив; замер усиления чтения — в design.md. Файлы: `pkg/cfprovider/fetch.go`, design.md. Проверка: ручной прогон сценариев «Содержимое совпадает с backend», «Частичная гидратация»; запись замера в design.md.
-- [ ] 3.5 Замеры гидратации M2 (design.md D11): streaming MB/s при N=1/8/64 параллельных FETCH_DATA на файле ≥1 GiB; число воркеров и глубина очереди фиксируются. Файлы: `pkg/cfprovider/fetch.go` (бенч-обвязка), design.md. Проверка: результаты M2 в design.md; сравнение с сырым S3-GET той же машины.
+- [x] 3.1 Пул гидратации: очередь, буферы, `CfExecute(TRANSFER_DATA)`. Пробы U3, U4, U13. Файлы: `pkg/cfprovider/fetch.go`, `pkg/cfapi/operations.go`, `pkg/cfprovider/fetch_test.go`. Проверка: `go test ./pkg/cfprovider`.
+- [x] 3.2 Разрешение inode → путь с подъёмом по родителям. Проба U12. Файлы: `pkg/cfprovider/index.go`, `pkg/cfprovider/index_test.go`. Проверка: `go test ./pkg/cfprovider`.
+- [x] 3.3 CANCEL_FETCH_DATA: флаг отмены и ответ со статусом отмены. Файлы: `pkg/cfapi/callbacks.go`, `pkg/cfprovider/fetch.go`, `pkg/cfprovider/fetch_test.go`. Проверка: `go test ./pkg/cfprovider`.
+- [x] 3.4 Ошибки backend: ответ кодом ошибки, процесс жив; замер усиления чтения — в design.md. Файлы: `pkg/cfprovider/fetch.go`, design.md. Проверка: ручной прогон сценариев «Содержимое совпадает с backend», «Частичная гидратация»; запись замера в design.md.
+- [x] 3.5 Замеры гидратации M2 (design.md D11): streaming MB/s при N=1/8/64 параллельных FETCH_DATA на файле ≥1 GiB; число воркеров и глубина очереди фиксируются. Файлы: `pkg/cfprovider/fetch.go` (бенч-обвязка), design.md. Проверка: результаты M2 в design.md; сравнение с сырым S3-GET той же машины.
 
 DoD этапа: сценарии «Содержимое совпадает с backend», «Частичная гидратация», «Ровно один ответ на задание», «Прерванное чтение» пройдены; `go test ./pkg/cfprovider` зелёный; результаты M2 в design.md.
 

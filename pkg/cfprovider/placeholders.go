@@ -91,6 +91,12 @@ type placeholderStore interface {
 	// entriesProcessed — кумулятивный счётчик обработанных записей
 	// (завершение population — processed >= total, проба 27.11).
 	AnswerFetchPlaceholders(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, status cfapi.NTStatus, infos []cfapi.CFPlaceholderCreateInfo, total int64, entriesProcessed uint32) error
+	// TransferData — ответ на FETCH_DATA операцией TRANSFER_DATA (гидрация,
+	// design.md D7, этап 3): данные диапазона [offset, offset+length) в buf
+	// (страница-выровненный VirtualAlloc из BufferPool) либо при
+	// status != SUCCESS — код отказа (buf nil, length 0). Ровно один вызов
+	// на задание — инвариант design.md.
+	TransferData(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, status cfapi.NTStatus, offset, length int64, buf []byte) error
 	// StateOf — состояние локального пути: существует ли и является ли
 	// плейсхолдером (виртуальным файлом), а не обычным файлом пользователя.
 	StateOf(path string) (exists, isPlaceholder bool, err error)
@@ -362,6 +368,10 @@ func (osStore) StandardInfo(path string) (*cfapi.CFPlaceholderStandardInfo, erro
 
 func (osStore) AnswerFetchPlaceholders(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, status cfapi.NTStatus, infos []cfapi.CFPlaceholderCreateInfo, total int64, entriesProcessed uint32) error {
 	return cfapi.AnswerFetchPlaceholders(conn, transferKey, requestKey, status, infos, total, entriesProcessed)
+}
+
+func (osStore) TransferData(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, status cfapi.NTStatus, offset, length int64, buf []byte) error {
+	return cfapi.AnswerFetchData(conn, transferKey, requestKey, status, buf, offset, length)
 }
 
 // StateOf читает атрибуты локального пути через os.Stat: на Windows атрибуты

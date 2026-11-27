@@ -46,11 +46,18 @@ import (
 
 var logger = utils.GetLogger("cfprovider")
 
+// DefaultFetchWorkers — размер пула гидратации по умолчанию (design.md
+// D3/D7); единая точка правды для флага --hydration-workers serve (значение
+// флага по умолчанию) и New. Переопределяется WithFetchWorkers (замер M2
+// при N=1/8/64 параллельных FETCH_DATA).
+const DefaultFetchWorkers = 4
+
 // Provider — провайдер Cloud Files API (design.md): проверка регистрации,
 // единственный экземпляр (именованный mutex), подключение
 // CfConnectSyncRoot с таблицей callback'ов; с подключённым data path
-// (WithData) — наполнение плейсхолдерами, маркер готовности и воркер
-// наполнения детей каталогов (этап 2 лестницы MVP).
+// (WithData) — наполнение плейсхолдерами, маркер готовности, воркер
+// наполнения детей каталогов (этап 2) и пул гидратации FETCH_DATA
+// (этап 3 лестницы MVP).
 type Provider struct {
 	root     string // путь sync root, например %USERPROFILE%\AgioDrive
 	volume   string // имя тома для логов (маркер готовности)
@@ -58,11 +65,19 @@ type Provider struct {
 	dispatch cfapi.CallbackDispatcher // nil никогда: New ставит заглушку-логгер
 
 	// Data path этапа 2 (WithData; nil — режим этапа 1 без наполнения):
-	fsys    *fs.FileSystem   // pkg/fs поверх meta+chunk (design.md Integration Points)
-	idx     *Index           // inode → путь, журнал в каталоге состояния
-	backend backendLister    // записи backend (реально — BackendFS)
-	store   placeholderStore // локальный диск + CfAPI (реально — osStore)
-	local   localLister      // локальное перечисление каталогов (реально — osLocalLister)
+	fsys     *fs.FileSystem   // pkg/fs поверх meta+chunk (design.md Integration Points)
+	idx      *Index           // inode → путь, журнал в каталоге состояния
+	backend  backendLister    // записи backend (реально — BackendFS)
+	fbackend fetchBackend     // данные backend для гидрации (реально — fsFetchBackend)
+	store    placeholderStore // локальный диск + CfAPI (реально — osStore)
+	local    localLister      // локальное перечисление каталогов (реально — osLocalLister)
+
+	// Пул гидратации (этап 3, design.md D7): fetchWorkers — число воркеров
+	// (конфиг — WithFetchWorkers/флаг --hydration-workers; дефолт 4),
+	// bufs — страница-выровненные буферы TRANSFER_DATA (VirtualAlloc,
+	// вне Go-кучи — M3).
+	fetchWorkers int
+	bufs         *cfapi.BufferPool
 
 	// Воркеры этапа 2: жизненный цикл внутренних горутин (наполнение,
 	// готовность, walk) — канал stop, закрывается в Stop; wg ждёт их
@@ -117,6 +132,8 @@ func New(root, volume string, api cfapi.SyncRootAPI, dispatch cfapi.CallbackDisp
 		backend:              nil,
 		store:                osStore{},
 		local:                osLocalLister{},
+		fetchWorkers:         DefaultFetchWorkers,
+		bufs:                 cfapi.NewBufferPool(DefaultFetchWorkers),
 		retryDelay:           2 * time.Second,
 		readyCh:              make(chan struct{}),
 		walkRetryDelay:       time.Second,
@@ -134,9 +151,29 @@ func (p *Provider) WithData(fsys *fs.FileSystem, idx *Index) *Provider {
 	p.idx = idx
 	if fsys != nil {
 		p.backend = NewBackendFS(fsys)
+		p.fbackend = fsFetchBackend{fsys: fsys}
 		idx.SetResolver(func(ctx context.Context, ino uint64) (string, bool) {
 			return resolveInoMeta(ctx, p, ino)
 		})
+	}
+	return p
+}
+
+// WithFetchWorkers задаёт размер пула гидратации (design.md D7; флаг
+// --hydration-workers serve, замер M2 при N=1/8/64). Значения < 1
+// приводятся к 1. Буферный пул пересоздаётся под новый размер, пока в нём
+// нет ни занятых, ни свободных буферов (конфигурация до Start; при живых
+// буферах пул сохраняется прежний).
+func (p *Provider) WithFetchWorkers(n int) *Provider {
+	if n < 1 {
+		n = 1
+	}
+	p.fetchWorkers = n
+	if p.bufs == nil || poolUnused(p.bufs) {
+		if p.bufs != nil {
+			p.bufs.Close()
+		}
+		p.bufs = cfapi.NewBufferPool(n)
 	}
 	return p
 }
@@ -145,6 +182,14 @@ func (p *Provider) WithData(fsys *fs.FileSystem, idx *Index) *Provider {
 // напрямую, не через WithData).
 func (p *Provider) hasDataPath() bool {
 	return p.backend != nil && p.idx != nil
+}
+
+// poolUnused — в пуле нет ни занятых, ни свободных буферов (никогда не
+// использовался либо закрыт с возвратом всех буферов): его можно закрыть и
+// заменить.
+func poolUnused(pool *cfapi.BufferPool) bool {
+	allocs, frees := pool.Stats()
+	return allocs == frees && pool.Busy() == 0 && pool.Idle() == 0
 }
 
 // Start запускает провайдера: проверка регистрации sync root, захват
@@ -189,6 +234,16 @@ func (p *Provider) Start(ctx context.Context) error {
 	p.stop = make(chan struct{})
 	p.stopMu.Unlock()
 	p.running = true
+	// Пул буферов закрывается в Stop (задача 3.3: гарантированный возврат);
+	// на повторный Start он создаётся заново под текущий размер пула
+	// гидратации — замена безопасна, пока нет ни занятых, ни свободных
+	// буферов (воркеры на этот момент не запущены).
+	if p.bufs == nil || poolUnused(p.bufs) {
+		if p.bufs != nil {
+			p.bufs.Close()
+		}
+		p.bufs = cfapi.NewBufferPool(p.fetchWorkers)
+	}
 	if p.hasDataPath() {
 		p.wg.Add(2)
 		go func() {
@@ -199,6 +254,11 @@ func (p *Provider) Start(ctx context.Context) error {
 			defer p.wg.Done()
 			p.readyLoop(ctx)
 		}()
+	}
+	if p.fbackend != nil && p.idx != nil {
+		// Пул гидратации (design.md D7, этап 3): воркеры обслуживают
+		// очередь FETCH_DATA диспетчера и переполнения (U13).
+		p.startFetchPool(ctx)
 	}
 	logger.Infof("provider connected to sync root %s (volume %s)", p.root, p.volume)
 	return nil
@@ -229,6 +289,10 @@ func (p *Provider) Stop() error {
 	}
 	p.stopMu.Unlock()
 	p.wg.Wait()
+	// Воркеры завершены (буферы возвращены defer'ами) — пул можно закрыть.
+	if p.bufs != nil {
+		p.bufs.Close()
+	}
 	// Walk завершён (goroutine'ы в wg) — разрешён на следующем запуске.
 	p.walkMu.Lock()
 	p.walkStarted = false
