@@ -37,7 +37,7 @@ func (m *grpcMeta) StatFS(ctx Context, ino Ino, totalspace, availspace, iused, i
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if totalspace != nil {
 		*totalspace = resp.GetTotalSpace()
@@ -67,7 +67,7 @@ func (m *grpcMeta) Access(ctx Context, inode Ino, modemask uint8, attr *Attr) sy
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if attr != nil && resp.Attr != nil {
 		*attr = *ProtoToAttr(resp.Attr)
@@ -92,7 +92,7 @@ func (m *grpcMeta) Lookup(ctx Context, parent Ino, name string, inode *Ino, attr
 		return grpcStatusToErrno(err)
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if inode != nil {
 		*inode = Ino(resp.GetInode())
@@ -118,7 +118,7 @@ func (m *grpcMeta) Resolve(ctx Context, parent Ino, path string, inode *Ino, att
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if inode != nil {
 		*inode = Ino(resp.GetInode())
@@ -152,7 +152,7 @@ func (m *grpcMeta) GetAttr(ctx Context, inode Ino, attr *Attr) syscall.Errno {
 		return grpcStatusToErrno(err)
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if attr != nil && resp.Attr != nil {
 		*attr = *ProtoToAttr(resp.Attr)
@@ -178,7 +178,7 @@ func (m *grpcMeta) SetAttr(ctx Context, inode Ino, set uint16, sggidclearmode ui
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	// Update attr from server response (contains full attrs including Typ)
 	if attr != nil && resp.Attr != nil {
@@ -203,7 +203,7 @@ func (m *grpcMeta) CheckSetAttr(ctx Context, inode Ino, set uint16, attr Attr) s
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	return 0
 }
@@ -225,7 +225,7 @@ func (m *grpcMeta) Mknod(ctx Context, parent Ino, name string, _type uint8, mode
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if inode != nil {
 		*inode = Ino(resp.GetInode())
@@ -254,7 +254,7 @@ func (m *grpcMeta) Mkdir(ctx Context, parent Ino, name string, mode uint16, cuma
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if inode != nil {
 		*inode = Ino(resp.GetInode())
@@ -286,7 +286,7 @@ func (m *grpcMeta) Create(ctx Context, parent Ino, name string, mode uint16, cum
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if inode != nil {
 		*inode = Ino(resp.GetInode())
@@ -374,7 +374,7 @@ func (m *grpcMeta) ResolveFileKey(ctx Context, inode Ino) (fek []byte, driveFile
 		return nil, "", 0, err
 	}
 	if resp.GetErrno() != 0 {
-		return nil, "", 0, syscall.Errno(resp.GetErrno())
+		return nil, "", 0, serverErrno(resp.GetErrno())
 	}
 	if !resp.GetEncrypted() {
 		return nil, "", 0, nil
@@ -398,7 +398,7 @@ func (m *grpcMeta) Close(ctx Context, inode Ino) syscall.Errno {
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	return 0
 }
@@ -416,7 +416,7 @@ func (m *grpcMeta) Unlink(ctx Context, parent Ino, name string, skipCheckTrash .
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	m.invalidateDirCache(uint64(parent))
 	return 0
@@ -435,7 +435,7 @@ func (m *grpcMeta) Rmdir(ctx Context, parent Ino, name string, skipCheckTrash ..
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	m.invalidateDirCache(uint64(parent))
 	return 0
@@ -457,7 +457,7 @@ func (m *grpcMeta) Rename(ctx Context, parentSrc Ino, nameSrc string, parentDst 
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if inode != nil {
 		*inode = Ino(resp.GetInode())
@@ -485,7 +485,7 @@ func (m *grpcMeta) Link(ctx Context, inodeSrc, parent Ino, name string, attr *At
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if attr != nil && resp.Attr != nil {
 		*attr = *ProtoToAttr(resp.Attr)
@@ -509,7 +509,7 @@ func (m *grpcMeta) Symlink(ctx Context, parent Ino, name string, path string, in
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if inode != nil {
 		*inode = Ino(resp.GetInode())
@@ -534,7 +534,7 @@ func (m *grpcMeta) ReadLink(ctx Context, inode Ino, path *[]byte) syscall.Errno 
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if path != nil {
 		*path = resp.Path
@@ -557,7 +557,7 @@ func (m *grpcMeta) Truncate(ctx Context, inode Ino, flags uint8, attrlength uint
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	m.invalidateAttrCache(uint64(inode))
 	if attr != nil && resp.Attr != nil {
@@ -582,7 +582,7 @@ func (m *grpcMeta) Fallocate(ctx Context, inode Ino, mode uint8, off uint64, siz
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if length != nil {
 		*length = resp.GetLength()
@@ -616,7 +616,7 @@ func (m *grpcMeta) Readdir(ctx Context, inode Ino, wantattr uint8, entries *[]*E
 	}
 	if resp.GetErrno() != 0 {
 		logger.Errorf("Readdir errno: %d", resp.GetErrno())
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if entries != nil {
 		*entries = ProtoToEntries(resp.Entries)

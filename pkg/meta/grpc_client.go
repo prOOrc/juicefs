@@ -771,7 +771,7 @@ func (m *grpcMeta) Check(ctx Context, fpath string, opt *CheckOpt) error {
 		return err
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	return nil
 }
@@ -788,7 +788,7 @@ func (m *grpcMeta) Chroot(ctx Context, subdir string) syscall.Errno {
 		return grpcStatusToErrno(err)
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if subdir != "" {
 		// Remember the target for re-Chroot on reconnect (design D4).

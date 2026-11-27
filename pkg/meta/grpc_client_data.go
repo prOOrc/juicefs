@@ -42,7 +42,7 @@ func (m *grpcMeta) Read(ctx Context, inode Ino, indx uint32, slices *[]Slice) sy
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if slices != nil {
 		*slices = ProtoToSlices(resp.Slices)
@@ -61,7 +61,7 @@ func (m *grpcMeta) NewSlice(ctx Context, id *uint64) syscall.Errno {
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if id != nil {
 		*id = resp.GetId()
@@ -85,7 +85,7 @@ func (m *grpcMeta) Write(ctx Context, inode Ino, indx uint32, off uint32, slice 
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	m.invalidateAttrCache(uint64(inode))
 	return 0
@@ -110,7 +110,7 @@ func (m *grpcMeta) InvalidateChunkCache(ctx Context, inode Ino, indx uint32) sys
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	return 0
 }
@@ -132,7 +132,7 @@ func (m *grpcMeta) CopyFileRange(ctx Context, fin Ino, offIn uint64, fout Ino, o
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if copied != nil {
 		*copied = resp.GetCopied()
@@ -178,7 +178,7 @@ func (m *grpcMeta) GetDirStat(ctx Context, inode Ino) (stat *dirStat, st syscall
 		return nil, syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return nil, syscall.Errno(resp.GetErrno())
+		return nil, serverErrno(resp.GetErrno())
 	}
 	return &dirStat{
 		length: resp.Length,
@@ -205,7 +205,7 @@ func (m *grpcMeta) Clone(ctx Context, srcParentIno, srcIno, dstParentIno Ino, ds
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if count != nil {
 		*count = resp.GetCount()
@@ -237,7 +237,7 @@ func (m *grpcMeta) Compact(ctx Context, inode Ino, concurrency int, preFunc, pos
 	if err != nil {
 		return syscall.EIO
 	}
-	return syscall.Errno(resp.GetErrno())
+	return serverErrno(resp.GetErrno())
 }
 
 // CompactAll compacts all chunks
@@ -251,7 +251,7 @@ func (m *grpcMeta) CompactAll(ctx Context, threads int, bar *utils.Bar) syscall.
 	if err != nil {
 		return syscall.EIO
 	}
-	return syscall.Errno(resp.GetErrno())
+	return serverErrno(resp.GetErrno())
 }
 
 // DeleteTokens deletes tokens by IDs
@@ -265,7 +265,7 @@ func (m *grpcMeta) DeleteTokens(ctx Context, ids []uint32) syscall.Errno {
 	if err != nil {
 		return syscall.EIO
 	}
-	return syscall.Errno(resp.GetErrno())
+	return serverErrno(resp.GetErrno())
 }
 
 // DumpMeta dumps metadata to writer (not supported by gRPC client)
@@ -297,7 +297,7 @@ func (m *grpcMeta) Flock(ctx Context, inode Ino, owner uint64, ltype uint32, blo
 	if err != nil {
 		return syscall.EIO
 	}
-	return syscall.Errno(resp.GetErrno())
+	return serverErrno(resp.GetErrno())
 }
 
 // SetFacl sets ACL on inode
@@ -313,7 +313,7 @@ func (m *grpcMeta) SetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) 
 	if err != nil {
 		return syscall.EIO
 	}
-	return syscall.Errno(resp.GetErrno())
+	return serverErrno(resp.GetErrno())
 }
 
 // GetFacl gets ACL from inode
@@ -329,7 +329,7 @@ func (m *grpcMeta) GetFacl(ctx Context, ino Ino, aclType uint8, n *aclAPI.Rule) 
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if n != nil && resp.Rule != nil {
 		*n = *fromProtoACLRule(resp.Rule)
@@ -349,7 +349,7 @@ func (m *grpcMeta) StoreToken(ctx Context, token []byte) (id uint32, st syscall.
 		return 0, syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return 0, syscall.Errno(resp.GetErrno())
+		return 0, serverErrno(resp.GetErrno())
 	}
 	return resp.Id, 0
 }
@@ -366,7 +366,7 @@ func (m *grpcMeta) UpdateToken(ctx Context, id uint32, token []byte) syscall.Err
 	if err != nil {
 		return syscall.EIO
 	}
-	return syscall.Errno(resp.GetErrno())
+	return serverErrno(resp.GetErrno())
 }
 
 // LoadToken loads a token
@@ -381,7 +381,7 @@ func (m *grpcMeta) LoadToken(ctx Context, id uint32) (token []byte, st syscall.E
 		return nil, syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return nil, syscall.Errno(resp.GetErrno())
+		return nil, serverErrno(resp.GetErrno())
 	}
 	return resp.Token, 0
 }
@@ -397,7 +397,7 @@ func (m *grpcMeta) ListTokens(ctx Context) (tokens map[uint32][]byte, st syscall
 		return nil, syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return nil, syscall.Errno(resp.GetErrno())
+		return nil, serverErrno(resp.GetErrno())
 	}
 	return resp.Tokens, 0
 }
@@ -427,7 +427,7 @@ func (m *grpcMeta) GetSummary(ctx Context, inode Ino, summary *Summary, recursiv
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if summary != nil && resp.Summary != nil {
 		*summary = *fromProtoSummary(resp.Summary)
@@ -451,7 +451,7 @@ func (m *grpcMeta) GetTreeSummary(ctx Context, root *TreeSummary, depth, topN ui
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if root != nil && resp.Tree != nil {
 		*root = *fromProtoTreeSummary(resp.Tree)
@@ -474,7 +474,7 @@ func (m *grpcMeta) Remove(ctx Context, parent Ino, name string, skipTrash bool, 
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if count != nil {
 		*count = resp.GetCount()
@@ -500,7 +500,7 @@ func (m *grpcMeta) BatchUnlink(ctx Context, parent Ino, entries []*Entry, count 
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if count != nil {
 		*count = resp.GetCount()
@@ -521,7 +521,7 @@ func (m *grpcMeta) GetXattr(ctx Context, inode Ino, name string, vbuff *[]byte) 
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if vbuff != nil {
 		*vbuff = resp.Value
@@ -543,7 +543,7 @@ func (m *grpcMeta) SetXattr(ctx Context, inode Ino, name string, value []byte, f
 	if err != nil {
 		return syscall.EIO
 	}
-	return syscall.Errno(resp.GetErrno())
+	return serverErrno(resp.GetErrno())
 }
 
 // RemoveXattr removes the extended attribute
@@ -558,7 +558,7 @@ func (m *grpcMeta) RemoveXattr(ctx Context, inode Ino, name string) syscall.Errn
 	if err != nil {
 		return syscall.EIO
 	}
-	return syscall.Errno(resp.GetErrno())
+	return serverErrno(resp.GetErrno())
 }
 
 // ListXattr returns all extended attributes
@@ -573,7 +573,7 @@ func (m *grpcMeta) ListXattr(ctx Context, inode Ino, dbuff *[]byte) syscall.Errn
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if dbuff != nil {
 		*dbuff = resp.Names
@@ -606,7 +606,7 @@ func (m *grpcMeta) Getlk(ctx Context, inode Ino, owner uint64, ltype *uint32, st
 		return syscall.EIO
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	if ltype != nil {
 		*ltype = resp.Ltype
@@ -634,7 +634,7 @@ func (m *grpcMeta) Setlk(ctx Context, inode Ino, owner uint64, block bool, ltype
 	if err != nil {
 		return syscall.EIO
 	}
-	return syscall.Errno(resp.GetErrno())
+	return serverErrno(resp.GetErrno())
 }
 
 // Unlk unlocks a file range lock (not supported by gRPC client)
@@ -663,7 +663,7 @@ func (m *grpcMeta) HandleQuota(ctx Context, cmd uint8, qkey string, qtype uint32
 	if err != nil {
 		return syscall.EIO
 	}
-	return syscall.Errno(resp.GetErrno())
+	return serverErrno(resp.GetErrno())
 }
 
 // ScanUserGroupUsage scans user/group usage
@@ -677,7 +677,7 @@ func (m *grpcMeta) ScanUserGroupUsage(ctx Context) error {
 		return err
 	}
 	if resp.GetErrno() != 0 {
-		return syscall.Errno(resp.GetErrno())
+		return serverErrno(resp.GetErrno())
 	}
 	return nil
 }
@@ -702,7 +702,7 @@ func (m *grpcMeta) CleanupSlices(ctx Context) syscall.Errno {
 	if err != nil {
 		return syscall.EIO
 	}
-	return syscall.Errno(resp.GetErrno())
+	return serverErrno(resp.GetErrno())
 }
 
 // WaitDeleteSlices waits for background slice-deletion tasks (handled by the server).
@@ -727,7 +727,7 @@ func (m *grpcMeta) ScanSlices(ctx Context, opt *ScanSlicesOption, fn func(Ino, S
 			return syscall.EIO
 		}
 		if resp.GetErrno() != 0 {
-			return syscall.Errno(resp.GetErrno())
+			return serverErrno(resp.GetErrno())
 		}
 		for _, e := range resp.GetEntries() {
 			ps := e.GetSlice()
