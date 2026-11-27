@@ -62,21 +62,35 @@ type Provider struct {
 	idx     *Index           // inode → путь, журнал в каталоге состояния
 	backend backendLister    // записи backend (реально — BackendFS)
 	store   placeholderStore // локальный диск + CfAPI (реально — osStore)
+	local   localLister      // локальное перечисление каталогов (реально — osLocalLister)
 
 	// Воркеры этапа 2: жизненный цикл внутренних горутин (наполнение,
-	// готовность) — канал stop, закрывается в Stop; wg ждёт их завершения.
-	// Отдельный mutex: Stop держит p.mu во время wg.Wait — воркеры читают
-	// stop без p.mu, иначе взаимная блокировка.
+	// готовность, walk) — канал stop, закрывается в Stop; wg ждёт их
+	// завершения. Отдельный mutex: Stop держит p.mu во время wg.Wait —
+	// воркеры читают stop без p.mu, иначе взаимная блокировка.
 	stopMu sync.RWMutex
 	stop   chan struct{}
 	wg     sync.WaitGroup
 
 	// Маркер готовности (спека «Готовность», «Hub недоступен»): выводится
 	// ровно один раз за запуск — после соединения и наполнения верхнего
-	// уровня; readyLoop повторяет попытки с нарастающей паузой.
+	// уровня; readyLoop повторяет попытки с нарастающей паузой. readyCh —
+	// для WaitReady: старт фонового walk после маркера (design.md D6, такт 2).
 	readyOnce  sync.Once
 	ready      atomic.Bool
+	readyCh    chan struct{}
 	retryDelay time.Duration // база нарастающей паузы; тесты сокращают
+
+	// Фоновый walk hub (design.md D6, такт 2; walk.go): параметры retry
+	// листинга (транзиентные ошибки — backoff) и интервала прогресса;
+	// тесты сокращают. rootSubdirs — стартовая очередь из populateTopLevel;
+	// walkStarted исключает второй walk на запуск провайдера.
+	walkRetryDelay       time.Duration
+	walkRetryMax         time.Duration
+	walkProgressInterval time.Duration
+	walkMu               sync.Mutex
+	rootSubdirs          []string
+	walkStarted          bool
 
 	mu      sync.Mutex
 	running bool
@@ -96,13 +110,18 @@ func New(root, volume string, api cfapi.SyncRootAPI, dispatch cfapi.CallbackDisp
 		dispatch = &loggingDispatcher{}
 	}
 	return &Provider{
-		root:       root,
-		volume:     volume,
-		api:        api,
-		dispatch:   dispatch,
-		backend:    nil,
-		store:      osStore{},
-		retryDelay: 2 * time.Second,
+		root:                 root,
+		volume:               volume,
+		api:                  api,
+		dispatch:             dispatch,
+		backend:              nil,
+		store:                osStore{},
+		local:                osLocalLister{},
+		retryDelay:           2 * time.Second,
+		readyCh:              make(chan struct{}),
+		walkRetryDelay:       time.Second,
+		walkRetryMax:         30 * time.Second,
+		walkProgressInterval: 5 * time.Second,
 	}
 }
 
@@ -132,8 +151,10 @@ func (p *Provider) hasDataPath() bool {
 // именованного mutex (второй экземпляр получает ошибку ДО подключения —
 // спека «Второй экземпляр»), подключение к sync root. С подключённым data
 // path дополнительно запускаются воркер наполнения детей каталогов и цикл
-// готовности (наполнение верхнего уровня с повторами и маркер). ctx —
-// жизненный цикл движка; внутренние горутины останавливаются также Stop.
+// готовности (наполнение верхнего уровня с повторами и маркер). Фоновый
+// walk hub (design.md D6, такт 2) стартует отдельно — StartWalk из serve
+// после маркера готовности. ctx — жизненный цикл движка; внутренние
+// горутины останавливаются также Stop.
 func (p *Provider) Start(ctx context.Context) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -208,6 +229,10 @@ func (p *Provider) Stop() error {
 	}
 	p.stopMu.Unlock()
 	p.wg.Wait()
+	// Walk завершён (goroutine'ы в wg) — разрешён на следующем запуске.
+	p.walkMu.Lock()
+	p.walkStarted = false
+	p.walkMu.Unlock()
 	if p.mutex != 0 {
 		// «Освобождение» mutex — закрытие единственного хендла: объект
 		// уничтожается, следующий экземпляр сможет его создать. ReleaseMutex
@@ -259,10 +284,12 @@ func (p *Provider) stopChan() chan struct{} {
 }
 
 // markReady выводит маркер готовности `OK, <имя тома> is ready` ровно один
-// раз за запуск (design.md D4, контракт для supervisor'а agio-drive).
+// раз за запуск (design.md D4, контракт для supervisor'а agio-drive) и
+// закрывает readyCh — сигнал старта фонового walk (design.md D6, такт 2).
 func (p *Provider) markReady() {
 	p.readyOnce.Do(func() {
 		p.ready.Store(true)
+		close(p.readyCh)
 		logger.Infof("OK, %s is ready", p.volume)
 	})
 }
@@ -270,6 +297,39 @@ func (p *Provider) markReady() {
 // Ready — выведен ли уже маркер готовности.
 func (p *Provider) Ready() bool {
 	return p.ready.Load()
+}
+
+// WaitReady ждёт маркер готовности, отмену ctx или остановку провайдера:
+// true — маркер выведен (верхний уровень заселён, можно стартовать walk —
+// design.md D6, такт 2). false — остановка без маркера.
+func (p *Provider) WaitReady(ctx context.Context) bool {
+	stop := p.stopChan()
+	select {
+	case <-p.readyCh:
+		return true
+	case <-ctx.Done():
+		return false
+	case <-stop:
+		return false
+	}
+}
+
+// setRootSubdirs сохраняет подкаталоги верхнего уровня — стартовую очередь
+// фонового walk (design.md D6, шаг 5 Execution Flow: «очередь = каталоги
+// верхнего уровня»).
+func (p *Provider) setRootSubdirs(dirs []string) {
+	p.walkMu.Lock()
+	p.rootSubdirs = dirs
+	p.walkMu.Unlock()
+}
+
+// takeRootSubdirs забирает стартовую очередь walk (повторный вызов — nil).
+func (p *Provider) takeRootSubdirs() []string {
+	p.walkMu.Lock()
+	defer p.walkMu.Unlock()
+	dirs := p.rootSubdirs
+	p.rootSubdirs = nil
+	return dirs
 }
 
 // sleepCtx ждёт d либо первой из отмен: ctx или закрытия stop.
@@ -296,15 +356,76 @@ func sleepCtx(ctx context.Context, stop chan struct{}, d time.Duration) bool {
 	}
 }
 
-// fsPathOf переводит локальный путь под sync root в путь в стиле fs
-// (разделитель "/", от корня); путь вне корня (в т.ч. ".."-относительный)
-// и сам корень — "/".
+// fsPathOf переводит локальный путь в путь в стиле fs (разделитель "/", от
+// корня): путь корня → "/", ребёнок → "/sub", относительный вход ("sub")
+// трактуется как путь относительно корня → "/sub". Пустой ввод и путь вне
+// sync root по обоим вариантам префикса (другой том, ".."-побег, чужой
+// префикс-каталог) → "" — не парсится: вызывающий код решает, что делать
+// (handleFetchPlaceholders падает в резолв через FileIdentity).
+//
+// Префикс корня распознаётся в ДВУХ вариантах (живая проба U2, 2026-11-27:
+// фильтр с RequireFullFilePath шлёт NormalizedPath БЕЗ буквы диска —
+// относительный имени тома DOS: `\Users\<user>\AgioDrive\companies`):
+// с томом (`C:\Users\<user>\AgioDrive`) и без (`\Users\<user>\AgioDrive`).
+// Вариант без тома сравнивается по «хвосту» — ведущие разделители (в т.ч.
+// удвоенные после Clean) отрезаются. Сравнение без учёта регистра:
+// файловая система Windows регистронезависима, регистр NormalizedPath
+// фильтр не гарантирует.
 func (p *Provider) fsPathOf(localPath string) string {
-	rel, err := filepath.Rel(p.root, localPath)
-	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, `..\`) {
+	if localPath == "" {
+		return ""
+	}
+	cleaned := filepath.Clean(localPath) // "/" и "\\" → "\", ".." схлопываются
+	low := strings.ToLower(cleaned)
+
+	// Относительный вход (без тома и без ведущего разделителя) — уже
+	// относительно sync root.
+	if !strings.HasPrefix(low, `\`) && filepath.VolumeName(cleaned) == "" {
+		rel := filepath.ToSlash(cleaned)
+		if rel == ".." || strings.HasPrefix(rel, "../") {
+			return "" // побег за пределы корня
+		}
+		if rel == "." {
+			return "/"
+		}
+		return "/" + rel
+	}
+
+	rootFull := strings.ToLower(filepath.Clean(p.root))
+	rootNoVol := strings.TrimPrefix(rootFull, strings.ToLower(filepath.VolumeName(p.root)))
+	var rel string
+	matched := false
+	switch {
+	case low == rootFull || low == rootNoVol:
+		matched = true // корень
+	case strings.HasPrefix(low, rootFull+`\`):
+		matched = true
+		rel = filepath.ToSlash(strings.TrimPrefix(low, rootFull+`\`))
+	default:
+		// Вариант без тома: сравнение по «хвосту» — ведущие разделители
+		// отрезаются с обеих сторон ( `\Users\...`, `\\Users\...`).
+		rootTail := strings.TrimPrefix(rootNoVol, `\`)
+		tail := strings.TrimLeft(low, `\`)
+		if rootTail != "" && tail != "" {
+			switch {
+			case tail == rootTail:
+				matched = true // корень
+			case strings.HasPrefix(tail, rootTail+`\`):
+				matched = true
+				rel = filepath.ToSlash(strings.TrimPrefix(tail, rootTail+`\`))
+			}
+		}
+	}
+	if !matched {
+		return "" // вне sync root по обоим вариантам префикса — FileID-ветка
+	}
+	if rel == "" {
 		return "/"
 	}
-	return "/" + filepath.ToSlash(rel)
+	if rel == ".." || strings.HasPrefix(rel, "../") {
+		return "" // ".."-побег за пределы корня
+	}
+	return "/" + rel
 }
 
 // acquireInstanceMutex захватывает именованный mutex единственного экземпляра

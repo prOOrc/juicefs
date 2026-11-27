@@ -250,6 +250,21 @@ const (
 
 	goldSizeofSyncRootBasicInfo          = 8
 	goldOffSyncRootBasicInfoSyncRootFile = 0
+
+	// CF_SYNC_ROOT_STANDARD_INFO (cfapi.h:1067): LARGE_INTEGER + 2×(2×USHORT)
+	// + 3×ULONG + WCHAR[256]×2 + ULONG + BYTE[1], выравнивание 8 → хвост
+	// 1057 паддится до 1064.
+	goldSizeofSyncRootStandardInfo             = 1064
+	goldOffSyncRootStandardInfoSyncRootFileId  = 0
+	goldOffSyncRootStandardInfoHydrationPolicy = 8
+	goldOffSyncRootStandardInfoPopulation      = 12
+	goldOffSyncRootStandardInfoInSyncPolicy    = 16
+	goldOffSyncRootStandardInfoHardLinkPolicy  = 20
+	goldOffSyncRootStandardInfoProviderStatus  = 24
+	goldOffSyncRootStandardInfoProviderName    = 28
+	goldOffSyncRootStandardInfoProviderVersion = 540
+	goldOffSyncRootStandardInfoIdentityLength  = 1052
+	goldOffSyncRootStandardInfoIdentity        = 1056
 )
 
 // checkS/checkO сверяют размер и смещение с эталоном.
@@ -506,6 +521,19 @@ func TestLayout(t *testing.T) {
 	// CF_SYNC_ROOT_BASIC_INFO
 	checkS(t, "CFSyncRootBasicInfo", unsafe.Sizeof(CFSyncRootBasicInfo{}), goldSizeofSyncRootBasicInfo)
 	checkO(t, "CFSyncRootBasicInfo.SyncRootFileId", unsafe.Offsetof(CFSyncRootBasicInfo{}.SyncRootFileId), goldOffSyncRootBasicInfoSyncRootFile)
+
+	// CF_SYNC_ROOT_STANDARD_INFO — readback политик sync root (status).
+	checkS(t, "CFSyncRootStandardInfo", unsafe.Sizeof(CFSyncRootStandardInfo{}), goldSizeofSyncRootStandardInfo)
+	checkO(t, "CFSyncRootStandardInfo.SyncRootFileId", unsafe.Offsetof(CFSyncRootStandardInfo{}.SyncRootFileId), goldOffSyncRootStandardInfoSyncRootFileId)
+	checkO(t, "CFSyncRootStandardInfo.HydrationPolicy", unsafe.Offsetof(CFSyncRootStandardInfo{}.HydrationPolicy), goldOffSyncRootStandardInfoHydrationPolicy)
+	checkO(t, "CFSyncRootStandardInfo.PopulationPolicy", unsafe.Offsetof(CFSyncRootStandardInfo{}.PopulationPolicy), goldOffSyncRootStandardInfoPopulation)
+	checkO(t, "CFSyncRootStandardInfo.InSyncPolicy", unsafe.Offsetof(CFSyncRootStandardInfo{}.InSyncPolicy), goldOffSyncRootStandardInfoInSyncPolicy)
+	checkO(t, "CFSyncRootStandardInfo.HardLinkPolicy", unsafe.Offsetof(CFSyncRootStandardInfo{}.HardLinkPolicy), goldOffSyncRootStandardInfoHardLinkPolicy)
+	checkO(t, "CFSyncRootStandardInfo.ProviderStatus", unsafe.Offsetof(CFSyncRootStandardInfo{}.ProviderStatus), goldOffSyncRootStandardInfoProviderStatus)
+	checkO(t, "CFSyncRootStandardInfo.ProviderName", unsafe.Offsetof(CFSyncRootStandardInfo{}.ProviderName), goldOffSyncRootStandardInfoProviderName)
+	checkO(t, "CFSyncRootStandardInfo.ProviderVersion", unsafe.Offsetof(CFSyncRootStandardInfo{}.ProviderVersion), goldOffSyncRootStandardInfoProviderVersion)
+	checkO(t, "CFSyncRootStandardInfo.SyncRootIdentityLength", unsafe.Offsetof(CFSyncRootStandardInfo{}.SyncRootIdentityLength), goldOffSyncRootStandardInfoIdentityLength)
+	checkO(t, "CFSyncRootStandardInfo.SyncRootIdentity", unsafe.Offsetof(CFSyncRootStandardInfo{}.SyncRootIdentity), goldOffSyncRootStandardInfoIdentity)
 }
 
 // windowsGUID — псевдоним для проверки размера GUID из x/sys (16 байт,

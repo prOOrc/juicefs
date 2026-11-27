@@ -356,6 +356,79 @@ func CfUpdatePlaceholder(fileHandle syscall.Handle, fsMetadata *CFFileMetadata, 
 	return hresult(r, "CfUpdatePlaceholder")
 }
 
+// openPlaceholderHandle открывает существующую реальную запись для
+// Cf-операций по пути: CfConvertToPlaceholder (cfapi.h:808) и
+// CfUpdatePlaceholder (cfapi.h:835) принимают HANDLE. FILE_FLAG_BACKUP_SEMANTICS
+// обязателен для каталогов и безвреден для файлов; доступ на запись —
+// только файлам: каталог Windows с GENERIC_WRITE не открывает.
+func openPlaceholderHandle(path string, isDir bool) (syscall.Handle, error) {
+	path16, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return 0, err
+	}
+	access := uint32(windows.GENERIC_READ | windows.GENERIC_WRITE)
+	if isDir {
+		access = windows.GENERIC_READ
+	}
+	h, err := windows.CreateFile(path16, access, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
+	if err != nil {
+		return 0, fmt.Errorf("open %s: %w", path, err)
+	}
+	return syscall.Handle(h), nil
+}
+
+// ConvertToPlaceholderByPath — CfConvertToPlaceholder по пути (convert-примитив
+// создания записей, design.md D6.4): открывает хендл сам (одна обёртка для
+// файла и каталога); identity удерживает вызывающий байт-срез на время вызова.
+func ConvertToPlaceholderByPath(path string, isDir bool, fileIdentity []byte, convertFlags uint32) error {
+	h, err := openPlaceholderHandle(path, isDir)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = windows.CloseHandle(windows.Handle(h))
+	}()
+	var identity unsafe.Pointer
+	if len(fileIdentity) > 0 {
+		identity = unsafe.Pointer(&fileIdentity[0])
+	}
+	return CfConvertToPlaceholder(h, identity, uint32(len(fileIdentity)), convertFlags, nil, 0)
+}
+
+// UpdatePlaceholderByPath — CfUpdatePlaceholder по пути (fallback дегидратации
+// convert-примитива, design.md D6.4); fsMetadata может быть nil.
+func UpdatePlaceholderByPath(path string, fsMetadata *CFFileMetadata, updateFlags uint32) error {
+	h, err := openPlaceholderHandle(path, false)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = windows.CloseHandle(windows.Handle(h))
+	}()
+	return CfUpdatePlaceholder(h, fsMetadata, nil, 0, nil, 0, updateFlags, nil, 0)
+}
+
+// PlaceholderStandardInfoByPath читает CF_PLACEHOLDER_STANDARD_INFO по пути
+// (CfGetPlaceholderInfo, cfapi.h): OnDiskDataSize/ValidatedDataSize —
+// дегидратированность плейсхолдера; проверка при усыновлении плейсхолдера без
+// индексной записи (краш-окно fallback-дегидратации, design.md D6.4).
+func PlaceholderStandardInfoByPath(path string, isDir bool) (*CFPlaceholderStandardInfo, error) {
+	h, err := openPlaceholderHandle(path, isDir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = windows.CloseHandle(windows.Handle(h))
+	}()
+	var info CFPlaceholderStandardInfo
+	buf := (*[unsafe.Sizeof(info)]byte)(unsafe.Pointer(&info))[:]
+	var returned uint32
+	if err := CfGetPlaceholderInfo(h, PlaceholderInfoStandard, buf, &returned); err != nil {
+		return nil, err
+	}
+	return &info, nil
+}
+
 // CfGetPlaceholderInfo читает информацию о плейсхолдере; минимум —
 // CF_PLACEHOLDER_BASIC_INFO (pin/in-sync, design.md D1).
 func CfGetPlaceholderInfo(fileHandle syscall.Handle, infoClass uint32, infoBuffer []byte, returnedLength *uint32) error {

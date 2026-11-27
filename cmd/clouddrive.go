@@ -33,6 +33,7 @@ import (
 	"syscall"
 	"text/tabwriter"
 	"time"
+	"unsafe"
 
 	"github.com/urfave/cli/v2"
 	"golang.org/x/sys/windows"
@@ -86,6 +87,45 @@ func cmdCloudDrive() *cli.Command {
 			&cli.StringFlag{
 				Name:  "state-dir",
 				Usage: "provider state directory (default: %LOCALAPPDATA%\\AgioDrive\\<volume>)",
+			},
+			&cli.IntFlag{
+				// Политика гидрации (register, CF_HYDRATION_POLICY primary).
+				// Дефолт — Progressive + StreamingAllowed (design.md D4,
+				// гидрация on-demand). Modifier StreamingAllowed описан в
+				// header для progressive-гидрации — при прочих primary
+				// ставится ModifierNone. ALWAYS_FULL (3) — столбец
+				// эмпирической матрицы проб 27.11: провайдерский
+				// CfCreatePlaceholders отвергается фильтром с
+				// ERROR_CLOUD_FILE_INVALID_REQUEST (0x8007017C) — register
+				// выводит Warn.
+				Name:  "hydration-policy",
+				Value: int(cfapi.HydrationPolicyProgressive),
+				Usage: "CF_HYDRATION_POLICY primary for register (advanced; 0 = partial, 1 = progressive + streaming allowed (default), 2 = full, 3 = always full — placeholder creation rejected by the filter)",
+			},
+			&cli.IntFlag{
+				// Дефолт — пивот 27.11 (design.md D3/D6): ALWAYS_FULL (3) —
+				// namespace строится полным walk провайдера, платформа
+				// завершает пользовательский create сама, FETCH не
+				// вызывается (эксперименты 1–6, U2/U14: FETCH-режимы не
+				// дают фильтру завершённого namespace). PARTIAL (0) и FULL
+				// (2) — FETCH-режимы для диагностики: register выводит Warn
+				// о неполном namespace. Перерегистрация (register повторно)
+				// обновляет политику.
+				Name:  "population-policy",
+				Value: int(cfapi.PopulationPolicyAlwaysFull),
+				Usage: "CF_POPULATION_POLICY for register (advanced; 3 = always full — default: provider walks the whole volume, user-creates completed by the platform; 0 = provider-defined namespace; 2 = on-demand population — FETCH modes, incomplete namespace)",
+			},
+			&cli.IntFlag{
+				// Advanced-флаг эмпирической матрицы проб (register): маска
+				// CF_PLACEHOLDER_MANAGEMENT_POLICY (0..7). 0x0 = DEFAULT —
+				// «провайдер делает всё», user-creates запрещены (проба
+				// 27.11: ERROR_CANT_RESOLVE_FILENAME 1921/0x80070781);
+				// биты: 0x1 CREATE, 0x2 CONVERT, 0x4 UPDATE unrestricted —
+				// write-путь В3 требует 0x7 (по умолчанию).
+				// Перерегистрация (register повторно) обновляет политику.
+				Name:  "management-policy",
+				Value: int(cfapi.PlaceholderManagementPolicyCreateUnrestricted | cfapi.PlaceholderManagementPolicyConvertToUnrestricted | cfapi.PlaceholderManagementPolicyUpdateUnrestricted),
+				Usage: "CF_PLACEHOLDER_MANAGEMENT_POLICY mask for register (advanced; bit 0x1 = user-creates allowed, 0x2 = convert-to-placeholder allowed, 0x4 = placeholder edits allowed; 0 = provider does all, user-creates rejected)",
 			},
 		}, nodeSTSFlags()...),
 		Description: `
@@ -182,15 +222,72 @@ func cloudDriveRegister(c *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("sync registration: %w", err)
 	}
-	// Политики прототипа (design.md D4): гидрация on-demand (Progressive +
-	// streaming), наполнение on-demand (Partial) — дети каталогов по первому
-	// обращению (этап 2), атрибутный in-sync-трекинг выключен.
+	// Политика управления плейсхолдерами (cfapi.h:206-211,
+	// CF_PLACEHOLDER_MANAGEMENT_POLICY). По умолчанию все три
+	// unrestricted-бита (маска 0x7) — write-путь В3: CREATE (новые файлы
+	// пользователя), CONVERT (конверсия full-файла в плейсхолдер после
+	// выгрузки), UPDATE (правки содержимого плейсхолдеров). Живая проба
+	// 27.11: DEFAULT (0x0, «провайдер делает всё») → любой create в sync
+	// root отклоняется фильтром с ERROR_CANT_RESOLVE_FILENAME (Win32 1921 /
+	// HRESULT 0x80070781).
+	management := c.Int("management-policy")
+	if management < 0 || management > 7 {
+		return fmt.Errorf("invalid --management-policy %d (supported: mask 0..7 — CREATE|CONVERT|UPDATE unrestricted)", management)
+	}
+	// Политика наполнения (population). Дефолт — ALWAYS_FULL (3), пивот
+	// 27.11 (design.md D3/D6): namespace строится полным фоновым walk
+	// провайдера; платформа завершает пользовательский create сама, FETCH
+	// не вызывается (эксперименты 1–6, U2/U14). PARTIAL (0) и FULL (2) —
+	// FETCH-режимы для диагностики: независимо от содержимого FETCH-ответов
+	// фильтр не получает завершённого namespace для user-create; register
+	// предупреждает о неполном namespace.
+	population := c.Int("population-policy")
+	if population < 0 || population > 3 {
+		// Числовой диапазон ДО приведения к uint16: большие значения иначе
+		// усекаются молча (например, int64(65539) → uint16(3) = ALWAYS_FULL).
+		return fmt.Errorf("invalid --population-policy %d (supported: 0, 2, 3)", population)
+	}
+	switch uint16(population) {
+	case cfapi.PopulationPolicyPartial, cfapi.PopulationPolicyFull, cfapi.PopulationPolicyAlwaysFull:
+	default:
+		return fmt.Errorf("invalid --population-policy %d (supported: 0, 2, 3)", population)
+	}
+	if population != int(cfapi.PopulationPolicyAlwaysFull) {
+		logger.Warnf("FETCH-режим: namespace неполный, пользовательский create не гарантируется (--population-policy %d)", population)
+	}
+	// Политика гидрации (cfapi.h CF_HYDRATION_POLICY). Modifier
+	// StreamingAllowed описан в header для progressive-гидрации — при прочих
+	// primary ставится ModifierNone (связки «не-progressive + streaming» в
+	// header нет). ALWAYS_FULL (3): плейсхолдер обязан создаваться полностью
+	// гидратированным — провайдерский CfCreatePlaceholders отвергается
+	// фильтром с ERROR_CLOUD_FILE_INVALID_REQUEST (0x8007017C), проба
+	// матрицы 27.11.
+	hydration := c.Int("hydration-policy")
+	if hydration < 0 || hydration > 3 {
+		// Числовой диапазон ДО приведения к uint16 — усечение молча
+		// пропустило бы значение (например, int64(65536) → uint16(0)).
+		return fmt.Errorf("invalid --hydration-policy %d (supported: 0, 1, 2, 3)", hydration)
+	}
+	switch uint16(hydration) {
+	case cfapi.HydrationPolicyPartial, cfapi.HydrationPolicyProgressive, cfapi.HydrationPolicyFull, cfapi.HydrationPolicyAlwaysFull:
+	default:
+		return fmt.Errorf("invalid --hydration-policy %d (supported: 0, 1, 2, 3)", hydration)
+	}
+	hydrationModifier := cfapi.HydrationPolicyModifierNone
+	if uint16(hydration) == cfapi.HydrationPolicyProgressive {
+		hydrationModifier = cfapi.HydrationPolicyModifierStreamingAllowed
+	}
+	if uint16(hydration) == cfapi.HydrationPolicyAlwaysFull {
+		logger.Warnf("ALWAYS_FULL: CfCreatePlaceholders будет отвергнут фильтром (MS-дока)")
+	}
+	// Остальные политики прототипа (design.md D4): атрибутный in-sync-
+	// трекинг выключен; гидрация и наполнение — из флагов выше.
 	policies := cfapi.NewSyncPolicies(
-		cfapi.CFHydrationPolicy{Primary: cfapi.HydrationPolicyProgressive, Modifier: cfapi.HydrationPolicyModifierStreamingAllowed},
-		cfapi.CFPopulationPolicy{Primary: cfapi.PopulationPolicyPartial, Modifier: cfapi.PopulationPolicyModifierNone},
+		cfapi.CFHydrationPolicy{Primary: uint16(hydration), Modifier: hydrationModifier},
+		cfapi.CFPopulationPolicy{Primary: uint16(population), Modifier: cfapi.PopulationPolicyModifierNone},
 		cfapi.InSyncPolicyTrackNone,
 		cfapi.HardlinkPolicyNone,
-		cfapi.PlaceholderManagementPolicyDefault,
+		uint32(management),
 	)
 	if err := cfapi.CfRegisterSyncRoot(root, registration, policies, cfapi.RegisterFlagNone); err != nil {
 		// Повторная регистрация (спека «Повторная регистрация»): корень уже
@@ -248,6 +345,27 @@ func cloudDriveStatus(c *cli.Context) error {
 			registered = "yes"
 		}
 	}
+
+	// Фактические политики зарегистрированного sync root — readback
+	// CfGetSyncRootInfoByPath(CF_SYNC_ROOT_INFO_STANDARD): фильтр хранит то,
+	// что записал register (матрица проб: сверка hydration/population после
+	// перерегистрации). mgmt фильтр не отдаёт: класса POLICIES в CfAPI нет
+	// (эталонный header, CF_SYNC_ROOT_INFO_CLASS: BASIC/STANDARD/PROVIDER) —
+	// фактическое значение видно только поведением фильтра. Печатается в
+	// общем порядке вывода ниже (после Registry).
+	policiesLine := ""
+	if registered == "yes" {
+		var info cfapi.CFSyncRootStandardInfo
+		buf := make([]byte, unsafe.Sizeof(info)+4<<10) // запас под SyncRootIdentity
+		var returned uint32
+		if err := cfapi.CfGetSyncRootInfoByPath(root, cfapi.SyncRootInfoStandard, buf, &returned); err == nil {
+			si := (*cfapi.CFSyncRootStandardInfo)(unsafe.Pointer(&buf[0]))
+			policiesLine = fmt.Sprintf("hydration=%d+%d population=%d inSync=0x%08x hardlink=0x%08x mgmt=n/a",
+				si.HydrationPolicy.Primary, si.HydrationPolicy.Modifier, si.PopulationPolicy.Primary, si.InSyncPolicy, si.HardLinkPolicy)
+		} else {
+			policiesLine = fmt.Sprintf("unavailable (%v)", err)
+		}
+	}
 	directory := "missing"
 	if info, err := os.Stat(root); err == nil {
 		if info.IsDir() {
@@ -261,6 +379,9 @@ func cloudDriveStatus(c *cli.Context) error {
 	fmt.Printf("Registered: %s\n", registered)
 	if keyPath != "" {
 		fmt.Printf("Registry:   HKCU\\%s\n", keyPath)
+	}
+	if policiesLine != "" {
+		fmt.Printf("Policies:   %s\n", policiesLine)
 	}
 	fmt.Printf("Directory:  %s\n", directory)
 	return nil
@@ -329,6 +450,26 @@ func cloudDriveServe(c *cli.Context) error {
 		return err
 	}
 	logger.Infof("serving sync root %s (volume %s); press Ctrl+C to stop", root, volume)
+
+	// Такт 2 (design.md D6): фоновый walk hub — старт строго после маркера
+	// готовности (такт 1 заселил верхний уровень), goroutine с ctx serve
+	// (signal.NotifyContext: Ctrl+C отменяет). Остановка: cancel → воркеры
+	// дорабатывают текущий каталог, журнал сброшен → `walk cancelled:` —
+	// provider.Stop дожидается строки через wg (walk.go). Полнота
+	// namespace — строка `walk complete:` (design.md D6.2), прогресс —
+	// `walk:`.
+	walkStarted := make(chan struct{})
+	go func() {
+		defer close(walkStarted)
+		if !provider.WaitReady(ctx) {
+			return
+		}
+		provider.StartWalk(ctx)
+	}()
+	defer func() {
+		<-walkStarted // Stop дождался walk; сигнальная горутина вышла
+	}()
+
 	<-ctx.Done()
 	logger.Info("shutting down: disconnecting sync root and releasing the instance mutex")
 	return provider.Stop()
