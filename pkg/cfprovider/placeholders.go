@@ -215,6 +215,13 @@ func createEntry(p *Provider, dir string, e BackendEntry) (placeholderResultKind
 	mtime := time.Unix(e.MtimeSec, int64(e.MtimeNsec))
 	identity := make([]byte, 8)
 	binary.LittleEndian.PutUint64(identity, e.Inode)
+	// Окно супрессии watcher-событий на СОБСТВЕННОЕ создание (живой кейс
+	// 27.11, AgioDrive9/facility: watcher видел walk-созданный каталог
+	// ДО записи в индекс → notifyDirCreate «не знал» его → лишний backend
+	// Mkdir в чужой компании → EXDEV и вечный retry журнала). Убирается
+	// гонка только по времени: событие в 10-секундном окне супрессии
+	// (watcher-путь) игнорируется, callback-путь фильтра не затрагивается.
+	p.markSelfEvent(strings.ToLower(rel))
 	if e.IsDir {
 		// Каталог (design.md D6.4): CreateDirectory → SetFileTime →
 		// convert(MARK_IN_SYNC); fallback для каталогов не предусмотрен.

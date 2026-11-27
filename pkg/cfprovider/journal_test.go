@@ -623,3 +623,21 @@ func TestJournalDecomposeForeignChildrenDropped(t *testing.T) {
 		t.Errorf("декомпозиция поставила потомков: %+v, ожидается пусто", journalOpPaths(j.Ops()))
 	}
 }
+
+// TestPermanentJournalErrnoExdev — EXDEV (cross-company отказ платформы,
+// «different disk drive») перманентен: повтор невозможен (живой кейс 27.11,
+// AgioDrive9/facility: watcher-событие walk-каталога чужой компании →
+// mkdir → EXDEV → вечный retry журнала до фикса).
+func TestPermanentJournalErrnoExdev(t *testing.T) {
+	if !permanentJournalErrno(syscall.EXDEV) {
+		t.Fatal("EXDEV классифицирован транзиентным — cross-company отказ будет ретраиться вечно")
+	}
+	for _, eno := range []syscall.Errno{syscall.EACCES, syscall.EPERM, syscall.ENOTEMPTY} {
+		if got := permanentJournalErrno(eno); got != (eno != syscall.ENOTEMPTY) {
+			t.Fatalf("permanentJournalErrno(%v) = %v", eno, got)
+		}
+	}
+	if permanentJournalErrno(syscall.EIO) {
+		t.Fatal("EIO классифицирован перманентным — недоступный hub должен ретраиться")
+	}
+}
