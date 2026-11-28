@@ -111,6 +111,10 @@ func cmdGateway() *cli.Command {
 			Value: "5m",
 			Usage: "interval to reload gateway IAM from configuration",
 		},
+		&cli.BoolFlag{
+			Name:  "platform",
+			Usage: "run in agio platform mode (service identity; requires the AGIO_* environment contract)",
+		},
 		&cli.StringFlag{
 			Name:  "mountpoint",
 			Value: "s3gateway",
@@ -134,26 +138,47 @@ $ export MINIO_ROOT_USER=admin
 $ export MINIO_ROOT_PASSWORD=12345678
 $ juicefs gateway redis://localhost localhost:9000
 
-Details: https://juicefs.com/docs/community/s3_gateway`,
+Details: https://juicefs.com/docs/community/s3_gateway
+
+In platform mode (--platform) the gateway serves a single bucket over a grpc
+meta proxy with a service identity: mandatory inputs come from the AGIO_*
+environment (deployment-provided; secrets are never logged), --subdir and
+--refresh-iam-interval are refused and MINIO_ROOT_* must not be set.
+Examples:
+$ export AGIO_S3_SERVICE_TOKEN=... AGIO_KEYMANAGER_ADDR=... AGIO_FACILITY_ID=...
+$ juicefs gateway --platform grpc://proxy:9000?tls=1 localhost:9000`,
 		Flags: expandFlags(selfFlags, clientFlags(0), shareInfoFlags()),
 	}
 }
 
 func gateway(c *cli.Context) error {
 	setup(c, 2)
-	ak := os.Getenv("MINIO_ROOT_USER")
-	if ak == "" {
-		ak = os.Getenv("MINIO_ACCESS_KEY")
-	}
-	if len(ak) < 3 {
-		logger.Fatalf("MINIO_ROOT_USER should be specified as an environment variable with at least 3 characters")
-	}
-	sk := os.Getenv("MINIO_ROOT_PASSWORD")
-	if sk == "" {
-		sk = os.Getenv("MINIO_SECRET_KEY")
-	}
-	if len(sk) < 8 {
-		logger.Fatalf("MINIO_ROOT_PASSWORD should be specified as an environment variable with at least 8 characters")
+	platform := c.Bool("platform")
+	if platform {
+		// Platform mode (add-gateway-platform-mode): fail-fast on forbidden
+		// legacy surfaces and missing mandatory inputs; ROOT credentials are
+		// not required — a service identity replaces the root key pair. Error
+		// messages and logs name configuration keys, never secret values.
+		if err := validatePlatformStartup(c); err != nil {
+			logger.Fatalf("platform mode startup failed: %s", err)
+		}
+		enablePlatformMasterSwitch()
+		logger.Infof("platform gateway mode enabled, mandatory inputs present: %s", platformEnvKeyNames())
+	} else {
+		ak := os.Getenv("MINIO_ROOT_USER")
+		if ak == "" {
+			ak = os.Getenv("MINIO_ACCESS_KEY")
+		}
+		if len(ak) < 3 {
+			logger.Fatalf("MINIO_ROOT_USER should be specified as an environment variable with at least 3 characters")
+		}
+		sk := os.Getenv("MINIO_ROOT_PASSWORD")
+		if sk == "" {
+			sk = os.Getenv("MINIO_SECRET_KEY")
+		}
+		if len(sk) < 8 {
+			logger.Fatalf("MINIO_ROOT_PASSWORD should be specified as an environment variable with at least 8 characters")
+		}
 	}
 	if c.IsSet("domain") {
 		os.Setenv("MINIO_DOMAIN", c.String("domain"))
@@ -164,6 +189,13 @@ func gateway(c *cli.Context) error {
 	}
 
 	metaAddr := c.Args().Get(0)
+	if platform {
+		// Service identity to the meta proxy (spec "Platform mode startup
+		// inputs"): the grpc meta client reads the token from this env
+		// variable and presents it as x-service-credential on every RPC. The
+		// URL only names the env variable — the token never enters the URL.
+		metaAddr = withServiceCredentialEnv(metaAddr, envAgioS3ServiceToken)
+	}
 	listenAddr := c.Args().Get(1)
 	conf, jfs := initForSvc(c, c.String("mountpoint"), "s3gateway", metaAddr, listenAddr)
 
@@ -252,6 +284,16 @@ func initForSvc(c *cli.Context, mp string, svcType, metaUrl, listenAddr string) 
 	removePassword(metaUrl)
 	metaConf := getMetaConf(c, mp, c.Bool("read-only"))
 	metaCli := meta.NewClient(metaUrl, metaConf)
+	if c.Bool("platform") {
+		// Startup service connectivity check (spec "Platform mode service
+		// connectivity check"): GetFormat from the service identity before
+		// any further setup and before the S3 port opens; a refusal (bad
+		// token, wrong volume, unreachable proxy) aborts the startup.
+		if err := probePlatformService(metaCli); err != nil {
+			logger.Fatalf("platform startup probe failed: %s", err)
+		}
+		logger.Infof("platform startup probe succeeded: GetFormat accepted over service identity")
+	}
 	if c.Bool("background") {
 		if err := makeDaemonForSvc(c, metaCli, metaUrl, listenAddr); err != nil {
 			logger.Fatalf("make daemon: %s", err)

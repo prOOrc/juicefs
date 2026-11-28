@@ -136,6 +136,13 @@ type grpcMeta struct {
 	tokenManager tokenProvider      // interface for testability
 	authGroup    singleflight.Group // coalesces concurrent token requests
 
+	// serviceCredential carries the raw service token presented as
+	// x-service-credential metadata on every outgoing RPC (gateway platform
+	// mode, add-gateway-platform-mode). Empty in every other mode: withAuth
+	// then behaves exactly as before. The value never enters the meta URL —
+	// the URL only names the env variable it is read from.
+	serviceCredential string
+
 	// stsRefreshMargin is the sts-refresh-margin from the meta URL (design
 	// configure-sts-refresh-ttl D4); see STSRefreshMargin.
 	stsRefreshMargin float64
@@ -245,6 +252,23 @@ func newGRPCMeta(driver, addr string, conf *Config) (Meta, error) {
 		}
 	}
 
+	// Service credential for headless clients (gateway platform mode,
+	// add-gateway-platform-mode): the meta URL names the env variable holding
+	// the raw token (service-credential-env=NAME) — the token itself never
+	// enters the URL, which is logged and lands in the process title. The
+	// service identity and OIDC modes are mutually exclusive: the proxy
+	// rejects requests that carry both headers.
+	serviceCredential := ""
+	if envName := query.get("service-credential-env", "service_credential_env"); envName != "" {
+		if oidcCfg != nil {
+			return nil, fmt.Errorf("service-credential-env cannot be combined with oidc-issuer")
+		}
+		serviceCredential = strings.TrimSpace(os.Getenv(envName))
+		if serviceCredential == "" {
+			return nil, fmt.Errorf("service credential environment variable %s is empty or unset", envName)
+		}
+	}
+
 	// TLS configuration (optional; without tls=1 the connection stays
 	// plaintext — backward compatible with existing deployments)
 	tlsEnabled := query.pop("tls") == "1"
@@ -305,6 +329,7 @@ func newGRPCMeta(driver, addr string, conf *Config) (Meta, error) {
 		stsRefreshMargin:  stsRefreshMargin,
 		lastPermGen:       -1, // unset until the first successful heartbeat (task 7.3)
 		oidcConfig:        oidcCfg,
+		serviceCredential: serviceCredential,
 		tlsOn:             tlsEnabled,
 	}
 	// Assign only when non-nil: wrapping a nil *oidc.TokenManager in the
@@ -515,6 +540,17 @@ func (m *grpcMeta) withAuth(ctx context.Context) context.Context {
 
 	if m.sid != 0 {
 		md["x-session-id"] = []string{fmt.Sprintf("%d", m.sid)}
+	}
+
+	// Service identity (gateway platform mode): attach the service credential
+	// instead of an OIDC bearer token. The proxy authenticates such requests
+	// solely by x-service-credential (add-meta-proxy-service-identity) and
+	// rejects any request carrying both headers. Empty credential keeps the
+	// legacy path byte-identical.
+	if m.serviceCredential != "" {
+		md["x-service-credential"] = []string{m.serviceCredential}
+		ctx = metadata.NewOutgoingContext(ctx, md)
+		return ctx
 	}
 
 	// Add OIDC bearer token if configured.
