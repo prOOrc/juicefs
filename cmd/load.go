@@ -26,13 +26,14 @@ import (
 	"sort"
 	"strings"
 
-	zstd "github.com/klauspost/compress/zstd"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/pkg/errors"
 
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
+
+	zstd "github.com/klauspost/compress/zstd"
 )
 
 func cmdLoad() *cli.Command {

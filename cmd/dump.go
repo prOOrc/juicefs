@@ -23,10 +23,11 @@ import (
 	"os"
 	"strings"
 
-	zstd "github.com/klauspost/compress/zstd"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
+
+	zstd "github.com/klauspost/compress/zstd"
 )
 
 func cmdDump() *cli.Command {

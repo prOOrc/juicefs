@@ -8,7 +8,6 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.4
-	github.com/DataDog/zstd v1.5.6
 	github.com/IBM/ibm-cos-sdk-go v1.13.0
 	github.com/Shopify/sarama v1.38.0
 	github.com/ThreeDotsLabs/watermill v1.5.1
@@ -51,7 +50,6 @@ require (
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.21.12+incompatible
-	github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/json-iterator/go v1.1.12
@@ -250,7 +248,7 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
 	github.com/jtolio/noiseconn v0.0.0-20230301220541-88105e6c8ac6 // indirect
-	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/klauspost/compress v1.18.0
 	github.com/klauspost/cpuid v1.3.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
 	github.com/klauspost/pgzip v1.2.5 // indirect
@@ -283,7 +281,7 @@ require (
 	github.com/pengsrc/go-shared v0.2.1-0.20190131101655-1999055a4a14 // indirect
 	github.com/philhofer/fwd v1.1.1 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
-	github.com/pierrec/lz4/v4 v4.1.18 // indirect
+	github.com/pierrec/lz4/v4 v4.1.18
 	github.com/pingcap/errors v0.11.5-0.20241219054535-6b8c588c3122 // indirect
 	github.com/pingcap/failpoint v0.0.0-20240528011301-b51a646c7c86 // indirect
 	github.com/pingcap/kvproto v0.0.0-20260608025309-50b863799195 // indirect
