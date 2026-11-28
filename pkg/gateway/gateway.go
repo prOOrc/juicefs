@@ -923,6 +923,17 @@ func (n *jfsObjects) mkdirAllUntil(ctx context.Context, p, root string) error {
 }
 
 func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions, applyObjTaggingFunc func(tmpName string)) (fi os.FileInfo, err error) {
+	// Complete-at-destination (add-gateway-platform-mode): the final object is
+	// created directly at the destination path, mirroring CompleteMultipartUpload
+	// below — on encrypted volumes CreateFileKey resolves KEK/AAD by the creation
+	// path, so the previous staging-under-`.sys/tmp` + rename flow keyed the
+	// object under the synthetic `.sys` company and made it unreadable at the
+	// real destination path. PutObjectPart shares this helper and keeps the
+	// staging flow: parts are created and stay under `.sys/uploads/` (creation
+	// path equals the final path), so their keying is unaffected by the rename.
+	if !strings.HasPrefix(object, sep+metaBucket+sep) {
+		return n.putObjectAtDestination(ctx, bucket, object, r, opts, applyObjTaggingFunc)
+	}
 	uuid := minio.MustGetUUID()
 	tmpname := n.tpath(bucket, "tmp", uuid[:subDirPrefix], uuid)
 	f, eno := n.fs.Create(mctx, tmpname, 0666, n.gConf.Umask)
@@ -995,6 +1006,95 @@ func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *mi
 		}
 		eno = n.fs.Rename(mctx, tmpname, object, 0)
 	}
+	if eno != 0 {
+		err = n.objectCommitErr(ctx, eno, bucket, object)
+	}
+	return
+}
+
+// putObjectAtDestination writes a user object straight to its destination path
+// (add-gateway-platform-mode): the file key is derived from the creation path,
+// so the object must never be staged under `.sys/tmp/` and renamed (see
+// putObject). After the destination Create any failure is rolled back by
+// removing the partial object, mirroring CompleteMultipartUpload; ENOENT on
+// the rollback Delete is ignored.
+func (n *jfsObjects) putObjectAtDestination(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions, applyObjTaggingFunc func(tmpName string)) (fi os.FileInfo, err error) {
+	f, eno := n.fs.Create(mctx, object, 0666, n.gConf.Umask)
+	if eno == syscall.EEXIST {
+		// S3 Put replaces an existing object — the rename-based flow
+		// overwrote it silently. A directory at the target path is a real
+		// conflict, exactly as it was for the rename-based flow.
+		var efi os.FileInfo
+		if efi, eno = n.fs.Stat(mctx, object); eno == 0 && efi.IsDir() {
+			err = n.objectCommitErr(ctx, syscall.EEXIST, bucket, object)
+			logger.Errorf("put %s: destination is a directory", object)
+			return
+		}
+		eno = n.fs.Delete(mctx, object)
+		if eno != 0 && !errors.Is(eno, syscall.ENOENT) {
+			err = n.objectCommitErr(ctx, eno, bucket, object)
+			logger.Errorf("delete stale object %s before put: %s", object, err)
+			return
+		}
+		f, eno = n.fs.Create(mctx, object, 0666, n.gConf.Umask)
+	}
+	if eno == syscall.ENOENT {
+		if err = n.mkdirAllInBucket(ctx, bucket, path.Dir(object)); err != nil {
+			logger.Errorf("mkdirAll %s: %s", path.Dir(object), err)
+			err = n.objectCommitErr(ctx, err, bucket, object)
+			return
+		}
+		f, eno = n.fs.Create(mctx, object, 0666, n.gConf.Umask)
+	}
+	if eno != 0 {
+		err = n.objectCommitErr(ctx, eno, bucket, object)
+		logger.Errorf("create %s: %s", object, err)
+		return
+	}
+	// rollback removes the destination object after a failed write: Put must
+	// not leave a partial object at the destination.
+	rollback := func() {
+		if derr := n.fs.Delete(mctx, object); derr != 0 && !errors.Is(derr, syscall.ENOENT) {
+			logger.Errorf("delete partial object %s: %s", object, derr)
+		}
+	}
+	defer func() {
+		if err != nil {
+			rollback()
+		}
+	}()
+
+	var buf = buffPool.Get().(*[]byte)
+	defer buffPool.Put(buf)
+	for {
+		var n int
+		n, err = io.ReadFull(r, *buf)
+		if n == 0 {
+			if err == io.EOF {
+				err = nil
+			}
+			break
+		}
+		_, eno := f.Write(mctx, (*buf)[:n])
+		if eno != 0 {
+			err = eno
+			break
+		}
+	}
+	if err == nil {
+		eno = f.Close(mctx)
+		if eno != 0 {
+			err = eno
+		}
+	} else {
+		_ = f.Close(mctx)
+	}
+	if err != nil {
+		return
+	}
+
+	applyObjTaggingFunc(object)
+	fi, eno = n.fs.Stat(mctx, object)
 	if eno != 0 {
 		err = n.objectCommitErr(ctx, eno, bucket, object)
 	}
