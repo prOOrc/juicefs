@@ -40,6 +40,49 @@ func (a *validatorAdapter) Validate(ctx context.Context, token string) (interfac
 	return a.Validator.Validate(ctx, token)
 }
 
+// IdentityKind classifies the authenticated identity of a request. The proxy
+// supports two kinds (add-meta-proxy-service-identity): interactive OIDC users
+// and headless service identities authenticated by the service credential.
+type IdentityKind string
+
+const (
+	// IdentityKindOIDCUser is an interactive OIDC-authenticated user. It is
+	// the default: requests without any kind in the context behave exactly as
+	// OIDC users did before the service identity mode existed.
+	IdentityKindOIDCUser IdentityKind = "oidc-user"
+	// IdentityKindService is a headless service identity authenticated by the
+	// x-service-credential header (never by a bearer token).
+	IdentityKindService IdentityKind = "service"
+)
+
+// ctxKeyIdentityKind is the context key for the authenticated identity kind.
+type ctxKeyIdentityKind struct{}
+
+// WithIdentityKind returns a context carrying the given identity kind, as set
+// by the service identity interceptor. Useful for tests and in-process callers.
+func WithIdentityKind(ctx context.Context, kind IdentityKind) context.Context {
+	return context.WithValue(ctx, ctxKeyIdentityKind{}, kind)
+}
+
+// IdentityKindFromContext returns the identity kind stored in the context.
+// ok is false when no kind was set — such requests keep the legacy
+// OIDC-user behavior in every downstream consumer.
+func IdentityKindFromContext(ctx context.Context) (IdentityKind, bool) {
+	if v := ctx.Value(ctxKeyIdentityKind{}); v != nil {
+		if kind, ok := v.(IdentityKind); ok {
+			return kind, true
+		}
+	}
+	return "", false
+}
+
+// IsServiceIdentity reports whether the context belongs to a service-identity
+// request. Requests without a kind (the legacy path) are never service.
+func IsServiceIdentity(ctx context.Context) bool {
+	kind, ok := IdentityKindFromContext(ctx)
+	return ok && kind == IdentityKindService
+}
+
 // ctxKeyClaims is the context key for verified ID token claims.
 type ctxKeyClaims struct{}
 
@@ -85,6 +128,11 @@ func ExtractBearerToken(ctx context.Context) string {
 // If a token is present but invalid, the request is rejected with Unauthenticated.
 func UnaryInterceptor(v ValidatorInterface) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if IsServiceIdentity(ctx) {
+			// Service identity is authenticated by the service credential
+			// upstream — bearer validation does not apply.
+			return handler(ctx, req)
+		}
 		tokenStr := ExtractBearerToken(ctx)
 		if tokenStr == "" {
 			// No token — pass through for backward compatibility
@@ -108,6 +156,11 @@ func UnaryInterceptor(v ValidatorInterface) grpc.UnaryServerInterceptor {
 func StreamInterceptor(v ValidatorInterface) grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
+		if IsServiceIdentity(ctx) {
+			// Service identity is authenticated by the service credential
+			// upstream — bearer validation does not apply.
+			return handler(srv, ss)
+		}
 		tokenStr := ExtractBearerToken(ctx)
 		if tokenStr == "" {
 			// No token — pass through for backward compatibility
@@ -132,6 +185,11 @@ func StreamInterceptor(v ValidatorInterface) grpc.StreamServerInterceptor {
 // a valid bearer token. Requests without a token are rejected with Unauthenticated.
 func StrictUnaryInterceptor(v ValidatorInterface) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if IsServiceIdentity(ctx) {
+			// Service identity is authenticated by the service credential
+			// upstream — the strict bearer requirement does not apply.
+			return handler(ctx, req)
+		}
 		tokenStr := ExtractBearerToken(ctx)
 		if tokenStr == "" {
 			interceptorLogger.Warnf("OIDC: no token provided")
@@ -154,6 +212,11 @@ func StrictUnaryInterceptor(v ValidatorInterface) grpc.UnaryServerInterceptor {
 func StrictStreamInterceptor(v ValidatorInterface) grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
+		if IsServiceIdentity(ctx) {
+			// Service identity is authenticated by the service credential
+			// upstream — the strict bearer requirement does not apply.
+			return handler(srv, ss)
+		}
 		tokenStr := ExtractBearerToken(ctx)
 		if tokenStr == "" {
 			interceptorLogger.Warnf("OIDC: no token provided")
