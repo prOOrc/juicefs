@@ -4,6 +4,11 @@
 
 When the proxy is configured with a service credential (pilot: SHA-256 hash via proxy configuration), requests carrying metadata `x-service-credential` SHALL be authenticated as service identity if and only if the SHA-256 of the presented credential matches the configured hash (constant-time comparison). A request carrying BOTH `authorization` (bearer) and `x-service-credential` SHALL be rejected with `codes.Unauthenticated`. A request carrying `x-service-credential` that does not match SHALL be rejected with `codes.Unauthenticated` without falling back to the OIDC path. When the proxy has no service credential configured, the `x-service-credential` metadata SHALL be ignored (OIDC-only behavior unchanged). The service credential value SHALL NOT be logged.
 
+Verified-by: pkg/meta/service_identity_test.go::TestServiceIdentityUnaryMatrix
+Verified-by: pkg/meta/service_identity_test.go::TestServiceIdentityStreamMatrix
+Verified-by: pkg/meta/service_identity_test.go::TestServiceIdentityDisabledHeaderIgnored
+Verified-by: pkg/meta/service_identity_test.go::TestServiceIdentityNoNodeCredentialFailClosed
+
 #### Scenario: Valid service credential authenticates as service
 
 - **WHEN** запрос с корректным `x-service-credential` при настроенном service-режиме
@@ -28,6 +33,10 @@ When the proxy is configured with a service credential (pilot: SHA-256 hash via 
 
 Для соединений/запросов с identity kind = service authz-интерцептор SHALL пропускать проверку (authz уже выполнен на gateway), при этом: admin-RPC (включая DumpMeta, LoadMeta и все прочие, кроме GetFormat) SHALL возвращать `PermissionDenied`; GetFormat SHALL быть разрешён; lifecycle-участие service-соединений SHALL соответствовать обычным правилам интерцепторов без per-user authz. Для identity kind = oidc-user поведение всех интерцепторов SHALL остаться без изменений.
 
+Verified-by: pkg/meta/service_identity_test.go::TestServiceMethodDecision
+Verified-by: pkg/meta/service_identity_test.go::TestAuthzInterceptorSkipsService
+Verified-by: pkg/meta/service_identity_e2e_test.go::TestServiceIdentityAdminOverWire
+
 #### Scenario: Service request skips per-user authz
 
 - **WHEN** service-запрос Lookup/GetAttr/Open по пути вне грантов любого пользователя
@@ -46,6 +55,9 @@ When the proxy is configured with a service credential (pilot: SHA-256 hash via 
 ### Requirement: Node credential routing to keymanager
 
 Исходящий keymanager-клиент прокси SHALL добавлять метадату `x-node-credential` (значение из конфига прокси) к вызовам CreateFileKey, GetFileFEK и RotateFileFEK тогда и только тогда, когда вызов порождён запросом с identity kind = service. Вызовы, порождённые oidc-user соединениями, SHALL идти без этой метадаты и с прежним содержимым (user_id в request). Keymanager-вызов вне контекста с identity (фоновая операция) SHALL идти без метадаты (fail-closed на платформе: платформа отклонит или обработает по per-user пути — но не получит node-ветку). Если service-режим включён, а node-credential в конфиге отсутствует, proxy SHALL отказывать в приёме service-соединений.
+
+Verified-by: pkg/meta/keymanager_node_credential_test.go::TestNodeCredentialRoutingMatrix
+Verified-by: pkg/meta/service_identity_e2e_test.go::TestServiceIdentityEndToEnd
 
 #### Scenario: Node credential attached only for service-originated calls
 

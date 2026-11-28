@@ -21,6 +21,7 @@
 
 - Поведение запросов без `x-service-credential` — байт-в-байт прежнее (OIDC strict, authz, кэши, аудит).
 - Service-решения не попадают в authz-кэш (skip целиком).
+- Service-соединение теперь тоже достигает pre-existing дефекта Chroot (Chroot = AuthzPermissionNone → pass, меняет общий s.root authz-free): известноe следствие модели доверия ADR-005 (gateway ≈ прокси); gateway Chroot не вызывает (--subdir запрещён) — отдельный issue на сам дефект, вне этого change.
 - Service-соединениям недоступен admin-набор, кроме GetFormat; стриминговые admin — недоступны (дыра закрыта для service).
 - node-credential прикрепляется только к трём FEK-методам и только для service-kind; платформа не получит node-ветку ни для какого oidc-вызова.
 - Значения `--service-credential-hash`/`--node-credential` не логируются; в конфигах — имена/файлы.
