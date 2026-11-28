@@ -976,3 +976,228 @@ func TestDeleteObjects(t *testing.T) {
 		}
 	})
 }
+
+// readTestObject reads the whole object at the given path through the
+// filesystem layer.
+func readTestObject(t *testing.T, jfs *fs.FileSystem, p string) []byte {
+	t.Helper()
+	f, errno := jfs.Open(mctx, p, 0)
+	if errno != 0 {
+		t.Fatalf("open %s: %s", p, errno)
+	}
+	defer func() { _ = f.Close(mctx) }()
+	var out []byte
+	buf := make([]byte, 4096)
+	for {
+		n, err := f.Read(mctx, buf)
+		out = append(out, buf[:n]...)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			t.Fatalf("read %s: %s", p, err)
+		}
+	}
+	return out
+}
+
+// newCompleteTestGateway builds a test gateway with fs-level caches disabled:
+// CompleteMultipartUpload writes data and attributes through meta-level
+// CopyFileRange, which does not invalidate the fs attr cache (true for the
+// previous rename-based flow as well), so assertions need the uncached view.
+func newCompleteTestGateway(t *testing.T, conf Config) (*jfsObjects, *fs.FileSystem, string) {
+	t.Helper()
+	m := meta.NewClient("memkv://", nil)
+	format := &meta.Format{
+		Name:      "test",
+		BlockSize: 4096,
+		Capacity:  1 << 30,
+		DirStats:  true,
+	}
+	if err := m.Init(format, true); err != nil {
+		t.Fatalf("init meta: %s", err)
+	}
+	vfsConf := &vfs.Config{
+		Meta: meta.DefaultConf(),
+		Chunk: &chunk.Config{
+			BlockSize:   format.BlockSize << 10,
+			MaxUpload:   1,
+			MaxDownload: 200,
+			BufferSize:  100 << 20,
+		},
+	}
+	objStore, _ := object.CreateStorage("mem", "", "", "", "")
+	store := chunk.NewCachedStore(objStore, *vfsConf.Chunk, nil)
+	jfs, err := fs.NewFileSystem(vfsConf, m, store, nil)
+	if err != nil {
+		t.Fatalf("initialize failed: %s", err)
+	}
+	conf.Bucket = format.Name
+	if conf.Umask == 0 {
+		conf.Umask = 022
+	}
+	jfsObj := &jfsObjects{
+		fs:       jfs,
+		conf:     vfsConf,
+		listPool: minio.NewTreeWalkPool(time.Minute * 30),
+		gConf:    &conf,
+		nsMutex:  minio.NewNSLock(false),
+	}
+	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
+	return jfsObj, jfs, format.Name
+}
+
+func multipartUploadForTest(t *testing.T, n *jfsObjects, ctx context.Context, bucket, object string, partDatas ...[]byte) (string, []minio.CompletePart) {
+	t.Helper()
+	uploadID, err := n.NewMultipartUpload(ctx, bucket, object, minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("new multipart upload: %s", err)
+	}
+	var parts []minio.CompletePart
+	for i, data := range partDatas {
+		part, err := n.PutObjectPart(ctx, bucket, object, uploadID, i+1, newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{})
+		if err != nil {
+			t.Fatalf("put part %d: %s", i+1, err)
+		}
+		parts = append(parts, minio.CompletePart{PartNumber: i + 1, ETag: part.ETag})
+	}
+	return uploadID, parts
+}
+
+// TestCompleteMultipartUploadAtDestination (add-gateway-platform-mode 2.1,
+// spec "Complete keys the final object by its real path"): Complete creates
+// the final object at the destination key, readable through the S3 API, and
+// removes the staging upload directory; no complete file is staged under
+// `.sys/uploads`.
+func TestCompleteMultipartUploadAtDestination(t *testing.T) {
+	n, jfs, bucket := newCompleteTestGateway(t, Config{})
+	ctx := context.Background()
+	data1 := []byte("hello ")
+	data2 := []byte("world")
+	object := "companies/acme/render.exr"
+
+	uploadID, parts := multipartUploadForTest(t, n, ctx, bucket, object, data1, data2)
+	objInfo, err := n.CompleteMultipartUpload(ctx, bucket, object, uploadID, parts, minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("complete: %s", err)
+	}
+	if objInfo.Size != int64(len(data1)+len(data2)) {
+		t.Fatalf("size %d, want %d", objInfo.Size, len(data1)+len(data2))
+	}
+	if want := minio.ComputeCompleteMultipartMD5(parts); objInfo.ETag != want {
+		t.Fatalf("etag %q, want multipart md5 %q", objInfo.ETag, want)
+	}
+
+	// the object is readable at the destination key with the merged content
+	got := readTestObject(t, jfs, n.path(bucket, object))
+	if !bytes.Equal(got, append(append([]byte{}, data1...), data2...)) {
+		t.Fatalf("content %q, want %q", got, "hello world")
+	}
+	if _, err := n.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{}); err != nil {
+		t.Fatalf("GetObjectInfo by key: %s", err)
+	}
+
+	// staging is gone: no upload directory, hence no staged complete file
+	if _, errno := n.fs.Stat(mctx, n.upath(bucket, uploadID)); !fs.IsNotExist(errno) {
+		t.Fatalf("staging upload directory still exists: %s", errno)
+	}
+
+	// a nested second complete keeps working at deeper keys
+	uploadID2, parts2 := multipartUploadForTest(t, n, ctx, bucket, "companies/acme/nested/other.bin", data2, data1)
+	if _, err := n.CompleteMultipartUpload(ctx, bucket, "companies/acme/nested/other.bin", uploadID2, parts2, minio.ObjectOptions{}); err != nil {
+		t.Fatalf("complete nested: %s", err)
+	}
+	if got := readTestObject(t, jfs, n.path(bucket, "companies/acme/nested/other.bin")); !bytes.Equal(got, append(append([]byte{}, data2...), data1...)) {
+		t.Fatalf("nested content %q", got)
+	}
+}
+
+// TestCompleteMultipartUploadReplacesExisting (unencrypted equivalence of the
+// previous rename semantics): Complete onto an existing key replaces the
+// object wholesale.
+func TestCompleteMultipartUploadReplacesExisting(t *testing.T) {
+	n, jfs, bucket := newCompleteTestGateway(t, Config{})
+	ctx := context.Background()
+	oldData := []byte("stale object payload")
+	newData := []byte("fresh content")
+	object := "companies/acme/replaced.bin"
+
+	if _, err := n.PutObject(ctx, bucket, object, newTestPutObjReader(t, bytes.NewReader(oldData), oldData), minio.ObjectOptions{}); err != nil {
+		t.Fatalf("put stale object: %s", err)
+	}
+	uploadID, parts := multipartUploadForTest(t, n, ctx, bucket, object, newData)
+	if _, err := n.CompleteMultipartUpload(ctx, bucket, object, uploadID, parts, minio.ObjectOptions{}); err != nil {
+		t.Fatalf("complete over existing object: %s", err)
+	}
+	if got := readTestObject(t, jfs, n.path(bucket, object)); !bytes.Equal(got, newData) {
+		t.Fatalf("content %q, want replacement %q", got, newData)
+	}
+	if _, errno := n.fs.Stat(mctx, n.upath(bucket, uploadID)); !fs.IsNotExist(errno) {
+		t.Fatalf("staging upload directory still exists: %s", errno)
+	}
+}
+
+// TestCompleteMultipartUploadFailureRemovesPartial (spec "Failed complete
+// leaves no partial object"): a part lost before Complete fails the commit,
+// the partially written destination file is removed and the staging directory
+// is left for the background cleanup.
+func TestCompleteMultipartUploadFailureRemovesPartial(t *testing.T) {
+	n, _, bucket := newCompleteTestGateway(t, Config{})
+	ctx := context.Background()
+	data1 := []byte("hello ")
+	data2 := []byte("world")
+	object := "companies/acme/broken.exr"
+
+	uploadID, parts := multipartUploadForTest(t, n, ctx, bucket, object, data1, data2)
+	// lose a part after the upload is registered
+	if errno := n.fs.Delete(mctx, n.ppath(bucket, uploadID, "2")); errno != 0 {
+		t.Fatalf("delete part: %s", errno)
+	}
+	if _, err := n.CompleteMultipartUpload(ctx, bucket, object, uploadID, parts, minio.ObjectOptions{}); err == nil {
+		t.Fatal("complete with a missing part must fail")
+	}
+	// no partial object at the destination
+	if _, errno := n.fs.Stat(mctx, n.path(bucket, object)); !fs.IsNotExist(errno) {
+		t.Fatalf("partial object left at destination: %s", errno)
+	}
+	// the staging directory stays for the background cleanup (unchanged)
+	if _, errno := n.fs.Stat(mctx, n.upath(bucket, uploadID)); errno != 0 {
+		t.Fatalf("staging directory must remain for background cleanup: %s", errno)
+	}
+}
+
+// TestCompleteMultipartUploadAbortUnchanged (2.2 regression): Abort removes
+// the staging directory and never touches the destination.
+func TestCompleteMultipartUploadAbortUnchanged(t *testing.T) {
+	n, _, bucket := newCompleteTestGateway(t, Config{})
+	ctx := context.Background()
+	object := "companies/acme/aborted.bin"
+	uploadID, _ := multipartUploadForTest(t, n, ctx, bucket, object, []byte("part"))
+	if err := n.AbortMultipartUpload(ctx, bucket, object, uploadID, minio.ObjectOptions{}); err != nil {
+		t.Fatalf("abort: %s", err)
+	}
+	if _, errno := n.fs.Stat(mctx, n.upath(bucket, uploadID)); !fs.IsNotExist(errno) {
+		t.Fatalf("staging directory still exists after abort: %s", errno)
+	}
+	if _, errno := n.fs.Stat(mctx, n.path(bucket, object)); !fs.IsNotExist(errno) {
+		t.Fatalf("abort must not create the destination object: %s", errno)
+	}
+}
+
+// TestCompleteMultipartUploadDestinationIsDirectory: a directory occupying the
+// destination key is a conflict, like it was for the rename-based flow.
+func TestCompleteMultipartUploadDestinationIsDirectory(t *testing.T) {
+	n, _, bucket := newCompleteTestGateway(t, Config{})
+	ctx := context.Background()
+	object := "companies/acme/dir-obj"
+	if errno := n.fs.MkdirAll(mctx, n.path(bucket, object), 0777, 022); errno != 0 {
+		t.Fatalf("mkdir destination: %s", errno)
+	}
+	uploadID, parts := multipartUploadForTest(t, n, ctx, bucket, object, []byte("data"))
+	if _, err := n.CompleteMultipartUpload(ctx, bucket, object, uploadID, parts, minio.ObjectOptions{}); err == nil {
+		t.Fatal("complete onto a directory must fail")
+	}
+	if _, errno := n.fs.Stat(mctx, n.path(bucket, object)); errno != 0 {
+		t.Fatalf("destination directory must survive the failed complete: %s", errno)
+	}
+}

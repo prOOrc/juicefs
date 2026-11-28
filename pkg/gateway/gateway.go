@@ -1422,26 +1422,67 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	if err = g.Wait(); err != nil {
 		return objInfo, err
 	}
-	tmp := n.ppath(bucket, uploadID, "complete")
-	_ = n.fs.Delete(mctx, tmp)
-	f, eno := n.fs.Create(mctx, tmp, 0666, n.gConf.Umask)
+
+	// Complete-at-destination (add-gateway-platform-mode): the final object is
+	// created directly at the destination path, so its file key is derived
+	// from the real path (on encrypted volumes CreateFileKey resolves KEK/AAD
+	// by the creation path — the previous complete-file-in-staging + rename
+	// flow keyed the object under `.sys/uploads/` and made it unreadable
+	// after the rename). Staging holds only the uploaded parts, as before;
+	// AbortMultipartUpload and the background cleanup are unchanged.
+	name := n.path(bucket, object)
+	f, eno := n.fs.Create(mctx, name, 0666, n.gConf.Umask)
+	if eno == syscall.EEXIST {
+		// S3 Complete replaces an existing object — the rename-based flow
+		// overwrote it silently. A directory at the target path is a real
+		// conflict, exactly as it was for the rename-based flow.
+		var fi os.FileInfo
+		if fi, eno = n.fs.Stat(mctx, name); eno == 0 && fi.IsDir() {
+			err = n.objectCommitErr(ctx, syscall.EEXIST, bucket, object, uploadID)
+			logger.Errorf("complete %s: destination is a directory", name)
+			return
+		}
+		eno = n.fs.Delete(mctx, name)
+		if eno != 0 && !errors.Is(eno, syscall.ENOENT) {
+			err = n.objectCommitErr(ctx, eno, bucket, object, uploadID)
+			logger.Errorf("delete stale object %s before complete: %s", name, err)
+			return
+		}
+		f, eno = n.fs.Create(mctx, name, 0666, n.gConf.Umask)
+	}
+	if eno == syscall.ENOENT {
+		if err = n.mkdirAllInBucket(ctx, bucket, path.Dir(name)); err != nil {
+			logger.Errorf("mkdirAll %s: %s", path.Dir(name), err)
+			err = n.objectCommitErr(ctx, err, bucket, object, uploadID)
+			return
+		}
+		f, eno = n.fs.Create(mctx, name, 0666, n.gConf.Umask)
+	}
 	if eno != 0 {
-		err = jfsToObjectErr(ctx, eno, bucket, object, uploadID)
-		logger.Errorf("create complete: %s", err)
+		err = n.objectCommitErr(ctx, eno, bucket, object, uploadID)
+		logger.Errorf("create %s: %s", name, err)
 		return
 	}
-	defer func() {
-		_ = f.Close(mctx)
-	}()
+	// rollback removes the destination object after a failed commit: Complete
+	// must not leave a partial object at the destination. The staging upload
+	// directory stays for the background cleanup, as before.
+	rollback := func() {
+		if derr := n.fs.Delete(mctx, name); derr != 0 && !errors.Is(derr, syscall.ENOENT) {
+			logger.Errorf("delete partial object %s: %s", name, derr)
+		}
+	}
+
 	var total uint64
 	for _, part := range parts {
 		p := n.ppath(bucket, uploadID, strconv.Itoa(part.PartNumber))
-		copied, eno := n.fs.CopyFileRange(mctx, p, 0, tmp, total, 5<<30)
+		copied, eno := n.fs.CopyFileRange(mctx, p, 0, name, total, 5<<30)
 		if eno == syscall.ENOENT { // try lookup from old path
 			p = n.ppathFlat(bucket, uploadID, strconv.Itoa(part.PartNumber))
-			copied, eno = n.fs.CopyFileRange(mctx, p, 0, tmp, total, 5<<30)
+			copied, eno = n.fs.CopyFileRange(mctx, p, 0, name, total, 5<<30)
 		}
 		if eno != 0 {
+			_ = f.Close(mctx)
+			rollback()
 			err = jfsToObjectErr(ctx, eno, bucket, object, uploadID)
 			logger.Errorf("merge parts: %s", err)
 			return
@@ -1452,9 +1493,9 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5 := minio.ComputeCompleteMultipartMD5(parts)
 	if n.gConf.KeepEtag {
-		eno = n.fs.SetXattr(mctx, tmp, s3Etag, []byte(s3MD5), 0)
+		eno = n.fs.SetXattr(mctx, name, s3Etag, []byte(s3MD5), 0)
 		if eno != 0 {
-			logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d error: %s", tmp, s3Etag, s3MD5, 0, eno)
+			logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d error: %s", name, s3Etag, s3MD5, 0, eno)
 		}
 	}
 
@@ -1466,8 +1507,8 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 				logger.Errorf("get object tags error, path: %s, error: %s", n.upath(bucket, uploadID), eno)
 			}
 		} else if len(tagStr) > 0 {
-			if eno = n.fs.SetXattr(mctx, tmp, s3Tags, tagStr, 0); eno != 0 {
-				logger.Errorf("set object tags error, path: %s, tags: %s, error: %s", tmp, string(tagStr), eno)
+			if eno = n.fs.SetXattr(mctx, name, s3Tags, tagStr, 0); eno != 0 {
+				logger.Errorf("set object tags error, path: %s, tags: %s, error: %s", name, string(tagStr), eno)
 			}
 		}
 	}
@@ -1476,31 +1517,20 @@ func (n *jfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 	if n.gConf.ObjMeta {
 		if objMeta, err = n.getObjMeta(n.upath(bucket, uploadID)); err != nil {
 			logger.Errorf("get object meta error, path: %s, error: %s", n.upath(bucket, uploadID), err)
-		} else if err = n.setObjMeta(tmp, objMeta); err != nil {
-			logger.Errorf("set object meta error, path: %s, error: %s", tmp, err)
+		} else if err = n.setObjMeta(name, objMeta); err != nil {
+			logger.Errorf("set object meta error, path: %s, error: %s", name, err)
 		}
 	}
-	fi, eno := n.fs.Stat(mctx, tmp)
-	if eno != 0 {
+	if eno := f.Close(mctx); eno != 0 {
+		rollback()
 		err = n.objectCommitErr(ctx, eno, bucket, object, uploadID)
+		logger.Errorf("close %s: %s", name, err)
 		return
 	}
-
-	name := n.path(bucket, object)
-	eno = n.fs.Rename(mctx, tmp, name, 0)
-	if eno == syscall.ENOENT {
-		if err = n.mkdirAllInBucket(ctx, bucket, path.Dir(name)); err != nil {
-			logger.Errorf("mkdirAll %s: %s", path.Dir(name), err)
-			_ = n.fs.Delete(mctx, tmp)
-			err = n.objectCommitErr(ctx, err, bucket, object, uploadID)
-			return
-		}
-		eno = n.fs.Rename(mctx, tmp, name, 0)
-	}
+	fi, eno := n.fs.Stat(mctx, name)
 	if eno != 0 {
-		_ = n.fs.Delete(mctx, tmp)
+		rollback()
 		err = n.objectCommitErr(ctx, eno, bucket, object, uploadID)
-		logger.Errorf("Rename %s -> %s: %s", tmp, name, err)
 		return
 	}
 
