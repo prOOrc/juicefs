@@ -63,11 +63,27 @@ func serverTLSConfig(certFile, keyFile string) (*tls.Config, error) {
 	}, nil
 }
 
+// outboxConfFromContext maps the meta-proxy outbox flags onto the meta engine
+// config, mirroring the mount/gateway wiring (cmd/mount.go): the stream name
+// applies only when explicitly set, everything else stays at the engine
+// defaults (add-meta-proxy-outbox).
+func outboxConfFromContext(c *cli.Context) *meta.Config {
+	conf := meta.DefaultConf()
+	conf.Outbox.Enabled = c.Bool("outbox-enabled")
+	if c.IsSet("outbox-stream") {
+		conf.Outbox.StreamName = c.String("outbox-stream")
+	}
+	return conf
+}
+
 func cmdMetaProxy() *cli.Command {
 	return &cli.Command{
 		Name:  "meta-proxy",
 		Usage: "Start a gRPC proxy for JuiceFS metadata backend",
-		Flags: []cli.Flag{
+		// Outbox flags come from the shared mount/gateway registrar
+		// (outboxFlags, add-meta-proxy-outbox) — a single source for the
+		// names/defaults so the operator surface cannot drift apart.
+		Flags: append([]cli.Flag{
 			&cli.StringFlag{
 				Name:  "meta-backend",
 				Usage: "Metadata backend URL (e.g., redis://localhost:6379/0, postgresql://...)",
@@ -202,7 +218,7 @@ func cmdMetaProxy() *cli.Command {
 				Name:  "node-credential",
 				Usage: "Node credential source for service-originated keymanager calls: env:VAR_NAME or a path to a file holding the raw token; without it service connections are rejected (fail-closed). The value is never logged",
 			},
-		},
+		}, outboxFlags()...),
 		Action: func(c *cli.Context) error {
 			setup(c, 0)
 
@@ -217,7 +233,7 @@ func cmdMetaProxy() *cli.Command {
 			loggerProxy.Infof("Metadata backend URL: %s", utils.RemovePassword(metaBackendUrl))
 			loggerProxy.Infof("gRPC address: %s", addr)
 
-			m := meta.NewClient(metaBackendUrl, meta.DefaultConf())
+			m := meta.NewClient(metaBackendUrl, outboxConfFromContext(c))
 
 			// Load the volume format so GetFormat (encryption checks) works from
 			// the first request. A not-yet-formatted volume is not fatal: the

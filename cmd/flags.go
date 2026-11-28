@@ -282,8 +282,25 @@ func dataCacheFlags() []cli.Flag {
 	})
 }
 
+// outboxFlags is the shared registrar of the outbox event flags (mount,
+// gateway and meta-proxy — add-meta-proxy-outbox): a single source for the
+// names, defaults and usages, so the operator surface cannot drift apart.
+func outboxFlags() []cli.Flag {
+	return []cli.Flag{
+		&cli.BoolFlag{
+			Name:  "outbox-enabled",
+			Usage: "enable outbox for writing filesystem events to Redis stream (use outbox command to publish to Kafka)",
+		},
+		&cli.StringFlag{
+			Name:  "outbox-stream",
+			Value: "juicefs:outbox",
+			Usage: "Redis stream name for outbox events (requires --outbox-enabled)",
+		},
+	}
+}
+
 func metaFlags() []cli.Flag {
-	return addCategories("META", []cli.Flag{
+	flags := addCategories("META", []cli.Flag{
 		&cli.StringFlag{
 			Name:  "subdir",
 			Usage: "mount a sub-directory as root",
@@ -343,16 +360,10 @@ func metaFlags() []cli.Flag {
 			Name:  "network-interfaces",
 			Usage: "comma-separated list of network interfaces to use for IP discovery (e.g. eth0,en0), empty means all",
 		},
-		&cli.BoolFlag{
-			Name:  "outbox-enabled",
-			Usage: "enable outbox for writing filesystem events to Redis stream (use outbox command to publish to Kafka)",
-		},
-		&cli.StringFlag{
-			Name:  "outbox-stream",
-			Value: "juicefs:outbox",
-			Usage: "Redis stream name for outbox events (requires --outbox-enabled)",
-		},
 	})
+	// The outbox flags are shared with meta-proxy (outboxFlags) but stay in
+	// the META category for mount/gateway, as before.
+	return append(flags, addCategories("META", outboxFlags())...)
 }
 
 func clientFlags(defaultEntryCache float64) []cli.Flag {
