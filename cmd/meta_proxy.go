@@ -192,6 +192,16 @@ func cmdMetaProxy() *cli.Command {
 				Usage:  "Server name for TLS certificate validation (default: service hostname)",
 				Hidden: true,
 			},
+			// Service identity flags (add-meta-proxy-service-identity).
+			// Secret values are never logged — only names/paths.
+			&cli.StringFlag{
+				Name:  "service-credential-hash",
+				Usage: "SHA-256 hex digest of the service credential headless clients present via the x-service-credential header (enables service identity mode; the value is never logged)",
+			},
+			&cli.StringFlag{
+				Name:  "node-credential",
+				Usage: "Node credential source for service-originated keymanager calls: env:VAR_NAME or a path to a file holding the raw token; without it service connections are rejected (fail-closed). The value is never logged",
+			},
 		},
 		Action: func(c *cli.Context) error {
 			setup(c, 0)
@@ -247,9 +257,31 @@ func cmdMetaProxy() *cli.Command {
 				loggerProxy.Infof("TLS enabled for the gRPC listener (minimum version 1.2)")
 			}
 
-			// Build interceptor chain: OIDC (authentication) → Authz (authorization)
+			// Build interceptor chain: Service identity (authentication) → OIDC
+			// (authentication) → Authz (authorization). The service interceptor is
+			// the first link of both chains: it fully decides any request carrying
+			// x-service-credential (there is no fallback to the OIDC path in
+			// either direction, add-meta-proxy-service-identity).
 			var unaryInterceptors []gRPC.UnaryServerInterceptor
 			var streamInterceptors []gRPC.StreamServerInterceptor
+
+			serviceCfg, err := meta.NewServiceIdentityConfig(
+				c.String("service-credential-hash"),
+				c.String("node-credential"),
+			)
+			if err != nil {
+				loggerProxy.Fatalf("Invalid service identity configuration: %v", err)
+			}
+			if serviceCfg != nil {
+				if serviceCfg.NodeCredential() == "" {
+					loggerProxy.Warn("Service identity mode enabled without a node credential — service connections will be rejected (fail-closed)")
+				} else {
+					loggerProxy.Info("Service identity mode enabled (node credential routing active)")
+				}
+				serviceIdentity := meta.NewServiceIdentityInterceptor(serviceCfg)
+				unaryInterceptors = append(unaryInterceptors, serviceIdentity.UnaryInterceptor())
+				streamInterceptors = append(streamInterceptors, serviceIdentity.StreamInterceptor())
+			}
 
 			// OIDC authentication (strict — requires valid token when enabled)
 			oidcIssuer := c.String("oidc-issuer")
@@ -316,7 +348,9 @@ func cmdMetaProxy() *cli.Command {
 				if err != nil {
 					loggerProxy.Fatalf("Failed to connect to keymanager service: %v", err)
 				}
-				server.SetKeyManager(keyManager)
+				// Service-originated FEK calls carry the node credential
+				// (x-node-credential); oidc-user calls stay byte-identical.
+				server.SetKeyManager(meta.WithNodeCredentialRouting(keyManager, serviceCfg.NodeCredential()))
 			} else if volFormat != nil && volFormat.EncryptionEnabled {
 				loggerProxy.Warnf("Volume has encryption enabled but --keymanager-service is not set — encrypted files cannot be created or opened")
 			} else {
