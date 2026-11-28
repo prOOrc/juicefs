@@ -20,8 +20,25 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/DataDog/zstd"
-	"github.com/hungys/go-lz4"
+	"github.com/klauspost/compress/zstd"
+	lz4 "github.com/pierrec/lz4/v4"
+)
+
+// Pure-Go реализации (cfapi-сборка движка без CGO, change fix-cfapi-
+// followups A5): DataDog/zstd и hungys/go-lz4 — cgo-обёртки libzstd/liblz4,
+// заменены на klauspost/compress и pierrec/lz4. Форматы данных совместимы:
+// zstd — тот же фрейм-формат (данные, сжатые старым бинарем, читаются новым
+// и наоборот), lz4 — тот же сырой block-формат. Рантайм-контракты фасада
+// сохранены: запись в переданный буфер без аллокаций наружу, «buffer too
+// short» только при реальном превышении len(dst).
+
+// Один синглтон на процесс: klauspost-кодек потокобезопасен и пулит буферы
+// сам; concurrency 1 — предсказуемая латентность на воркера чанка.
+var (
+	zstdEncoder, _ = zstd.NewWriter(nil,
+		zstd.WithEncoderLevel(zstd.SpeedFastest), // DataDog level 1 (ZSTD_LEVEL=1)
+		zstd.WithEncoderConcurrency(1))
+	zstdDecoder, _ = zstd.NewReader(nil, zstd.WithDecoderConcurrency(1))
 )
 
 // ZSTD_LEVEL compression level used by Zstd
@@ -75,19 +92,40 @@ type ZStandard struct {
 // Name returns name of the algorithm Zstd
 func (n ZStandard) Name() string { return "Zstd" }
 
-// CompressBound max size of compressed data
-func (n ZStandard) CompressBound(l int) int { return zstd.CompressBound(l) }
+// CompressBound max size of compressed data — зеркалирует ZSTD_COMPRESSBOUND
+// libzstd с запасом +4KiB (урок f78e14cd: буферы STANDARD с запасом).
+func (n ZStandard) CompressBound(l int) int {
+	b := l + (l >> 8)
+	if l < 128*1024 {
+		b += (128*1024 - l) >> 11
+	} else {
+		b += 512
+	}
+	return b + 4096
+}
+
+// emptyZstdFrame — минимальный валидный zstd-фрейм пустого контента
+// (magic + FHD single-segment с 1-байтовым FCS=0 + raw-блок size 0).
+// klauspost EncodeAll на пустом входе возвращает ПУСТОЙ выход (без фрейма),
+// а контракт фасада требует, чтобы compress(empty) давал декодируемый
+// результат — как libzstd в старой сборке (DataDog).
+var emptyZstdFrame = []byte{0x28, 0xB5, 0x2F, 0xFD, 0x20, 0x00, 0x01, 0x00, 0x00}
 
 // Compress using Zstd
 func (n ZStandard) Compress(dst, src []byte) (int, error) {
-	d, err := zstd.CompressLevel(dst, src, n.level)
-	if err != nil {
-		return 0, err
+	if len(src) == 0 {
+		if len(dst) < len(emptyZstdFrame) {
+			return 0, fmt.Errorf("buffer too short: %d < %d", len(dst), len(emptyZstdFrame))
+		}
+		copy(dst, emptyZstdFrame)
+		return len(emptyZstdFrame), nil
 	}
-	if len(d) > 0 && len(dst) > 0 && &d[0] != &dst[0] {
-		return 0, fmt.Errorf("buffer too short: %d < %d", cap(dst), cap(d))
+	d := zstdEncoder.EncodeAll(src, nil)
+	if len(d) > len(dst) {
+		return 0, fmt.Errorf("buffer too short: %d < %d", len(dst), len(d))
 	}
-	return len(d), err
+	copy(dst, d)
+	return len(d), nil
 }
 
 // Decompress using Zstd
@@ -95,21 +133,15 @@ func (n ZStandard) Decompress(dst, src []byte) (int, error) {
 	if len(src) == 0 {
 		return 0, fmt.Errorf("decompress an empty input")
 	}
-	// Use DecompressInto to limit writes to len(dst), not cap(dst).
-	out := dst
-	if len(out) == 0 {
-		// libzstd needs a non-empty output, even for an empty frame
-		var scratch [1]byte
-		out = scratch[:]
-	}
-	written, err := zstd.DecompressInto(out, src)
+	d, err := zstdDecoder.DecodeAll(src, nil)
 	if err != nil {
 		return 0, err
 	}
-	if written > len(dst) {
-		return 0, fmt.Errorf("buffer too short: %d < %d", len(dst), written)
+	if len(d) > len(dst) {
+		return 0, fmt.Errorf("buffer too short: %d < %d", len(dst), len(d))
 	}
-	return written, nil
+	copy(dst, d)
+	return len(d), nil
 }
 
 // LZ4 implements Compressor using LZ4 library
@@ -119,17 +151,23 @@ type LZ4 struct{}
 func (l LZ4) Name() string { return "LZ4" }
 
 // CompressBound max size of compressed data
-func (l LZ4) CompressBound(size int) int { return lz4.CompressBound(size) }
+func (l LZ4) CompressBound(size int) int { return lz4.CompressBlockBound(size) }
 
-// Compress using LZ4 algorithm
+// Compress using LZ4 algorithm (raw block, как liblz4 в hungys/go-lz4).
+// pierrec CompressBlock на слишком маленьком dst возвращает (0, nil) —
+// контракт старой сборки требует ошибку (тест «expect short buffer error»).
 func (l LZ4) Compress(dst, src []byte) (int, error) {
-	return lz4.CompressDefault(src, dst)
+	n, err := lz4.CompressBlock(src, dst, nil)
+	if err == nil && n == 0 && len(src) > 0 {
+		return 0, fmt.Errorf("lz4: buffer too short: %d for %d bytes", len(dst), len(src))
+	}
+	return n, err
 }
 
-// Decompress using LZ4 algorithm
+// Decompress using LZ4 algorithm (raw block)
 func (l LZ4) Decompress(dst, src []byte) (int, error) {
 	if len(src) == 0 {
 		return 0, fmt.Errorf("decompress an empty input")
 	}
-	return lz4.DecompressSafe(src, dst)
+	return lz4.UncompressBlock(src, dst)
 }

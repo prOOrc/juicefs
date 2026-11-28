@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+//go:build windows && !cfapionly
+// +build windows,!cfapionly
+
 package cmd
 
 import (

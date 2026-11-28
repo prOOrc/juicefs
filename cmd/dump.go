@@ -23,7 +23,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/DataDog/zstd"
+	zstd "github.com/klauspost/compress/zstd"
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/urfave/cli/v2"
@@ -110,7 +110,7 @@ func dumpMeta(m meta.Meta, dst string, threads int, keepSecret, fast, skipTrash,
 				err = errors.Join(err, w.Close())
 			}()
 		} else if strings.HasSuffix(dst, ".zstd") {
-			w = zstd.NewWriterLevel(fp, zstd.BestSpeed)
+			w, err = zstd.NewWriter(fp, zstd.WithEncoderLevel(zstd.SpeedFastest))
 			defer func() {
 				err = errors.Join(err, w.Close())
 			}()

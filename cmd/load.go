@@ -26,7 +26,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/DataDog/zstd"
+	zstd "github.com/klauspost/compress/zstd"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/pkg/errors"
 
@@ -90,6 +90,12 @@ type reader struct {
 	compressR io.ReadCloser
 }
 
+// zstdCloseReader адаптирует klauspost/compress Decoder (Close без ошибки)
+// к io.ReadCloser (cfapi-сборка движка без CGO, fix-cfapi-followups A5).
+type zstdCloseReader struct{ *zstd.Decoder }
+
+func (w zstdCloseReader) Close() error { w.Decoder.Close(); return nil }
+
 func (r *reader) Read(p []byte) (n int, err error) {
 	return r.compressR.Read(p)
 }
@@ -147,7 +153,13 @@ func open(src string, key string, algo string) (io.ReadCloser, error) {
 			return nil, err
 		}
 	} else if strings.HasSuffix(src, ".zstd") {
-		r = zstd.NewReader(fp)
+		var err error
+		var dec *zstd.Decoder
+		dec, err = zstd.NewReader(fp)
+		if err != nil {
+			return nil, err
+		}
+		r = zstdCloseReader{dec}
 	} else {
 		return fp, nil
 	}
