@@ -14,4 +14,4 @@
 - [x] 3.1 `go build ./...`, `go vet ./...`, `go test ./cmd/... ./pkg/gateway/...` зелёные (pkg/gateway и новые cmd-тесты зелёные; vet — только pre-existing замечания darwin/arm64 mockey и sdk/java; в полном `go test ./cmd/...` TestIntegration падает так же, как на базе 3035f4786: env-gated тест — требует MINIO_ROOT_* окружения и FUSE, на CI/linux)
 - [x] 3.2 `openspec validate add-gateway-platform-mode --strict` без ошибок
 - [ ] 3.3 E2E-контур пилота (после minio/agio-platform changes): multipart rclone на шифрованном томе — FEK читается по реальному пути (приёмка п.9-11) — после деплоя change 8
-- [ ] 3.4 reviewer APPROVED (по конвейеру)
+- [x] 3.4 reviewer APPROVED (2 minor — синхронизация design/spec с фактическим env-контрактом: AGIO_AUTHZ_VOLUME_NAME + AGIO_GATEWAY_PLATFORM в Component Map, имя тома в authz-поверхности спеки, Open Question про AGIO_S3_BUCKET разрешён; nit: комментарий facility-id; ревьюер разрешил APPROVE без ре-прогона — код не менялся)

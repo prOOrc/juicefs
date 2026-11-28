@@ -59,7 +59,7 @@ const (
 	// envAgioAuthzVolumeName - volume name the authz service resolves paths for.
 	envAgioAuthzVolumeName = "AGIO_AUTHZ_VOLUME_NAME"
 
-	// envAgioFacilityID - facility this gateway serves (secret per contract).
+	// envAgioFacilityID - facility this gateway serves (identifier, not a secret).
 	envAgioFacilityID = "AGIO_FACILITY_ID"
 
 	// envAgioS3Bucket - the single bucket name served in platform mode.

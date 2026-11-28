@@ -6,7 +6,7 @@
 
 ### Requirement: Platform mode startup inputs
 
-Gateway SHALL поддерживать platform-режим, включаемый при запуске с grpc meta-URL и набором обязательных env: service-token (к прокси), адрес keymanager платформы, node-credential gateway (к платформе), адрес authz-сервиса, facility id, имя бакета. Отсутствие любого обязательного входа SHALL вызывать ошибку старта с именованием недостающего ключа; S3-порта не поднимается. Значения секретных env SHALL NOT попадать в логи (лог печатает только имена ключей конфигурации).
+Gateway SHALL поддерживать platform-режим, включаемый при запуске с grpc meta-URL и набором обязательных env: service-token (к прокси), адрес keymanager платформы, node-credential gateway (к платформе), адрес authz-сервиса + имя тома (для authz-резолва путей), facility id, имя бакета. Отсутствие любого обязательного входа SHALL вызывать ошибку старта с именованием недостающего ключа; S3-порта не поднимается. Значения секретных env SHALL NOT попадать в логи (лог печатает только имена ключей конфигурации).
 
 #### Scenario: Missing mandatory input fails fast
 

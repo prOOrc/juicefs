@@ -5,7 +5,7 @@
 ## Component Map
 
 - `cmd/gateway.go` — platform-ветка: флаг `--platform`; проверки fail-fast (subdir/refresh-iam-interval/MINIO_ROOT_*/обязательные env); обход обязательности ROOT-кредов (:132-148) в platform-режиме; startup GetFormat через grpc-клиент от service-identity; сборка env для minio.
-- Env-контракт (заполняет деплой agio-cloud, change 8): `AGIO_S3_SERVICE_TOKEN` (секрет), `AGIO_KEYMANAGER_ADDR`, `AGIO_KEYMANAGER_NODE_CREDENTIAL` (секрет), `AGIO_AUTHZ_ADDR` (+ mTLS-пути), `AGIO_FACILITY_ID`, `AGIO_S3_BUCKET` (имя бакета). Секреты только env из k8s Secret — не в URL/флагах/логах.
+- Env-контракт (заполняет деплой agio-cloud, change 8; имена сверены с кодом minio-ветки changes 4/5): master-switch `AGIO_GATEWAY_PLATFORM=1` (os.Setenv до ServerMainForJFS, in-process); не-секретные `AGIO_AUTHZ_ADDR`, `AGIO_AUTHZ_VOLUME_NAME` (имя тома для authz-резолва путей — платформа стриппит companies-префикс по volume_name), `AGIO_KEYMANAGER_ADDR`, `AGIO_S3_BUCKET` (имя бакета); секретные `AGIO_S3_SERVICE_TOKEN`, `AGIO_KEYMANAGER_NODE_CREDENTIAL`, `AGIO_FACILITY_ID`. mTLS-пути AGIO_*_TLS_* на пилоте не задаются (D4). Секреты только env из k8s Secret — не в URL/флагах/логах.
 - `pkg/gateway/gateway.go` — CompleteMultipartUpload: создание целевого файла по финальному пути, CopyFileRange частей, удаление staging; abort/cleanup без изменений.
 - minio-форк получает всё через env (changes add-platform-identity-resolver / add-platform-authz-policy-engine).
 
@@ -38,5 +38,5 @@
 
 ## Open Questions
 
-- Маппинг `--bucket-name` в path(bucket,·) при одном бакете: подтверждается при кодировании (ожидание: бакет = корень тома, ключи с `companies/`-префиксом — как согласовано в ADR-005); если бакет маппится в подкаталог — правка only-design, спека не меняется (path-контракт уже полный от корня).
+- РЕШЕНО при кодировании: `AGIO_S3_BUCKET` валидируется gateway на присутствие (fail-fast), но потребляется деплоем/приёмкой — имя бакета gateway берёт из `--bucket-name` values (деплой обязан держать оба согласованными; minio-форк AGIO_S3_BUCKET в текущей реализации не читает). Маппинг бакета: один бакет = корень тома, ключи с `companies/`-префиксом (ADR-005); шифрованный FEK-ассерт Complete — приёмка task 3.3 (после деплоя change 8).
 - Latency: startup-проба GetFormat добавляет один RPC к времени старта — не блокирует.
