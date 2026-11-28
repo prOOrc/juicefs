@@ -98,8 +98,13 @@ func (ai *AuthzInterceptor) SetPathResolver(pr PathRecovery) {
 
 // extractUserIDFromOIDC returns the OIDC sub (= user.id UUID, invariant A6) and
 // validates its format: a malformed UUID is an identity-configuration error and
-// must fail closed (FR-ID-3, decision 3.7).
+// must fail closed (FR-ID-3, decision 3.7). Service-identity requests carry no
+// user: it returns an empty id without error so call sites proceed with an
+// empty user_id unchanged (add-meta-proxy-service-identity, design D4).
 func extractUserIDFromOIDC(ctx context.Context) (string, error) {
+	if oidc.IsServiceIdentity(ctx) {
+		return "", nil
+	}
 	claims := oidc.ClaimsFromContext(ctx)
 	if claims == nil {
 		return "", errors.New("no oidc claims in context")
@@ -126,6 +131,12 @@ func (ai *AuthzInterceptor) extractUserID(ctx context.Context) (string, error) {
 // UnaryInterceptor returns a gRPC unary server interceptor for authorization.
 func (ai *AuthzInterceptor) UnaryInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if oidc.IsServiceIdentity(ctx) {
+			// Service identity: authorization was already performed on the
+			// gateway — skip entirely (no CheckPermission/CheckBulk, no authz
+			// cache entries).
+			return handler(ctx, req)
+		}
 		if !ai.enabled {
 			return handler(ctx, req)
 		}

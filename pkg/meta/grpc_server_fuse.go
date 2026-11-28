@@ -27,6 +27,7 @@ import (
 	authzpb "github.com/juicedata/juicefs/pkg/meta/authz_pb"
 	kmpb "github.com/juicedata/juicefs/pkg/meta/keymanager_pb"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
+	"github.com/juicedata/juicefs/pkg/oidc"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -855,6 +856,12 @@ func (s *MetaProxyServer) Readdir(ctx context.Context, req *pb.ReaddirRequest) (
 // An empty result with errno 0 stays legitimate for a known path with zero
 // authorized children.
 func (s *MetaProxyServer) filterEntriesByAuthz(ctx context.Context, parentInode Ino, entries []*Entry) ([]*Entry, syscall.Errno) {
+	if oidc.IsServiceIdentity(ctx) {
+		// Service identity: authorization was performed on the gateway — the
+		// per-user listing filter does not apply (no authz calls, no cache
+		// entries; spec "Service request skips per-user authz").
+		return entries, 0
+	}
 	if s.authzInterceptor == nil || !s.authzInterceptor.enabled {
 		return entries, 0 // no authz configured — return all
 	}
