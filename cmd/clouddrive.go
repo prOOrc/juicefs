@@ -153,6 +153,22 @@ func cmdCloudDrive() *cli.Command {
 				Name:  "recursive",
 				Usage: "for pin/unpin: apply the pin state to the whole directory subtree (CF_SET_PIN_FLAG_RECURSE; recursive pin hydrates the subtree as FETCH_DATA batches to the running serve)",
 			},
+			&cli.BoolFlag{
+				// cleanup (задача 4.4, fix-cfapi-followups A4): уровни
+				// применения. На родителе — как все флаги команды
+				// (reorderOptions/parent-chain); значения читает действие
+				// подкоманды cleanup.
+				Name:  "apply",
+				Usage: "for cleanup: mutate — revert orphaned placeholders to plain files (default is a dry-run report without mutations)",
+			},
+			&cli.BoolFlag{
+				Name:  "delete-files",
+				Usage: "for cleanup (with --apply): additionally remove only verified-reverted entries and empty reverted directories (no recursive removal)",
+			},
+			&cli.BoolFlag{
+				Name:  "unregister",
+				Usage: "for cleanup (with --apply): additionally unregister the sync root and clean the Explorer registry key before reverting",
+			},
 		}, nodeSTSFlags()...),
 		Description: `
 Manage a Windows Cloud Files API (CfAPI) sync root backed by a JuiceFS volume.
@@ -183,7 +199,10 @@ $ juicefs clouddrive pin --recursive docs
 $ juicefs clouddrive unpin docs/report.pdf
 
 # Unregister the sync root
-$ juicefs clouddrive unregister`,
+$ juicefs clouddrive unregister
+
+# Report orphaned placeholders in the sync root (dry-run, no mutations)
+$ juicefs clouddrive cleanup`,
 		Subcommands: []*cli.Command{
 			{
 				Name:   "register",
@@ -231,6 +250,11 @@ $ juicefs clouddrive unregister`,
 				Usage:     "Unpin a file or directory in the sync root: the filter dehydrates the placeholder and frees its disk space (works without serve)",
 				Action:    cloudDriveUnpin,
 			},
+			{
+				Name:   "cleanup",
+				Usage:  "Analyze orphaned placeholders in the sync root (dry-run report by default; refuse mutations behind --apply levels)",
+				Action: cloudDriveCleanup,
+			},
 		},
 	}
 }
@@ -241,6 +265,20 @@ func defaultCloudDriveRoot() string {
 	return filepath.Join(os.Getenv("USERPROFILE"), "AgioDrive")
 }
 
+// cloudDriveRequireNTFS — предпроверка тома до Cf-операций (общий хелпер
+// register/serve/cleanup, fix-cfapi-followups A4): cldflt.sys работает
+// только на NTFS.
+func cloudDriveRequireNTFS(root string) error {
+	fsName, err := fileSystemOf(root)
+	if err != nil {
+		return fmt.Errorf("cannot determine the file system of %s: %w", root, err)
+	}
+	if fsName != "NTFS" {
+		return fmt.Errorf("sync root %s is on %s; the Cloud Files API requires NTFS", root, fsName)
+	}
+	return nil
+}
+
 // cloudDriveRegister — спека «Регистрация sync root»: предпроверка NTFS,
 // CfRegisterSyncRoot, ключ реестра Explorer. Повторный запуск обновляет
 // регистрацию без дублей.
@@ -248,13 +286,8 @@ func cloudDriveRegister(c *cli.Context) error {
 	setup(c, 0)
 	root := c.String("root")
 
-	// Предпроверка тома до регистрации: cldflt.sys работает только на NTFS.
-	fsName, err := fileSystemOf(root)
-	if err != nil {
-		return fmt.Errorf("cannot determine the file system of %s: %w", root, err)
-	}
-	if fsName != "NTFS" {
-		return fmt.Errorf("sync root %s is on %s; the Cloud Files API requires NTFS", root, fsName)
+	if err := cloudDriveRequireNTFS(root); err != nil {
+		return err
 	}
 	if err := os.MkdirAll(root, 0755); err != nil {
 		return fmt.Errorf("cannot create sync root directory %s: %w", root, err)
@@ -363,8 +396,20 @@ func cloudDriveUnregister(c *cli.Context) error {
 	setup(c, 0)
 	root := c.String("root")
 
+	if err := cloudDriveUnregisterSyncRoot(root); err != nil {
+		return err
+	}
+	logger.Infof("sync root %s unregistered", root)
+	return nil
+}
+
+// cloudDriveUnregisterSyncRoot — общий хелпер снятия регистрации
+// (fix-cfapi-followups A4): CfUnregisterSyncRoot и чистка ключа реестра
+// Explorer. Используется командой unregister и движком cleanup (уровень
+// --unregister). Корень мог быть не зарегистрирован — реестр чистится
+// всё равно (отказ CfUnregisterSyncRoot — Warn, не ошибка).
+func cloudDriveUnregisterSyncRoot(root string) error {
 	if err := cfapi.CfUnregisterSyncRoot(root); err != nil {
-		// Корень мог быть не зарегистрирован — реестр всё равно чистим.
 		logger.Warnf("CfUnregisterSyncRoot(%s): %v; cleaning up registry key anyway", root, err)
 	}
 	sid, err := currentUserSIDStr()
@@ -374,8 +419,33 @@ func cloudDriveUnregister(c *cli.Context) error {
 	if err := deleteSyncRootRegistry(sid); err != nil {
 		return fmt.Errorf("cannot delete Explorer registry key: %w", err)
 	}
-	logger.Infof("sync root %s unregistered", root)
 	return nil
+}
+
+// cloudDriveCleanup — cleanup осиротевших плейсхолдеров (fix-cfapi-followups
+// A4): движок pkg/cfprovider.RunCleanup — dry-run по умолчанию (отчёт без
+// мутаций в stdout), --apply — revert плейсхолдеров, --apply --delete-files —
+// + удаление подтверждённо-reverted и пустых reverted-каталогов, --apply
+// --delete-files --unregister — + снятие регистрации и чистка реестра
+// Explorer. Каталог состояния (--state-dir/--volume-name) исключается из
+// обхода. Ненулевой код выхода — отказ предусловий или любая неудача apply.
+func cloudDriveCleanup(c *cli.Context) error {
+	setup(c, 0)
+	root := c.String("root")
+	stateDir := c.String("state-dir")
+	if stateDir == "" && c.String("volume-name") != "" {
+		stateDir = cfprovider.DefaultStateDir(c.String("volume-name"))
+	}
+	_, err := cfprovider.RunCleanup(cfprovider.NewCleanupDeps(cloudDriveUnregisterSyncRoot), cfprovider.CleanupOptions{
+		Root:        root,
+		Apply:       c.Bool("apply"),
+		DeleteFiles: c.Bool("delete-files"),
+		Unregister:  c.Bool("unregister"),
+		StateDir:    stateDir,
+		Out:         os.Stdout,
+	})
+	// Отчёт напечатан движком; ошибка уходит в CLI (ненулевой код выхода).
+	return err
 }
 
 // cloudDriveStatus — спека «Первая регистрация»: зарегистрирован/не
@@ -495,26 +565,14 @@ func cloudDriveStatusPath(c *cli.Context, root, arg string) error {
 		// state=0 НЕ означает «не плейсхолдер»: фильтр чистит спец-атрибуты
 		// у полностью синхронизированных записей (живой ретест этапа 5).
 		// Уточняем через CF_PLACEHOLDER_STANDARD_INFO (OnDiskDataSize) и
-		// логическую длину: ошибка запроса (STANDARD требует
-		// плейсхолдер-хендл, plain-файл вне sync root) — честное
-		// «not a placeholder», ошибка глотается.
+		// логическую длину: интерпретация ответа — общий хелпер pkg/cfapi
+		// (fix-cfapi-followups A1, вывод команды не меняется). Ошибка
+		// запроса (STANDARD требует плейсхолдер-хендл, plain-файл вне sync
+		// root) — честная причина, ошибка глотается.
 		if fi, ferr := os.Stat(path); ferr == nil {
 			if info, ierr := cfapi.PlaceholderStandardInfoByPath(path, fi.IsDir()); ierr == nil {
-				inSync := "in-sync state unknown"
-				switch info.InSyncState {
-				case cfapi.InSyncStateInSync:
-					inSync = "in-sync"
-				case cfapi.InSyncStateNotInSync:
-					inSync = "not in-sync"
-				}
-				switch {
-				case fi.Size() > 0 && info.OnDiskDataSize == 0:
-					parts = append(parts, "placeholder, dehydrated ("+inSync+")")
-				case fi.Size() > 0:
-					parts = append(parts, "placeholder, hydrated ("+inSync+")")
-				default:
-					parts = append(parts, "placeholder, empty ("+inSync+")")
-				}
+				inSync, hydration := cfapi.StandardStateDescriptions(fi.Size(), info)
+				parts = append(parts, "placeholder, "+hydration+" ("+inSync+")")
 			} else {
 				// Ошибка запроса не глотается молча (задача 5.8): у
 				// плейсхолдера запрос STANDARD обязан проходить — честная
@@ -551,12 +609,8 @@ func cloudDriveServe(c *cli.Context) error {
 
 	// Предпроверка тома до проверки регистрации и до mutex/connect:
 	// cldflt.sys работает только на NTFS (proposal, таблица рисков).
-	fsName, err := fileSystemOf(root)
-	if err != nil {
-		return fmt.Errorf("cannot determine the file system of %s: %w", root, err)
-	}
-	if fsName != "NTFS" {
-		return fmt.Errorf("sync root %s is on %s; the Cloud Files API requires NTFS", root, fsName)
+	if err := cloudDriveRequireNTFS(root); err != nil {
+		return err
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

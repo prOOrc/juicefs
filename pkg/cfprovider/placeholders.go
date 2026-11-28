@@ -100,6 +100,16 @@ type placeholderStore interface {
 	// StateOf — состояние локального пути: существует ли и является ли
 	// плейсхолдером (виртуальным файлом), а не обычным файлом пользователя.
 	StateOf(path string) (exists, isPlaceholder bool, err error)
+	// StandardInfoOf — CF_PLACEHOLDER_STANDARD_INFO локальной записи с
+	// определённым ответом «не плейсхолдер»: (nil, false, nil) по сентинелу
+	// ERROR_NOT_A_CLOUD_FILE (cfapi.IsNotAPlaceholder), прочие неуспехи —
+	// err. Классификация занятых имён identity-first (fix-cfapi-followups
+	// A1): идентичность записи — FileIdentity хвоста STANDARD-ответа.
+	StandardInfoOf(path string) (info *cfapi.CFPlaceholderStandardInfo, isPlaceholder bool, err error)
+	// StatOf — размер, время модификации и тип локальной записи (os.Lstat:
+	// метаданные без открытия — плейсхолдеры и каталоги безопасны).
+	// Сверка свежести при рестарте (fix-cfapi-followups A2).
+	StatOf(path string) (size int64, mtime time.Time, isDir bool, err error)
 }
 
 // localLister — локальное перечисление каталога sync root: имена записей
@@ -430,6 +440,24 @@ func (osStore) StateOf(path string) (bool, bool, error) {
 	return true, wd.FileAttributes&localPlaceholderAttrMask != 0, nil
 }
 
+// StandardInfoOf — cfapi.StandardInfoOfPath: STANDARD-запрос с определённым
+// ответом «не плейсхолдер» → (nil, false, nil); прочие неуспехи — err
+// (классификация A1 консервативно unknown → конфликт).
+func (osStore) StandardInfoOf(path string) (*cfapi.CFPlaceholderStandardInfo, bool, error) {
+	return cfapi.StandardInfoOfPath(path)
+}
+
+// StatOf — os.Lstat локального пути: логический размер (у плейсхолдера —
+// из метаданных фильтра), mtime и тип (метаданные доступны без открытия и
+// гидрации).
+func (osStore) StatOf(path string) (int64, time.Time, bool, error) {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return 0, time.Time{}, false, err
+	}
+	return fi.Size(), fi.ModTime(), fi.IsDir(), nil
+}
+
 // populatedDir — результат сборки записей одного каталога: массив infos и
 // параллельный список записей backend (для записи в индекс по результату),
 // плюс existing — существующие плейсхолдеры, отфильтрованные от
@@ -506,17 +534,34 @@ func buildPopulatedDir(ctx context.Context, p *Provider, dir string, entries []B
 	for _, e := range entries {
 		rel := fsJoin(dir, e.Name)
 		local := localJoin(p.root, rel)
-		exists, isPlaceholder, err := p.store.StateOf(local)
+		exists, _, err := p.store.StateOf(local)
 		if err != nil {
 			logger.Warnf("placeholder %s: stat local %s: %v; entry skipped", rel, local, err)
 			continue
 		}
-		if exists && !isPlaceholder {
+		// Известный inode не нуждается в доказательстве идентичности —
+		// STANDARD-запрос не выполняется (дельта-спека: «При известном inode
+		// SHALL NOT выполняться STANDARD-запрос идентичности»): тот же
+		// шорткат, что в walk-ветке classifyOccupied. Путь в индексе
+		// разошёлся (переименование) — индекс обновляется, дальше запись
+		// ведётся как existing (ветки ниже).
+		if prev, known := p.idx.Path(e.Inode); known {
+			if prev != rel {
+				if err := p.idx.Put(e.Inode, rel); err != nil {
+					logger.Warnf("placeholder %s: index update: %v", rel, err)
+				}
+			}
+		} else if exists && classifyIdentity(p.store, local, e.Inode) != identityOwn {
+			// Классификация занятого имени без записи индекса — по
+			// идентичности STANDARD-записи, тот же предикат, что в
+			// walk-классификации (fix-cfapi-followups A1.4): чужая/
+			// недоказанная идентичность (включая не-плейсхолдер) — конфликт;
+			// путь FETCH-наполнения и walk решают одинаково.
 			logger.Warnf("conflict: %s exists and is not a placeholder; backend entry %s skipped (local file is left untouched)", local, rel)
 			out.conflicts++
 			continue
 		}
-		if exists && isPlaceholder && !includeExisting {
+		if exists && !includeExisting {
 			// Create-путь: перезапуск, плейсхолдер уже на диске — повторное
 			// создание не нужно (дубль), индекс обновляем.
 			out.existing = append(out.existing, e)
@@ -556,13 +601,15 @@ func (d *populatedDir) saveIndexed(p *Provider, dir string) {
 // 1с→30с на каталог).
 type dirPopulation struct {
 	dir              string
-	subdirs          []string // fs-пути подкаталогов к обходу (created + existing; конфликтные — нет)
-	createdFiles     int      // создано плейсхолдеров-файлов
-	createdDirs      int      // создано плейсхолдеров-каталогов
-	skipped          int      // existing: по индексу + восстановленные + переклассифицированные EEXIST
-	conflicts        int      // одноимённые локальные не-плейсхолдеры, не в индексе
-	conflictExamples []string // до 10 имён для Warn
-	failedEntries    int      // записи с отказом createEntry (после отката; карантин тоже здесь)
+	subdirs          []string      // fs-пути подкаталогов к обходу (created + existing; конфликтные — нет)
+	createdFiles     int           // создано плейсхолдеров-файлов
+	createdDirs      int           // создано плейсхолдеров-каталогов
+	skipped          int           // existing: по индексу + восстановленные + усыновлённые + переклассифицированные EEXIST
+	adopted          int           // усыновлено по идентичности (подмножество skipped; строка `walk adopt:`)
+	conflicts        int           // одноимённые локальные записи с чужой/недоказанной идентичностью, не в индексе
+	conflictExamples []string      // до 10 имён для Warn
+	failedEntries    int           // записи с отказом createEntry (после отката; карантин тоже здесь)
+	fresh            freshCounters // сверка свежести своих записей-файлов (fix-cfapi-followups A2)
 }
 
 // populateDirectory — примитив «обработать каталог D» (design.md D6, такт 1
@@ -672,20 +719,35 @@ func applyCreateResult(p *Provider, res *dirPopulation, e BackendEntry, rel, loc
 }
 
 // classifyOccupied — классификация записи, чьё имя занято локально
-// (design.md D6.5); вызывается также после CREATE_NEW-отказа createEntry
-// (D6.4 «переклассификация по индексу»). existing по индексу — skip;
-// наш плейсхолдер без записи индекса — восстановление; не-плейсхолдер —
+// (design.md D6.5, fix-cfapi-followups A1 identity-first); вызывается также
+// после CREATE_NEW-отказа createEntry (D6.4 «переклассификация по
+// индексу»). existing по индексу — skip БЕЗ STANDARD-запроса (ноль новых
+// syscalls на тёплом пути); имя без записи индекса классифицируется по
+// идентичности STANDARD-записи (classifyIdentity): своя — усыновление
+// (idx.Put + skipped + adopted), чужая/не плейсхолдер/без ответа —
 // конфликт; имя исчезло между перечислением и проверкой — to-create
 // (только при allowCreate: при переклассификации EEXIST повторного
 // создания нет — гонка трактуется как конфликт, без циклов).
 func classifyOccupied(p *Provider, res *dirPopulation, e BackendEntry, rel, localPath string, allowCreate bool, failedExamples *[]string) {
 	if prev, known := p.idx.Path(e.Inode); known {
 		// existing по индексу: skip без Warn (design.md D6.5); журнал —
-		// только изменившиеся пути (D6.7).
+		// только изменившиеся пути (D6.7). STANDARD-запроса нет: известный
+		// inode не нуждается в доказательстве идентичности (fix-cfapi-
+		// followups A1, спека «При известном inode SHALL NOT выполняться
+		// STANDARD-запрос идентичности»).
 		if prev != rel {
 			if err := p.idx.Put(e.Inode, rel); err != nil {
 				logger.Warnf("walk %s: index %s: %v", res.dir, rel, err)
 			}
+		}
+		logger.Debugf("walk classify: %s: known-index", rel)
+		// Сверка свежести (fix-cfapi-followups A2): только совпадение пути
+		// индекса с localPath (нормализованное lower — переименованная
+		// запись не сверяется, она ещё не является «своей» по этому пути)
+		// и только файлы (тип записи известен из hub — каталог не тратит
+		// даже StatOf).
+		if strings.EqualFold(prev, rel) && !e.IsDir {
+			res.fresh.add(p.checkFreshness(e, rel, localPath).counts)
 		}
 		res.skipped++
 		if e.IsDir {
@@ -698,6 +760,7 @@ func classifyOccupied(p *Provider, res *dirPopulation, e BackendEntry, rel, loca
 		if !allowCreate {
 			// Имя занято (EEXIST от createEntry), но состояние уже пусто:
 			// двойная гонка — конфликт (без повторов создания).
+			logger.Debugf("walk classify: %s: absent", rel)
 			res.conflicts++
 			if len(res.conflictExamples) < 10 {
 				res.conflictExamples = append(res.conflictExamples, e.Name)
@@ -710,45 +773,76 @@ func classifyOccupied(p *Provider, res *dirPopulation, e BackendEntry, rel, loca
 		applyCreateResult(p, res, e, rel, localPath, kind, cerr, failedExamples)
 		return
 	}
-	if err != nil || !isPlaceholder {
-		// conflict: одноимённый локальный не-плейсхолдер, индексу
-		// неизвестный — skip (инвариант «локальный файл пользователя не
-		// перезаписывается и не удаляется»); один Warn на каталог.
+	if err != nil {
+		// Ошибка состояния — конфликт (как прежде; fix-cfapi-followups
+		// A1.2), один Warn на каталог у вызывающего.
+		logger.Debugf("walk classify: %s: stat-error", rel)
 		res.conflicts++
 		if len(res.conflictExamples) < 10 {
 			res.conflictExamples = append(res.conflictExamples, e.Name)
 		}
 		return
 	}
-	// Наш плейсхолдер, записи в индексе нет (утерянный журнал при живом
-	// диске) — восстановление: изменение → строка журнала (D6.7). Краш-окно
-	// fallback-дегидратации (design.md D6.4): convert(MARK_IN_SYNC) прошёл,
-	// а Update(DEHYDRATE) нет — остался плейсхолдер с EOF-нулями без
-	// индексной записи; перед усыновлением файла дегидратированность
+	// Имя существует, записи в индексе нет: решает ИДЕНТИЧНОСТЬ
+	// STANDARD-записи, а не атрибутный флаг (U20: фильтр чистит спец-
+	// атрибуты у in-sync записей — атрибут-положительный чужой файл
+	// усыновлять нельзя; fix-cfapi-followups A1.3).
+	kind := classifyIdentity(p.store, localPath, e.Inode)
+	logger.Debugf("walk classify: %s: %s", rel, kind)
+	if kind != identityOwn {
+		// plain/foreign/unknown — конфликт: без createEntry, без idx.Put,
+		// без дегидратации (design.md A1.5; инвариант «локальный файл
+		// пользователя не перезаписывается и не удаляется»); один Warn на
+		// каталог у вызывающего. Fallback на атрибуты запрещён.
+		res.conflicts++
+		if len(res.conflictExamples) < 10 {
+			res.conflictExamples = append(res.conflictExamples, e.Name)
+		}
+		return
+	}
+	// Свой плейсхолдер без записи индекса (утерянный журнал при живом
+	// диске) — усыновление: изменение → строка журнала (D6.7). Сверка
+	// свежести (fix-cfapi-followups A2) — до дегидратации: дегидратация
+	// допустима только при совпадении версий (equal), иначе отбросила бы
+	// локальную правку при inSync=TrackNone либо погасила бы ревалидацию.
+	// Краш-окно fallback-дегидратации (design.md D6.4): convert(MARK_IN_SYNC)
+	// прошёл, а Update(DEHYDRATE) нет — остался плейсхолдер с EOF-нулями
+	// без индексной записи; перед усыновлением файла дегидратированность
 	// проверяется и нормализуется — иначе чтение вернуло бы «молчаливые
-	// гидратированные нули» (FETCH_DATA не пришёл бы). У каталогов ветки
-	// дегидратации нет (D6.4: только convert(MARK_IN_SYNC)) — принимаются
-	// без проверки.
+	// гидратированные нули» (FETCH_DATA не пришёл бы). Нормализация —
+	// ТОЛЬКО при положительном атрибутном флаге StateOf (класс U20 с
+	// чистыми атрибутами усыновляется без дегидратации) и только при
+	// equal. У каталогов ветки дегидратации и сверки нет (D6.4: только
+	// convert(MARK_IN_SYNC)) — принимаются без проверки.
 	if !e.IsDir {
-		if nerr := ensureDehydrated(p, e, localPath); nerr != nil {
-			if rerr := rollbackEntry(localPath); rerr != nil {
-				nerr = fmt.Errorf("%v; rollback: %w", nerr, rerr)
-				var q *quarantineError
-				if errors.As(rerr, &q) {
-					logger.Warnf("walk quarantine: %s", localPath)
+		fc := p.checkFreshness(e, rel, localPath)
+		res.fresh.add(fc.counts)
+		// Нормализация — только при равных версиях (stat-ошибка —
+		// консервативный пропуск нормализации) и положительном атрибутном
+		// флаге; независимо от исхода сверки запись усыновляется
+		// (идентичность доказана — idx.Put ниже).
+		if fc.statErr == nil && fc.verdict == freshEqual && isPlaceholder {
+			if nerr := ensureDehydrated(p, e, localPath); nerr != nil {
+				if rerr := rollbackEntry(localPath); rerr != nil {
+					nerr = fmt.Errorf("%v; rollback: %w", nerr, rerr)
+					var q *quarantineError
+					if errors.As(rerr, &q) {
+						logger.Warnf("walk quarantine: %s", localPath)
+					}
 				}
+				res.failedEntries++
+				if len(*failedExamples) < 10 {
+					*failedExamples = append(*failedExamples, e.Name)
+				}
+				return
 			}
-			res.failedEntries++
-			if len(*failedExamples) < 10 {
-				*failedExamples = append(*failedExamples, e.Name)
-			}
-			return
 		}
 	}
 	if err := p.idx.Put(e.Inode, rel); err != nil {
 		logger.Warnf("walk %s: index %s: %v", res.dir, rel, err)
 	}
 	res.skipped++
+	res.adopted++
 	if e.IsDir {
 		res.subdirs = append(res.subdirs, rel)
 	}

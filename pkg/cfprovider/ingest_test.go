@@ -548,6 +548,31 @@ func (r recreatingRemover) Remove(p string) error {
 	return nil
 }
 
+// stampedRecreatingRemover — recreatingRemover, который при удалении
+// подтверждает identity плейсхолдера в модели фильтра (fix-cfapi-followups
+// A1: к моменту EEXIST-классификации STANDARD-запрос обязан доказать
+// идентичность — inode записи уже назначен Create'ом выгрузки).
+type stampedRecreatingRemover struct {
+	inner recreatingRemover
+	store *fakeStore
+	path  string
+	ino   func() uint64
+}
+
+func (r stampedRecreatingRemover) Remove(p string) error {
+	if err := r.inner.Remove(p); err != nil {
+		return err
+	}
+	if strings.EqualFold(p, r.path) {
+		info := fakeStdInfoWithIdentity(r.ino())
+		if prev, ok := r.store.standard[r.path]; ok && prev != nil {
+			info.OnDiskDataSize = prev.OnDiskDataSize // гидратированность модели сохраняется
+		}
+		r.store.standard[r.path] = info
+	}
+	return nil
+}
+
 // recvTask ждёт задание из канала коалисера (воркеры асинхронны).
 func recvTask(t *testing.T, ch <-chan ingestTask) ingestTask {
 	t.Helper()
@@ -1262,9 +1287,16 @@ func TestIngestRecreateExistsAdoptsOwnPlaceholder(t *testing.T) {
 	if err := os.WriteFile(local, data, 0o644); err != nil {
 		t.Fatalf("write local: %v", err)
 	}
-	p.remover = recreatingRemover{inner: osRemover{}, path: local, content: []byte("user remade")}
+	p.remover = stampedRecreatingRemover{
+		inner: recreatingRemover{inner: osRemover{}, path: local, content: []byte("user remade")},
+		store: fstore,
+		path:  local,
+		ino:   func() uint64 { return backend.inodeOf("/adopt.txt") },
+	}
 	// Модель фильтра: путь уже наш плейсхолдер (создан параллельным walk),
-	// дегидратированный (OnDiskDataSize 0 — дефолт подменного store).
+	// дегидратированный (OnDiskDataSize 0 — дефолт подменного store);
+	// identity пути подтверждается STANDARD-запросом классификации
+	// (fix-cfapi-followups A1).
 	fstore.local[local] = true
 
 	p.runIngest(context.Background(), ingestTask{fsPath: "/adopt.txt", local: local, key: "/adopt.txt"})
@@ -1349,12 +1381,21 @@ func TestIngestRecreateExistsAdoptsHydratedHonestMetadata(t *testing.T) {
 		t.Fatalf("stat local: %v", err)
 	}
 	modTime := fi.ModTime()
-	p.remover = recreatingRemover{inner: osRemover{}, path: local, content: []byte("user remade")}
+	p.remover = stampedRecreatingRemover{
+		inner: recreatingRemover{inner: osRemover{}, path: local, content: []byte("user remade")},
+		store: fstore,
+		path:  local,
+		ino:   func() uint64 { return backend.inodeOf("/adopt-hydrated.txt") },
+	}
 	// Модель фильтра: путь уже наш плейсхолдер, ГИДРАТИРОВАННЫЙ
 	// (OnDiskDataSize > 0) — ensureDehydrated обязан дегидратировать
-	// повторным Update с честными метаданными.
+	// повторным Update с честными метаданными; identity пути подтверждается
+	// STANDARD-запросом классификации (fix-cfapi-followups A1); StatOf
+	// подтверждает равные версии выгруженной записи (свежесть equal —
+	// дегидратация допустима, fix-cfapi-followups A2).
 	fstore.local[local] = true
 	fstore.standard[local] = &cfapi.CFPlaceholderStandardInfo{OnDiskDataSize: 12345}
+	fstore.stats = map[string]fakeStat{local: {size: int64(len(data)), mtime: modTime}}
 
 	p.runIngest(context.Background(), ingestTask{fsPath: "/adopt-hydrated.txt", local: local, key: "/adopt-hydrated.txt"})
 

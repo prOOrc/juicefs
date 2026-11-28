@@ -395,19 +395,19 @@ func testSubdirOperations(t *testing.T, m Meta) {
 			}},
 			{"Locks", func(t *testing.T, parent, realParent, otherParent Ino) {
 				inode := create(t, parent, file)
-				require.Zero(t, m.Flock(ctx, inode, 1, syscall.F_WRLCK, false))
-				assert.Equal(t, syscall.EAGAIN, m.Flock(ctx, inode, 2, syscall.F_WRLCK, false))
+				require.Zero(t, m.Flock(ctx, inode, 1, flockWRLCK, false))
+				assert.Equal(t, syscall.EAGAIN, m.Flock(ctx, inode, 2, flockWRLCK, false))
 				plocks, flocks, err := m.ListLocks(ctx, inode)
 				require.NoError(t, err)
 				assert.Empty(t, plocks)
 				assert.Len(t, flocks, 1)
-				require.Zero(t, m.Flock(ctx, inode, 1, syscall.F_UNLCK, false))
-				require.Zero(t, m.Setlk(ctx, inode, 1, false, syscall.F_WRLCK, 0, 4095, 123))
-				ltype, start, end, pid := uint32(syscall.F_WRLCK), uint64(0), uint64(4095), uint32(0)
+				require.Zero(t, m.Flock(ctx, inode, 1, flockUNLCK, false))
+				require.Zero(t, m.Setlk(ctx, inode, 1, false, flockWRLCK, 0, 4095, 123))
+				ltype, start, end, pid := uint32(flockWRLCK), uint64(0), uint64(4095), uint32(0)
 				require.Zero(t, m.Getlk(ctx, inode, 2, &ltype, &start, &end, &pid))
-				assert.Equal(t, uint32(syscall.F_WRLCK), ltype)
+				assert.Equal(t, uint32(flockWRLCK), ltype)
 				assert.Equal(t, uint32(123), pid)
-				require.Zero(t, m.Setlk(ctx, inode, 1, false, syscall.F_UNLCK, 0, 4095, 123))
+				require.Zero(t, m.Setlk(ctx, inode, 1, false, flockUNLCK, 0, 4095, 123))
 			}},
 		}
 		for _, tc := range cases {

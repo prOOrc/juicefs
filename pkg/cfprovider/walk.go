@@ -91,11 +91,13 @@ func classifyListError(err error) listErrorKind {
 // `walk: dirs=%d files=%d skipped=%d conflicts=%d failed=%d pending=%d elapsed=%s`).
 type walkStats struct {
 	mu        sync.Mutex
-	dirs      int // каталогов обработано
-	files     int // создано плейсхолдеров-файлов
-	skipped   int // existing: по индексу + восстановленные + ALREADY_EXISTS
-	conflicts int // конфликтов (одноимённые локальные не-плейсхолдеры)
-	failed    int // каталогов с перманентной ошибкой листинга (поддеревья)
+	dirs      int           // каталогов обработано
+	files     int           // создано плейсхолдеров-файлов
+	skipped   int           // existing: по индексу + восстановленные + усыновлённые + ALREADY_EXISTS
+	adopted   int           // усыновлено по идентичности (подмножество skipped; строка `walk adopt:`)
+	conflicts int           // конфликтов (одноимённые локальные записи с чужой/недоказанной идентичностью)
+	failed    int           // каталогов с перманентной ошибкой листинга (поддеревья)
+	fresh     freshCounters // сверка свежести (строка `walk fresh:` при ненулевой сумме)
 	startedAt time.Time
 }
 
@@ -104,8 +106,10 @@ func (s *walkStats) record(res *dirPopulation) {
 	s.dirs++
 	s.files += res.createdFiles
 	s.skipped += res.skipped
+	s.adopted += res.adopted // усыновлённые учитываются и в skipped (спека «Плейсхолдеры из метаданных hub»)
 	s.conflicts += res.conflicts
 	s.failed += res.failedEntries // записи с отказом create-примитива (design.md D6.4)
+	s.fresh.add(res.fresh)
 	s.mu.Unlock()
 }
 
@@ -113,6 +117,33 @@ func (s *walkStats) fail() {
 	s.mu.Lock()
 	s.failed++
 	s.mu.Unlock()
+}
+
+// logAdopted — строка `walk adopt: entries=%d` (Info, только при
+// ненулевом числе усыновлений; fix-cfapi-followups A1, спека
+// «Усыновление синхронизированного плейсхолдера»). Усыновлённые записи уже
+// учтены в skipped строки `walk:` — формат её байт-в-байт прежний.
+func (s *walkStats) logAdopted() {
+	s.mu.Lock()
+	adopted := s.adopted
+	s.mu.Unlock()
+	if adopted > 0 {
+		logger.Infof("walk adopt: entries=%d", adopted)
+	}
+}
+
+// logFresh — строка `walk fresh: revalidated=%d queued-upload=%d readonly=%d
+// pinned=%d ambiguous=%d out-of-sync=%d` (Info, только при ненулевой сумме;
+// fix-cfapi-followups A2, спека «Сверка при старте»). Рестарт без изменений
+// не выводит строку: equal не увеличивает ни одного счётчика.
+func (s *walkStats) logFresh() {
+	s.mu.Lock()
+	f := s.fresh
+	s.mu.Unlock()
+	if f.total() > 0 {
+		logger.Infof("walk fresh: revalidated=%d queued-upload=%d readonly=%d pinned=%d ambiguous=%d out-of-sync=%d",
+			f.revalidated, f.queuedUpload, f.readonly, f.pinned, f.ambiguous, f.outOfSync)
+	}
 }
 
 // logf — строка лога walk: prefix — `walk:`, `walk complete:` или
@@ -300,12 +331,18 @@ func (p *Provider) runWalk(ctx context.Context, initial []string) {
 	q.close()
 	workers.Wait()
 	// Ровно одна финальная строка (design.md D6.8): остановка — cancelled,
-	// честное опустошение — complete.
+	// честное опустошение — complete. Усыновления и сверка свежести —
+	// отдельными строками с префиксами `walk adopt:`/`walk fresh:` (в
+	// формат `walk:` не входят).
 	if cancelled || ctx.Err() != nil {
 		stats.logf("walk cancelled:", q.pending())
+		stats.logAdopted()
+		stats.logFresh()
 		return
 	}
 	stats.logf("walk complete:", q.pending())
+	stats.logAdopted()
+	stats.logFresh()
 }
 
 // walkWorker — воркер пула BFS: каталог из очереди → рабочий цикл → дети в

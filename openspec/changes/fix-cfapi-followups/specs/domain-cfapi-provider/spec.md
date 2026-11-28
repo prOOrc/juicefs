@@ -81,6 +81,17 @@ Walk SHALL быть идемпотентным: запись hub, имя кот�
 - **THEN** выводится строка `walk cancelled:`, а строка `walk complete:` не выводится
 - **AND** при следующем запуске walk создаёт только отсутствующие записи
 
+Verified-by: pkg/cfapi/identity_test.go::TestFileIdentityBytes
+Verified-by: pkg/cfapi/identity_test.go::TestIsNotAPlaceholder
+Verified-by: pkg/cfprovider/identity_test.go::TestClassifyIdentity
+Verified-by: pkg/cfprovider/identity_test.go::TestClassifyOccupiedIdentityFirst
+Verified-by: pkg/cfprovider/identity_test.go::TestClassifyOccupiedKnownNoStandardQuery
+Verified-by: pkg/cfprovider/identity_test.go::TestClassifyOccupiedAbsentCreates
+Verified-by: pkg/cfprovider/identity_test.go::TestBuildPopulatedDir
+Verified-by: pkg/cfprovider/walk_test.go::TestWalkAdoptionNormalizesHydratedPlaceholder
+Verified-by: pkg/cfprovider/walk_test.go::TestWalkAdoptionDehydratedSkipsNormalization
+Verified-by: pkg/cfprovider/walk_test.go::TestWalkExistsReclassifyRestore
+
 ### Requirement: Сверка при старте
 
 При запуске `serve` SHALL ставить в очередь выгрузки локальные файлы без плейсхолдера и плейсхолдеры вне состояния in-sync, а в очередь удаления — записи индекса, отсутствующие на диске в каталогах с завершённым наполнением.
@@ -113,6 +124,22 @@ Walk SHALL быть идемпотентным: запись hub, имя кот�
 - **WHEN** размер локального файла и записи hub разошлись, а время модификации в пределах допуска
 - **THEN** пропуск с предупреждением, без мутаций
 
+Verified-by: pkg/cfprovider/freshness_test.go::TestCompareVersion
+Verified-by: pkg/cfprovider/freshness_test.go::TestCheckFreshnessEqualNoMutations
+Verified-by: pkg/cfprovider/freshness_test.go::TestCheckFreshnessStatError
+Verified-by: pkg/cfprovider/freshness_test.go::TestCheckFreshnessDirSkipped
+Verified-by: pkg/cfprovider/freshness_test.go::TestCheckFreshnessPathMismatchSkipped
+Verified-by: pkg/cfprovider/freshness_test.go::TestCheckFreshnessLocalNewerQueuesUpload
+Verified-by: pkg/cfprovider/freshness_test.go::TestCheckFreshnessLocalNewerReadOnly
+Verified-by: pkg/cfprovider/freshness_test.go::TestCheckFreshnessLocalNewerOutOfSyncLeftToReconcile
+Verified-by: pkg/cfprovider/freshness_test.go::TestCheckFreshnessBackendNewerRevalidates
+Verified-by: pkg/cfprovider/freshness_test.go::TestCheckFreshnessBackendNewerPinnedSkips
+Verified-by: pkg/cfprovider/freshness_test.go::TestCheckFreshnessBackendNewerOutOfSyncSkips
+Verified-by: pkg/cfprovider/freshness_test.go::TestCheckFreshnessAmbiguousSkipsNoMutations
+Verified-by: pkg/cfprovider/freshness_test.go::TestCheckFreshnessStateUnavailableSkips
+Verified-by: pkg/cfprovider/freshness_test.go::TestCheckFreshnessAdoptDivergedSkipsNormalization
+Verified-by: pkg/cfprovider/walk_test.go::TestWalkIdempotentSecondRun
+
 ## ADDED Requirements
 
 ### Requirement: Cleanup-режим осиротевших плейсхолдеров
@@ -127,15 +154,39 @@ Walk SHALL быть идемпотентным: запись hub, имя кот�
 - **WHEN** выполняется `cleanup --root X` при живом `serve` на этом корне
 - **THEN** команда завершается отказом до первой мутации
 
+Verified-by: pkg/cfprovider/cleanup_test.go::TestCleanupClassifyAndDryRun
+Verified-by: pkg/cfprovider/cleanup_test.go::TestCleanupByAttributesFallback
+Verified-by: pkg/cfprovider/cleanup_test.go::TestCleanupDryRunNestedLiveRootSkips
+Verified-by: pkg/cfprovider/cleanup_test.go::TestCleanupApplyNestedLiveRootRefuses
+Verified-by: pkg/cfprovider/cleanup_test.go::TestCleanupRefuseMutexHeld
+Verified-by: pkg/cfprovider/cleanup_test.go::TestCleanupRefusePreconditions
+Verified-by: pkg/cfprovider/cleanup_test.go::TestCleanupStateDirUntouched
+
 ### Requirement: Уровни применения cleanup
 
-С мутационными флагами SHALL применяться уровни: `--apply` — revert плейсхолдеров в обычные записи через `CfRevertPlaceholder` с пост-проверкой; `--apply --delete-files` — дополнительно удаление только подтверждённо-reverted записей; `--apply --delete-files --unregister` — дополнительно снятие регистрации sync root и очистка ключа реестра. Команда SHALL NOT удалять записи, не бывшие плейсхолдерами; SHALL NOT использовать рекурсивное удаление каталогов; каталоги SHALL удаляться только пустыми. Применение к реальным корням SHALL выполняться владельцем отдельно (в настоящем change — только dry-run проверка).
+С мутационными флагами SHALL применяться уровни: `--apply` — revert плейсхолдеров в обычные записи через `CfRevertPlaceholder` с пост-проверкой; `--apply --delete-files` — дополнительно удаление подтверждённо-reverted записей, а при отказе revert'а (живой факт U-C1: revert — provider-mediated, на мёртвом провайдере HRESULT 0x80070194) — прямое удаление доказанно дегидратированных сирот (контент в backend, fallback `removed-direct`; каталог — только пустой) с пост-проверкой отсутствия; гидратированная сирота при отказе revert'а SHALL давать ошибку с rescue-указанием (возможен локальный контент, отсутствующий в backend) и SHALL NOT удаляться; запись, классифицированная только по атрибутам (STANDARD не дал доказательства), SHALL NOT удаляться через fallback; `--apply --delete-files --unregister` — дополнительно снятие регистрации sync root и очистка ключа реестра, выполняемое ПОСЛЕДНИМ шагом после revert/удалений (CfUnregisterSyncRoot удаляет дегидратированные скелеты и материализует гидратированные). Команда SHALL NOT удалять записи, не бывшие плейсхолдерами; SHALL NOT использовать рекурсивное удаление каталогов; каталоги SHALL удаляться только пустыми. Применение к реальным корням SHALL выполняться владельцем отдельно (в настоящем change — только dry-run проверка).
 
 #### Scenario: Revert и удаление
 - **WHEN** выполняется `cleanup --root X --apply --delete-files` на dry-run-плане с плейсхолдерами
 - **THEN** каждый плейсхолдер revertnut и после подтверждения удалён
 - **AND** обычные файлы и каталоги с обычными файлами внутри сохранены
 
+#### Scenario: Сирота с мёртвым провайдером
+- **WHEN** revert дегидратированного плейсхолдера падает (провайдер не отвечает) и передан `--delete-files`
+- **THEN** запись удаляется напрямую с пост-проверкой отсутствия и учитывается как `removed-direct`
+- **AND** гидратированная сирота в том же прогоне даёт ошибку с rescue-указанием и остаётся на месте
+
 #### Scenario: Идемпотентность
 - **WHEN** cleanup выполняется повторно после успешного применения
 - **THEN** dry-run показывает ноль плейсхолдеров
+
+Verified-by: pkg/cfapi/operations_test.go::TestRevertPlaceholderByPathPlainFile
+Verified-by: pkg/cfprovider/cleanup_test.go::TestCleanupApplyRevertNoDelete
+Verified-by: pkg/cfprovider/cleanup_test.go::TestCleanupApplyDeleteFiles
+Verified-by: pkg/cfprovider/cleanup_test.go::TestCleanupApplyDirRevertBlocked
+Verified-by: pkg/cfprovider/cleanup_test.go::TestCleanupPostCheckKeepsFile
+Verified-by: pkg/cfprovider/cleanup_test.go::TestCleanupRegisteredRequiresUnregister
+Verified-by: pkg/cfprovider/cleanup_test.go::TestCleanupUnregisterAfterRevert
+Verified-by: pkg/cfprovider/cleanup_test.go::TestCleanupDehydratedFallbackDirectRemove
+Verified-by: pkg/cfprovider/cleanup_test.go::TestCleanupHydratedRevertFailureKeepsError
+Verified-by: pkg/cfprovider/cleanup_test.go::TestCleanupIdempotentSecondRun

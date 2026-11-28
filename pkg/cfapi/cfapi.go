@@ -443,6 +443,31 @@ func PlaceholderStandardInfoByPath(path string, isDir bool) (*CFPlaceholderStand
 	return (*CFPlaceholderStandardInfo)(unsafe.Pointer(&buf[0])), nil
 }
 
+// StandardStateDescriptions — словесное состояние STANDARD-записи для отчёта
+// `clouddrive status` (контракт вывода команды — строки байт-в-байт прежние):
+// inSync — «in-sync»/«not in-sync»/«in-sync state unknown» по CF_IN_SYNC_STATE,
+// hydration — «dehydrated»/«hydrated»/«empty» по логическому размеру и
+// OnDiskDataSize (fix-cfapi-followups A1: общий хелпер интерпретации
+// STANDARD-ответа — классификация и отчёт читают одни поля).
+func StandardStateDescriptions(logicalSize int64, info *CFPlaceholderStandardInfo) (inSync, hydration string) {
+	inSync = "in-sync state unknown"
+	switch info.InSyncState {
+	case InSyncStateInSync:
+		inSync = "in-sync"
+	case InSyncStateNotInSync:
+		inSync = "not in-sync"
+	}
+	switch {
+	case logicalSize > 0 && info.OnDiskDataSize == 0:
+		hydration = "dehydrated"
+	case logicalSize > 0:
+		hydration = "hydrated"
+	default:
+		hydration = "empty"
+	}
+	return inSync, hydration
+}
+
 // CfGetPlaceholderInfo читает информацию о плейсхолдере; минимум —
 // CF_PLACEHOLDER_BASIC_INFO (pin/in-sync, design.md D1).
 func CfGetPlaceholderInfo(fileHandle syscall.Handle, infoClass uint32, infoBuffer []byte, returnedLength *uint32) error {

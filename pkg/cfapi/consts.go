@@ -341,7 +341,15 @@ const (
 )
 
 // CF_REVERT_FLAGS.
-const RevertFlagNone uint32 = 0x00000000
+const (
+	RevertFlagNone uint32 = 0x00000000
+	// RevertFlagDelete — CF_REVERT_FLAG_DELETE (cfapi.h): revert с
+	// одновременным удалением записи. Информационная константа пробы U-C3;
+	// продукт от неё не зависит: cleanup revert'ит с RevertFlagNone и удаляет
+	// отдельно — точка подтверждения «стал plain» (fix-cfapi-followups A4,
+	// R4).
+	RevertFlagDelete uint32 = 0x00000001
+)
 
 // CF_PLACEHOLDER_STATE.
 const (

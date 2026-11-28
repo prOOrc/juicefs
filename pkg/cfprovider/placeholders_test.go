@@ -28,6 +28,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 
@@ -82,9 +83,27 @@ type fakeStore struct {
 	transfers []transferCall
 	local     map[string]bool // локальные пути, существующие как ПЛЕЙСХОЛДЕРЫ
 	localReal map[string]bool // локальные пути, существующие как ОБЫЧНЫЕ файлы
+	// localClean — плейсхолдеры с очищенными фильтром спец-атрибутами (U20):
+	// StateOf видит существующую запись БЕЗ признаков плейсхолдера, но
+	// STANDARD-запрос подтверждает плейсхолдерность и identity.
+	localClean map[string]bool
+	// standardOfCalls — число STANDARD-запросов StandardInfoOf (гейт A1:
+	// known-ветка классификации обязана проходить без них).
+	standardOfCalls int
 	// standard — CF_PLACEHOLDER_STANDARD_INFO по путям (усыновление);
 	// отсутствие записи — дегидратированный плейсхолдер (OnDiskDataSize 0).
 	standard map[string]*cfapi.CFPlaceholderStandardInfo
+	// identities — identity плейсхолдеров, записанных Convert (модель
+	// фильтра: конверсия запоминает FileIdentity записи);
+	// standardOfErr — явная ошибка STANDARD-запроса (класс unknown).
+	identities    map[string]uint64
+	standardOfErr map[string]error
+	// stats — размер/mtime/тип локальных записей для сверки свежести (A2);
+	// отсутствие записи — ошибка StatOf (путь неизвестен «диску»);
+	// statOfCalls — число вызовов StatOf (гейт: known-ветка по несовпавшему
+	// пути и каталоги сверку не начинают).
+	stats       map[string]fakeStat
+	statOfCalls int
 	// answerResults — симуляция записи фильтром per-entry Result в наш
 	// массив при обработке TRANSFER-ответа (имя записи → Result).
 	answerResults map[string]cfapi.HRESULT
@@ -138,8 +157,19 @@ func (f *fakeStore) Convert(path string, isDir bool, identity []byte, flags uint
 		ino = binary.LittleEndian.Uint64(identity)
 	}
 	f.converts = append(f.converts, convertCall{path: path, isDir: isDir, ino: ino, flags: flags})
-	// Модель реального фильтра: после успешной конверсии путь — плейсхолдер.
+	// Модель реального фильтра: после успешной конверсии путь — плейсхолдер,
+	// несущий identity (STANDARD-запрос отдаст её обратно). Карты могут быть
+	// не заданы фиксстурой — ленивая инициализация.
+	if f.local == nil {
+		f.local = map[string]bool{}
+	}
 	f.local[path] = true
+	if ino != 0 {
+		if f.identities == nil {
+			f.identities = map[string]uint64{}
+		}
+		f.identities[path] = ino
+	}
 	return nil
 }
 
@@ -182,12 +212,17 @@ func (f *fakeStore) TransferData(conn cfapi.ConnectionKey, transferKey cfapi.Tra
 }
 
 // StateOf подменного store: realPaths — обычные файлы (не плейсхолдеры),
-// placeholders — плейсхолдеры. Для честной проверки конфликтов часть тестов
-// использует osStore.StateOf на реальных файлах диска (os.Stat, без cldapi).
+// localClean — плейсхолдеры с очищенными атрибутами (U20: запись есть,
+// признаков плейсхолдера нет), placeholders — плейсхолдеры. Для честной
+// проверки конфликтов часть тестов использует osStore.StateOf на реальных
+// файлах диска (os.Stat, без cldapi).
 func (f *fakeStore) StateOf(path string) (bool, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.localReal[path] {
+		return true, false, nil
+	}
+	if f.localClean[path] {
 		return true, false, nil
 	}
 	if f.local[path] {
@@ -205,6 +240,50 @@ func (f *fakeStore) StandardInfo(path string) (*cfapi.CFPlaceholderStandardInfo,
 		return info, nil
 	}
 	return &cfapi.CFPlaceholderStandardInfo{OnDiskDataSize: 0}, nil
+}
+
+// fakeStdInfoWithIdentity — STANDARD-запись с identity = inode LE 8 байт
+// в одном буфере (модель ответа фильтра: структура и хвост — одна память).
+func fakeStdInfoWithIdentity(ino uint64) *cfapi.CFPlaceholderStandardInfo {
+	identity := make([]byte, 8)
+	binary.LittleEndian.PutUint64(identity, ino)
+	buf := make([]byte, unsafe.Sizeof(cfapi.CFPlaceholderStandardInfo{})+uintptr(len(identity)))
+	info := (*cfapi.CFPlaceholderStandardInfo)(unsafe.Pointer(&buf[0]))
+	info.FileIdentityLength = uint32(len(identity))
+	tail := unsafe.Slice(&info.FileIdentity[0], len(identity))
+	copy(tail, identity)
+	return info
+}
+
+// StandardInfoOf подменного store — модель STANDARD-ответа фильтра
+// (классификация identity-first, fix-cfapi-followups A1):
+//   - standardOfErr[path] — явная ошибка запроса (класс unknown);
+//   - localReal — обычный файл: определённый ответ «не плейсхолдер»;
+//   - standard[path] — сохранённая запись (identity — как записана);
+//   - identities[path] — identity конверсии Convert (наш плейсхолдер);
+//   - local без standard/identities — плейсхолдер с пустой идентичностью
+//     (foreign: фиксстуры усыновления обязаны доказать identity явно);
+//   - неизвестный путь — ошибка открытия (модель osStore).
+func (f *fakeStore) StandardInfoOf(path string) (*cfapi.CFPlaceholderStandardInfo, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.standardOfCalls++
+	if err, ok := f.standardOfErr[path]; ok {
+		return nil, false, err
+	}
+	if f.localReal[path] {
+		return nil, false, nil
+	}
+	if info, ok := f.standard[path]; ok {
+		return info, true, nil
+	}
+	if ino, ok := f.identities[path]; ok {
+		return fakeStdInfoWithIdentity(ino), true, nil
+	}
+	if f.local[path] {
+		return &cfapi.CFPlaceholderStandardInfo{}, true, nil
+	}
+	return nil, false, errFake("fake: open failed (path unknown)")
 }
 
 // SetInSync — фиксация пометки in-sync (интерфейс ingestStore; сверка
@@ -256,6 +335,28 @@ func (f *fakeStore) transferCalls() []transferCall {
 	return append([]transferCall(nil), f.transfers...)
 }
 
+// fakeStat — запись «диска» подменного store для сверки свежести (A2):
+// логический размер, mtime, тип.
+type fakeStat struct {
+	size  int64
+	mtime time.Time
+	isDir bool
+}
+
+// StatOf подменного store: карта stats; отсутствие записи — ошибка
+// (модель osStore на несуществующем пути — freshness консервативно
+// пропускает запись).
+func (f *fakeStore) StatOf(path string) (int64, time.Time, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.statOfCalls++
+	st, ok := f.stats[path]
+	if !ok {
+		return 0, time.Time{}, false, errFake("fake: stat failed (path unknown)")
+	}
+	return st.size, st.mtime, st.isDir, nil
+}
+
 // errFake — простая ошибка для подменных реализаций.
 type errFake string
 
@@ -271,7 +372,7 @@ func (f fakeLocal) ListNames(localDir string) ([]string, error) {
 	defer f.s.mu.Unlock()
 	seen := map[string]bool{}
 	var names []string
-	for _, m := range []map[string]bool{f.s.local, f.s.localReal} {
+	for _, m := range []map[string]bool{f.s.local, f.s.localReal, f.s.localClean} {
 		for p := range m {
 			if filepath.Dir(p) == localDir {
 				n := filepath.Base(p)
@@ -455,6 +556,14 @@ func (s *stateAwareStore) StandardInfo(path string) (*cfapi.CFPlaceholderStandar
 	return s.store.StandardInfo(path)
 }
 
+func (s *stateAwareStore) StandardInfoOf(path string) (*cfapi.CFPlaceholderStandardInfo, bool, error) {
+	return s.store.StandardInfoOf(path)
+}
+
+func (s *stateAwareStore) StatOf(path string) (int64, time.Time, bool, error) {
+	return s.store.StatOf(path)
+}
+
 func (s *stateAwareStore) AnswerFetchPlaceholders(conn cfapi.ConnectionKey, transferKey cfapi.TransferKey, requestKey cfapi.RequestKey, status cfapi.NTStatus, infos []cfapi.CFPlaceholderCreateInfo, total int64, entriesProcessed uint32) error {
 	return s.store.AnswerFetchPlaceholders(conn, transferKey, requestKey, status, infos, total, entriesProcessed)
 }
@@ -475,8 +584,15 @@ func TestPopulateTopLevelRestartNoDuplicates(t *testing.T) {
 	backend := &fakeBackend{dirs: map[string][]BackendEntry{
 		"/": {{Name: "old.bin", Inode: 42, Size: 9, MtimeSec: 3}},
 	}}
-	// Путь существует и является плейсхолдером (создан предыдущим запуском).
-	store := &fakeStore{local: map[string]bool{filepath.Join(root, "old.bin"): true}, localReal: map[string]bool{}}
+	// Путь существует и является плейсхолдером (создан предыдущим запуском);
+	// identity записи подтверждает STANDARD-запрос (fix-cfapi-followups A1).
+	store := &fakeStore{
+		local:     map[string]bool{filepath.Join(root, "old.bin"): true},
+		localReal: map[string]bool{},
+		standard: map[string]*cfapi.CFPlaceholderStandardInfo{
+			filepath.Join(root, "old.bin"): fakeStdInfoWithIdentity(42),
+		},
+	}
 	p, idx := newTestProvider(t, root, backend, store)
 	// «Диск» — в fakeStore: локальное перечисление по его картам.
 	p.local = fakeLocal{store}
@@ -681,9 +797,16 @@ func TestPopulateTopLevelCreateFailureNoIndex(t *testing.T) {
 			{Name: "old.bin", Inode: 22, Size: 6, MtimeSec: 2},
 		},
 	}}
-	// old.bin — плейсхолдер предыдущего запуска; new.bin — новая запись.
+	// old.bin — плейсхолдер предыдущего запуска (identity подтверждает
+	// STANDARD-запрос, fix-cfapi-followups A1); new.bin — новая запись.
 	store := &failingConvertStore{
-		fakeStore:  fakeStore{local: map[string]bool{filepath.Join(root, "old.bin"): true}, localReal: map[string]bool{}},
+		fakeStore: fakeStore{
+			local:     map[string]bool{filepath.Join(root, "old.bin"): true},
+			localReal: map[string]bool{},
+			standard: map[string]*cfapi.CFPlaceholderStandardInfo{
+				filepath.Join(root, "old.bin"): fakeStdInfoWithIdentity(22),
+			},
+		},
 		convertErr: errFake("fake: CfConvertToPlaceholder отказал"),
 	}
 	p, idx := newTestProvider(t, root, backend, store)
@@ -737,6 +860,11 @@ func TestHandleFetchPlaceholdersIncludesExistingCompleteBatch(t *testing.T) {
 	}}
 	store := &fakeStore{
 		local: map[string]bool{filepath.Join(root, "sub", "b.bin"): true},
+		// Идентичность существующей записи — своя (классификация A1
+		// усыновляет по STANDARD-ответу).
+		standard: map[string]*cfapi.CFPlaceholderStandardInfo{
+			filepath.Join(root, "sub", "b.bin"): fakeStdInfoWithIdentity(8),
+		},
 		// Фильтр на существующую запись отвечает ALREADY_EXISTS.
 		answerResults: map[string]cfapi.HRESULT{"b.bin": errorAlreadyExistsResult},
 	}
@@ -795,6 +923,10 @@ func TestHandleFetchPlaceholdersTotalIsFullBackendCount(t *testing.T) {
 	store := &fakeStore{
 		local:     map[string]bool{filepath.Join(root, "mix", "known.bin"): true},
 		localReal: map[string]bool{filepath.Join(root, "mix", "conflict.log"): true},
+		// Идентичность existing-записи — своя (классификация A1).
+		standard: map[string]*cfapi.CFPlaceholderStandardInfo{
+			filepath.Join(root, "mix", "known.bin"): fakeStdInfoWithIdentity(92),
+		},
 	}
 	p, idx := newTestProvider(t, root, backend, store)
 
@@ -837,8 +969,12 @@ func TestHandleFetchPlaceholdersEmptyDirectoryPopulated(t *testing.T) {
 		"/void": {},                                                    // истинно пустой в backend
 	}}
 	store := &fakeStore{
-		local:         map[string]bool{filepath.Join(root, "full", "only.bin"): true},
-		localReal:     map[string]bool{},
+		local:     map[string]bool{filepath.Join(root, "full", "only.bin"): true},
+		localReal: map[string]bool{},
+		// Идентичность existing-записи — своя (классификация A1).
+		standard: map[string]*cfapi.CFPlaceholderStandardInfo{
+			filepath.Join(root, "full", "only.bin"): fakeStdInfoWithIdentity(41),
+		},
 		answerResults: map[string]cfapi.HRESULT{"only.bin": errorAlreadyExistsResult},
 	}
 	p, idx := newTestProvider(t, root, backend, store)

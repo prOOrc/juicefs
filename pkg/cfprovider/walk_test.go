@@ -53,7 +53,7 @@ func (s *simStore) listNames(localDir string) ([]string, error) {
 	defer s.mu.Unlock()
 	seen := map[string]bool{}
 	var names []string
-	for _, m := range []map[string]bool{s.local, s.localReal} {
+	for _, m := range []map[string]bool{s.local, s.localReal, s.localClean} {
 		for p := range m {
 			if filepath.Dir(p) == localDir {
 				n := filepath.Base(p)
@@ -190,6 +190,14 @@ func journalLines(t *testing.T, idx *Index) int {
 		t.Fatalf("read journal: %v", err)
 	}
 	return strings.Count(string(b), "\n")
+}
+
+// ownStdInfo — STANDARD-запись своего плейсхолдера (identity == inode 8B LE,
+// fix-cfapi-followups A1) с заданным OnDiskDataSize.
+func ownStdInfo(ino uint64, onDisk int64) *cfapi.CFPlaceholderStandardInfo {
+	info := fakeStdInfoWithIdentity(ino)
+	info.OnDiskDataSize = onDisk
+	return info
 }
 
 // mkdirPlaceholder создаёт каталог-плейсхолдер на реальном диске: walk
@@ -375,6 +383,14 @@ func TestWalkIdempotentSecondRun(t *testing.T) {
 	}
 	if n := hook.count("walk conflict"); n != 0 {
 		t.Errorf("повторный walk выдал Warn о конфликтах: %d, ожидается 0", n)
+	}
+	// Спека «Рестарт без изменений» (fix-cfapi-followups A1/A2): ноль строк
+	// усыновлений и свежести — equal не логируется и не мутирует.
+	if n := hook.count("walk adopt:"); n != 0 {
+		t.Errorf("повторный walk выдал строк усыновлений: %d, ожидается 0", n)
+	}
+	if n := hook.count("walk fresh:"); n != 0 {
+		t.Errorf("повторный walk выдал строк свежести: %d, ожидается 0", n)
 	}
 	// existing-каталоги ставятся в очередь и обходятся снова (design.md D6.3).
 	if n := backend.callCount("/a/c"); n != 2 {
@@ -816,7 +832,9 @@ func TestWalkExistsReclassifyRestore(t *testing.T) {
 		"/racedir": {{Name: "raced.bin", Inode: 131, Size: 1, MtimeSec: 1}},
 	})
 	// Реальная запись на диске (её создал параллельный процесс) и
-	// «плейсхолдер» в модели store; из перечисления имя скрыто.
+	// «плейсхолдер» в модели store; из перечисления имя скрыто. Identity
+	// записи (fix-cfapi-followups A1): классификация усыновляет только
+	// при доказанном FileIdentity == inode записи hub.
 	mkdirPlaceholder(t, root, "/racedir")
 	if err := os.WriteFile(filepath.Join(root, "racedir", "raced.bin"), []byte{0, 0}, 0o644); err != nil {
 		t.Fatalf("создание гонки: %v", err)
@@ -824,6 +842,9 @@ func TestWalkExistsReclassifyRestore(t *testing.T) {
 	store := &simStore{fakeStore: fakeStore{
 		local:     map[string]bool{filepath.Join(root, "racedir", "raced.bin"): true},
 		localReal: map[string]bool{},
+		standard: map[string]*cfapi.CFPlaceholderStandardInfo{
+			filepath.Join(root, "racedir", "raced.bin"): fakeStdInfoWithIdentity(131),
+		},
 	}}
 	p, idx := newWalkTestProvider(t, root, backend, store, hidingLocal{inner: mapLocal{store}, hide: "raced.bin"})
 	hook := &logCapture{}
@@ -986,7 +1007,12 @@ func TestWalkAdoptionNormalizesHydratedPlaceholder(t *testing.T) {
 	store := &fakeStore{
 		local: map[string]bool{filepath.Join(root, "adopt", "lost.bin"): true},
 		standard: map[string]*cfapi.CFPlaceholderStandardInfo{
-			filepath.Join(root, "adopt", "lost.bin"): {OnDiskDataSize: 3}, // EOF-нули на диске
+			filepath.Join(root, "adopt", "lost.bin"): ownStdInfo(161, 3), // EOF-нули на диске
+		},
+		// StatOf подтверждает равные версии — свежесть equal, нормализация
+		// допустима (fix-cfapi-followups A2: дегидратация только при equal).
+		stats: map[string]fakeStat{
+			filepath.Join(root, "adopt", "lost.bin"): {size: 3, mtime: time.Unix(1, 0)},
 		},
 	}
 	p, idx := newWalkTestProvider(t, root, backend, store, fakeLocal{store})
@@ -1023,7 +1049,10 @@ func TestWalkAdoptionNormalizesHydratedPlaceholder(t *testing.T) {
 		fakeStore: fakeStore{
 			local: map[string]bool{filepath.Join(root2, "adopt", "lost.bin"): true},
 			standard: map[string]*cfapi.CFPlaceholderStandardInfo{
-				filepath.Join(root2, "adopt", "lost.bin"): {OnDiskDataSize: 3},
+				filepath.Join(root2, "adopt", "lost.bin"): ownStdInfo(161, 3),
+			},
+			stats: map[string]fakeStat{
+				filepath.Join(root2, "adopt", "lost.bin"): {size: 3, mtime: time.Unix(1, 0)},
 			},
 		},
 		failPath: filepath.Join(root2, "adopt", "lost.bin"),
@@ -1058,6 +1087,9 @@ func TestWalkAdoptionDehydratedSkipsNormalization(t *testing.T) {
 	store := &fakeStore{
 		local:     map[string]bool{filepath.Join(root, "adopt", "old.bin"): true},
 		localReal: map[string]bool{},
+		standard: map[string]*cfapi.CFPlaceholderStandardInfo{
+			filepath.Join(root, "adopt", "old.bin"): fakeStdInfoWithIdentity(171), // дегидратирован (OnDiskDataSize 0)
+		},
 	}
 	p, idx := newWalkTestProvider(t, root, backend, store, fakeLocal{store})
 	hook := &logCapture{}
@@ -1074,5 +1106,10 @@ func TestWalkAdoptionDehydratedSkipsNormalization(t *testing.T) {
 	}
 	if n := hook.count("walk entry failed"); n != 0 {
 		t.Errorf("обычное усыновление логируется как отказ: %d", n)
+	}
+	// Строка усыновлений (fix-cfapi-followups A1, спека «Усыновление
+	// синхронизированного плейсхолдера») — ровно одна, с числом записей.
+	if n := hook.count("walk adopt: entries=1"); n != 1 {
+		t.Errorf("строк `walk adopt: entries=1`: %d, ожидается 1", n)
 	}
 }

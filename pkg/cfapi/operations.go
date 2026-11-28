@@ -26,6 +26,7 @@ package cfapi
 
 import (
 	"fmt"
+	"os"
 	"syscall"
 	"unsafe"
 
@@ -196,7 +197,8 @@ func CfOpenFileWithOplock(filePath string, flags uint32, protectedHandle *syscal
 // CfRevertPlaceholder откатывает запись в обычный (не-плейсхолдер) файл
 // (cfapi.h:854): содержимое становится локальным, связь с sync engine
 // разрывается. Отложенный биндинг этапа 6 (проба U15 — осиротевшие
-// плейсхолдеры блокируют удаление); к командам прототипа не подключён.
+// плейсхолдеры блокируют удаление); подключён cleanup-режимом
+// (fix-cfapi-followups A4) через RevertPlaceholderByPath.
 func CfRevertPlaceholder(fileHandle syscall.Handle, revertFlags uint32, overlapped uintptr) error {
 	r, _, _ := procCfRevertPlaceholder.Call(
 		uintptr(fileHandle),
@@ -204,6 +206,64 @@ func CfRevertPlaceholder(fileHandle syscall.Handle, revertFlags uint32, overlapp
 		overlapped,
 	)
 	return hresult(r, "CfRevertPlaceholder")
+}
+
+// openRevertHandle — хендл записи для CfRevertPlaceholder (fix-cfapi-followups
+// A4). Режимы открытия — те же, что у openPlaceholderHandle (cfapi.go, живая
+// диагностика этапа 5): файлы — GENERIC_READ|GENERIC_WRITE БЕЗ
+// FILE_FLAG_BACKUP_SEMANTICS (файловый хендл с ним фильтр для Cf-операций
+// отвергает с 0x8007017c), каталоги — GENERIC_READ с BACKUP_SEMANTICS
+// (обязателен). Расширения для revert: DELETE-доступ — только при
+// RevertFlagDelete (право DELETE отдельное от GENERIC_WRITE и допустимо
+// каталогам); FILE_SHARE_DELETE в шаринге — revert не должен мешать
+// параллельной работе пользователя (у openPlaceholderHandle шаринг
+// read+write — поведением convert/update не меняется).
+func openRevertHandle(path string, isDir bool, revertFlags uint32) (syscall.Handle, error) {
+	path16, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return 0, err
+	}
+	access := uint32(windows.GENERIC_READ | windows.GENERIC_WRITE)
+	flags := uint32(0)
+	if isDir {
+		access = windows.GENERIC_READ
+		flags = windows.FILE_FLAG_BACKUP_SEMANTICS
+	}
+	if revertFlags&RevertFlagDelete != 0 {
+		access |= windows.DELETE
+	}
+	h, err := windows.CreateFile(path16, access, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, flags, 0)
+	if err != nil {
+		return 0, fmt.Errorf("open %s: %w", path, err)
+	}
+	return syscall.Handle(h), nil
+}
+
+// RevertPlaceholderByPath — CfRevertPlaceholder по пути (cleanup осиротевших
+// плейсхолдеров, fix-cfapi-followups A4): содержимое плейсхолдера становится
+// локальным, связь с sync engine разрывается. revertFlags — CF_REVERT_FLAGS
+// (продукт использует RevertFlagNone и удаляет запись отдельным os.Remove —
+// точка подтверждения «стал plain»; RevertFlagDelete — проба U-C3).
+//
+// Директорийность — по os.Lstat (метаданные, без гидрации); режимы хендла —
+// openRevertHandle. На записи вне sync root/не-плейсхолдере вызов возвращает
+// ошибку (сентинел ERROR_NOT_A_CLOUD_FILE различается cfapi.IsNotAPlaceholder).
+func RevertPlaceholderByPath(path string, revertFlags uint32) error {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return fmt.Errorf("lstat %s: %w", path, err)
+	}
+	h, err := openRevertHandle(path, fi.IsDir(), revertFlags)
+	if err != nil {
+		return fmt.Errorf("CfRevertPlaceholder %s: %w", path, err)
+	}
+	defer func() {
+		_ = windows.CloseHandle(windows.Handle(h))
+	}()
+	if err := CfRevertPlaceholder(h, revertFlags, 0); err != nil {
+		return fmt.Errorf("CfRevertPlaceholder %s: %w", path, err)
+	}
+	return nil
 }
 
 // PlaceholderStateByPath — CF_PLACEHOLDER_STATE записи sync root по пути
