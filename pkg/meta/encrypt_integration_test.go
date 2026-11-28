@@ -342,7 +342,10 @@ func newEncryptTestEnvMode(t *testing.T, db int, encryptionEnabled, tlsOn bool) 
 	_, err = rm.Load(true)
 	require.NoError(t, err)
 
-	server := NewMetaProxyServer(rm, 1000)
+	// Handlers reach engines only through the session's pool entry (I1, I8):
+	// rm doubles as the pooled engine, so every connection session is served
+	// by the same redisMeta the test asserts against.
+	server := NewMetaProxyServer(rm, 1000, passThroughFactory(rm))
 	env := &encryptTestEnv{rdb: rdb, meta: rm, server: server, keyMgr: newFakeKeyManager(), tlsOn: tlsOn}
 	server.SetKeyManager(env.keyMgr)
 	server.SetVolumeName(format.Name)
@@ -359,7 +362,13 @@ func newEncryptTestEnvMode(t *testing.T, db int, encryptionEnabled, tlsOn bool) 
 			MinVersion:   tls.VersionTLS12,
 		})))
 	}
-	srvOpts = append(srvOpts, grpc.ChainUnaryInterceptor(testIdentityInterceptor()))
+	// Session machinery first, exactly like cmd/meta_proxy.go: RPCs on a
+	// connection without a session fail closed (I1).
+	srvOpts = append(srvOpts,
+		grpc.StatsHandler(server.SessionStatsHandler()),
+		grpc.ChainUnaryInterceptor(server.SessionUnaryInterceptor(), testIdentityInterceptor()),
+		grpc.ChainStreamInterceptor(server.SessionStreamInterceptor()),
+	)
 	grpcSrv := grpc.NewServer(srvOpts...)
 	pb.RegisterMetaServiceServer(grpcSrv, server)
 	go func() { _ = grpcSrv.Serve(lis) }()

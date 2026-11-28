@@ -51,9 +51,11 @@ import (
 // fekFakeMeta is a minimal in-memory Meta for the transport-level Open/FEK
 // tests: it serves a single configurable attr and reports a configurable
 // volume format. The embedded nil Meta panics if a test accidentally
-// exercises an unstubbed method.
+// exercises an unstubbed method; the pool's lifecycle calls (NewSession/
+// CloseSession/Shutdown, fix-meta-proxy-per-session-chroot) are served by
+// poolLifecycleMeta.
 type fekFakeMeta struct {
-	Meta
+	poolLifecycleMeta
 
 	attr   *Attr
 	format *Format
@@ -167,7 +169,7 @@ func newFekTransportServer(t *testing.T, encryptionEnabled, tlsOn bool) *fekTran
 		},
 		format: format,
 	}
-	srv := NewMetaProxyServer(m, 100)
+	srv := NewMetaProxyServer(m, 100, passThroughFactory(m))
 	srv.SetKeyManager(km)
 	srv.InodePathCache().Set(testFekInode, "/secret.exr")
 	srv.SetVolumeName(format.Name)
@@ -195,7 +197,13 @@ func serveFekTransport(t *testing.T, srv *MetaProxyServer, tlsOn bool, fek []byt
 			MinVersion:   tls.VersionTLS12,
 		})))
 	}
-	opts = append(opts, grpc.ChainUnaryInterceptor(testIdentityInterceptor()))
+	opts = append(opts,
+		// Session machinery (fix-meta-proxy-per-session-chroot): every
+		// connection gets a proxy session; RPCs without one fail closed (I1).
+		grpc.StatsHandler(srv.SessionStatsHandler()),
+		grpc.ChainUnaryInterceptor(srv.SessionUnaryInterceptor(), testIdentityInterceptor()),
+		grpc.ChainStreamInterceptor(srv.SessionStreamInterceptor()),
+	)
 	ts.grpcSrv = grpc.NewServer(opts...)
 	pb.RegisterMetaServiceServer(ts.grpcSrv, srv)
 	go func() { _ = ts.grpcSrv.Serve(ts.lis) }()

@@ -379,6 +379,9 @@ func testLoadDump(t *testing.T, name, addr string) {
 }
 
 func TestLoadDump(t *testing.T) { //skip mutate
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
+	}
 	testLoadDump(t, "redis", "redis://127.0.0.1/10")
 	testLoadDump(t, "sqlite3", "sqlite3://"+path.Join(t.TempDir(), "jfs-load-dump-sqlite3.db"))
 	testLoadDump(t, "badger", "badger://"+path.Join(t.TempDir(), "jfs-load-dump"))
@@ -606,6 +609,9 @@ func TestLoadMetaV2DuplicateRecords(t *testing.T) {
 }
 
 func TestMySQLClientLoadMetaV2DuplicateRecords(t *testing.T) { //skip mutate
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
+	}
 	client, err := newSQLMeta("mysql", "root:@/dev", testConfig())
 	if err != nil {
 		t.Fatal(err)

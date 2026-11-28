@@ -205,9 +205,9 @@ func TestRecovery_LinearChain(t *testing.T) {
 
 	// The whole ancestor chain is warmed (first-seen-wins Set), directories in
 	// the dir convention with a trailing slash.
-	assert.Equal(t, "/a/", cache.Get(10))
-	assert.Equal(t, "/a/b/", cache.Get(11))
-	assert.Equal(t, "/a/b/c/", cache.Get(12))
+	assert.Equal(t, "/a/", cache.Get(context.Background(), 10))
+	assert.Equal(t, "/a/b/", cache.Get(context.Background(), 11))
+	assert.Equal(t, "/a/b/c/", cache.Get(context.Background(), 12))
 }
 
 func TestRecovery_TreeSharedAncestors(t *testing.T) {
@@ -230,7 +230,7 @@ func TestRecovery_TreeSharedAncestors(t *testing.T) {
 	// The shared parent's listing was fetched only once; the sibling resolved
 	// from the warmed cache without another walk.
 	assert.Equal(t, int32(1), readdirB, "shared ancestor must be walked once")
-	assert.Equal(t, "/a/b/y", cache.Get(21))
+	assert.Equal(t, "/a/b/y", cache.Get(context.Background(), 21))
 }
 
 func TestRecovery_RootShortCircuit(t *testing.T) {
@@ -386,7 +386,7 @@ func TestRecovery_Invalidate(t *testing.T) {
 	require.Equal(t, "/a/f", p)
 
 	r.Invalidate(11)
-	assert.Equal(t, "", cache.Get(11), "Invalidate must drop the mapping")
+	assert.Equal(t, "", cache.Get(context.Background(), 11), "Invalidate must drop the mapping")
 
 	// Recovery rebuilds it from the engine.
 	p, resolved, _ = r.Resolve(context.Background(), 11)
@@ -395,7 +395,7 @@ func TestRecovery_Invalidate(t *testing.T) {
 
 	// Root is pinned: Invalidate never drops it.
 	r.Invalidate(RootInode)
-	assert.Equal(t, "/", cache.Get(RootInode))
+	assert.Equal(t, "/", cache.Get(context.Background(), RootInode))
 }
 
 func TestRecovery_PopulatesAncestorsFirstSeenWins(t *testing.T) {
@@ -411,5 +411,5 @@ func TestRecovery_PopulatesAncestorsFirstSeenWins(t *testing.T) {
 	p, resolved, _ := r.Resolve(context.Background(), 11)
 	require.True(t, resolved)
 	assert.Equal(t, "/a/f", p)
-	assert.Equal(t, "/elsewhere/", cache.Get(10), "first-seen-wins: existing mapping stays")
+	assert.Equal(t, "/elsewhere/", cache.Get(context.Background(), 10), "first-seen-wins: existing mapping stays")
 }

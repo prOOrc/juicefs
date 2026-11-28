@@ -22,12 +22,18 @@ import (
 	"syscall"
 
 	"github.com/juicedata/juicefs/pkg/meta/pb"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
-// dirHandlerEntry pairs a DirHandler with its inode for authz resolution.
+// dirHandlerEntry pairs a DirHandler with its inode for authz resolution and
+// with the session that opened it: handles are owned by their proxy session
+// (fix-meta-proxy-per-session-chroot) — another session sees EBADF, and the
+// session end closes every handle it owns.
 type dirHandlerEntry struct {
 	handler DirHandler
 	inode   Ino
+	sess    *proxySession // owning session; lives as long as the handle
 
 	// Authz mode serves listings from a stable filtered snapshot instead of
 	// the DirHandler's offset machinery: filtering after handler.List()
@@ -46,12 +52,18 @@ type MetaProxyServer struct {
 	// server: GetSTSCredentials in grpc_server_sts.go.
 	pb.UnimplementedStsProxyServiceServer
 
-	meta Meta
+	// Session-aware engine pool (fix-meta-proxy-per-session-chroot): handlers
+	// reach engines only through engineFor (I8); the base engine lives only in
+	// pathResolver (its constructor argument).
+	pool         *enginePool
+	sessions     *sessionRegistry
+	maxSessions  int
+	authzEnabled bool
 
-	// DirHandler state management
+	// DirHandler id allocation. The handles themselves live in the owning
+	// session (proxySession.handles) — there is no server-wide registry.
 	mu         sync.Mutex
 	nextHandle uint64
-	handlers   map[uint64]*dirHandlerEntry
 
 	// Authorization (optional)
 	authzInterceptor *AuthzInterceptor
@@ -84,16 +96,28 @@ type fileCryptoSetter interface {
 }
 
 // NewMetaProxyServer creates a new MetaProxyServer.
-// cacheMaxSize sets the maximum inode→path mappings (0 = unlimited).
-func NewMetaProxyServer(m Meta, cacheMaxSize int) *MetaProxyServer {
+// cacheMaxSize sets the maximum inode→path mappings (0 = unlimited). m is the
+// base engine, kept only for pathResolver (inode→path recovery); newEngine is
+// the factory the pool uses to build chrooted engines (NewClient + Load(true),
+// no session) — it may be nil only when no RPC ever reaches engineFor.
+func NewMetaProxyServer(m Meta, cacheMaxSize int, newEngine EngineFactory) *MetaProxyServer {
 	s := &MetaProxyServer{
-		meta:           m,
-		handlers:       make(map[uint64]*dirHandlerEntry),
+		pool:           newEnginePool(newEngine),
+		sessions:       newSessionRegistry(),
 		inodePathCache: NewInodePathCache(cacheMaxSize),
 		rotateRate:     defaultRotateRate,
 	}
 	s.pathResolver = newPathResolver(m, s.inodePathCache)
 	return s
+}
+
+// SetMaxSessions caps concurrent proxy sessions (gRPC connections); 0 (the
+// default) disables the limit.
+func (s *MetaProxyServer) SetMaxSessions(n int) {
+	s.maxSessions = n
+	s.sessions.mu.Lock()
+	s.sessions.max = n
+	s.sessions.mu.Unlock()
 }
 
 // SetAuthzInterceptor configures the authorization interceptor and wires the
@@ -111,6 +135,7 @@ func (s *MetaProxyServer) SetAuthzInterceptor(ai *AuthzInterceptor) {
 // is configured.
 func (s *MetaProxyServer) SetAuthzMode(enabled bool) {
 	s.authzMode = enabled
+	s.authzEnabled = enabled
 }
 
 // SetKeyManager configures the KeyManager client for per-file FEK encryption.
@@ -133,9 +158,10 @@ func (s *MetaProxyServer) SetRotateRate(rate int) {
 	}
 }
 
-// encryptionEnabled reports whether per-file FEK encryption is on for this volume.
-func (s *MetaProxyServer) encryptionEnabled() bool {
-	return s.meta.GetFormat().EncryptionEnabled
+// encryptionEnabled reports whether per-file FEK encryption is on for the
+// session engine's volume.
+func (s *MetaProxyServer) encryptionEnabled(eng Engine) bool {
+	return eng.GetFormat().EncryptionEnabled
 }
 
 // InodePathCache returns the inode→path cache (for cmd/meta_proxy.go).
@@ -143,15 +169,19 @@ func (s *MetaProxyServer) InodePathCache() *InodePathCache {
 	return s.inodePathCache
 }
 
-// ResolveHandle returns the inode for a DirHandler handle (for authz interceptor).
+// ResolveHandle returns the inode for a DirHandler handle (for authz
+// interceptor). Handles live in their owning session, and this scan carries no
+// session of its own — that is fine: handle ids are unique server-wide.
 func (s *MetaProxyServer) ResolveHandle(handle uint64) (Ino, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	entry, ok := s.handlers[handle]
-	if !ok {
-		return 0, false
+	for _, sess := range s.sessions.snapshot() {
+		sess.mu.Lock()
+		entry, ok := sess.handles[handle]
+		sess.mu.Unlock()
+		if ok {
+			return entry.inode, true
+		}
 	}
-	return entry.inode, true
+	return 0, false
 }
 
 // helper to convert Context from proto
@@ -170,4 +200,64 @@ func (s *MetaProxyServer) metaCtx(ctx context.Context, ctx2 *pb.MetaContext) Con
 		return WrapWithCancelSkipPermCheck(ctx, ctx2.Pid, ctx2.Uid, gids)
 	}
 	return WrapWithCancel(ctx, ctx2.Pid, ctx2.Uid, gids)
+}
+
+// engineFor is the only path from the RPC handlers to a session's engine
+// (I1, I8): it resolves the connection session and lazily acquires the root
+// engine ("") when the session has none yet.
+func (s *MetaProxyServer) engineFor(ctx context.Context) (Engine, error) {
+	sess, err := s.sessionFor(ctx)
+	if err != nil {
+		return nil, err
+	}
+	e, err := s.sessionEntry(sess, ctx)
+	if err != nil {
+		return nil, err
+	}
+	return e.engine, nil
+}
+
+// sessionEntry returns the session's pooled engine, acquiring and binding the
+// root engine ("") on first use.
+func (s *MetaProxyServer) sessionEntry(sess *proxySession, ctx context.Context) (*poolEntry, error) {
+	sess.mu.Lock()
+	e := sess.entry
+	sess.mu.Unlock()
+	if e != nil {
+		return e, nil
+	}
+	ne, errno, err := s.pool.acquire(ctx, "", false)
+	if err != nil {
+		// Audit event for engine unavailability outside Chroot (spec
+		// "Engine unavailable outside Chroot").
+		logger.Warnf("meta-proxy session engine failed id=%d err=%v", sess.id, err)
+		return nil, err
+	}
+	if errno != 0 {
+		// Unreachable for the root key (create chroots only non-empty keys) and
+		// the failed reference is already settled away by acquire — kept as a
+		// guard so the caller never sees a chrooted-by-mistake engine.
+		return nil, status.Errorf(codes.Internal, "meta-proxy: unexpected chroot errno %d on the root engine", errno)
+	}
+	s.bind(sess, ne)
+	return ne, nil
+}
+
+// sessionEntryFor is sessionFor + sessionEntry for handlers that need the
+// pool entry itself (e.g. the saved engine NewSession response).
+func (s *MetaProxyServer) sessionEntryFor(ctx context.Context) (*poolEntry, error) {
+	sess, err := s.sessionFor(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.sessionEntry(sess, ctx)
+}
+
+// CloseSessions ends every live session and tears the pool down (execution
+// flow step 7, graceful stop). ctx bounds the engine teardown budget.
+func (s *MetaProxyServer) CloseSessions(ctx context.Context) {
+	for _, sess := range s.sessions.snapshot() {
+		s.endSession(sess)
+	}
+	s.pool.shutdown(ctx)
 }

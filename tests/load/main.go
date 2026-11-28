@@ -184,7 +184,22 @@ func newEnv(redisAddr string, db int) (*env, error) {
 	}
 
 	km := newCountingKeyManager()
-	server := meta.NewMetaProxyServer(rm, 1000)
+	// fix-meta-proxy-per-session-chroot: handlers reach engines only through the
+	// per-session pool; every pool creation builds a fresh engine with the same
+	// construction as the base engine above (same URI), plus a loaded format —
+	// exactly like cmd/meta_proxy.go. Sharing the base instance would let the
+	// first client disconnect tear the shared engine down (pool teardown:
+	// CloseSession + Shutdown) for every later session — and for path recovery,
+	// which uses the base engine.
+	newEngine := func() (meta.Meta, error) {
+		eng := meta.NewClient(metaURI, meta.DefaultConf())
+		if _, err := eng.Load(true); err != nil {
+			_ = eng.Shutdown()
+			return nil, err
+		}
+		return eng, nil
+	}
+	server := meta.NewMetaProxyServer(rm, 1000, newEngine)
 	server.SetKeyManager(km)
 	server.SetVolumeName(format.Name)
 
@@ -192,7 +207,9 @@ func newEnv(redisAddr string, db int) (*env, error) {
 	if err != nil {
 		return nil, err
 	}
-	grpcSrv := grpc.NewServer(grpc.ChainUnaryInterceptor(identityInterceptor()))
+	grpcSrv := grpc.NewServer(
+		grpc.StatsHandler(server.SessionStatsHandler()),
+		grpc.ChainUnaryInterceptor(server.SessionUnaryInterceptor(), identityInterceptor()))
 	pb.RegisterMetaServiceServer(grpcSrv, server)
 	go func() { _ = grpcSrv.Serve(lis) }()
 

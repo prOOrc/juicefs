@@ -27,9 +27,11 @@ import (
 )
 
 // mockAuthzMeta implements Meta for DirHandler authz tests. Unstubbed methods
-// panic (embedded nil interface), which surfaces any unexpected call.
+// panic (embedded nil interface), which surfaces any unexpected call; the
+// pool's lifecycle calls (NewSession/CloseSession/Shutdown) are served by
+// poolLifecycleMeta.
 type mockAuthzMeta struct {
-	Meta
+	poolLifecycleMeta
 	entries []*Entry
 }
 
@@ -72,24 +74,25 @@ var rootEntries = []*Entry{
 }
 
 // newAuthzTestServer builds a MetaProxyServer with authz enabled and the given
-// root entries. Auth expectations are set on the returned mock client.
-func newAuthzTestServer(t *testing.T, entries []*Entry) (*MetaProxyServer, *mockAuthzClient) {
+// root entries, plus a session-bound context (handlers fail closed without a
+// session, I1). Auth expectations are set on the returned mock client.
+func newAuthzTestServer(t *testing.T, entries []*Entry) (*MetaProxyServer, *mockAuthzClient, context.Context) {
 	t.Helper()
-	server := NewMetaProxyServer(&mockAuthzMeta{entries: entries}, 0)
+	server := newDirectServer(t, &mockAuthzMeta{entries: entries}, 0)
 	client := new(mockAuthzClient)
 	server.SetAuthzInterceptor(newTestInterceptor(client, server.InodePathCache(), "user-1"))
-	return server, client
+	return server, client, directSessionCtx(t, server)
 }
 
 // listUntilEOF simulates the FUSE kernel readdir protocol: keep calling List
 // with an offset that counts the entries actually received, until an empty
 // response. Returns the full stream of entry names in delivery order.
-func listUntilEOF(t *testing.T, s *MetaProxyServer, handle *pb.DirHandlerHandle) []string {
+func listUntilEOF(t *testing.T, s *MetaProxyServer, ctx context.Context, handle *pb.DirHandlerHandle) []string {
 	t.Helper()
 	var stream []string
 	off := 0
 	for i := 0; i < 100; i++ {
-		resp, err := s.DirHandlerList(context.Background(), &pb.DirHandlerListRequest{Handle: handle, Offset: int32(off)})
+		resp, err := s.DirHandlerList(ctx, &pb.DirHandlerListRequest{Handle: handle, Offset: int32(off)})
 		assert.NoError(t, err)
 		assert.EqualValues(t, 0, resp.Errno)
 		if len(resp.Entries) == 0 {
@@ -104,9 +107,12 @@ func listUntilEOF(t *testing.T, s *MetaProxyServer, handle *pb.DirHandlerHandle)
 	return nil
 }
 
-func newTestHandle(t *testing.T, s *MetaProxyServer) *pb.DirHandlerHandle {
+// newTestHandle opens a dir handler for the session carried by ctx: the handle
+// belongs to that session (handles live in sess.handles, not in a server-wide
+// registry), so every later handle RPC must use the same context.
+func newTestHandle(t *testing.T, s *MetaProxyServer, ctx context.Context) *pb.DirHandlerHandle {
 	t.Helper()
-	resp, err := s.NewDirHandler(context.Background(), &pb.NewDirHandlerRequest{Inode: uint64(RootInode)})
+	resp, err := s.NewDirHandler(ctx, &pb.NewDirHandlerRequest{Inode: uint64(RootInode)})
 	assert.NoError(t, err)
 	assert.EqualValues(t, 0, resp.Errno)
 	return resp.Handle
@@ -118,13 +124,13 @@ func newTestHandle(t *testing.T, s *MetaProxyServer) *pb.DirHandlerHandle {
 // appeared once per init-entry + batch slice). The listing must deliver each
 // allowed entry exactly once and then EOF.
 func TestDirHandlerList_Authz_NoDuplicateEntries(t *testing.T) {
-	server, client := newAuthzTestServer(t, rootEntries)
+	server, client, ctx := newAuthzTestServer(t, rootEntries)
 	client.On("CheckBulkPermissions", mock.Anything, "user-1",
 		[]string{"/.minio.sys/", "/companies/", "/company/", "/programs/"}, AuthzPermissionView).
 		Return([]bool{false, true, false, false}, nil).Once()
 
-	handle := newTestHandle(t, server)
-	stream := listUntilEOF(t, server, handle)
+	handle := newTestHandle(t, server, ctx)
+	stream := listUntilEOF(t, server, ctx, handle)
 
 	assert.Equal(t, []string{"companies"}, stream, "each allowed entry must appear exactly once")
 	client.AssertExpectations(t)
@@ -133,13 +139,13 @@ func TestDirHandlerList_Authz_NoDuplicateEntries(t *testing.T) {
 // TestDirHandlerList_Authz_AllDenied returns an empty stream when no entry is
 // viewable, and terminates immediately.
 func TestDirHandlerList_Authz_AllDenied(t *testing.T) {
-	server, client := newAuthzTestServer(t, rootEntries)
+	server, client, ctx := newAuthzTestServer(t, rootEntries)
 	client.On("CheckBulkPermissions", mock.Anything, "user-1",
 		mock.Anything, AuthzPermissionView).
 		Return([]bool{false, false, false, false}, nil).Once()
 
-	handle := newTestHandle(t, server)
-	stream := listUntilEOF(t, server, handle)
+	handle := newTestHandle(t, server, ctx)
+	stream := listUntilEOF(t, server, ctx, handle)
 
 	assert.Empty(t, stream)
 	client.AssertExpectations(t)
@@ -148,10 +154,11 @@ func TestDirHandlerList_Authz_AllDenied(t *testing.T) {
 // TestDirHandlerList_NoAuthz_Unchanged verifies the non-authz path still
 // streams every entry (including "." and ".." from init entries) exactly once.
 func TestDirHandlerList_NoAuthz_Unchanged(t *testing.T) {
-	server := NewMetaProxyServer(&mockAuthzMeta{entries: rootEntries}, 0)
-	handle := newTestHandle(t, server)
+	server := newDirectServer(t, &mockAuthzMeta{entries: rootEntries}, 0)
+	ctx := directSessionCtx(t, server)
+	handle := newTestHandle(t, server, ctx)
 
-	stream := listUntilEOF(t, server, handle)
+	stream := listUntilEOF(t, server, ctx, handle)
 
 	assert.Equal(t, []string{".", "..", ".minio.sys", "companies", "company", "programs"}, stream)
 }
@@ -164,17 +171,18 @@ func TestDirHandlerList_Authz_UnresolvableParentIsEACCES(t *testing.T) {
 	engine := churnTree()
 	// Recovery of inode 10 (parent = root) walks via readdir(root): make it fail.
 	engine.failReaddir(RootInode, syscall.EIO)
-	server := NewMetaProxyServer(&churnMeta{engine}, 0)
+	server := newDirectServer(t, &churnMeta{engine}, 0)
 	client := new(mockAuthzClient)
 	server.SetAuthzInterceptor(newTestInterceptor(client, server.InodePathCache(), "user-1"))
+	ctx := directSessionCtx(t, server)
 
 	// Open a handler for a directory whose path the cache does not know
 	// (cold cache: only the pinned root survives a restart).
-	newResp, err := server.NewDirHandler(context.Background(), &pb.NewDirHandlerRequest{Inode: uint64(10)})
+	newResp, err := server.NewDirHandler(ctx, &pb.NewDirHandlerRequest{Inode: uint64(10)})
 	assert.NoError(t, err)
 	assert.EqualValues(t, 0, newResp.Errno)
 
-	listResp, err := server.DirHandlerList(context.Background(),
+	listResp, err := server.DirHandlerList(ctx,
 		&pb.DirHandlerListRequest{Handle: newResp.Handle, Offset: 0})
 	assert.NoError(t, err)
 	assert.EqualValues(t, syscall.EACCES, listResp.Errno, "unresolvable parent path must fail the listing with EACCES")

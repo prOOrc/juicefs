@@ -23,8 +23,12 @@ import (
 )
 
 func (s *MetaProxyServer) StoreToken(ctx context.Context, req *pb.StoreTokenRequest) (*pb.StoreTokenResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
-	id, errno := s.meta.StoreToken(mctx, req.Token)
+	id, errno := eng.StoreToken(mctx, req.Token)
 	return &pb.StoreTokenResponse{
 		Errno: uint32(errno),
 		Id:    id,
@@ -32,14 +36,22 @@ func (s *MetaProxyServer) StoreToken(ctx context.Context, req *pb.StoreTokenRequ
 }
 
 func (s *MetaProxyServer) UpdateToken(ctx context.Context, req *pb.UpdateTokenRequest) (*pb.UpdateTokenResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
-	errno := s.meta.UpdateToken(mctx, req.Id, req.Token)
+	errno := eng.UpdateToken(mctx, req.Id, req.Token)
 	return &pb.UpdateTokenResponse{Errno: uint32(errno)}, nil
 }
 
 func (s *MetaProxyServer) LoadToken(ctx context.Context, req *pb.LoadTokenRequest) (*pb.LoadTokenResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
-	token, errno := s.meta.LoadToken(mctx, req.Id)
+	token, errno := eng.LoadToken(mctx, req.Id)
 	return &pb.LoadTokenResponse{
 		Errno: uint32(errno),
 		Token: token,
@@ -47,16 +59,24 @@ func (s *MetaProxyServer) LoadToken(ctx context.Context, req *pb.LoadTokenReques
 }
 
 func (s *MetaProxyServer) DeleteTokens(ctx context.Context, req *pb.DeleteTokensRequest) (*pb.DeleteTokensResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	ids := make([]uint32, len(req.Ids))
 	copy(ids, req.Ids)
-	errno := s.meta.DeleteTokens(mctx, ids)
+	errno := eng.DeleteTokens(mctx, ids)
 	return &pb.DeleteTokensResponse{Errno: uint32(errno)}, nil
 }
 
 func (s *MetaProxyServer) ListTokens(ctx context.Context, req *pb.ListTokensRequest) (*pb.ListTokensResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
-	tokens, errno := s.meta.ListTokens(mctx)
+	tokens, errno := eng.ListTokens(mctx)
 	protoTokens := make(map[uint32][]byte, len(tokens))
 	for id, token := range tokens {
 		protoTokens[id] = token

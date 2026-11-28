@@ -23,17 +23,25 @@ import (
 )
 
 func (s *MetaProxyServer) Flock(ctx context.Context, req *pb.FlockRequest) (*pb.FlockResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
-	errno := s.meta.Flock(mctx, Ino(req.Inode), req.Owner, uint32(req.Ltype), req.Block)
+	errno := eng.Flock(mctx, Ino(req.Inode), req.Owner, uint32(req.Ltype), req.Block)
 	return &pb.FlockResponse{Errno: uint32(errno)}, nil
 }
 
 func (s *MetaProxyServer) Getlk(ctx context.Context, req *pb.GetlkRequest) (*pb.GetlkResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var ltype uint32
 	var start, end uint64
 	var pid uint32
-	errno := s.meta.Getlk(mctx, Ino(req.Inode), req.Owner, &ltype, &start, &end, &pid)
+	errno := eng.Getlk(mctx, Ino(req.Inode), req.Owner, &ltype, &start, &end, &pid)
 	return &pb.GetlkResponse{
 		Errno: uint32(errno),
 		Ltype: ltype,
@@ -44,8 +52,12 @@ func (s *MetaProxyServer) Getlk(ctx context.Context, req *pb.GetlkRequest) (*pb.
 }
 
 func (s *MetaProxyServer) Setlk(ctx context.Context, req *pb.SetlkRequest) (*pb.SetlkResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
-	errno := s.meta.Setlk(mctx, Ino(req.Inode), req.Owner, req.Block,
+	errno := eng.Setlk(mctx, Ino(req.Inode), req.Owner, req.Block,
 		uint32(req.Ltype), req.Start, req.End, req.Pid)
 	return &pb.SetlkResponse{Errno: uint32(errno)}, nil
 }

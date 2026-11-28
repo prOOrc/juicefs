@@ -202,6 +202,13 @@ func cmdMetaProxy() *cli.Command {
 				Name:  "node-credential",
 				Usage: "Node credential source for service-originated keymanager calls: env:VAR_NAME or a path to a file holding the raw token; without it service connections are rejected (fail-closed). The value is never logged",
 			},
+			// Per-session chroot (fix-meta-proxy-per-session-chroot): one proxy
+			// session per gRPC connection; engines are pooled per chroot subdir.
+			&cli.IntFlag{
+				Name:  "max-sessions",
+				Usage: "Maximum concurrent proxy sessions (gRPC connections); 0 = unlimited",
+				Value: 256,
+			},
 		},
 		Action: func(c *cli.Context) error {
 			setup(c, 0)
@@ -231,7 +238,22 @@ func cmdMetaProxy() *cli.Command {
 			}
 
 			cacheMaxSize := c.Int("authz-path-cache-size")
-			server := meta.NewMetaProxyServer(m, cacheMaxSize)
+			// Engine factory for the per-session pool (fix-meta-proxy-per-session-chroot):
+			// same construction as the base engine below, plus a loaded format —
+			// Chroot requires the format, no session yet (the pool opens exactly
+			// one engine session per engine, at creation time).
+			newEngine := func() (meta.Meta, error) {
+				eng := meta.NewClient(metaBackendUrl, meta.DefaultConf())
+				if _, err := eng.Load(true); err != nil {
+					_ = eng.Shutdown()
+					return nil, err
+				}
+				return eng, nil
+			}
+			maxSessions := c.Int("max-sessions")
+			server := meta.NewMetaProxyServer(m, cacheMaxSize, newEngine)
+			server.SetMaxSessions(maxSessions)
+			loggerProxy.Infof("Proxy session limit: %d (0 = unlimited)", maxSessions)
 
 			opts := []gRPC.ServerOption{
 				gRPC.MaxRecvMsgSize(maxRecvMsgSize),
@@ -244,6 +266,9 @@ func cmdMetaProxy() *cli.Command {
 					MinTime:             time.Second * 5,
 					PermitWithoutStream: false,
 				}),
+				// Session lifecycle is driven by connection events: one proxy
+				// session per gRPC connection (TagConn opens, ConnEnd closes).
+				gRPC.StatsHandler(server.SessionStatsHandler()),
 			}
 
 			// TLS listener (optional; without --tls-cert/--tls-key the server
@@ -257,9 +282,11 @@ func cmdMetaProxy() *cli.Command {
 				loggerProxy.Infof("TLS enabled for the gRPC listener (minimum version 1.2)")
 			}
 
-			// Build interceptor chain: Service identity (authentication) → OIDC
-			// (authentication) → Authz (authorization). The service interceptor is
-			// the first link of both chains: it fully decides any request carrying
+			// Build interceptor chain: Session (connection binding) → Service
+			// identity (authentication) → OIDC (authentication) → Authz
+			// (authorization). The session interceptor is prepended just before
+			// the chain is applied below (fix-meta-proxy-per-session-chroot);
+			// the service interceptor fully decides any request carrying
 			// x-service-credential (there is no fallback to the OIDC path in
 			// either direction, add-meta-proxy-service-identity).
 			var unaryInterceptors []gRPC.UnaryServerInterceptor
@@ -357,13 +384,13 @@ func cmdMetaProxy() *cli.Command {
 				loggerProxy.Infof("KeyManager not configured — per-file encryption disabled for all volumes")
 			}
 
-			// Apply interceptor chain
-			if len(unaryInterceptors) > 0 {
-				opts = append(opts, gRPC.ChainUnaryInterceptor(unaryInterceptors...))
-			}
-			if len(streamInterceptors) > 0 {
-				opts = append(opts, gRPC.ChainStreamInterceptor(streamInterceptors...))
-			}
+			// Apply interceptor chain. The session interceptor is the first link
+			// of both chains (I1): a connection without a live proxy session
+			// fails closed before any authentication/authorization runs.
+			unaryInterceptors = append([]gRPC.UnaryServerInterceptor{server.SessionUnaryInterceptor()}, unaryInterceptors...)
+			streamInterceptors = append([]gRPC.StreamServerInterceptor{server.SessionStreamInterceptor()}, streamInterceptors...)
+			opts = append(opts, gRPC.ChainUnaryInterceptor(unaryInterceptors...))
+			opts = append(opts, gRPC.ChainStreamInterceptor(streamInterceptors...))
 
 			grpcServer := gRPC.NewServer(opts...)
 			pb.RegisterMetaServiceServer(grpcServer, server)
@@ -407,6 +434,12 @@ func cmdMetaProxy() *cli.Command {
 					loggerProxy.Warn("GracefulStop timeout, forcing stop")
 					grpcServer.Stop()
 				}
+				// Close every live proxy session and tear the engine pool down
+				// (execution flow step 7) before the base engine goes away.
+				loggerProxy.Info("Closing proxy sessions...")
+				closeCtx, closeCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				server.CloseSessions(closeCtx)
+				closeCancel()
 				loggerProxy.Info("Shutting down metadata client...")
 				if err := m.Shutdown(); err != nil {
 					loggerProxy.Errorf("Error shutting down metadata client: %v", err)

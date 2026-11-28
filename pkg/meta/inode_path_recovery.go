@@ -69,7 +69,7 @@ func (r *pathResolver) Resolve(ctx context.Context, ino Ino) (string, bool, bool
 	if ino == RootInode {
 		return "/", true, false
 	}
-	if p := r.cache.Get(ino); p != "" {
+	if p := r.cache.Get(ctx, ino); p != "" {
 		return p, true, false
 	}
 	v, _, _ := r.group.Do(strconv.FormatUint(uint64(ino), 10), func() (interface{}, error) {
@@ -79,7 +79,7 @@ func (r *pathResolver) Resolve(ctx context.Context, ino Ino) (string, bool, bool
 	// A concurrent winner may have warmed the whole ancestor chain into the
 	// cache even when this ino itself stayed unresolved; prefer a fresh hit.
 	if !res.resolved {
-		if p := r.cache.Get(ino); p != "" {
+		if p := r.cache.Get(ctx, ino); p != "" {
 			return p, true, false
 		}
 	}

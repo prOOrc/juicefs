@@ -18,6 +18,8 @@ package meta
 
 import (
 	"context"
+	"strings"
+	"sync"
 	"syscall"
 	"testing"
 
@@ -25,12 +27,64 @@ import (
 	authzpb "github.com/juicedata/juicefs/pkg/meta/authz_pb"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
 	"github.com/juicedata/juicefs/pkg/oidc"
+	"github.com/juicedata/juicefs/pkg/utils"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// logCapture is a logrus hook recording every entry it sees, so tests can
+// assert on audit-log levels and message content (fix-meta-proxy-per-session-
+// chroot, Stage 6).
+type logCapture struct {
+	mu      sync.Mutex
+	entries []*logrus.Entry
+}
+
+func (c *logCapture) Levels() []logrus.Level {
+	return logrus.AllLevels
+}
+
+func (c *logCapture) Fire(e *logrus.Entry) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries = append(c.entries, e)
+	return nil
+}
+
+func (c *logCapture) all() []*logrus.Entry {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]*logrus.Entry(nil), c.entries...)
+}
+
+// messages returns the captured messages starting with prefix.
+func (c *logCapture) messages(prefix string) []string {
+	var out []string
+	for _, e := range c.all() {
+		if strings.HasPrefix(e.Message, prefix) {
+			out = append(out, e.Message)
+		}
+	}
+	return out
+}
+
+// captureLogger installs a logCapture hook on a LogHandle and returns it; the
+// previous hooks and level are restored at cleanup.
+func captureLogger(t *testing.T, l *utils.LogHandle) *logCapture {
+	t.Helper()
+	cap := &logCapture{}
+	prevHooks, prevLevel := l.Hooks, l.Level
+	l.AddHook(cap)
+	t.Cleanup(func() {
+		l.SetLevel(prevLevel)
+		l.Hooks = prevHooks
+	})
+	return cap
+}
 
 // mockAuthzClient implements AuthzClient for testing.
 type mockAuthzClient struct {
@@ -67,9 +121,79 @@ func TestRequiredPermission_Lifecycle(t *testing.T) {
 	assert.Equal(t, AuthzPermissionNone, ai.requiredPermission("/pb.MetaService/Init"))
 	assert.Equal(t, AuthzPermissionNone, ai.requiredPermission("/pb.MetaService/NewSession"))
 	assert.Equal(t, AuthzPermissionNone, ai.requiredPermission("/pb.MetaService/CloseSession"))
-	// Chroot is a per-session restriction (limits user's view), not an escalation.
-	// Called unconditionally during mount init; all subsequent file ops are still checked.
-	assert.Equal(t, AuthzPermissionNone, ai.requiredPermission("/pb.MetaService/Chroot"))
+	// Chroot left the lifecycle branch: since fix-meta-proxy-per-session-chroot
+	// it is path-checked View (see TestRequiredPermissionChroot).
+}
+
+// TestRequiredPermissionChroot (spec fix-meta-proxy-per-session-chroot, "Chroot
+// target authorization"): Chroot requires path-checked View on
+// "/" + <normalized subdir> via CheckPermission — not organization-admin. A
+// denied View fails the RPC with PermissionDenied before the handler; the
+// volume root ("/") stays always-allowed with no authz call.
+func TestRequiredPermissionChroot(t *testing.T) {
+	ai := &AuthzInterceptor{}
+	assert.Equal(t, AuthzPermissionView, ai.requiredPermission("/pb.MetaService/Chroot"))
+
+	// Allowed View on the target: the handler is reached.
+	mockClient := &mockAuthzClient{}
+	cache := NewInodePathCache(0)
+	mockClient.On("CheckPermission", mock.Anything, "user-123",
+		"/companies/acme", AuthzPermissionView, authzpb.Operation_OP_OTHER).Return(true, nil)
+
+	ai = newTestInterceptor(mockClient, cache, "user-123")
+	handlerCalled := false
+	_, err := ai.UnaryInterceptor()(context.Background(), &pb.ChrootRequest{Subdir: "companies/acme"},
+		&grpc.UnaryServerInfo{FullMethod: "/pb.MetaService/Chroot"},
+		func(ctx context.Context, req interface{}) (interface{}, error) {
+			handlerCalled = true
+			return &pb.ChrootResponse{}, nil
+		})
+	assert.NoError(t, err)
+	assert.True(t, handlerCalled, "allowed chroot reaches the handler")
+	mockClient.AssertExpectations(t)
+
+	// Denied View: PermissionDenied before the handler; the caller's session
+	// root is untouched (the handler is never reached).
+	deny := &mockAuthzClient{}
+	deny.On("CheckPermission", mock.Anything, "user-123",
+		"/companies/acme", AuthzPermissionView, authzpb.Operation_OP_OTHER).Return(false, nil)
+	ai = newTestInterceptor(deny, cache, "user-123")
+	handlerCalled = false
+	_, err = ai.UnaryInterceptor()(context.Background(), &pb.ChrootRequest{Subdir: "companies/acme"},
+		&grpc.UnaryServerInfo{FullMethod: "/pb.MetaService/Chroot"},
+		func(ctx context.Context, req interface{}) (interface{}, error) {
+			handlerCalled = true
+			return &pb.ChrootResponse{}, nil
+		})
+	st, ok := status.FromError(err)
+	assert.True(t, ok)
+	assert.Equal(t, codes.PermissionDenied, st.Code())
+	assert.False(t, handlerCalled, "denied chroot must not reach the handler")
+	deny.AssertExpectations(t)
+
+	// Normalization: "//companies//acme/" checks the same normalized path.
+	norm := &mockAuthzClient{}
+	norm.On("CheckPermission", mock.Anything, "user-123",
+		"/companies/acme", AuthzPermissionView, authzpb.Operation_OP_OTHER).Return(true, nil)
+	ai = newTestInterceptor(norm, cache, "user-123")
+	_, err = ai.UnaryInterceptor()(context.Background(), &pb.ChrootRequest{Subdir: "/companies//acme/"},
+		&grpc.UnaryServerInfo{FullMethod: "/pb.MetaService/Chroot"},
+		func(ctx context.Context, req interface{}) (interface{}, error) {
+			return &pb.ChrootResponse{}, nil
+		})
+	assert.NoError(t, err)
+	norm.AssertExpectations(t)
+
+	// Volume root: "/" with View is always allowed — no authz service call.
+	root := &mockAuthzClient{}
+	ai = newTestInterceptor(root, cache, "user-123")
+	_, err = ai.UnaryInterceptor()(context.Background(), &pb.ChrootRequest{},
+		&grpc.UnaryServerInfo{FullMethod: "/pb.MetaService/Chroot"},
+		func(ctx context.Context, req interface{}) (interface{}, error) {
+			return &pb.ChrootResponse{}, nil
+		})
+	assert.NoError(t, err)
+	root.AssertNotCalled(t, "CheckPermission", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestRequiredPermission_View(t *testing.T) {
@@ -744,7 +868,7 @@ func TestInterceptor_UnresolvedPathRecoveredByEngine(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, called, "handler must run when the recovered path is authorized")
 	client.AssertExpectations(t)
-	assert.Equal(t, "/a/b/c/f.exr", cache.Get(13), "recovery must repopulate the cache")
+	assert.Equal(t, "/a/b/c/f.exr", cache.Get(context.Background(), 13), "recovery must repopulate the cache")
 }
 
 // TestInterceptor_RecoveryGoneReturnsENOENT: when the engine reports the
@@ -803,4 +927,78 @@ func TestInterceptor_RecoveryFailureStillDenies(t *testing.T) {
 			client.AssertNotCalled(t, "CheckPermission", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 		})
 	}
+}
+
+// TestAuthzDenyLoggedAtWarn (spec fix-meta-proxy-per-session-chroot, "Authz
+// decision logging"): every authz denial is logged at Warn with the key=value
+// fields user= method= path= perm= — the resolved volume path, or "-" when the
+// path did not resolve; allows keep their Trace level and never appear as
+// "authz denied".
+func TestAuthzDenyLoggedAtWarn(t *testing.T) {
+	cap := captureLogger(t, authzLogger)
+	authzLogger.SetLevel(logrus.TraceLevel) // allows are Trace: capture them too
+
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return &pb.LookupResponse{}, nil
+	}
+
+	// 1. Denied by policy on a resolved path: Warn with the full field set.
+	mockClient := &mockAuthzClient{}
+	mockClient.On("CheckPermission", mock.Anything, "user-123",
+		"/companies", AuthzPermissionView, authzpb.Operation_OP_OTHER).Return(false, nil).Once()
+	cache := NewInodePathCache(0)
+	cache.Set(10, "/companies")
+	ai := newTestInterceptor(mockClient, cache, "user-123")
+
+	_, err := ai.UnaryInterceptor()(context.Background(), &pb.LookupRequest{Parent: 10},
+		&grpc.UnaryServerInfo{FullMethod: "/pb.MetaService/Lookup"}, handler)
+	assert.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+
+	denied := cap.messages("authz denied")
+	assert.Len(t, denied, 1, "exactly one deny record for the denied call")
+	if len(denied) == 1 {
+		assert.Contains(t, denied[0], "user=user-123")
+		assert.Contains(t, denied[0], "method=/pb.MetaService/Lookup")
+		assert.Contains(t, denied[0], "path=/companies")
+		assert.Contains(t, denied[0], "perm=1")
+	}
+	for _, e := range cap.all() {
+		if strings.HasPrefix(e.Message, "authz denied") {
+			assert.Equal(t, logrus.WarnLevel, e.Level, "denials are Warn, never Debug")
+		}
+	}
+
+	// 2. Path did not resolve (fail-closed deny): Warn with path=-.
+	_, err = ai.UnaryInterceptor()(context.Background(), &pb.GetAttrRequest{Inode: 99},
+		&grpc.UnaryServerInfo{FullMethod: "/pb.MetaService/GetAttr"}, handler)
+	assert.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	unresolved := cap.messages("authz denied")
+	assert.Len(t, unresolved, 2, "the unresolved-path deny adds one record")
+	assert.Contains(t, unresolved[1], "method=/pb.MetaService/GetAttr")
+	assert.Contains(t, unresolved[1], "path=-", "an unresolved path renders as -")
+	assert.Contains(t, unresolved[1], "perm=1")
+
+	// 3. Allowed: stays at Trace, no "authz denied" record.
+	allowedClient := &mockAuthzClient{}
+	allowedClient.On("CheckPermission", mock.Anything, "user-123",
+		"/companies", AuthzPermissionView, authzpb.Operation_OP_OTHER).Return(true, nil).Once()
+	aiAllowed := newTestInterceptor(allowedClient, cache, "user-123")
+	_, err = aiAllowed.UnaryInterceptor()(context.Background(), &pb.LookupRequest{Parent: 10},
+		&grpc.UnaryServerInfo{FullMethod: "/pb.MetaService/Lookup"}, handler)
+	assert.NoError(t, err)
+	assert.Len(t, cap.messages("authz denied"), 2, "an allow adds no deny record")
+
+	traceChecks := 0
+	for _, e := range cap.all() {
+		if strings.HasPrefix(e.Message, "Authz check: ") {
+			traceChecks++
+			assert.Equal(t, logrus.TraceLevel, e.Level, "allow decisions stay at Trace")
+			assert.Contains(t, e.Message, "method=/pb.MetaService/Lookup")
+			assert.Contains(t, e.Message, "user=user-123")
+			assert.Contains(t, e.Message, "path=/companies")
+		}
+	}
+	assert.Equal(t, 2, traceChecks, "both allowed calls logged their decision at Trace")
 }
