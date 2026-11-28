@@ -38,6 +38,7 @@ import (
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/vfs"
 	minio "github.com/minio/minio/cmd"
+	xhttp "github.com/minio/minio/cmd/http"
 	miniohash "github.com/minio/minio/pkg/hash"
 )
 
@@ -370,15 +371,8 @@ func TestObjectCommitAfterBucketDeleted(t *testing.T) {
 	if err := g1.MakeBucketWithLocation(ctx, minio.MinioMetaBucket, minio.BucketOptions{}); err != nil {
 		t.Fatalf("create metadata bucket: %s", err)
 	}
-	if err := g1.MakeBucketWithLocation(ctx, "src-bucket", minio.BucketOptions{}); err != nil {
-		t.Fatalf("create src bucket: %s", err)
-	}
 	if err := g1.MakeBucketWithLocation(ctx, bucket, minio.BucketOptions{}); err != nil {
 		t.Fatalf("create bucket: %s", err)
-	}
-	srcData := []byte("src")
-	if _, err := g1.PutObject(ctx, "src-bucket", "src-obj", newTestPutObjReader(t, bytes.NewReader(srcData), srcData), minio.ObjectOptions{}); err != nil {
-		t.Fatalf("put src object: %s", err)
 	}
 	uploadID, err := g1.NewMultipartUpload(ctx, bucket, "obj", minio.ObjectOptions{})
 	if err != nil {
@@ -404,9 +398,8 @@ func TestObjectCommitAfterBucketDeleted(t *testing.T) {
 			t.Fatalf("PutObject %s after bucket deleted should return BucketNotFound, got %v", object, err)
 		}
 	}
-	if _, err := g1.CopyObject(ctx, "src-bucket", "src-obj", bucket, "copy-obj", minio.ObjectInfo{}, minio.ObjectOptions{}, minio.ObjectOptions{}); !errors.As(err, &minio.BucketNotFound{}) {
-		t.Fatalf("CopyObject after bucket deleted should return BucketNotFound, got %v", err)
-	}
+	// the CopyObject case is covered by TestCopyObjectAtDestinationAfterBucketDeleted
+	// and TestCopyObjectAtDestinationFailureRemovesPartial
 	if _, err := g1.CompleteMultipartUpload(ctx, bucket, "obj", uploadID, []minio.CompletePart{{PartNumber: 1, ETag: part.ETag}}, minio.ObjectOptions{}); !errors.As(err, &minio.BucketNotFound{}) {
 		t.Fatalf("CompleteMultipartUpload after bucket deleted should return BucketNotFound, got %v", err)
 	}
@@ -421,7 +414,13 @@ func TestObjectCommitAfterBucketDeleted(t *testing.T) {
 	}
 }
 
-func TestCopyObjectTempCreateAfterBucketDeleted(t *testing.T) {
+// TestCopyObjectAtDestinationAfterBucketDeleted (ported from the staging-flow
+// TestCopyObjectTempCreateAfterBucketDeleted): the destination Create against
+// a bucket deleted mid-copy (the hook fires on the first Create of the copy
+// flow — the destination file itself, staging under `.sys/tmp` is gone) fails
+// with BucketNotFound, leaves no destination file and does not resurrect the
+// bucket.
+func TestCopyObjectAtDestinationAfterBucketDeleted(t *testing.T) {
 	format := &meta.Format{Name: "test", BlockSize: 4096, Capacity: 1 << 30, DirStats: true}
 	baseMeta := meta.NewClient("memkv://", nil)
 	if err := baseMeta.Init(format, true); err != nil {
@@ -450,6 +449,12 @@ func TestCopyObjectTempCreateAfterBucketDeleted(t *testing.T) {
 	}
 	if deleteErr != nil {
 		t.Fatalf("delete destination bucket: %s", deleteErr)
+	}
+	if _, errno := g2.fs.Stat(mctx, g2.path("dst-bucket")); !fs.IsNotExist(errno) {
+		t.Fatalf("deleted destination bucket was recreated: %s", errno)
+	}
+	if _, errno := g1.fs.Stat(mctx, g1.path("dst-bucket", "dst-obj")); !fs.IsNotExist(errno) {
+		t.Fatalf("destination object was created in a deleted bucket: %s", errno)
 	}
 }
 
@@ -1373,5 +1378,376 @@ func TestPutObjectFailureRemovesPartial(t *testing.T) {
 	// no partial object at the destination
 	if _, errno := n.fs.Stat(mctx, n.path(bucket, object)); !fs.IsNotExist(errno) {
 		t.Fatalf("partial object left at destination: %s", errno)
+	}
+}
+
+// copyFailMeta injects failures into the copy-at-destination flow. failCopy
+// fails the first CopyFileRange call (the content transfer step). failStat
+// emulates a failing final Stat(dst): the wrapper arms on the first passed
+// CopyFileRange and then fails the first lookup of the destination leaf —
+// with the test config (no KeepEtag/ObjTag/ObjMeta) that lookup is exactly
+// the copy's final Stat, after the destination Create and the EEXIST checks.
+type copyFailMeta struct {
+	meta.Meta
+	dstLeaf    string
+	failCopy   bool
+	failStat   bool
+	copyDone   bool
+	copyFailed bool
+	statFailed bool
+}
+
+func (m *copyFailMeta) CopyFileRange(ctx meta.Context, fin meta.Ino, offIn uint64, fout meta.Ino, offOut uint64, size uint64, flags uint32, copied, outLength *uint64) syscall.Errno {
+	if m.failCopy && !m.copyFailed {
+		m.copyFailed = true
+		return syscall.EIO
+	}
+	m.copyDone = true
+	return m.Meta.CopyFileRange(ctx, fin, offIn, fout, offOut, size, flags, copied, outLength)
+}
+
+func (m *copyFailMeta) Lookup(ctx meta.Context, parent meta.Ino, name string, inode *meta.Ino, attr *meta.Attr, checkPerm bool) syscall.Errno {
+	if m.failStat && m.copyDone && !m.statFailed && name == m.dstLeaf {
+		m.statFailed = true
+		return syscall.EIO
+	}
+	return m.Meta.Lookup(ctx, parent, name, inode, attr, checkPerm)
+}
+
+// rearm re-enables the one-shot injections for a second copy attempt.
+func (m *copyFailMeta) rearm() {
+	m.copyDone = false
+	m.copyFailed = false
+	m.statFailed = false
+}
+
+// newCopyFailTestGateway builds a gateway with fs-level caches disabled (see
+// newCompleteTestGateway — the resolve caching must not mask the injected
+// lookups) whose meta fails the copy flow as requested.
+func newCopyFailTestGateway(t *testing.T, dstLeaf string, failCopy, failStat bool) (*jfsObjects, *fs.FileSystem, *copyFailMeta, string) {
+	t.Helper()
+	format := &meta.Format{Name: "test", BlockSize: 4096, Capacity: 1 << 30, DirStats: true}
+	m := meta.NewClient("memkv://", nil)
+	if err := m.Init(format, true); err != nil {
+		t.Fatalf("init meta: %s", err)
+	}
+	failMeta := &copyFailMeta{Meta: m, dstLeaf: dstLeaf, failCopy: failCopy, failStat: failStat}
+	vfsConf := &vfs.Config{
+		Meta: meta.DefaultConf(),
+		Chunk: &chunk.Config{
+			BlockSize:   format.BlockSize << 10,
+			MaxUpload:   1,
+			MaxDownload: 200,
+			BufferSize:  100 << 20,
+		},
+	}
+	objStore, _ := object.CreateStorage("mem", "", "", "", "")
+	store := chunk.NewCachedStore(objStore, *vfsConf.Chunk, nil)
+	jfs, err := fs.NewFileSystem(vfsConf, failMeta, store, nil)
+	if err != nil {
+		t.Fatalf("initialize failed: %s", err)
+	}
+	conf := Config{Bucket: format.Name, Umask: 022}
+	jfsObj := &jfsObjects{
+		fs:       jfs,
+		conf:     vfsConf,
+		listPool: minio.NewTreeWalkPool(time.Minute * 30),
+		gConf:    &conf,
+		nsMutex:  minio.NewNSLock(false),
+	}
+	mctx = meta.NewContext(uint32(os.Getpid()), uint32(os.Getuid()), []uint32{uint32(os.Getgid())})
+	return jfsObj, jfs, failMeta, format.Name
+}
+
+// TestCopyObjectAtDestination (spec "Server-side copy writes final object at
+// destination"): CopyObject creates the destination object at its final key —
+// content and ETag equal to the source — and never stages a temp file under
+// `.sys/tmp` (the staged+renamed flow was keyed under the synthetic `.sys`
+// company on encrypted volumes and rejected outright at the `.sys/tmp`
+// creation path).
+func TestCopyObjectAtDestination(t *testing.T) {
+	// uncached gateway: the meta-level CopyFileRange does not invalidate the
+	// fs attr cache (see newCompleteTestGateway), assertions need the fresh view
+	n, jfs, bucket := newCompleteTestGateway(t, Config{KeepEtag: true})
+	ctx := context.Background()
+	data := []byte("copy payload")
+	source := "companies/acme/original.exr"
+	object := "companies/acme/copied.exr"
+
+	if _, err := n.PutObject(ctx, bucket, source, newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{}); err != nil {
+		t.Fatalf("put source object: %s", err)
+	}
+	sum := md5.Sum(data)
+	wantETag := hex.EncodeToString(sum[:])
+
+	// staging is untouched before the copy: no `.sys/tmp` tree exists at all
+	if _, errno := n.fs.Stat(mctx, n.tpath(bucket, "tmp")); !fs.IsNotExist(errno) {
+		t.Fatalf("staging tmp directory exists before the copy: %s", errno)
+	}
+
+	objInfo, err := n.CopyObject(ctx, bucket, source, bucket, object, minio.ObjectInfo{}, minio.ObjectOptions{}, minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("copy: %s", err)
+	}
+	if objInfo.Size != int64(len(data)) {
+		t.Fatalf("size %d, want %d", objInfo.Size, len(data))
+	}
+	if objInfo.ETag != wantETag {
+		t.Fatalf("etag %q, want source md5 %q", objInfo.ETag, wantETag)
+	}
+
+	// the object is readable at the destination key with the source content
+	got := readTestObject(t, jfs, n.path(bucket, object))
+	if !bytes.Equal(got, data) {
+		t.Fatalf("content %q, want %q", got, data)
+	}
+	srcInfo, err := n.GetObjectInfo(ctx, bucket, source, minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("get source info: %s", err)
+	}
+	if srcInfo.ETag != objInfo.ETag {
+		t.Fatalf("destination etag %q differs from source etag %q", objInfo.ETag, srcInfo.ETag)
+	}
+
+	// nested destination with missing parents keeps working
+	nested := "x/y/z"
+	if _, err := n.CopyObject(ctx, bucket, source, bucket, nested, minio.ObjectInfo{}, minio.ObjectOptions{}, minio.ObjectOptions{}); err != nil {
+		t.Fatalf("copy to nested destination: %s", err)
+	}
+	if got := readTestObject(t, jfs, n.path(bucket, nested)); !bytes.Equal(got, data) {
+		t.Fatalf("nested content %q, want %q", got, data)
+	}
+
+	// zero-size source copies as a zero-size object
+	if _, err := n.PutObject(ctx, bucket, "empty-src", newTestPutObjReader(t, bytes.NewReader(nil), nil), minio.ObjectOptions{}); err != nil {
+		t.Fatalf("put empty source: %s", err)
+	}
+	emptyInfo, err := n.CopyObject(ctx, bucket, "empty-src", bucket, "empty-dst", minio.ObjectInfo{}, minio.ObjectOptions{}, minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("copy empty object: %s", err)
+	}
+	if emptyInfo.Size != 0 {
+		t.Fatalf("empty copy size %d, want 0", emptyInfo.Size)
+	}
+	if _, errno := n.fs.Stat(mctx, n.path(bucket, "empty-dst")); errno != 0 {
+		t.Fatalf("stat empty destination: %s", errno)
+	}
+
+	// staging is still untouched: no `.sys/tmp` tree was created for the copies
+	if _, errno := n.fs.Stat(mctx, n.tpath(bucket, "tmp")); !fs.IsNotExist(errno) {
+		t.Fatalf("staging tmp directory was created by the copies: %s", errno)
+	}
+}
+
+// TestCopyObjectAtDestinationReplacesExisting (unencrypted equivalence of the
+// previous rename semantics): Copy onto an existing key replaces the object
+// wholesale — content, ETag and tags come from the source per the request
+// directives, no xattr of the replaced object survives.
+func TestCopyObjectAtDestinationReplacesExisting(t *testing.T) {
+	// uncached gateway: the meta-level CopyFileRange does not invalidate the
+	// fs attr cache (see newCompleteTestGateway), assertions need the fresh view
+	n, jfs, bucket := newCompleteTestGateway(t, Config{KeepEtag: true, ObjTag: true})
+	ctx := context.Background()
+	oldData := []byte("stale object payload")
+	newData := []byte("fresh content")
+	source := "companies/acme/source.bin"
+	object := "companies/acme/replaced.bin"
+
+	if _, err := n.PutObject(ctx, bucket, object, newTestPutObjReader(t, bytes.NewReader(oldData), oldData), minio.ObjectOptions{UserDefined: map[string]string{xhttp.AmzObjectTagging: "old=tag&x=1"}}); err != nil {
+		t.Fatalf("put stale object: %s", err)
+	}
+	if _, err := n.PutObject(ctx, bucket, source, newTestPutObjReader(t, bytes.NewReader(newData), newData), minio.ObjectOptions{UserDefined: map[string]string{xhttp.AmzObjectTagging: "new=tag&y=2"}}); err != nil {
+		t.Fatalf("put source object: %s", err)
+	}
+	sum := md5.Sum(newData)
+	wantETag := hex.EncodeToString(sum[:])
+
+	objInfo, err := n.CopyObject(ctx, bucket, source, bucket, object, minio.ObjectInfo{UserDefined: map[string]string{xhttp.AmzObjectTagging: "new=tag&y=2"}}, minio.ObjectOptions{}, minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("copy over existing object: %s", err)
+	}
+	if objInfo.ETag != wantETag {
+		t.Fatalf("etag %q, want source md5 %q", objInfo.ETag, wantETag)
+	}
+	if objInfo.UserTags != "new=tag&y=2" {
+		t.Fatalf("user tags %q, want source tags", objInfo.UserTags)
+	}
+
+	// the object is replaced wholesale with the source content
+	got := readTestObject(t, jfs, n.path(bucket, object))
+	if !bytes.Equal(got, newData) {
+		t.Fatalf("content %q, want replacement %q", got, newData)
+	}
+	// etag xattr comes from the source, the stale one is gone
+	etag, eno := n.fs.GetXattr(mctx, n.path(bucket, object), s3Etag)
+	if eno != 0 {
+		t.Fatalf("get destination etag xattr: %s", eno)
+	}
+	if string(etag) != wantETag {
+		t.Fatalf("etag xattr %q, want source md5 %q", etag, wantETag)
+	}
+	// tags xattr comes from the source, the stale one is gone
+	tags, eno := n.fs.GetXattr(mctx, n.path(bucket, object), s3Tags)
+	if eno != 0 {
+		t.Fatalf("get destination tags xattr: %s", eno)
+	}
+	if string(tags) != "new=tag&y=2" {
+		t.Fatalf("tags xattr %q, want source tags %q", tags, "new=tag&y=2")
+	}
+}
+
+// TestCopyObjectAtDestinationDestinationIsDirectory: a directory occupying the
+// destination key is a conflict, like it was for the rename-based flow.
+func TestCopyObjectAtDestinationDestinationIsDirectory(t *testing.T) {
+	n, jfs, bucket := newTestGateway(t, Config{})
+	ctx := context.Background()
+	data := []byte("copy payload")
+	source := "companies/acme/source.bin"
+	object := "companies/acme/dir-obj"
+
+	if _, err := n.PutObject(ctx, bucket, source, newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{}); err != nil {
+		t.Fatalf("put source object: %s", err)
+	}
+	if errno := n.fs.MkdirAll(mctx, n.path(bucket, object), 0777, 022); errno != 0 {
+		t.Fatalf("mkdir destination: %s", errno)
+	}
+	if _, err := n.CopyObject(ctx, bucket, source, bucket, object, minio.ObjectInfo{}, minio.ObjectOptions{}, minio.ObjectOptions{}); err == nil {
+		t.Fatal("copy onto a directory must fail")
+	}
+	// the destination directory and the source object survive
+	if _, errno := n.fs.Stat(mctx, n.path(bucket, object)); errno != 0 {
+		t.Fatalf("destination directory must survive the failed copy: %s", errno)
+	}
+	if got := readTestObject(t, jfs, n.path(bucket, source)); !bytes.Equal(got, data) {
+		t.Fatalf("source content %q after failed copy, want %q", got, data)
+	}
+}
+
+// TestCopyObjectAtDestinationFailureRemovesPartial (spec "Server-side copy
+// failure leaves no destination file"): a fatal step after the destination
+// Create (CopyFileRange or Stat) fails the copy and the destination file is
+// removed, including the overwrite case.
+func TestCopyObjectAtDestinationFailureRemovesPartial(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		failCopy bool
+		failStat bool
+	}{
+		{"copy file range fails", true, false},
+		{"stat fails", false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const dstLeaf = "broken.bin"
+			n, _, failMeta, bucket := newCopyFailTestGateway(t, dstLeaf, tc.failCopy, tc.failStat)
+			ctx := context.Background()
+			data := []byte("copy payload")
+			source := "companies/acme/source.bin"
+			object := "companies/acme/" + dstLeaf
+
+			if _, err := n.PutObject(ctx, bucket, source, newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{}); err != nil {
+				t.Fatalf("put source object: %s", err)
+			}
+
+			// overwrite case: the destination exists before the failing copy
+			oldData := []byte("stale object payload")
+			if _, err := n.PutObject(ctx, bucket, object, newTestPutObjReader(t, bytes.NewReader(oldData), oldData), minio.ObjectOptions{}); err != nil {
+				t.Fatalf("put stale object: %s", err)
+			}
+			if _, err := n.CopyObject(ctx, bucket, source, bucket, object, minio.ObjectInfo{}, minio.ObjectOptions{}, minio.ObjectOptions{}); err == nil {
+				t.Fatal("copy with an injected failure must fail")
+			}
+			// no partial object at the destination — the stale object does not
+			// come back either
+			if _, errno := n.fs.Stat(mctx, n.path(bucket, object)); !fs.IsNotExist(errno) {
+				t.Fatalf("object left at destination after failed copy: %s", errno)
+			}
+
+			// fresh-destination case: the same key after the failed overwrite
+			// (nothing exists there) must not create the file either
+			failMeta.rearm()
+			if _, err := n.CopyObject(ctx, bucket, source, bucket, object, minio.ObjectInfo{}, minio.ObjectOptions{}, minio.ObjectOptions{}); err == nil {
+				t.Fatal("copy with an injected failure must fail")
+			}
+			if _, errno := n.fs.Stat(mctx, n.path(bucket, object)); !fs.IsNotExist(errno) {
+				t.Fatalf("object left at fresh destination after failed copy: %s", errno)
+			}
+		})
+	}
+}
+
+// TestCopyObjectAtDestinationKeepsSource (spec "Server-side copy writes final
+// object at destination", scenario "Источник не изменяется"): a completed copy
+// leaves the source object untouched and reusable.
+func TestCopyObjectAtDestinationKeepsSource(t *testing.T) {
+	// uncached gateway: the meta-level CopyFileRange does not invalidate the
+	// fs attr cache (see newCompleteTestGateway), assertions need the fresh view
+	n, jfs, bucket := newCompleteTestGateway(t, Config{KeepEtag: true})
+	ctx := context.Background()
+	data := []byte("keep me intact")
+	source := "companies/acme/kept.exr"
+
+	if _, err := n.PutObject(ctx, bucket, source, newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{}); err != nil {
+		t.Fatalf("put source object: %s", err)
+	}
+	before, err := n.GetObjectInfo(ctx, bucket, source, minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("get source info: %s", err)
+	}
+
+	if _, err := n.CopyObject(ctx, bucket, source, bucket, "companies/acme/copy1.exr", minio.ObjectInfo{}, minio.ObjectOptions{}, minio.ObjectOptions{}); err != nil {
+		t.Fatalf("first copy: %s", err)
+	}
+	if got := readTestObject(t, jfs, n.path(bucket, source)); !bytes.Equal(got, data) {
+		t.Fatalf("source content %q after copy, want %q", got, data)
+	}
+	after, err := n.GetObjectInfo(ctx, bucket, source, minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("get source info after copy: %s", err)
+	}
+	if after.Size != before.Size || after.ETag != before.ETag {
+		t.Fatalf("source changed after copy: size %d->%d etag %q->%q", before.Size, after.Size, before.ETag, after.ETag)
+	}
+
+	// the source still serves further copies
+	if _, err := n.CopyObject(ctx, bucket, source, bucket, "companies/acme/copy2.exr", minio.ObjectInfo{}, minio.ObjectOptions{}, minio.ObjectOptions{}); err != nil {
+		t.Fatalf("second copy: %s", err)
+	}
+	if got := readTestObject(t, jfs, n.path(bucket, "companies/acme/copy2.exr")); !bytes.Equal(got, data) {
+		t.Fatalf("second copy content %q, want %q", got, data)
+	}
+}
+
+// TestCopyObjectAtDestinationSourceMissingKeepsDestination (spec
+// "Server-side copy failure leaves no destination file", scenario "Источник
+// отсутствует"): the source is stat'ed before the destination is touched, so
+// a missing source fails the copy and an existing destination (the overwrite
+// case) stays intact.
+func TestCopyObjectAtDestinationSourceMissingKeepsDestination(t *testing.T) {
+	n, jfs, bucket := newTestGateway(t, Config{})
+	ctx := context.Background()
+	dstData := []byte("existing destination payload")
+	object := "companies/acme/kept.bin"
+
+	if _, err := n.PutObject(ctx, bucket, object, newTestPutObjReader(t, bytes.NewReader(dstData), dstData), minio.ObjectOptions{}); err != nil {
+		t.Fatalf("put destination object: %s", err)
+	}
+
+	if _, err := n.CopyObject(ctx, bucket, "companies/acme/missing.bin", bucket, object, minio.ObjectInfo{}, minio.ObjectOptions{}, minio.ObjectOptions{}); err == nil {
+		t.Fatal("copy from a missing source must fail")
+	}
+	// the existing destination is untouched by the failed overwrite
+	if got := readTestObject(t, jfs, n.path(bucket, object)); !bytes.Equal(got, dstData) {
+		t.Fatalf("destination content %q after failed copy, want %q", got, dstData)
+	}
+	if _, err := n.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{}); err != nil {
+		t.Fatalf("head destination after failed copy: %s", err)
+	}
+
+	// a missing source does not create a fresh destination either
+	if _, err := n.CopyObject(ctx, bucket, "companies/acme/missing.bin", bucket, "companies/acme/fresh.bin", minio.ObjectInfo{}, minio.ObjectOptions{}, minio.ObjectOptions{}); err == nil {
+		t.Fatal("copy from a missing source must fail")
+	}
+	if _, errno := n.fs.Stat(mctx, n.path(bucket, "companies/acme/fresh.bin")); !fs.IsNotExist(errno) {
+		t.Fatalf("destination created from a missing source: %s", errno)
 	}
 }
