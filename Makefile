@@ -19,6 +19,15 @@ else ifeq ($(BUILD),debug)
 	GCFLAGS := all=-N -l
 endif
 
+# The single binary links both authz service stubs (pkg/meta/authz_pb for the
+# meta-proxy and minio cmd/authzpb for the S3 gateway) generated from the same
+# agio.platform.authz.v1 contract — the wire contract with the platform
+# AuthzService, so neither side may rename its proto package. The duplicate
+# registration is semantically identical; demote the protobuf-go registry
+# conflict from panic to silent ignore (documented escape hatch,
+# google.golang.org/protobuf@v1.36.11 reflect/protoregistry/registry.go:31).
+LDFLAGS += -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore
+
 SHELL = /bin/sh
 
 ifdef STATIC
