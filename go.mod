@@ -369,7 +369,7 @@ require (
 	xorm.io/builder v0.3.13 // indirect
 )
 
-replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/prOOrc/minio v0.0.0-20261128000032-1656244b1cef
+replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/prOOrc/minio v0.0.0-20261128074415-73eff210d37b
 
 replace github.com/redis/go-redis/v9 v9.18.0 => github.com/prOOrc/go-redis/v9 v9.18.1
 

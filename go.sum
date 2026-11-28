@@ -735,8 +735,8 @@ github.com/pquerna/ffjson v0.0.0-20190930134022-aa0246cd15f7 h1:xoIK0ctDddBMnc74
 github.com/pquerna/ffjson v0.0.0-20190930134022-aa0246cd15f7/go.mod h1:YARuvh7BUWHNhzDq2OM5tzR2RiCcN2D7sapiKyCel/M=
 github.com/prOOrc/go-redis/v9 v9.18.1 h1:gZBwZmMsVGT41b3p/LKx05+u/QMwJM03zJtRnZZJYfM=
 github.com/prOOrc/go-redis/v9 v9.18.1/go.mod h1:k3ufPphLU5YXwNTUcCRXGxUoF1fqxnhFQmscfkCoDA0=
-github.com/prOOrc/minio v0.0.0-20261128000032-1656244b1cef h1:ui0q6JZ9e2LQumTr0tNoUgEokhensBElFR/U2wmyHPA=
-github.com/prOOrc/minio v0.0.0-20261128000032-1656244b1cef/go.mod h1:E6Uh14WTMmAALn84SL+dGvbWp+6Hs9nQDwQb5DJ3qAI=
+github.com/prOOrc/minio v0.0.0-20261128074415-73eff210d37b h1:MRR3FjchvAfokgk742LoVKgaHD8aDIpjAlO1ZIgTqIA=
+github.com/prOOrc/minio v0.0.0-20261128074415-73eff210d37b/go.mod h1:E6Uh14WTMmAALn84SL+dGvbWp+6Hs9nQDwQb5DJ3qAI=
 github.com/prOOrc/oidc-login v0.0.0-20260804072428-dd6d8e9d3c41 h1:is4FQAPr3p6tWomKo9NxnDcjwRf2EngNr5ICEZd18Gs=
 github.com/prOOrc/oidc-login v0.0.0-20260804072428-dd6d8e9d3c41/go.mod h1:AsebKYWD8rE1b09/teeT1J48c7/6thvgk0WWkyiGaaw=
 github.com/prashantv/gostub v1.1.0 h1:BTyx3RfQjRHnUWaGF9oQos79AlQ5k8WNktv7VGvVH4g=
