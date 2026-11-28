@@ -88,6 +88,19 @@ func cmdCloudDrive() *cli.Command {
 				Name:  "state-dir",
 				Usage: "provider state directory (default: %LOCALAPPDATA%\\AgioDrive\\<volume>)",
 			},
+			&cli.StringFlag{
+				// chroot тома (fix-cfapi-followups A6, семантика mount
+				// --subdir: cmd/mount.go:355 + Chroot :803): корень тома для
+				// serve/ls/hash — каталог --subdir (V3-приложение передаёт
+				// companies/<code>: в sync root попадает каталог компании, а
+				// не весь том). До chroot движок создаёт working_dir из
+				// STS-кредов (ensureCompanyWorkingDir — он объёмно-
+				// относителен); отказ chroot (authz deny, ENOTDIR) завершает
+				// команду fail-closed, подмены маунтом всего тома нет
+				// (спека add-mount-company-subdir).
+				Name:  "subdir",
+				Usage: "volume directory to chroot to (serve/ls/hash paths become relative to it)",
+			},
 			&cli.IntFlag{
 				// Политика гидрации (register, CF_HYDRATION_POLICY primary).
 				// Дефолт — Progressive + StreamingAllowed (design.md D4,
@@ -183,10 +196,13 @@ $ juicefs clouddrive status
 # Serve the sync root (single instance, Ctrl+C to stop)
 $ juicefs clouddrive serve grpc://meta-proxy:9900?tls=1 --sts-enabled --company-id <uuid>
 
-# List a backend directory (same entries Explorer shows under the sync root)
+# Serve a company directory of the volume instead of the whole volume
+$ juicefs clouddrive serve grpc://meta-proxy:9900?tls=1 --sts-enabled --company-id <uuid> --subdir companies/<code>
+
+# List a backend directory (same entries Explorer shows under the sync root; relative to --subdir when set)
 $ juicefs clouddrive ls grpc://meta-proxy:9900?tls=1 /docs
 
-# SHA-256 of a backend file
+# SHA-256 of a backend file (relative to --subdir when set)
 $ juicefs clouddrive hash grpc://meta-proxy:9900?tls=1 /docs/report.pdf
 
 # Pin a placeholder (downloads its content; requires a running serve)
@@ -229,13 +245,13 @@ $ juicefs clouddrive cleanup`,
 			{
 				Name:      "ls",
 				ArgsUsage: "META-URL PATH",
-				Usage:     "List a backend directory (path relative to the volume root)",
+				Usage:     "List a backend directory (path relative to the volume root, or to --subdir when set)",
 				Action:    cloudDriveLs,
 			},
 			{
 				Name:      "hash",
 				ArgsUsage: "META-URL PATH",
-				Usage:     "Print SHA-256 of a backend file (hex)",
+				Usage:     "Print SHA-256 of a backend file (hex; path relative to --subdir when set)",
 				Action:    cloudDriveHash,
 			},
 			{
@@ -618,7 +634,7 @@ func cloudDriveServe(c *cli.Context) error {
 
 	// Data path: недоступный hub не завершает serve (спека «Hub
 	// недоступен») — попытки с нарастающей паузой до успеха или Ctrl+C.
-	stack, err := connectWithRetry(ctx, metaURI, stsNodeOptionsFrom(c))
+	stack, err := connectWithRetry(ctx, metaURI, stsNodeOptionsFrom(c), c.String("subdir"))
 	if err != nil {
 		return err
 	}
@@ -708,8 +724,12 @@ type cloudDriveStack struct {
 
 // buildCloudDriveStack собирает data path. Последовательность и обработка
 // ошибок повторяют mount: каждый отказ закрывает уже созданные ресурсы.
-func buildCloudDriveStack(metaURI string, sts *stsNodeOptions) (*cloudDriveStack, error) {
+func buildCloudDriveStack(metaURI string, sts *stsNodeOptions, subdir string) (*cloudDriveStack, error) {
 	metaConf := meta.DefaultConf()
+	// chroot (--subdir): как в mount (cmd/mount.go:355) — meta-конфиг несёт
+	// subdir для authz-интерцептора (pkg/meta/authz_interceptor.go) и
+	// fast-path проверок fs (pkg/fs/fs.go), сам remap делает Chroot ниже.
+	metaConf.Subdir = subdir
 	metaCli := meta.NewClient(metaURI, metaConf)
 	format, err := metaCli.Load(true)
 	if err != nil {
@@ -801,6 +821,23 @@ func buildCloudDriveStack(metaURI string, sts *stsNodeOptions) (*cloudDriveStack
 		ensureCompanyWorkingDir(metaCli, provider.WorkingDir())
 	}
 
+	// chroot (--subdir, fix-cfapi-followups A6): семантика mount
+	// (cmd/mount.go:803) — корневой inode мапится на --subdir. Строго ПОСЛЕ
+	// ensureCompanyWorkingDir (working_dir объёмно-относителен: после chroot
+	// корень — уже каталог --subdir) и до NewSession/NewCachedStore.
+	// Fail-closed: отказ (authz deny, ENOTDIR) — ошибка; подмены маунтом
+	// всего тома нет (спека add-mount-company-subdir).
+	if metaConf.Subdir != "" {
+		if st := metaCli.Chroot(meta.Background(), metaConf.Subdir); st != 0 {
+			if refresher != nil {
+				refresher.Stop()
+			}
+			object.Shutdown(blob)
+			_ = metaCli.Shutdown()
+			return nil, fmt.Errorf("chroot %s: %v", metaConf.Subdir, st)
+		}
+	}
+
 	store := chunk.NewCachedStore(blob, *chunkConf, nil)
 	registerMetaMsg(metaCli, store, chunkConf)
 	if err := metaCli.NewSession(true); err != nil {
@@ -862,11 +899,11 @@ func (s *cloudDriveStack) Close() {
 // connectWithRetry собирает data path, повторяя попытки с нарастающей
 // паузой (2 c → 30 c): недоступный hub не завершает serve (спека «Hub
 // недоступен»), из цикла выходят только успехом или отменой ctx (Ctrl+C).
-func connectWithRetry(ctx context.Context, metaURI string, sts *stsNodeOptions) (*cloudDriveStack, error) {
+func connectWithRetry(ctx context.Context, metaURI string, sts *stsNodeOptions, subdir string) (*cloudDriveStack, error) {
 	const maxDelay = 30 * time.Second
 	delay := 2 * time.Second
 	for attempt := 1; ; attempt++ {
-		stack, err := buildCloudDriveStack(metaURI, sts)
+		stack, err := buildCloudDriveStack(metaURI, sts, subdir)
 		if err == nil {
 			if attempt > 1 {
 				logger.Infof("volume %s connected after %d attempts", stack.format.Name, attempt)
@@ -897,7 +934,7 @@ func withCloudDriveStack(c *cli.Context, fn func(*cloudDriveStack) error) error 
 	if metaURI == "" {
 		return errors.New("META-URL is required, e.g. grpc://host:9900?tls=1")
 	}
-	stack, err := buildCloudDriveStack(metaURI, stsNodeOptionsFrom(c))
+	stack, err := buildCloudDriveStack(metaURI, stsNodeOptionsFrom(c), c.String("subdir"))
 	if err != nil {
 		return err
 	}
@@ -925,7 +962,9 @@ func normalizeFsPath(p string) string {
 }
 
 // cloudDriveLs — задача 2.6: печать записей каталога backend (name/size/
-// type/mime) через fs.FileSystem; путь — относительно корня тома.
+// type/mime) через fs.FileSystem; путь — относительно корня тома, а при
+// заданном --subdir — относительно каталога chroot (совпадает с содержимым
+// sync root).
 func cloudDriveLs(c *cli.Context) error {
 	setup(c, 2)
 	return withCloudDriveStack(c, func(stack *cloudDriveStack) error {

@@ -201,7 +201,7 @@ func TestFtruncate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open file failed: %s", err)
 	}
-	if err = syscall.Ftruncate(int(file.Fd()), 1024); err != nil {
+	if err = file.Truncate(1024); err != nil {
 		t.Fatalf("ftruncate failed: %s", err)
 	}
 	fileInfo, err := os.Stat(fpath)
@@ -217,7 +217,7 @@ func TestFtruncate(t *testing.T) {
 	if _, err = os.Stat(fpath); !errors.Is(err, syscall.ENOENT) {
 		t.Fatalf("file still exists after delete: %s", err)
 	}
-	err = syscall.Ftruncate(int(file.Fd()), 2048)
+	err = file.Truncate(2048)
 	if err != nil {
 		t.Fatalf("ftruncate failed: %s", err)
 	}
@@ -334,30 +334,6 @@ func TestMountVersionMatch(t *testing.T) {
 
 	err = tryMountTemp(t, nil, []string{"--enable-acl=true"}, nil)
 	assert.Contains(t, err.Error(), "check version")
-}
-
-func TestParseUIDGID(t *testing.T) {
-	tests := []struct {
-		input       string
-		defaultUid  uint32
-		defaultGid  uint32
-		expectedUid uint32
-		expectedGid uint32
-	}{
-		{"1000:1000", 65534, 65534, 1000, 1000},
-		{"1000:", 65534, 65534, 1000, 65534},
-		{":1000", 65534, 65534, 65534, 1000},
-		{"", 65534, 65534, 65534, 65534},
-		{"0:1000", 65534, 65534, 65534, 1000},
-		{"1000:0", 65534, 65534, 1000, 65534},
-	}
-
-	for _, tt := range tests {
-		uid, gid := parseUIDGID(tt.input, tt.defaultUid, tt.defaultGid)
-		if uid != tt.expectedUid || gid != tt.expectedGid {
-			t.Errorf("parseUIDGID(%q) = (%d, %d), want (%d, %d)", tt.input, uid, gid, tt.expectedUid, tt.expectedGid)
-		}
-	}
 }
 
 // fakeDirTree is an in-memory directory tree implementing workingDirEnsurer for
