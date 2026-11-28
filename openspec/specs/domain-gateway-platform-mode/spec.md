@@ -1,7 +1,5 @@
 ## Requirements
 
-## ADDED Requirements
-
 ### Requirement: Server-side copy writes final object at destination
 
 Шлюз SHALL создавать файл объекта-получателя server-side CopyObject (источник и
