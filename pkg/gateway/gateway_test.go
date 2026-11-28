@@ -651,7 +651,16 @@ func TestBucketLifecycleConsistency(t *testing.T) {
 	})
 }
 
-func TestPutObjectDoesNotRecreateDeletedBucket(t *testing.T) {
+// TestPutObjectInFlightPinsBucket (add-gateway-platform-mode, complete-at-
+// destination trade-off, design decision 3): the object is created at the
+// destination path before the payload streams, so a bucket delete concurrent
+// with an in-flight PutObject observes the destination object and fails with
+// BucketNotEmpty — the staging flow hid the object under `.sys/tmp` until the
+// atomic rename and let the delete succeed. A commit racing a real deletion
+// still never recreates the deleted bucket root and reports BucketNotFound
+// (TestObjectCommitAfterBucketDeleted exercises that path for the
+// direct-create flow).
+func TestPutObjectInFlightPinsBucket(t *testing.T) {
 	format := &meta.Format{Name: "test", BlockSize: 4096, Capacity: 1 << 30, DirStats: true}
 	m := meta.NewClient("memkv://", nil)
 	if err := m.Init(format, true); err != nil {
@@ -682,29 +691,25 @@ func TestPutObjectDoesNotRecreateDeletedBucket(t *testing.T) {
 		t.Fatal("PutObject did not start reading")
 	}
 
-	if err := g2.DeleteBucket(ctx, bucket, false); err != nil {
+	// the destination object is already visible, so the concurrent delete must
+	// refuse the bucket instead of removing it under the in-flight put
+	if err := g2.DeleteBucket(ctx, bucket, false); !errors.As(err, &minio.BucketNotEmpty{}) {
 		close(reader.release)
-		t.Fatalf("delete bucket: %s", err)
+		t.Fatalf("DeleteBucket during in-flight put must see the destination object, got %v", err)
 	}
-	// Simulate the first gateway observing the deletion after its dentry cache
-	// expires. The object commit must still not create the bucket root.
-	g1.fs.InvalidateEntry(meta.RootInode, bucket)
 	close(reader.release)
 	select {
 	case err := <-putDone:
-		if !errors.As(err, &minio.BucketNotFound{}) {
-			t.Fatalf("PutObject after bucket deleted should return BucketNotFound, got %v", err)
+		if err != nil {
+			t.Fatalf("PutObject must succeed on a bucket that stayed alive: %s", err)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("PutObject did not finish")
 	}
 
-	if _, errno := g2.fs.Stat(mctx, g2.path(bucket)); !fs.IsNotExist(errno) {
-		t.Fatalf("deleted bucket was recreated: %s", errno)
-	}
-	metadataPath := g2.path(minio.MinioMetaBucket, minio.BucketMetaPrefix, bucket, minio.BucketMetadataFile)
-	if _, errno := g2.fs.Stat(mctx, metadataPath); !fs.IsNotExist(errno) {
-		t.Fatalf("deleted bucket metadata was recreated: %s", errno)
+	// the object written by the in-flight put is visible to the second gateway
+	if _, err := g2.GetObjectInfo(ctx, bucket, "dir/object", minio.ObjectOptions{}); err != nil {
+		t.Fatalf("object written by in-flight put must be visible: %s", err)
 	}
 }
 
@@ -1199,5 +1204,125 @@ func TestCompleteMultipartUploadDestinationIsDirectory(t *testing.T) {
 	}
 	if _, errno := n.fs.Stat(mctx, n.path(bucket, object)); errno != 0 {
 		t.Fatalf("destination directory must survive the failed complete: %s", errno)
+	}
+}
+
+// errAfterDataReader serves only the first few bytes of the payload, then
+// fails: it emulates a client connection breaking mid-upload after the
+// destination file was created. The failure must hit before the declared
+// payload length is reached (the hash reader wraps the source in a
+// LimitReader that would turn an exhausted stream into a clean EOF).
+type errAfterDataReader struct {
+	head []byte // bytes served before the failure
+	err  error
+	off  int
+}
+
+func (r *errAfterDataReader) Read(p []byte) (int, error) {
+	if r.off >= len(r.head) {
+		return 0, r.err
+	}
+	n := copy(p, r.head[r.off:])
+	r.off += n
+	return n, nil
+}
+
+// TestPutObjectAtDestination (add-gateway-platform-mode, gap found on the
+// hector-stage pilot, spec "Complete keys the final object by its real path"
+// applied to single Put): PutObject creates the object directly at the
+// destination key — readable through the S3 API — and never stages a temp file
+// under `.sys/tmp` (a staged+renamed file was keyed under the synthetic `.sys`
+// company on encrypted volumes and became unreadable at the destination).
+func TestPutObjectAtDestination(t *testing.T) {
+	n, jfs, bucket := newTestGateway(t, Config{})
+	ctx := context.Background()
+	data := []byte("single put payload")
+	object := "companies/acme/render/shot01/frame.exr"
+
+	objInfo, err := n.PutObject(ctx, bucket, object, newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("put: %s", err)
+	}
+	if objInfo.Size != int64(len(data)) {
+		t.Fatalf("size %d, want %d", objInfo.Size, len(data))
+	}
+	sum := md5.Sum(data)
+	if want := hex.EncodeToString(sum[:]); objInfo.ETag != want {
+		t.Fatalf("etag %q, want md5 %q", objInfo.ETag, want)
+	}
+
+	// the object is readable at the destination key with the full content
+	got := readTestObject(t, jfs, n.path(bucket, object))
+	if !bytes.Equal(got, data) {
+		t.Fatalf("content %q, want %q", got, data)
+	}
+	info, err := n.GetObjectInfo(ctx, bucket, object, minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("GetObjectInfo by key: %s", err)
+	}
+	if info.Size != int64(len(data)) {
+		t.Fatalf("head size %d, want %d", info.Size, len(data))
+	}
+
+	// staging is untouched: no `.sys/tmp` tree is created at all
+	if _, errno := n.fs.Stat(mctx, n.tpath(bucket, "tmp")); !fs.IsNotExist(errno) {
+		t.Fatalf("staging tmp directory was created: %s", errno)
+	}
+}
+
+// TestPutObjectReplacesExisting (unencrypted equivalence of the previous
+// rename semantics): Put onto an existing key replaces the object wholesale.
+func TestPutObjectReplacesExisting(t *testing.T) {
+	n, jfs, bucket := newTestGateway(t, Config{})
+	ctx := context.Background()
+	oldData := []byte("stale object payload")
+	newData := []byte("fresh content")
+	object := "companies/acme/replaced.bin"
+
+	if _, err := n.PutObject(ctx, bucket, object, newTestPutObjReader(t, bytes.NewReader(oldData), oldData), minio.ObjectOptions{}); err != nil {
+		t.Fatalf("put stale object: %s", err)
+	}
+	if _, err := n.PutObject(ctx, bucket, object, newTestPutObjReader(t, bytes.NewReader(newData), newData), minio.ObjectOptions{}); err != nil {
+		t.Fatalf("put over existing object: %s", err)
+	}
+	if got := readTestObject(t, jfs, n.path(bucket, object)); !bytes.Equal(got, newData) {
+		t.Fatalf("content %q, want replacement %q", got, newData)
+	}
+}
+
+// TestPutObjectDestinationIsDirectory: a directory occupying the destination
+// key is a conflict, like it was for the rename-based flow.
+func TestPutObjectDestinationIsDirectory(t *testing.T) {
+	n, _, bucket := newTestGateway(t, Config{})
+	ctx := context.Background()
+	object := "companies/acme/dir-obj"
+	if errno := n.fs.MkdirAll(mctx, n.path(bucket, object), 0777, 022); errno != 0 {
+		t.Fatalf("mkdir destination: %s", errno)
+	}
+	data := []byte("data")
+	if _, err := n.PutObject(ctx, bucket, object, newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{}); err == nil {
+		t.Fatal("put onto a directory must fail")
+	}
+	if _, errno := n.fs.Stat(mctx, n.path(bucket, object)); errno != 0 {
+		t.Fatalf("destination directory must survive the failed put: %s", errno)
+	}
+}
+
+// TestPutObjectFailureRemovesPartial (spec "Failed complete leaves no partial
+// object", applied to single Put): a reader failing mid-upload fails the put,
+// the partially written destination file is removed.
+func TestPutObjectFailureRemovesPartial(t *testing.T) {
+	n, _, bucket := newTestGateway(t, Config{})
+	ctx := context.Background()
+	data := []byte("partial payload")
+	object := "companies/acme/broken.bin"
+
+	reader := &errAfterDataReader{head: data[:7], err: errors.New("connection lost")}
+	if _, err := n.PutObject(ctx, bucket, object, newTestPutObjReader(t, reader, data), minio.ObjectOptions{}); err == nil {
+		t.Fatal("put with a failing reader must fail")
+	}
+	// no partial object at the destination
+	if _, errno := n.fs.Stat(mctx, n.path(bucket, object)); !fs.IsNotExist(errno) {
+		t.Fatalf("partial object left at destination: %s", errno)
 	}
 }
