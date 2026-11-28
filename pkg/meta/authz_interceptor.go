@@ -180,16 +180,16 @@ func (ai *AuthzInterceptor) UnaryInterceptor() grpc.UnaryServerInterceptor {
 			return nil, goneErr
 		}
 		if len(checks) == 0 {
-			authzLogger.Debugf("Cannot resolve path for method=%s user=%s — denying",
-				info.FullMethod, userID)
+			authzLogger.Warnf("authz denied user=%s method=%s path=- perm=%d",
+				userID, info.FullMethod, permission)
 			return nil, status.Error(codes.PermissionDenied, "access denied: path not resolved")
 		}
 
 		// Check each required permission (deny if any fails)
 		for _, chk := range checks {
 			if chk.Path == "" {
-				authzLogger.Debugf("Cannot resolve path for method=%s user=%s — denying",
-					info.FullMethod, userID)
+				authzLogger.Warnf("authz denied user=%s method=%s path=- perm=%d",
+					userID, info.FullMethod, chk.Permission)
 				return nil, status.Error(codes.PermissionDenied, "access denied: path not resolved")
 			}
 
@@ -203,8 +203,8 @@ func (ai *AuthzInterceptor) UnaryInterceptor() grpc.UnaryServerInterceptor {
 				info.FullMethod, userID, chk.Path, chk.Permission, chk.Op)
 			allowed, err := ai.client.CheckPermission(ctx, userID, chk.Path, chk.Permission, chk.Op)
 			if err != nil || !allowed {
-				authzLogger.Debugf("Authz denied: method=%s user=%s path=%s perm=%d err=%v",
-					info.FullMethod, userID, chk.Path, chk.Permission, err)
+				authzLogger.Warnf("authz denied user=%s method=%s path=%s perm=%d err=%v",
+					userID, info.FullMethod, chk.Path, chk.Permission, err)
 				return nil, status.Error(codes.PermissionDenied, "access denied")
 			}
 		}
@@ -226,11 +226,17 @@ func (ai *AuthzInterceptor) requiredPermission(method string) AuthzPermission {
 	case "Init", "Load",
 		"NewSession", "CloseSession", "FlushSession",
 		"GetSession", "ListSessions", "CleanStaleSessions",
-		"Chroot",
 		"DirHandlerList", "DirHandlerInsert", "DirHandlerDelete", "DirHandlerClose":
 		return AuthzPermissionNone
 
-		// --- Admin: require organization admin ---
+		// --- View: Chroot (spec fix-meta-proxy-per-session-chroot): chrooting is a
+	// per-session narrowing, but it selects the subtree the caller will work in,
+	// so the decision is a path-checked View on "/" + <normalized subdir>
+	// (resolveChecks), not an organization-admin check.
+	case "Chroot":
+		return AuthzPermissionView
+
+	// --- Admin: require organization admin ---
 	case "GetFormat", "Remove", "BatchUnlink",
 		"GetSummary", "GetTreeSummary", "Clone", "GetPaths",
 		"Check", "CompactAll", "Compact", "ListSlices", "CleanupSlices",
@@ -324,7 +330,7 @@ func (ai *AuthzInterceptor) requiredPermission(method string) AuthzPermission {
 // engine reports the inode as nonexistent (I7); unresolved+not-gone keeps the
 // legacy fail-closed deny path.
 func (ai *AuthzInterceptor) lookupPath(ctx context.Context, ino Ino) (p string, gone bool) {
-	if p = ai.cache.Get(ino); p != "" {
+	if p = ai.cache.Get(ctx, ino); p != "" {
 		return p, false
 	}
 	if ai.recovery == nil {
@@ -350,6 +356,18 @@ func (ai *AuthzInterceptor) resolveChecks(ctx context.Context, req interface{}, 
 	perm := ai.requiredPermission(method)
 
 	switch r := req.(type) {
+	// --- Chroot: View on the absolute volume path of the target (spec
+	// fix-meta-proxy-per-session-chroot, "Chroot target authorization"). A
+	// denied Chroot fails the RPC with PermissionDenied and leaves the
+	// session's root unchanged (the handler is never reached). The volume
+	// root itself ("/") stays always-allowed (isAlwaysAllowed), matching the
+	// convention that access control starts at the company-code level.
+	case *pb.ChrootRequest:
+		return []AuthzCheck{{
+			Path:       "/" + normalizeSubdir(r.Subdir),
+			Permission: AuthzPermissionView,
+		}}, nil
+
 	// --- Parent-based: check parent permission ---
 	case *pb.LookupRequest:
 		p, gone := ai.lookupPath(ctx, Ino(r.Parent))
@@ -365,7 +383,7 @@ func (ai *AuthzInterceptor) resolveChecks(ctx context.Context, req interface{}, 
 		return nil, nil // deny for PoC — multi-component paths not fully verified
 
 	case *pb.CreateRequest:
-		p := ai.cache.Get(Ino(r.Parent))
+		p := ai.cache.Get(ctx, Ino(r.Parent))
 		if p == "" {
 			return nil, nil
 		}
@@ -377,35 +395,35 @@ func (ai *AuthzInterceptor) resolveChecks(ctx context.Context, req interface{}, 
 		// on the stripped companies-namespace root ("/companies/" → "") and on
 		// the caller's own company dir — a parent-path check would reduce every
 		// root-level mkdir to "edit on /" and let arbitrary root dirs through.
-		child := ai.cache.BuildChildPath(Ino(r.Parent), r.Name)
+		child := ai.cache.BuildChildPath(ctx, Ino(r.Parent), r.Name)
 		if child == "" {
 			return nil, nil
 		}
 		return []AuthzCheck{{Path: dirAuthzPath(child), Permission: AuthzPermissionWrite, Op: authzpb.Operation_OP_MKDIR}}, nil
 
 	case *pb.MknodRequest:
-		p := ai.cache.Get(Ino(r.Parent))
+		p := ai.cache.Get(ctx, Ino(r.Parent))
 		if p == "" {
 			return nil, nil
 		}
 		return []AuthzCheck{{Path: p, Permission: AuthzPermissionWrite}}, nil
 
 	case *pb.SymlinkRequest:
-		p := ai.cache.Get(Ino(r.Parent))
+		p := ai.cache.Get(ctx, Ino(r.Parent))
 		if p == "" {
 			return nil, nil
 		}
 		return []AuthzCheck{{Path: p, Permission: AuthzPermissionWrite}}, nil
 
 	case *pb.UnlinkRequest:
-		p := ai.cache.Get(Ino(r.Parent))
+		p := ai.cache.Get(ctx, Ino(r.Parent))
 		if p == "" {
 			return nil, nil
 		}
 		return []AuthzCheck{{Path: p, Permission: AuthzPermissionWrite}}, nil
 
 	case *pb.RmdirRequest:
-		p := ai.cache.Get(Ino(r.Parent))
+		p := ai.cache.Get(ctx, Ino(r.Parent))
 		if p == "" {
 			return nil, nil
 		}
@@ -413,8 +431,8 @@ func (ai *AuthzInterceptor) resolveChecks(ctx context.Context, req interface{}, 
 
 		// --- Multi-check: Rename (source parent + destination parent) ---
 	case *pb.RenameRequest:
-		srcParentPath := ai.cache.Get(Ino(r.ParentSrc))
-		dstParentPath := ai.cache.Get(Ino(r.ParentDst))
+		srcParentPath := ai.cache.Get(ctx, Ino(r.ParentSrc))
+		dstParentPath := ai.cache.Get(ctx, Ino(r.ParentDst))
 
 		if srcParentPath == "" || dstParentPath == "" {
 			return nil, nil // deny: cannot resolve both parents
@@ -426,8 +444,8 @@ func (ai *AuthzInterceptor) resolveChecks(ctx context.Context, req interface{}, 
 
 		// --- Multi-check: Link (source inode Read + destination parent Write) ---
 	case *pb.LinkRequest:
-		srcPath := ai.cache.Get(Ino(r.InodeSrc))
-		dstParentPath := ai.cache.Get(Ino(r.Parent))
+		srcPath := ai.cache.Get(ctx, Ino(r.InodeSrc))
+		dstParentPath := ai.cache.Get(ctx, Ino(r.Parent))
 
 		if srcPath == "" || dstParentPath == "" {
 			return nil, nil // deny: cannot resolve both paths
@@ -439,8 +457,8 @@ func (ai *AuthzInterceptor) resolveChecks(ctx context.Context, req interface{}, 
 
 		// --- Multi-check: CopyFileRange (source Read + destination Write) ---
 	case *pb.CopyFileRangeRequest:
-		srcPath := ai.cache.Get(Ino(r.Fin))
-		dstPath := ai.cache.Get(Ino(r.Fout))
+		srcPath := ai.cache.Get(ctx, Ino(r.Fin))
+		dstPath := ai.cache.Get(ctx, Ino(r.Fout))
 
 		if srcPath == "" || dstPath == "" {
 			return nil, nil // deny: cannot resolve both paths

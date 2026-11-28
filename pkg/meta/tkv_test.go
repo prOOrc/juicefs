@@ -298,6 +298,9 @@ func TestMemKVClient(t *testing.T) {
 }
 
 func TestTiKVClient(t *testing.T) { //skip mutate
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
+	}
 	m, err := newKVMeta("tikv", "127.0.0.1:2379/jfs-unit-test", testConfig())
 	if err != nil || m.Name() != "tikv" {
 		t.Fatalf("create meta: %s", err)

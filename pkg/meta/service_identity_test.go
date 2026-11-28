@@ -444,7 +444,7 @@ func TestFilterEntriesByAuthzSkipsService(t *testing.T) {
 	client.On("CheckBulkPermissions", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return([]bool{false}, nil).Maybe()
 
-	server := NewMetaProxyServer(&fekFakeMeta{format: &Format{}}, 10)
+	server := NewMetaProxyServer(&fekFakeMeta{format: &Format{}}, 10, nil)
 	ai := NewAuthzInterceptor(client, server.InodePathCache(), nil)
 	server.SetAuthzInterceptor(ai)
 

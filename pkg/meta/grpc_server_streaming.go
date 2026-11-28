@@ -25,9 +25,13 @@ import (
 )
 
 func (s *MetaProxyServer) DumpMeta(req *pb.DumpMetaRequest, stream pb.MetaService_DumpMetaServer) error {
+	eng, err := s.engineFor(stream.Context())
+	if err != nil {
+		return err
+	}
 	pr, pw := io.Pipe()
 	go func() {
-		_ = s.meta.DumpMeta(pw, Ino(req.Root), int(req.Threads), req.KeepSecret, req.Fast, req.SkipTrash)
+		_ = eng.DumpMeta(pw, Ino(req.Root), int(req.Threads), req.KeepSecret, req.Fast, req.SkipTrash)
 		pw.Close()
 	}()
 	buf := make([]byte, 64*1024)
@@ -48,6 +52,10 @@ func (s *MetaProxyServer) DumpMeta(req *pb.DumpMetaRequest, stream pb.MetaServic
 }
 
 func (s *MetaProxyServer) LoadMeta(stream pb.MetaService_LoadMetaServer) error {
+	eng, err := s.engineFor(stream.Context())
+	if err != nil {
+		return err
+	}
 	pr, pw := io.Pipe()
 	go func() {
 		for {
@@ -67,7 +75,7 @@ func (s *MetaProxyServer) LoadMeta(stream pb.MetaService_LoadMetaServer) error {
 			}
 		}
 	}()
-	err := s.meta.LoadMeta(pr)
+	err = eng.LoadMeta(pr)
 	pw.Close()
 	if err != nil {
 		return status.Error(codes.Internal, err.Error())
@@ -76,6 +84,10 @@ func (s *MetaProxyServer) LoadMeta(stream pb.MetaService_LoadMetaServer) error {
 }
 
 func (s *MetaProxyServer) DumpMetaV2(req *pb.DumpMetaV2Request, stream pb.MetaService_DumpMetaV2Server) error {
+	eng, err := s.engineFor(stream.Context())
+	if err != nil {
+		return err
+	}
 	mctx := s.metaCtx(stream.Context(), req.Ctx)
 	opt := &DumpOption{
 		KeepSecret: req.KeepSecret,
@@ -83,7 +95,7 @@ func (s *MetaProxyServer) DumpMetaV2(req *pb.DumpMetaV2Request, stream pb.MetaSe
 	}
 	pr, pw := io.Pipe()
 	go func() {
-		_ = s.meta.DumpMetaV2(mctx, pw, opt)
+		_ = eng.DumpMetaV2(mctx, pw, opt)
 		pw.Close()
 	}()
 	buf := make([]byte, 64*1024)
@@ -104,6 +116,10 @@ func (s *MetaProxyServer) DumpMetaV2(req *pb.DumpMetaV2Request, stream pb.MetaSe
 }
 
 func (s *MetaProxyServer) LoadMetaV2(stream pb.MetaService_LoadMetaV2Server) error {
+	eng, err := s.engineFor(stream.Context())
+	if err != nil {
+		return err
+	}
 	pr, pw := io.Pipe()
 	go func() {
 		for {
@@ -124,7 +140,7 @@ func (s *MetaProxyServer) LoadMetaV2(stream pb.MetaService_LoadMetaV2Server) err
 		}
 	}()
 	opt := &LoadOption{Threads: 10}
-	err := s.meta.LoadMetaV2(Background(), pr, opt)
+	err = eng.LoadMetaV2(Background(), pr, opt)
 	pw.Close()
 	if err != nil {
 		return status.Error(codes.Internal, err.Error())

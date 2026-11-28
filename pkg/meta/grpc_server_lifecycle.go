@@ -23,12 +23,17 @@ import (
 
 	kmpb "github.com/juicedata/juicefs/pkg/meta/keymanager_pb"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
+	"google.golang.org/protobuf/proto"
 )
 
 func (s *MetaProxyServer) Init(ctx context.Context, req *pb.InitRequest) (*pb.InitResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	format := ProtoToFormat(req.Format)
 	logger.Debugf("Init called with format: name=%s, uuid=%s", format.Name, format.UUID)
-	err := s.meta.Init(format, req.Force)
+	err = eng.Init(format, req.Force)
 	var errno uint32
 	if err != nil {
 		logger.Errorf("Init failed: %v", err)
@@ -42,8 +47,12 @@ func (s *MetaProxyServer) Init(ctx context.Context, req *pb.InitRequest) (*pb.In
 }
 
 func (s *MetaProxyServer) Load(ctx context.Context, req *pb.LoadRequest) (*pb.LoadResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	logger.Debugf("Load called with checkVersion=%v", req.CheckVersion)
-	format, err := s.meta.Load(req.CheckVersion)
+	format, err := eng.Load(req.CheckVersion)
 	if err != nil {
 		logger.Debugf("Load failed: %v (type: %T)", err, err)
 		if e, ok := err.(syscall.Errno); ok {
@@ -64,36 +73,35 @@ func (s *MetaProxyServer) Load(ctx context.Context, req *pb.LoadRequest) (*pb.Lo
 	}, nil
 }
 
-func (s *MetaProxyServer) NewSession(ctx context.Context, req *pb.NewSessionRequest) (*pb.NewSessionResponse, error) {
-	logger.Debugf("NewSession called with record=%v", req.Record)
-	err := s.meta.NewSession(req.Record)
-	var errno uint32
-	var sid uint64
+// NewSession answers with the engine session that was created once at engine
+// creation (D4): every client of the engine group receives a clone of the same
+// saved response. The client's own record argument is not re-issued (D5).
+func (s *MetaProxyServer) NewSession(ctx context.Context, _ *pb.NewSessionRequest) (*pb.NewSessionResponse, error) {
+	e, err := s.sessionEntryFor(ctx) // fail-closed + lazy root engine
 	if err != nil {
-		logger.Errorf("NewSession failed: %v", err)
-		errno = uint32(syscall.EIO)
-	} else {
-		if rm, ok := s.meta.(*redisMeta); ok {
-			sid = rm.sid
-			logger.Debugf("NewSession succeeded, sid=%d (from redisMeta)", sid)
-		} else {
-			logger.Errorf("NewSession: meta is not redisMeta, type=%T, sid=0", s.meta)
-		}
+		return nil, err
 	}
-	return &pb.NewSessionResponse{Errno: errno, Sid: sid}, nil
+	return proto.Clone(e.newSessResp).(*pb.NewSessionResponse), nil
 }
 
-func (s *MetaProxyServer) CloseSession(ctx context.Context, req *pb.CloseSessionRequest) (*pb.CloseSessionResponse, error) {
-	err := s.meta.CloseSession()
-	var errno uint32
+// CloseSession ends only the sender's session (D6); the engine CloseSession
+// runs exactly once at pool teardown, when the last referencing session is
+// gone (I5, I6).
+func (s *MetaProxyServer) CloseSession(ctx context.Context, _ *pb.CloseSessionRequest) (*pb.CloseSessionResponse, error) {
+	sess, err := s.sessionFor(ctx)
 	if err != nil {
-		errno = uint32(syscall.EIO)
+		return nil, err
 	}
-	return &pb.CloseSessionResponse{Errno: errno}, nil
+	s.endSession(sess)
+	return &pb.CloseSessionResponse{Errno: 0}, nil
 }
 
 func (s *MetaProxyServer) FlushSession(ctx context.Context, req *pb.FlushSessionRequest) (*pb.FlushSessionResponse, error) {
-	s.meta.FlushSession()
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
+	eng.FlushSession()
 	resp := &pb.FlushSessionResponse{Errno: 0}
 	// Permission generation (task 7.3): the heartbeat is the revocation channel —
 	// the platform bumps drivepermgen:{userID} on every role change and the client
@@ -113,7 +121,11 @@ func (s *MetaProxyServer) FlushSession(ctx context.Context, req *pb.FlushSession
 }
 
 func (s *MetaProxyServer) GetSession(ctx context.Context, req *pb.GetSessionRequest) (*pb.GetSessionResponse, error) {
-	session, err := s.meta.GetSession(req.Sid, req.Detail)
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
+	session, err := eng.GetSession(req.Sid, req.Detail)
 	if err != nil {
 		return &pb.GetSessionResponse{Errno: uint32(syscall.EIO)}, nil
 	}
@@ -124,13 +136,17 @@ func (s *MetaProxyServer) GetSession(ctx context.Context, req *pb.GetSessionRequ
 }
 
 func (s *MetaProxyServer) ListSessions(ctx context.Context, req *pb.ListSessionsRequest) (*pb.ListSessionsResponse, error) {
-	sessions, err := s.meta.ListSessions()
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sessions, err := eng.ListSessions()
 	if err != nil {
 		return &pb.ListSessionsResponse{Errno: uint32(syscall.EIO)}, nil
 	}
 	protoSessions := make([]*pb.ProtoSession, len(sessions))
-	for i, s := range sessions {
-		protoSessions[i] = SessionToProto(s)
+	for i, sess := range sessions {
+		protoSessions[i] = SessionToProto(sess)
 	}
 	return &pb.ListSessionsResponse{
 		Errno:    0,
@@ -139,7 +155,11 @@ func (s *MetaProxyServer) ListSessions(ctx context.Context, req *pb.ListSessions
 }
 
 func (s *MetaProxyServer) CleanStaleSessions(ctx context.Context, req *pb.CleanStaleSessionsRequest) (*pb.CleanStaleSessionsResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
-	s.meta.CleanStaleSessions(mctx)
+	eng.CleanStaleSessions(mctx)
 	return &pb.CleanStaleSessionsResponse{Errno: 0}, nil
 }

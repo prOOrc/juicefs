@@ -17,6 +17,7 @@
 package meta
 
 import (
+	"context"
 	"path"
 	"strings"
 	"sync"
@@ -29,7 +30,9 @@ import (
 //   - inode → path: single mapping per inode (first-seen wins for hardlinks)
 //   - path → inode: reverse lookup for Unlink/Rmdir cache cleanup
 //   - FIFO eviction: bounded size to prevent memory exhaustion
-//   - RootInode is pinned and never evicted
+//   - RootInode is never stored: its path is resolved per requesting session
+//     (rootPathFromContext, fix-meta-proxy-per-session-chroot I9) — the cache
+//     holds only full volume paths
 //   - Path validation: rejects "..", "/", and null bytes in component names
 //   - Hardlinks: stores only the first observed path per inode. Operations via
 //     alternative hardlink paths may be denied or authorized based on the primary
@@ -43,15 +46,25 @@ type InodePathCache struct {
 	maxSize     int            // 0 = unlimited
 }
 
-// NewInodePathCache creates a new cache with root inode registered as "/".
+// NewInodePathCache creates an empty cache. The root inode is resolved per
+// requesting session in Get/BuildChildPath — no pinned entry is stored.
 func NewInodePathCache(maxSize int) *InodePathCache {
-	c := &InodePathCache{
+	return &InodePathCache{
 		pathByInode: make(map[Ino]string),
 		inodeByPath: make(map[string]Ino),
 		maxSize:     maxSize,
 	}
-	c.Set(RootInode, "/")
-	return c
+}
+
+// rootPathFromContext returns the requesting session's volume-space root
+// (fix-meta-proxy-per-session-chroot, I9): "/" + <normalized subdir> for a
+// chrooted session, "/" for an un-chrooted session and for requests without a
+// session (recovery, tests).
+func rootPathFromContext(ctx context.Context) string {
+	if sess := sessionFromContext(ctx); sess != nil {
+		return sess.rootPath()
+	}
+	return "/"
 }
 
 // validPathComponent checks that a name is a single filesystem component.
@@ -68,9 +81,14 @@ func validPathComponent(name string) bool {
 	return true
 }
 
-// Get returns the cached path for an inode.
+// Get returns the cached path for an inode (a full volume path). The root
+// inode is not cached: it resolves per the requesting session (I9) — the
+// session root for a chrooted session, "/" otherwise.
 // Returns empty string if not found.
-func (c *InodePathCache) Get(inode Ino) string {
+func (c *InodePathCache) Get(ctx context.Context, inode Ino) string {
+	if inode == RootInode {
+		return rootPathFromContext(ctx)
+	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.pathByInode[inode]
@@ -256,19 +274,25 @@ func (c *InodePathCache) RenameSubtree(oldPrefix, newPrefix string) {
 	}
 }
 
-// BuildChildPath constructs the full path for a child entry given its parent inode and name.
+// BuildChildPath constructs the full volume path for a child entry given its
+// parent inode and name. The root parent resolves per the requesting session
+// (I9): children of the root join the session root, not "/".
 // Returns empty string if parent is not in cache or name is invalid.
-func (c *InodePathCache) BuildChildPath(parent Ino, name string) string {
+func (c *InodePathCache) BuildChildPath(ctx context.Context, parent Ino, name string) string {
 	if !validPathComponent(name) {
 		return ""
 	}
 
-	c.mu.RLock()
-	parentPath, ok := c.pathByInode[parent]
-	c.mu.RUnlock()
-
-	if !ok {
-		return ""
+	var parentPath string
+	if parent == RootInode {
+		parentPath = rootPathFromContext(ctx)
+	} else {
+		c.mu.RLock()
+		parentPath = c.pathByInode[parent]
+		c.mu.RUnlock()
+		if parentPath == "" {
+			return ""
+		}
 	}
 
 	return path.Join(parentPath, name)

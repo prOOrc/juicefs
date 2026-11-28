@@ -35,7 +35,7 @@ import (
 // the client-side ensure has no other source for the path).
 func TestStsProxyPassThrough(t *testing.T) {
 	km := newFakeKeyManager()
-	s := NewMetaProxyServer(nil, 0)
+	s := NewMetaProxyServer(nil, 0, nil)
 	s.SetKeyManager(km)
 
 	sub := uuid.New().String()
@@ -53,7 +53,7 @@ func TestStsProxyPassThrough(t *testing.T) {
 // TestStsProxyRequiresSession: without an authenticated OIDC session the proxy
 // must fail closed — no subject, no credentials (FR-REV-3).
 func TestStsProxyRequiresSession(t *testing.T) {
-	s := NewMetaProxyServer(nil, 0)
+	s := NewMetaProxyServer(nil, 0, nil)
 	s.SetKeyManager(newFakeKeyManager())
 
 	t.Run("no oidc claims", func(t *testing.T) {
@@ -73,7 +73,7 @@ func TestStsProxyRequiresSession(t *testing.T) {
 // TestStsProxyRequiresKeyManager: the pass-through is served only when the
 // proxy has a KeyManager configured (--keymanager-service).
 func TestStsProxyRequiresKeyManager(t *testing.T) {
-	s := NewMetaProxyServer(nil, 0) // no SetKeyManager
+	s := NewMetaProxyServer(nil, 0, nil) // no SetKeyManager
 	sub := uuid.New().String()
 	ctx := oidc.WithIDToken(context.Background(), &oidc.IDToken{Subject: sub})
 	_, err := s.GetSTSCredentials(ctx, &pb.StsCredentialsRequest{CompanyId: testCompanyID})

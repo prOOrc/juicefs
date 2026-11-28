@@ -100,9 +100,10 @@ func TestOpenUnencryptedVolumeUnaffected(t *testing.T) {
 
 // createFakeMeta answers Create/Mknod with a configurable attr and records
 // Unlink rollbacks and SetFileCrypto calls (the fileCryptoSetter the proxy
-// type-asserts). Any other call panics on the embedded nil Meta.
+// type-asserts). Any other Meta call panics on the embedded nil interface; the
+// pool's lifecycle calls are served by poolLifecycleMeta.
 type createFakeMeta struct {
-	Meta
+	poolLifecycleMeta
 
 	format     *Format
 	createAttr Attr // attr the engine answers for Create/Mknod
@@ -148,7 +149,7 @@ const testFekCreateInode = 100
 func newFekCreateTransportServer(t *testing.T, tlsOn bool, km *fakeKeyManager, format *Format, createAttr Attr) (*fekTransportServer, *createFakeMeta) {
 	t.Helper()
 	m := &createFakeMeta{format: format, createAttr: createAttr, ino: testFekCreateInode}
-	srv := NewMetaProxyServer(m, 100)
+	srv := NewMetaProxyServer(m, 100, passThroughFactory(m))
 	srv.SetKeyManager(km)
 	srv.InodePathCache().Set(RootInode, "/")
 	srv.SetVolumeName(format.Name)
@@ -405,7 +406,7 @@ func TestMknodRegularFileProvisionsBinding(t *testing.T) {
 
 // writeCaptureMeta records the mtime the Write handler forwards to the engine.
 type writeCaptureMeta struct {
-	Meta
+	poolLifecycleMeta
 
 	mu    sync.Mutex
 	inode Ino
@@ -427,11 +428,12 @@ func (w *writeCaptureMeta) Write(_ Context, inode Ino, _ uint32, _ uint32, slice
 // 1e6 — the "year 56835320" stat corruption seen on stage acceptance.
 func TestWriteMtimeMicroseconds(t *testing.T) {
 	capture := &writeCaptureMeta{}
-	s := NewMetaProxyServer(capture, 0)
+	s := newDirectServer(t, capture, 0)
+	ctx := directSessionCtx(t, s)
 
 	now := time.Now()
 	sent := now.UnixNano() / 1000 // exactly what the client puts on the wire
-	resp, err := s.Write(context.Background(), &pb.WriteRequest{
+	resp, err := s.Write(ctx, &pb.WriteRequest{
 		Inode: 7,
 		Slice: SliceToProto(Slice{Id: 9, Size: 4, Off: 0, Len: 4}),
 		Mtime: sent,

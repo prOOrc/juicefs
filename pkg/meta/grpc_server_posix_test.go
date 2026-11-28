@@ -11,7 +11,6 @@
 package meta
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"syscall"
@@ -50,26 +49,30 @@ func TestProxyMknodAuthzModeSkipsPosix(t *testing.T) {
 	_, err = rm.Load(true)
 	require.NoError(t, err)
 
-	server := NewMetaProxyServer(rm, 0)
+	// Handlers reach engines only through the session's pool entry (I1, I8):
+	// rm doubles as the pooled engine, and every handler call runs under a
+	// live session.
+	server := newDirectServer(t, rm, 0)
+	ctx := directSessionCtx(t, server)
 	root := &pb.MetaContext{Uid: 0, Gid: 0, Gids: []uint32{0}}
 	client := &pb.MetaContext{Uid: clientUid, Gid: clientUid, Gids: []uint32{clientUid}}
 
 	// Stored parent: /acl owned by uid 0, mode 0755.
-	mresp, err := server.Mkdir(context.Background(), &pb.MkdirRequest{
+	mresp, err := server.Mkdir(ctx, &pb.MkdirRequest{
 		Ctx: root, Parent: uint64(RootInode), Name: "acl", Mode: 0755,
 	})
 	require.NoError(t, err)
 	require.Zero(t, mresp.Errno, "root Mkdir setup")
 	parent := mresp.Inode
 
-	aresp, err := server.GetAttr(context.Background(), &pb.GetAttrRequest{Ctx: root, Inode: parent})
+	aresp, err := server.GetAttr(ctx, &pb.GetAttrRequest{Ctx: root, Inode: parent})
 	require.NoError(t, err)
 	require.Zero(t, aresp.Errno)
 	require.Equal(t, uint32(0), aresp.Attr.Uid, "stored owner must be uid 0")
 	require.Equal(t, uint32(0755), uint32(aresp.Attr.Mode)&0777)
 
 	mknod := func() *pb.MknodResponse {
-		resp, err := server.Mknod(context.Background(), &pb.MknodRequest{
+		resp, err := server.Mknod(ctx, &pb.MknodRequest{
 			Ctx: client, Parent: parent, Name: "f.bin", Type: uint32(TypeFile),
 			Mode: 0644,
 		})
@@ -91,7 +94,7 @@ func TestProxyMknodAuthzModeSkipsPosix(t *testing.T) {
 	require.NotZero(t, resp.Inode)
 	require.Equal(t, uint32(clientUid), resp.Attr.Uid, "new inode stored with the client-carried uid")
 
-	aresp, err = server.GetAttr(context.Background(), &pb.GetAttrRequest{Ctx: root, Inode: resp.Inode})
+	aresp, err = server.GetAttr(ctx, &pb.GetAttrRequest{Ctx: root, Inode: resp.Inode})
 	require.NoError(t, err)
 	require.Zero(t, aresp.Errno)
 	require.Equal(t, uint32(clientUid), aresp.Attr.Uid, "stored uid must reflect the carried uid, not a rewritten one")

@@ -26,7 +26,7 @@ import (
 func TestMetaCtxCheckPermissionAuthzMode(t *testing.T) {
 	mctx := &pb.MetaContext{Uid: 1000, Gid: 1000, Gids: []uint32{1000}, Pid: 42}
 
-	s := NewMetaProxyServer(nil, 0)
+	s := NewMetaProxyServer(nil, 0, nil)
 	require.True(t, s.metaCtx(context.Background(), mctx).CheckPermission(),
 		"without authz mode the engine-level POSIX checks stay enabled")
 	require.True(t, s.metaCtx(context.Background(), nil).CheckPermission())

@@ -18,6 +18,8 @@ package meta
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -25,6 +27,7 @@ import (
 
 	authzpb "github.com/juicedata/juicefs/pkg/meta/authz_pb"
 	"github.com/juicedata/juicefs/pkg/meta/pb"
+	"github.com/juicedata/juicefs/pkg/oidc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -263,16 +266,26 @@ func (m *churnMeta) NewDirHandler(ctx Context, inode Ino, plus bool, initEntries
 	return &churnDirHandler{}, 0
 }
 
+// The engine-pool lifecycle (engine session open/close at create/teardown,
+// fix-meta-proxy-per-session-chroot) is not part of what these tests exercise:
+// serve it with no-ops.
+func (m *churnMeta) NewSession(bool) error { return nil }
+func (m *churnMeta) CloseSession() error   { return nil }
+func (m *churnMeta) Shutdown() error       { return nil }
+
 // newChurnProxy builds the post-restart stack: a fresh MetaProxyServer (cold
 // inode→path cache) over a live fake engine, authz enabled with the given
 // mock client. The server auto-wires path recovery into the interceptor.
-func newChurnProxy(engine *fakeTreeMeta, userID string) (*MetaProxyServer, *AuthzInterceptor, *mockAuthzClient) {
-	server := NewMetaProxyServer(&churnMeta{engine}, 0)
+// The returned factory hands out session-bound contexts — handlers fail closed
+// without a session (I1); each call registers a fresh session that ends at
+// test cleanup.
+func newChurnProxy(t *testing.T, engine *fakeTreeMeta, userID string) (*MetaProxyServer, *AuthzInterceptor, *mockAuthzClient, func() context.Context) {
+	server := newDirectServer(t, &churnMeta{engine}, 0)
 	server.SetAuthzMode(true)
 	mockClient := &mockAuthzClient{}
 	ai := newTestInterceptor(mockClient, server.InodePathCache(), userID)
 	server.SetAuthzInterceptor(ai)
-	return server, ai, mockClient
+	return server, ai, mockClient, func() context.Context { return directSessionCtx(t, server) }
 }
 
 // callThrough runs one RPC through the authz interceptor into the server
@@ -296,8 +309,8 @@ func churnTree() *fakeTreeMeta {
 
 func TestProxyRestartChurn_DeepPathsRecover(t *testing.T) {
 	engine := churnTree()
-	server, ai, client := newChurnProxy(engine, "user-1")
-	ctx := context.Background()
+	server, ai, client, ctxOf := newChurnProxy(t, engine, "user-1")
+	ctx := ctxOf()
 
 	// GetAttr on a deep file: the path is reconstructed through the engine
 	// and the authz decision is made on it ("/a/b/c/f.exr").
@@ -311,7 +324,7 @@ func TestProxyRestartChurn_DeepPathsRecover(t *testing.T) {
 	client.AssertExpectations(t)
 	// Recovery warmed the cache: the next request on the same inode is served
 	// without another walk.
-	require.Equal(t, "/a/b/c/f.exr", server.InodePathCache().Get(13))
+	require.Equal(t, "/a/b/c/f.exr", server.InodePathCache().Get(context.Background(), 13))
 
 	// Open (O_RDONLY) on the same file: View/Read on the recovered path.
 	client.On("CheckPermission", mock.Anything, "user-1", "/a/b/c/f.exr", AuthzPermissionRead, authzpb.Operation_OP_OTHER).Return(true, nil).Once()
@@ -338,8 +351,8 @@ func TestProxyRestartChurn_DeepPathsRecover(t *testing.T) {
 
 func TestProxyRestartChurn_ReaddirRecoversParent(t *testing.T) {
 	engine := churnTree()
-	server, _, client := newChurnProxy(engine, "user-1")
-	ctx := context.Background()
+	server, _, client, ctxOf := newChurnProxy(t, engine, "user-1")
+	ctx := ctxOf()
 
 	// Readdir is post-filtered in the handler: the parent path is recovered
 	// ("/a/b/c/"), the parent View check passes, and the batch check runs on
@@ -360,8 +373,8 @@ func TestProxyRestartChurn_ReaddirRecoversParent(t *testing.T) {
 
 func TestProxyRestartChurn_UnauthorizedStaysDenied(t *testing.T) {
 	engine := churnTree()
-	server, ai, client := newChurnProxy(engine, "user-1")
-	ctx := context.Background()
+	server, ai, client, ctxOf := newChurnProxy(t, engine, "user-1")
+	ctx := ctxOf()
 
 	// The unauthorized inode IS recoverable (the engine reconstructs
 	// "/a/b/private/secret") — and the authz decision still denies it (I2).
@@ -383,8 +396,8 @@ func TestProxyRestartChurn_UnauthorizedStaysDenied(t *testing.T) {
 
 func TestProxyRestartChurn_VanishedInodeENOENT(t *testing.T) {
 	engine := churnTree()
-	server, ai, _ := newChurnProxy(engine, "user-1")
-	ctx := context.Background()
+	server, ai, _, ctxOf := newChurnProxy(t, engine, "user-1")
+	ctx := ctxOf()
 
 	// Inode 999 never existed: gone → codes.NotFound, which the client maps
 	// to ENOENT (I7) — an honest POSIX answer, not a deny.
@@ -403,12 +416,12 @@ func TestProxyRestartChurn_VanishedInodeENOENT(t *testing.T) {
 
 func TestProxyRestartChurn_ReaddirUnrecoverableEACCES(t *testing.T) {
 	engine := churnTree()
-	server, _, _ := newChurnProxy(engine, "user-1")
+	server, _, _, ctxOf := newChurnProxy(t, engine, "user-1")
 	// The engine errors on the walk: the parent path stays unrecoverable even
 	// after recovery — the listing must fail with EACCES, never a silent
 	// empty listing with errno 0 (design D2).
 	engine.failReaddir(10, syscall.EIO)
-	ctx := context.Background()
+	ctx := ctxOf()
 
 	resp, err := server.Readdir(ctx, &pb.ReaddirRequest{Inode: uint64(11)})
 	require.NoError(t, err)
@@ -417,7 +430,7 @@ func TestProxyRestartChurn_ReaddirUnrecoverableEACCES(t *testing.T) {
 
 func TestProxyRestartChurn_ConcurrentMissesOneWalk(t *testing.T) {
 	engine := churnTree()
-	server, ai, client := newChurnProxy(engine, "user-1")
+	server, ai, client, ctxOf := newChurnProxy(t, engine, "user-1")
 	client.On("CheckPermission", mock.Anything, "user-1", "/a/b/c/f.exr", AuthzPermissionView, authzpb.Operation_OP_OTHER).Return(true, nil)
 
 	// Hold the leader's walk in flight until all goroutines are inside the
@@ -426,13 +439,16 @@ func TestProxyRestartChurn_ConcurrentMissesOneWalk(t *testing.T) {
 	engine.gate = gate
 	engine.gatedIno = 13
 
+	// One live session shared by all concurrent RPCs — the same shape as one
+	// connection serving concurrent requests.
+	ctx := ctxOf()
 	const n = 8
 	var wg sync.WaitGroup
 	for i := 0; i < n; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			resp, err := ai.UnaryInterceptor()(context.Background(), &pb.GetAttrRequest{Inode: uint64(13)},
+			resp, err := ai.UnaryInterceptor()(ctx, &pb.GetAttrRequest{Inode: uint64(13)},
 				&grpc.UnaryServerInfo{FullMethod: "/pb.MetaService/GetAttr"},
 				func(ctx context.Context, req interface{}) (interface{}, error) {
 					return server.GetAttr(ctx, req.(*pb.GetAttrRequest))
@@ -464,8 +480,8 @@ func TestProxyRestartChurn_ConcurrentMissesOneWalk(t *testing.T) {
 // two-parent Rename check pass.
 func TestProxyInvalidation_RenameAuthorizesNewPath(t *testing.T) {
 	engine := churnTree()
-	server, ai, client := newChurnProxy(engine, "user-1")
-	ctx := context.Background()
+	server, ai, client, ctxOf := newChurnProxy(t, engine, "user-1")
+	ctx := ctxOf()
 
 	// Warm-up: GetAttr(13) recovers "/a/b/c/f.exr" and the whole ancestor chain.
 	client.On("CheckPermission", mock.Anything, "user-1", "/a/b/c/f.exr", AuthzPermissionView, authzpb.Operation_OP_OTHER).Return(true, nil).Once()
@@ -507,8 +523,8 @@ func TestProxyInvalidation_RenameAuthorizesNewPath(t *testing.T) {
 // reports the inode gone, and the client sees ENOENT — not EACCES.
 func TestProxyInvalidation_UnlinkGivesHonestENOENT(t *testing.T) {
 	engine := churnTree()
-	server, ai, client := newChurnProxy(engine, "user-1")
-	ctx := context.Background()
+	server, ai, client, ctxOf := newChurnProxy(t, engine, "user-1")
+	ctx := ctxOf()
 
 	// Warm-up: GetAttr(14) recovers "/a/b/c/g.txt".
 	client.On("CheckPermission", mock.Anything, "user-1", "/a/b/c/g.txt", AuthzPermissionView, authzpb.Operation_OP_OTHER).Return(true, nil).Once()
@@ -542,4 +558,112 @@ func TestProxyInvalidation_UnlinkGivesHonestENOENT(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, codes.NotFound, st.Code())
 	require.False(t, handlerCalled)
+}
+
+// --- Stage 3 (fix-meta-proxy-per-session-chroot, task 3.3): the Chroot
+// handler's authz-mode target semantics on REAL redis engines (spec "Chroot
+// target authorization"). ---
+
+// TestMetaProxyChrootAuthz: a user-identity Chroot in authz mode answers
+// ENOENT for a missing target and creates nothing (I7), ENOTDIR for a
+// non-directory target, a denied View never reaches the handler and leaves
+// the session root unchanged, and the service identity keeps the
+// create-as-today semantics (D9). Real engines throughout (local redis, db 15).
+func TestMetaProxyChrootAuthz(t *testing.T) {
+	env := newChrootRealEnv(t, "22222222-2222-4222-8222-222222222222")
+	env.seed(t)
+
+	const userSub = "22222222-2222-4222-8222-222222222222"
+	newSess := func(id uint64) *proxySession {
+		return &proxySession{srv: env.srv, id: id, peer: fmt.Sprintf("chroot-authz-test:%d", id), start: time.Now()}
+	}
+	userCtx := func(sess *proxySession) context.Context {
+		return oidc.WithIDToken(sessionContextWith(sess), &oidc.IDToken{Subject: userSub})
+	}
+	rootHas := func(name string) syscall.Errno {
+		var ino, child Ino
+		var attr Attr
+		ino = RootInode
+		for _, comp := range strings.Split(name, "/") {
+			if comp == "" {
+				continue
+			}
+			if st := env.base.Lookup(Background(), ino, comp, &child, &attr, false); st != 0 {
+				return st
+			}
+			ino = child
+		}
+		return 0
+	}
+
+	t.Run("TargetMissingCreatesNothing", func(t *testing.T) {
+		resp, err := env.srv.Chroot(userCtx(newSess(1)), &pb.ChrootRequest{Ctx: &pb.MetaContext{}, Subdir: "companies/missing"})
+		require.NoError(t, err)
+		require.Equal(t, uint32(syscall.ENOENT), resp.GetErrno())
+		require.Equal(t, syscall.ENOENT, rootHas("companies/missing"), "no directories are created (I7)")
+		require.NotContains(t, env.engineKeys(), "companies/missing")
+	})
+
+	t.Run("TargetMissingIsFinal", func(t *testing.T) {
+		sess := newSess(2)
+		resp, err := env.srv.Chroot(userCtx(sess), &pb.ChrootRequest{Ctx: &pb.MetaContext{}, Subdir: "companies/missing"})
+		require.NoError(t, err)
+		require.Equal(t, uint32(syscall.ENOENT), resp.GetErrno())
+		// Replay of the failed subdir: the recorded outcome, engines untouched.
+		resp2, err := env.srv.Chroot(userCtx(sess), &pb.ChrootRequest{Ctx: &pb.MetaContext{}, Subdir: "companies/missing"})
+		require.NoError(t, err)
+		require.Equal(t, uint32(syscall.ENOENT), resp2.GetErrno())
+		// Another subdir: FailedPrecondition — the first outcome is final.
+		_, err = env.srv.Chroot(userCtx(sess), &pb.ChrootRequest{Ctx: &pb.MetaContext{}, Subdir: "companies/acme"})
+		require.Error(t, err)
+		require.Equal(t, codes.FailedPrecondition, status.Code(err))
+	})
+
+	t.Run("TargetNotDir", func(t *testing.T) {
+		resp, err := env.srv.Chroot(userCtx(newSess(3)), &pb.ChrootRequest{Ctx: &pb.MetaContext{}, Subdir: "companies/plain.file"})
+		require.NoError(t, err)
+		require.Equal(t, uint32(syscall.ENOTDIR), resp.GetErrno())
+	})
+
+	t.Run("DeniedViewLeavesRootUnchanged", func(t *testing.T) {
+		env.authz.mu.Lock()
+		env.authz.deny = map[string]bool{"/companies/denied": true}
+		env.authz.mu.Unlock()
+
+		sess := newSess(4)
+		_, err := callThrough(t, env.srv.authzInterceptor, userCtx(sess), "Chroot",
+			&pb.ChrootRequest{Subdir: "companies/denied"},
+			func(c context.Context, r interface{}) (interface{}, error) {
+				return env.srv.Chroot(c, r.(*pb.ChrootRequest))
+			})
+		require.Error(t, err, "denied View fails the RPC")
+		require.Equal(t, codes.PermissionDenied, status.Code(err))
+		require.NotContains(t, env.engineKeys(), "companies/denied")
+
+		// The session is still un-chrooted: an allowed chroot applies.
+		resp, err := env.srv.Chroot(userCtx(sess), &pb.ChrootRequest{Ctx: &pb.MetaContext{}, Subdir: "companies/acme"})
+		require.NoError(t, err)
+		require.Zero(t, resp.GetErrno())
+	})
+
+	t.Run("ExistingTargetApplies", func(t *testing.T) {
+		resp, err := env.srv.Chroot(userCtx(newSess(5)), &pb.ChrootRequest{Ctx: &pb.MetaContext{}, Subdir: "companies/acme"})
+		require.NoError(t, err)
+		require.Zero(t, resp.GetErrno())
+		require.Contains(t, env.engineKeys(), "companies/acme")
+	})
+
+	t.Run("ServiceIdentityCreates", func(t *testing.T) {
+		sess := newSess(6)
+		ctx := oidc.WithIdentityKind(sessionContextWith(sess), oidc.IdentityKindService)
+		resp, err := env.srv.Chroot(ctx, &pb.ChrootRequest{Ctx: &pb.MetaContext{}, Subdir: "companies/made-by-service"})
+		require.NoError(t, err)
+		require.Zero(t, resp.GetErrno(), "service chroot creates the missing target (D9)")
+		require.Zero(t, rootHas("companies/made-by-service"))
+	})
+
+	// Deterministic teardown: end every session and drain the pool.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	env.srv.CloseSessions(ctx)
 }

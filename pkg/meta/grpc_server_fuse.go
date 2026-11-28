@@ -47,9 +47,13 @@ func connectionIsTLS(ctx context.Context) bool {
 }
 
 func (s *MetaProxyServer) StatFS(ctx context.Context, req *pb.StatFSRequest) (*pb.StatFSResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var total, avail, iused, iavail uint64
-	errno := s.meta.StatFS(mctx, Ino(req.Ino), &total, &avail, &iused, &iavail)
+	errno := eng.StatFS(mctx, Ino(req.Ino), &total, &avail, &iused, &iavail)
 	return &pb.StatFSResponse{
 		Errno:      uint32(errno),
 		TotalSpace: total,
@@ -60,13 +64,17 @@ func (s *MetaProxyServer) StatFS(ctx context.Context, req *pb.StatFSRequest) (*p
 }
 
 func (s *MetaProxyServer) Lookup(ctx context.Context, req *pb.LookupRequest) (*pb.LookupResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var inode Ino
 	var attr Attr
-	errno := s.meta.Lookup(mctx, Ino(req.Parent), req.Name, &inode, &attr, req.CheckPermission)
+	errno := eng.Lookup(mctx, Ino(req.Parent), req.Name, &inode, &attr, req.CheckPermission)
 
 	if errno == 0 {
-		childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
+		childPath := s.inodePathCache.BuildChildPath(ctx, Ino(req.Parent), string(req.Name))
 		if childPath != "" {
 			s.inodePathCache.Set(inode, withDirSlash(childPath, &attr))
 		}
@@ -80,10 +88,14 @@ func (s *MetaProxyServer) Lookup(ctx context.Context, req *pb.LookupRequest) (*p
 }
 
 func (s *MetaProxyServer) Resolve(ctx context.Context, req *pb.ResolveRequest) (*pb.ResolveResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var inode Ino
 	var attr Attr
-	errno := s.meta.Resolve(mctx, Ino(req.Parent), req.Path, &inode, &attr, req.Force)
+	errno := eng.Resolve(mctx, Ino(req.Parent), req.Path, &inode, &attr, req.Force)
 	return &pb.ResolveResponse{
 		Errno: uint32(errno),
 		Inode: uint64(inode),
@@ -92,9 +104,13 @@ func (s *MetaProxyServer) Resolve(ctx context.Context, req *pb.ResolveRequest) (
 }
 
 func (s *MetaProxyServer) Access(ctx context.Context, req *pb.AccessRequest) (*pb.AccessResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var attr Attr
-	errno := s.meta.Access(mctx, Ino(req.Inode), uint8(req.Modemask), &attr)
+	errno := eng.Access(mctx, Ino(req.Inode), uint8(req.Modemask), &attr)
 	return &pb.AccessResponse{
 		Errno: uint32(errno),
 		Attr:  AttrToProto(&attr),
@@ -102,9 +118,13 @@ func (s *MetaProxyServer) Access(ctx context.Context, req *pb.AccessRequest) (*p
 }
 
 func (s *MetaProxyServer) GetAttr(ctx context.Context, req *pb.GetAttrRequest) (*pb.GetAttrResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var attr Attr
-	errno := s.meta.GetAttr(mctx, Ino(req.Inode), &attr)
+	errno := eng.GetAttr(mctx, Ino(req.Inode), &attr)
 	return &pb.GetAttrResponse{
 		Errno: uint32(errno),
 		Attr:  AttrToProto(&attr),
@@ -112,9 +132,13 @@ func (s *MetaProxyServer) GetAttr(ctx context.Context, req *pb.GetAttrRequest) (
 }
 
 func (s *MetaProxyServer) SetAttr(ctx context.Context, req *pb.SetAttrRequest) (*pb.SetAttrResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	attr := ProtoToAttr(req.Attr)
-	errno := s.meta.SetAttr(mctx, Ino(req.Inode), uint16(req.Set), uint8(req.Sggidclearmode), attr)
+	errno := eng.SetAttr(mctx, Ino(req.Inode), uint16(req.Set), uint8(req.Sggidclearmode), attr)
 	return &pb.SetAttrResponse{
 		Errno: uint32(errno),
 		Attr:  AttrToProto(attr),
@@ -122,21 +146,29 @@ func (s *MetaProxyServer) SetAttr(ctx context.Context, req *pb.SetAttrRequest) (
 }
 
 func (s *MetaProxyServer) CheckSetAttr(ctx context.Context, req *pb.CheckSetAttrRequest) (*pb.CheckSetAttrResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	attr := *ProtoToAttr(req.Attr)
-	errno := s.meta.CheckSetAttr(mctx, Ino(req.Inode), uint16(req.Set), attr)
+	errno := eng.CheckSetAttr(mctx, Ino(req.Inode), uint16(req.Set), attr)
 	return &pb.CheckSetAttrResponse{Errno: uint32(errno)}, nil
 }
 
 func (s *MetaProxyServer) Mknod(ctx context.Context, req *pb.MknodRequest) (*pb.MknodResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var inode Ino
 	var attr Attr
-	errno := s.meta.Mknod(mctx, Ino(req.Parent), req.Name, uint8(req.Type),
+	errno := eng.Mknod(mctx, Ino(req.Parent), req.Name, uint8(req.Type),
 		uint16(req.Mode), uint16(req.Cumask), req.Rdev, req.Path, &inode, &attr)
 
 	if errno == 0 {
-		childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
+		childPath := s.inodePathCache.BuildChildPath(ctx, Ino(req.Parent), string(req.Name))
 		if childPath != "" {
 			s.inodePathCache.Set(inode, withDirSlash(childPath, &attr))
 		}
@@ -145,9 +177,9 @@ func (s *MetaProxyServer) Mknod(ctx context.Context, req *pb.MknodRequest) (*pb.
 		// encrypted volume gets its crypto binding exactly like a Create;
 		// fifo/device/socket nodes are unaffected. No plaintext FEK rides in
 		// MknodResponse — the first write goes through Open, which delivers it.
-		if s.encryptionEnabled() && req.Type == uint32(TypeFile) && s.keyManager != nil && len(attr.WrappedFek) == 0 {
+		if s.encryptionEnabled(eng) && req.Type == uint32(TypeFile) && s.keyManager != nil && len(attr.WrappedFek) == 0 {
 			driveFileID := uuid.New().String() // MknodRequest carries no client-side id (FR-USR-3 covers Create)
-			if st := s.provisionFileCrypto(ctx, mctx, Ino(req.Parent), req.Name, inode, childPath, driveFileID, &attr); st != 0 {
+			if st := s.provisionFileCrypto(ctx, eng, mctx, Ino(req.Parent), req.Name, inode, childPath, driveFileID, &attr); st != 0 {
 				return &pb.MknodResponse{Errno: uint32(st)}, nil
 			}
 		}
@@ -161,14 +193,18 @@ func (s *MetaProxyServer) Mknod(ctx context.Context, req *pb.MknodRequest) (*pb.
 }
 
 func (s *MetaProxyServer) Mkdir(ctx context.Context, req *pb.MkdirRequest) (*pb.MkdirResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var inode Ino
 	var attr Attr
-	errno := s.meta.Mkdir(mctx, Ino(req.Parent), req.Name, uint16(req.Mode),
+	errno := eng.Mkdir(mctx, Ino(req.Parent), req.Name, uint16(req.Mode),
 		uint16(req.Cumask), uint8(req.Copysgid), &inode, &attr)
 
 	if errno == 0 {
-		childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
+		childPath := s.inodePathCache.BuildChildPath(ctx, Ino(req.Parent), string(req.Name))
 		if childPath != "" {
 			s.inodePathCache.Set(inode, withDirSlash(childPath, &attr))
 		}
@@ -182,17 +218,21 @@ func (s *MetaProxyServer) Mkdir(ctx context.Context, req *pb.MkdirRequest) (*pb.
 }
 
 func (s *MetaProxyServer) Create(ctx context.Context, req *pb.CreateRequest) (*pb.CreateResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var inode Ino
 	var attr Attr
-	errno := s.meta.Create(mctx, Ino(req.Parent), req.Name, uint16(req.Mode),
+	errno := eng.Create(mctx, Ino(req.Parent), req.Name, uint16(req.Mode),
 		uint16(req.Cumask), uint32(req.Flags), &inode, &attr)
 
 	if errno != 0 {
 		return &pb.CreateResponse{Errno: uint32(errno)}, nil
 	}
 
-	childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
+	childPath := s.inodePathCache.BuildChildPath(ctx, Ino(req.Parent), string(req.Name))
 	if childPath != "" {
 		s.inodePathCache.Set(inode, withDirSlash(childPath, &attr))
 	}
@@ -202,7 +242,7 @@ func (s *MetaProxyServer) Create(ctx context.Context, req *pb.CreateRequest) (*p
 	// sends it.
 	var fek []byte
 	var fekVer uint32
-	if s.encryptionEnabled() && attr.Typ == TypeFile && s.keyManager != nil {
+	if s.encryptionEnabled(eng) && attr.Typ == TypeFile && s.keyManager != nil {
 		if len(attr.WrappedFek) > 0 {
 			// O_CREAT overwrite of a file that already carries a binding
 			// (decision B2): the binding must stay as-is — re-issuing it with a
@@ -211,7 +251,7 @@ func (s *MetaProxyServer) Create(ctx context.Context, req *pb.CreateRequest) (*p
 			// O_CREAT-without-O_EXCL to succeed, and the client falls back to
 			// ResolveFileKey when no FEK is delivered.
 			var err error
-			fek, fekVer, err = s.fetchFEKForCreate(ctx, inode, &attr, childPath, req.Flags)
+			fek, fekVer, err = s.fetchFEKForCreate(ctx, eng, inode, &attr, childPath, req.Flags)
 			if err != nil {
 				logger.Warnf("create inode %d: deliver existing binding FEK: %v — client falls back to ResolveFileKey", inode, err)
 			}
@@ -223,7 +263,7 @@ func (s *MetaProxyServer) Create(ctx context.Context, req *pb.CreateRequest) (*p
 			// concurrent Creates of the same path can both see no binding and
 			// re-provision; the future guard is a compare-and-swap on the
 			// wrapped FEK in SetFileCrypto, out of Stage 11 scope.
-			if st := s.provisionFileCrypto(ctx, mctx, Ino(req.Parent), req.Name, inode, childPath, req.DriveFileId, &attr); st != 0 {
+			if st := s.provisionFileCrypto(ctx, eng, mctx, Ino(req.Parent), req.Name, inode, childPath, req.DriveFileId, &attr); st != 0 {
 				return &pb.CreateResponse{Errno: uint32(st)}, nil
 			}
 			// The creating client must encrypt its very first write session
@@ -235,10 +275,10 @@ func (s *MetaProxyServer) Create(ctx context.Context, req *pb.CreateRequest) (*p
 			// than this call — delivery stays best-effort: the client falls back
 			// to ResolveFileKey and the writer fails closed without a FEK (B4).
 			var err error
-			fek, fekVer, err = s.fetchFEKForCreate(ctx, inode, &attr, childPath, req.Flags)
+			fek, fekVer, err = s.fetchFEKForCreate(ctx, eng, inode, &attr, childPath, req.Flags)
 			if err != nil {
 				if req.Flags&syscall.O_EXCL != 0 {
-					_ = s.meta.Unlink(mctx, Ino(req.Parent), req.Name) // rollback (FR-USR-2)
+					_ = eng.Unlink(mctx, Ino(req.Parent), req.Name) // rollback (FR-USR-2)
 					return &pb.CreateResponse{Errno: uint32(syscall.EACCES)}, nil
 				}
 				logger.Warnf("create inode %d: deliver fresh binding FEK: %v — file kept, writer fails closed without a FEK", inode, err)
@@ -259,27 +299,27 @@ func (s *MetaProxyServer) Create(ctx context.Context, req *pb.CreateRequest) (*p
 // SetFileCrypto, updating attr in place. Any failure removes the file (Unlink)
 // and returns the errno to answer — only valid for files this very call created
 // (FR-USR-2).
-func (s *MetaProxyServer) provisionFileCrypto(ctx context.Context, mctx Context, parent Ino, name string, inode Ino, childPath string, driveFileID string, attr *Attr) syscall.Errno {
+func (s *MetaProxyServer) provisionFileCrypto(ctx context.Context, eng Engine, mctx Context, parent Ino, name string, inode Ino, childPath string, driveFileID string, attr *Attr) syscall.Errno {
 	userID, err := extractUserIDFromOIDC(ctx) // FR-ID-3: UUID validation (decision 3.7)
 	if err != nil {
-		_ = s.meta.Unlink(mctx, parent, name)
+		_ = eng.Unlink(mctx, parent, name)
 		return syscall.EACCES // fail-closed
 	}
 	resp, err := s.keyManager.CreateFileKey(ctx, &kmpb.CreateFileKeyRequest{
 		UserId:      userID,
-		VolumeUuid:  s.meta.GetFormat().UUID,
+		VolumeUuid:  eng.GetFormat().UUID,
 		DriveFileId: driveFileID,
 		Inode:       int64(inode),
 		Path:        childPath,
 		VolumeName:  s.volumeName,
 	})
 	if err != nil {
-		_ = s.meta.Unlink(mctx, parent, name) // rollback (FR-USR-2)
+		_ = eng.Unlink(mctx, parent, name) // rollback (FR-USR-2)
 		return syscall.EIO
 	}
-	setter, ok := s.meta.(fileCryptoSetter)
+	setter, ok := eng.(fileCryptoSetter)
 	if !ok {
-		_ = s.meta.Unlink(mctx, parent, name)
+		_ = eng.Unlink(mctx, parent, name)
 		return syscall.EIO
 	}
 	cryptoAlg := resp.CryptoAlg
@@ -292,7 +332,7 @@ func (s *MetaProxyServer) provisionFileCrypto(ctx context.Context, mctx Context,
 		FekVersion:  uint32(resp.FekVersion),
 		CryptoAlg:   cryptoAlg,
 	}); st != 0 {
-		_ = s.meta.Unlink(mctx, parent, name)
+		_ = eng.Unlink(mctx, parent, name)
 		return st
 	}
 	attr.Encrypted = true
@@ -308,7 +348,7 @@ func (s *MetaProxyServer) provisionFileCrypto(ctx context.Context, mctx Context,
 // overwrite), and the creating client needs the key to encrypt its first write
 // session. TLS only — over a plaintext connection nothing is fetched and the
 // fields stay empty (the Open TLS contract, nil/nil/nil error).
-func (s *MetaProxyServer) fetchFEKForCreate(ctx context.Context, inode Ino, attr *Attr, path string, flags uint32) ([]byte, uint32, error) {
+func (s *MetaProxyServer) fetchFEKForCreate(ctx context.Context, eng Engine, inode Ino, attr *Attr, path string, flags uint32) ([]byte, uint32, error) {
 	if !connectionIsTLS(ctx) {
 		return nil, 0, nil
 	}
@@ -318,7 +358,7 @@ func (s *MetaProxyServer) fetchFEKForCreate(ctx context.Context, inode Ino, attr
 	}
 	fekResp, err := s.keyManager.GetFileFEK(ctx, &kmpb.GetFileFEKRequest{
 		UserId:      userID,
-		VolumeUuid:  s.meta.GetFormat().UUID,
+		VolumeUuid:  eng.GetFormat().UUID,
 		DriveFileId: attr.DriveFileID,
 		Inode:       int64(inode),
 		Path:        path,
@@ -334,9 +374,13 @@ func (s *MetaProxyServer) fetchFEKForCreate(ctx context.Context, inode Ino, attr
 }
 
 func (s *MetaProxyServer) Open(ctx context.Context, req *pb.OpenRequest) (*pb.OpenResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var attr Attr
-	errno := s.meta.Open(mctx, Ino(req.Inode), uint32(req.Flags), &attr)
+	errno := eng.Open(mctx, Ino(req.Inode), uint32(req.Flags), &attr)
 	if errno != 0 {
 		return &pb.OpenResponse{Errno: uint32(errno)}, nil
 	}
@@ -347,7 +391,7 @@ func (s *MetaProxyServer) Open(ctx context.Context, req *pb.OpenRequest) (*pb.Op
 		// plaintext FEK never leaves the server over a plaintext connection,
 		// regardless of the listener mode. Volumes without volume-level
 		// encryption enabled are unaffected.
-		if s.encryptionEnabled() && !connectionIsTLS(ctx) {
+		if s.encryptionEnabled(eng) && !connectionIsTLS(ctx) {
 			return nil, status.Error(codes.Unauthenticated, "plaintext FEK delivery requires a TLS connection")
 		}
 		resp.Encrypted = true
@@ -369,7 +413,7 @@ func (s *MetaProxyServer) Open(ctx context.Context, req *pb.OpenRequest) (*pb.Op
 			}
 			fekResp, err := s.keyManager.GetFileFEK(ctx, &kmpb.GetFileFEKRequest{
 				UserId:      userID,
-				VolumeUuid:  s.meta.GetFormat().UUID,
+				VolumeUuid:  eng.GetFormat().UUID,
 				DriveFileId: attr.DriveFileID,
 				Inode:       int64(req.Inode),
 				Path:        path,
@@ -393,9 +437,13 @@ func (s *MetaProxyServer) Open(ctx context.Context, req *pb.OpenRequest) (*pb.Op
 // encrypted=false without a KeyManager round-trip; any failure fails closed
 // with EACCES (NFR-AVAIL-3) — the client must never fall back to a wrong key.
 func (s *MetaProxyServer) ResolveFileKey(ctx context.Context, req *pb.ResolveFileKeyRequest) (*pb.ResolveFileKeyResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var attr Attr
-	if errno := s.meta.GetAttr(mctx, Ino(req.Inode), &attr); errno != 0 {
+	if errno := eng.GetAttr(mctx, Ino(req.Inode), &attr); errno != 0 {
 		return &pb.ResolveFileKeyResponse{Errno: uint32(errno)}, nil
 	}
 	resp := &pb.ResolveFileKeyResponse{Errno: 0}
@@ -408,7 +456,7 @@ func (s *MetaProxyServer) ResolveFileKey(ctx context.Context, req *pb.ResolveFil
 	// Fail-closed FEK (implement-grpc-tls): same TLS rule as Open — the
 	// GetFileFEK-derived plaintext never leaves the server over a plaintext
 	// connection on an encrypted volume.
-	if s.encryptionEnabled() && !connectionIsTLS(ctx) {
+	if s.encryptionEnabled(eng) && !connectionIsTLS(ctx) {
 		return nil, status.Error(codes.Unauthenticated, "plaintext FEK delivery requires a TLS connection")
 	}
 	path, gone := s.resolvePath(ctx, Ino(req.Inode))
@@ -424,7 +472,7 @@ func (s *MetaProxyServer) ResolveFileKey(ctx context.Context, req *pb.ResolveFil
 	}
 	fekResp, err := s.keyManager.GetFileFEK(ctx, &kmpb.GetFileFEKRequest{
 		UserId:      userID,
-		VolumeUuid:  s.meta.GetFormat().UUID,
+		VolumeUuid:  eng.GetFormat().UUID,
 		DriveFileId: attr.DriveFileID,
 		Inode:       int64(req.Inode),
 		Path:        path,
@@ -446,6 +494,10 @@ func (s *MetaProxyServer) ResolveFileKey(ctx context.Context, req *pb.ResolveFil
 // must match it (the field exists for audit, a mismatch is rejected). Any
 // failure is fail-closed (see rotateFileFEK).
 func (s *MetaProxyServer) RotateFileKey(ctx context.Context, req *pb.RotateFileKeyRequest) (*pb.RotateFileKeyResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	fail := func(e syscall.Errno) *pb.RotateFileKeyResponse {
 		return &pb.RotateFileKeyResponse{Errno: uint32(e)}
 	}
@@ -458,22 +510,22 @@ func (s *MetaProxyServer) RotateFileKey(ctx context.Context, req *pb.RotateFileK
 	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var attr Attr
-	if st := s.meta.GetAttr(mctx, Ino(req.Inode), &attr); st != 0 {
+	if st := eng.GetAttr(mctx, Ino(req.Inode), &attr); st != 0 {
 		return fail(st), nil
 	}
 	if !attr.Encrypted || len(attr.WrappedFek) == 0 {
 		return fail(syscall.EINVAL), nil // legacy file — nothing to rotate
 	}
-	path := s.inodePathCache.Get(Ino(req.Inode))
+	path := s.inodePathCache.Get(ctx, Ino(req.Inode))
 	if path == "" {
 		return fail(syscall.EACCES), nil // fail-closed: cannot prove file identity to KeyManager
 	}
-	st := s.rotateFileFEK(ctx, mctx, userID, Ino(req.Inode), &attr, path)
+	st := s.rotateFileFEK(ctx, eng, mctx, userID, Ino(req.Inode), &attr, path)
 	if st != 0 {
 		return fail(st), nil
 	}
 	var newAttr Attr
-	if st := s.meta.GetAttr(mctx, Ino(req.Inode), &newAttr); st != 0 {
+	if st := eng.GetAttr(mctx, Ino(req.Inode), &newAttr); st != 0 {
 		return fail(st), nil
 	}
 	return &pb.RotateFileKeyResponse{Errno: 0, NewFekVersion: int32(newAttr.FekVersion)}, nil
@@ -484,8 +536,8 @@ func (s *MetaProxyServer) RotateFileKey(ctx context.Context, req *pb.RotateFileK
 // server-side) -> SetFileCrypto(v+1) -> RewrapSlices. Fail-closed at every
 // step; no rollback is needed — the old key stays valid until SetFileCrypto,
 // and RewrapSlices is atomic per chunk.
-func (s *MetaProxyServer) rotateFileFEK(ctx context.Context, mctx Context, userID string, inode Ino, attr *Attr, path string) syscall.Errno {
-	volUUID := s.meta.GetFormat().UUID
+func (s *MetaProxyServer) rotateFileFEK(ctx context.Context, eng Engine, mctx Context, userID string, inode Ino, attr *Attr, path string) syscall.Errno {
+	volUUID := eng.GetFormat().UUID
 	// 1. Current FEK (Read on the path, enforced by the platform).
 	oldResp, err := s.keyManager.GetFileFEK(ctx, &kmpb.GetFileFEKRequest{
 		UserId: userID, VolumeUuid: volUUID, DriveFileId: attr.DriveFileID,
@@ -512,7 +564,7 @@ func (s *MetaProxyServer) rotateFileFEK(ctx context.Context, mctx Context, userI
 	}
 	newVersion := uint32(rot.FekVersion)
 	// 3. Persist the new wrapped FEK (from here on the old key is not authoritative).
-	setter, ok := s.meta.(fileCryptoSetter)
+	setter, ok := eng.(fileCryptoSetter)
 	if !ok {
 		utils.MemClear(oldFek)
 		utils.MemClear(newFek)
@@ -529,7 +581,7 @@ func (s *MetaProxyServer) rotateFileFEK(ctx context.Context, mctx Context, userI
 		return st
 	}
 	// 4. Re-wrap every slice CEK under the new FEK (zero-copy; atomic per chunk).
-	rewrapper, ok := s.meta.(sliceRewrapper)
+	rewrapper, ok := eng.(sliceRewrapper)
 	if !ok {
 		utils.MemClear(oldFek)
 		utils.MemClear(newFek)
@@ -557,6 +609,10 @@ const maxRotateBatchPaths = 100
 // must match admin_user_id; each file goes through the same fail-closed
 // sequence as RotateFileKey.
 func (s *MetaProxyServer) RotateFileKeysByPaths(ctx context.Context, req *pb.RotateFileKeysByPathsRequest) (*pb.RotateFileKeysByPathsResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	resp := &pb.RotateFileKeysByPathsResponse{}
 	if s.keyManager == nil {
 		resp.Errno = uint32(syscall.EOPNOTSUPP)
@@ -597,12 +653,12 @@ func (s *MetaProxyServer) RotateFileKeysByPaths(ctx context.Context, req *pb.Rot
 		p := paths[i]
 		var inode Ino
 		var attr Attr
-		st := s.meta.Resolve(mctx, RootInode, p, &inode, &attr, true)
+		st := eng.Resolve(mctx, RootInode, p, &inode, &attr, true)
 		if st == 0 && (!attr.Encrypted || len(attr.WrappedFek) == 0) {
 			st = syscall.EINVAL // legacy file — nothing to rotate
 		}
 		if st == 0 {
-			st = s.rotateFileFEK(ctx, mctx, userID, inode, &attr, p)
+			st = s.rotateFileFEK(ctx, eng, mctx, userID, inode, &attr, p)
 		}
 		if st == 0 {
 			resp.RotatedPaths = append(resp.RotatedPaths, p)
@@ -619,7 +675,7 @@ func (s *MetaProxyServer) RotateFileKeysByPaths(ctx context.Context, req *pb.Rot
 // means the engine reports the inode as nonexistent (design I7) — answer
 // ENOENT; an unresolved path without gone stays fail-closed at the caller.
 func (s *MetaProxyServer) resolvePath(ctx context.Context, ino Ino) (p string, gone bool) {
-	if p = s.inodePathCache.Get(ino); p != "" {
+	if p = s.inodePathCache.Get(ctx, ino); p != "" {
 		return p, false
 	}
 	if s.pathResolver == nil {
@@ -643,8 +699,12 @@ func (s *MetaProxyServer) resolvedParentPath(ctx context.Context, parent Ino) st
 }
 
 func (s *MetaProxyServer) Close(ctx context.Context, req *pb.CloseRequest) (*pb.CloseResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
-	errno := s.meta.Close(mctx, Ino(req.Inode))
+	errno := eng.Close(mctx, Ino(req.Inode))
 	return &pb.CloseResponse{Errno: uint32(errno)}, nil
 }
 
@@ -652,7 +712,7 @@ func (s *MetaProxyServer) Close(ctx context.Context, req *pb.CloseRequest) (*pb.
 // parent is recovered through the engine when it is not cached, so delete
 // hygiene keeps working on a cold proxy (restart / eviction).
 func (s *MetaProxyServer) invalidateChild(ctx context.Context, parent Ino, name string, dir bool) {
-	childPath := s.inodePathCache.BuildChildPath(parent, name)
+	childPath := s.inodePathCache.BuildChildPath(ctx, parent, name)
 	if childPath == "" {
 		parentPath := s.resolvedParentPath(ctx, parent)
 		if parentPath == "" {
@@ -671,8 +731,12 @@ func (s *MetaProxyServer) invalidateChild(ctx context.Context, parent Ino, name 
 }
 
 func (s *MetaProxyServer) Unlink(ctx context.Context, req *pb.UnlinkRequest) (*pb.UnlinkResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
-	errno := s.meta.Unlink(mctx, Ino(req.Parent), req.Name, req.SkipCheckTrash)
+	errno := eng.Unlink(mctx, Ino(req.Parent), req.Name, req.SkipCheckTrash)
 
 	if errno == 0 {
 		s.invalidateChild(ctx, Ino(req.Parent), string(req.Name), false)
@@ -682,8 +746,12 @@ func (s *MetaProxyServer) Unlink(ctx context.Context, req *pb.UnlinkRequest) (*p
 }
 
 func (s *MetaProxyServer) Rmdir(ctx context.Context, req *pb.RmdirRequest) (*pb.RmdirResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
-	errno := s.meta.Rmdir(mctx, Ino(req.Parent), req.Name, req.SkipCheckTrash)
+	errno := eng.Rmdir(mctx, Ino(req.Parent), req.Name, req.SkipCheckTrash)
 
 	if errno == 0 {
 		s.invalidateChild(ctx, Ino(req.Parent), string(req.Name), true)
@@ -693,14 +761,18 @@ func (s *MetaProxyServer) Rmdir(ctx context.Context, req *pb.RmdirRequest) (*pb.
 }
 
 func (s *MetaProxyServer) Rename(ctx context.Context, req *pb.RenameRequest) (*pb.RenameResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var inode Ino
 	var attr Attr
-	errno := s.meta.Rename(mctx, Ino(req.ParentSrc), req.NameSrc,
+	errno := eng.Rename(mctx, Ino(req.ParentSrc), req.NameSrc,
 		Ino(req.ParentDst), req.NameDst, uint32(req.Flags), &inode, &attr)
 
 	if errno == 0 && inode > 0 {
-		oldPath := s.inodePathCache.BuildChildPath(Ino(req.ParentSrc), string(req.NameSrc))
+		oldPath := s.inodePathCache.BuildChildPath(ctx, Ino(req.ParentSrc), string(req.NameSrc))
 		if oldPath == "" {
 			// Parent not cached (restart / eviction): recover it so the rename
 			// can rewrite the subtree mapping (design D5).
@@ -708,7 +780,7 @@ func (s *MetaProxyServer) Rename(ctx context.Context, req *pb.RenameRequest) (*p
 				oldPath = path.Join(p, string(req.NameSrc))
 			}
 		}
-		newPath := s.inodePathCache.BuildChildPath(Ino(req.ParentDst), string(req.NameDst))
+		newPath := s.inodePathCache.BuildChildPath(ctx, Ino(req.ParentDst), string(req.NameDst))
 		if newPath == "" {
 			if p := s.resolvedParentPath(ctx, Ino(req.ParentDst)); p != "" {
 				newPath = path.Join(p, string(req.NameDst))
@@ -746,9 +818,13 @@ func (s *MetaProxyServer) Rename(ctx context.Context, req *pb.RenameRequest) (*p
 }
 
 func (s *MetaProxyServer) Link(ctx context.Context, req *pb.LinkRequest) (*pb.LinkResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var attr Attr
-	errno := s.meta.Link(mctx, Ino(req.InodeSrc), Ino(req.Parent), req.Name, &attr)
+	errno := eng.Link(mctx, Ino(req.InodeSrc), Ino(req.Parent), req.Name, &attr)
 
 	// Link creates a new directory entry for an existing inode.
 	// The inode already has a path; the new name is an additional reference.
@@ -761,13 +837,17 @@ func (s *MetaProxyServer) Link(ctx context.Context, req *pb.LinkRequest) (*pb.Li
 }
 
 func (s *MetaProxyServer) Symlink(ctx context.Context, req *pb.SymlinkRequest) (*pb.SymlinkResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var inode Ino
 	var attr Attr
-	errno := s.meta.Symlink(mctx, Ino(req.Parent), req.Name, req.Path, &inode, &attr)
+	errno := eng.Symlink(mctx, Ino(req.Parent), req.Name, req.Path, &inode, &attr)
 
 	if errno == 0 {
-		childPath := s.inodePathCache.BuildChildPath(Ino(req.Parent), string(req.Name))
+		childPath := s.inodePathCache.BuildChildPath(ctx, Ino(req.Parent), string(req.Name))
 		if childPath != "" {
 			s.inodePathCache.Set(inode, withDirSlash(childPath, &attr))
 		}
@@ -781,9 +861,13 @@ func (s *MetaProxyServer) Symlink(ctx context.Context, req *pb.SymlinkRequest) (
 }
 
 func (s *MetaProxyServer) ReadLink(ctx context.Context, req *pb.ReadLinkRequest) (*pb.ReadLinkResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var path []byte
-	errno := s.meta.ReadLink(mctx, Ino(req.Inode), &path)
+	errno := eng.ReadLink(mctx, Ino(req.Inode), &path)
 	return &pb.ReadLinkResponse{
 		Errno: uint32(errno),
 		Path:  path,
@@ -791,9 +875,13 @@ func (s *MetaProxyServer) ReadLink(ctx context.Context, req *pb.ReadLinkRequest)
 }
 
 func (s *MetaProxyServer) Truncate(ctx context.Context, req *pb.TruncateRequest) (*pb.TruncateResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var attr Attr
-	errno := s.meta.Truncate(mctx, Ino(req.Inode), uint8(req.Flags), req.Length, &attr, req.SkipPermCheck)
+	errno := eng.Truncate(mctx, Ino(req.Inode), uint8(req.Flags), req.Length, &attr, req.SkipPermCheck)
 	return &pb.TruncateResponse{
 		Errno: uint32(errno),
 		Attr:  AttrToProto(&attr),
@@ -801,9 +889,13 @@ func (s *MetaProxyServer) Truncate(ctx context.Context, req *pb.TruncateRequest)
 }
 
 func (s *MetaProxyServer) Fallocate(ctx context.Context, req *pb.FallocateRequest) (*pb.FallocateResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var length uint64
-	errno := s.meta.Fallocate(mctx, Ino(req.Inode), uint8(req.Mode), req.Off, req.Size, &length)
+	errno := eng.Fallocate(mctx, Ino(req.Inode), uint8(req.Mode), req.Off, req.Size, &length)
 	return &pb.FallocateResponse{
 		Errno:  uint32(errno),
 		Length: length,
@@ -811,9 +903,13 @@ func (s *MetaProxyServer) Fallocate(ctx context.Context, req *pb.FallocateReques
 }
 
 func (s *MetaProxyServer) Readdir(ctx context.Context, req *pb.ReaddirRequest) (*pb.ReaddirResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var entries []*Entry
-	errno := s.meta.Readdir(mctx, Ino(req.Inode), uint8(req.Wantattr), &entries)
+	errno := eng.Readdir(mctx, Ino(req.Inode), uint8(req.Wantattr), &entries)
 
 	if errno != 0 {
 		return &pb.ReaddirResponse{Errno: uint32(errno)}, nil
@@ -830,7 +926,7 @@ func (s *MetaProxyServer) Readdir(ctx context.Context, req *pb.ReaddirRequest) (
 	if len(filtered) > 0 {
 		mappings := make(map[Ino]string)
 		for _, e := range filtered {
-			childPath := s.inodePathCache.BuildChildPath(Ino(req.Inode), string(e.Name))
+			childPath := s.inodePathCache.BuildChildPath(ctx, Ino(req.Inode), string(e.Name))
 			if childPath != "" {
 				mappings[e.Inode] = withDirSlash(childPath, e.Attr)
 			}
@@ -902,11 +998,11 @@ func (s *MetaProxyServer) filterEntriesByAuthz(ctx context.Context, parentInode 
 			// filter — never bulk-check or forward them.
 			continue
 		}
-		p := s.inodePathCache.Get(e.Inode)
+		p := s.inodePathCache.Get(ctx, e.Inode)
 		if p == "" {
 			// Fallback: build from the actual parent inode (not RootInode).
 			// Directories get a trailing slash (authz path convention).
-			p = withDirSlash(s.inodePathCache.BuildChildPath(parentInode, string(e.Name)), e.Attr)
+			p = withDirSlash(s.inodePathCache.BuildChildPath(ctx, parentInode, string(e.Name)), e.Attr)
 		}
 		if p == "" || p == "/" {
 			continue // empty or root path — skip this entry
@@ -948,9 +1044,13 @@ func (s *MetaProxyServer) filterEntriesByAuthz(ctx context.Context, parentInode 
 }
 
 func (s *MetaProxyServer) Read(ctx context.Context, req *pb.ReadRequest) (*pb.ReadResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var slices []Slice
-	errno := s.meta.Read(mctx, Ino(req.Inode), req.Indx, &slices)
+	errno := eng.Read(mctx, Ino(req.Inode), req.Indx, &slices)
 	return &pb.ReadResponse{
 		Errno:  uint32(errno),
 		Slices: SlicesToProto(slices),
@@ -958,20 +1058,28 @@ func (s *MetaProxyServer) Read(ctx context.Context, req *pb.ReadRequest) (*pb.Re
 }
 
 func (s *MetaProxyServer) Write(ctx context.Context, req *pb.WriteRequest) (*pb.WriteResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	slice := ProtoToSlice(req.Slice)
 	// WriteRequest.Mtime is microseconds since the epoch: the client sends
 	// mtime.UnixNano()/1000 (grpc_client_data.Write). Interpreting it as
 	// seconds stored a time ~1e6 years in the future (the "year 56835320"
 	// stat corruption).
-	errno := s.meta.Write(mctx, Ino(req.Inode), req.Indx, req.Off, slice, time.UnixMicro(req.GetMtime()))
+	errno := eng.Write(mctx, Ino(req.Inode), req.Indx, req.Off, slice, time.UnixMicro(req.GetMtime()))
 	return &pb.WriteResponse{Errno: uint32(errno)}, nil
 }
 
 func (s *MetaProxyServer) NewSlice(ctx context.Context, req *pb.NewSliceRequest) (*pb.NewSliceResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var id uint64
-	errno := s.meta.NewSlice(mctx, &id)
+	errno := eng.NewSlice(mctx, &id)
 	return &pb.NewSliceResponse{
 		Errno: uint32(errno),
 		Id:    id,
@@ -979,12 +1087,20 @@ func (s *MetaProxyServer) NewSlice(ctx context.Context, req *pb.NewSliceRequest)
 }
 
 func (s *MetaProxyServer) InvalidateChunkCache(ctx context.Context, req *pb.InvalidateChunkCacheRequest) (*pb.InvalidateChunkCacheResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
-	s.meta.InvalidateChunkCache(mctx, Ino(req.Inode), req.Indx)
+	eng.InvalidateChunkCache(mctx, Ino(req.Inode), req.Indx)
 	return &pb.InvalidateChunkCacheResponse{Errno: 0}, nil
 }
 
 func (s *MetaProxyServer) CopyFileRange(ctx context.Context, req *pb.CopyFileRangeRequest) (*pb.CopyFileRangeResponse, error) {
+	eng, err := s.engineFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	mctx := s.metaCtx(ctx, req.Ctx)
 	var copied, outLength uint64
 
@@ -993,12 +1109,12 @@ func (s *MetaProxyServer) CopyFileRange(ctx context.Context, req *pb.CopyFileRan
 	// must re-wrap them under its own FEK (post-op). A legacy target cannot hold
 	// encrypted slices at all — fail closed before touching metadata.
 	var srcAttr, dstAttr Attr
-	if st := s.meta.GetAttr(mctx, Ino(req.Fin), &srcAttr); st != 0 {
+	if st := eng.GetAttr(mctx, Ino(req.Fin), &srcAttr); st != 0 {
 		return &pb.CopyFileRangeResponse{Errno: uint32(st)}, nil
 	}
 	srcEncrypted := srcAttr.Encrypted && len(srcAttr.WrappedFek) > 0
 	if srcEncrypted {
-		if st := s.meta.GetAttr(mctx, Ino(req.Fout), &dstAttr); st != 0 {
+		if st := eng.GetAttr(mctx, Ino(req.Fout), &dstAttr); st != 0 {
 			return &pb.CopyFileRangeResponse{Errno: uint32(st)}, nil
 		}
 		if !dstAttr.Encrypted || len(dstAttr.WrappedFek) == 0 {
@@ -1006,14 +1122,14 @@ func (s *MetaProxyServer) CopyFileRange(ctx context.Context, req *pb.CopyFileRan
 		}
 	}
 
-	errno := s.meta.CopyFileRange(mctx, Ino(req.Fin), req.OffIn, Ino(req.Fout),
+	errno := eng.CopyFileRange(mctx, Ino(req.Fin), req.OffIn, Ino(req.Fout),
 		req.OffOut, req.Size, uint32(req.Flags), &copied, &outLength)
 	if errno != 0 {
 		return &pb.CopyFileRangeResponse{Errno: uint32(errno), Copied: copied, OutLength: outLength}, nil
 	}
 
 	if srcEncrypted && copied > 0 {
-		if st := s.copyFileRangeRewrap(ctx, mctx, Ino(req.Fin), Ino(req.Fout), req.OffOut, copied, &srcAttr, &dstAttr); st != 0 {
+		if st := s.copyFileRangeRewrap(ctx, eng, mctx, Ino(req.Fin), Ino(req.Fout), req.OffOut, copied, &srcAttr, &dstAttr); st != 0 {
 			return &pb.CopyFileRangeResponse{Errno: uint32(st)}, nil
 		}
 	}
@@ -1030,9 +1146,9 @@ func (s *MetaProxyServer) CopyFileRange(ctx context.Context, req *pb.CopyFileRan
 // enforced by the platform), then RewrapSlicesRange touches only the chunk lists
 // covering [offOut, offOut+copied). S3 data is not touched. Any failure fails
 // closed — the caller must treat the target range as unreadable.
-func (s *MetaProxyServer) copyFileRangeRewrap(ctx context.Context, mctx Context, fin, fout Ino, offOut, copied uint64, srcAttr, dstAttr *Attr) syscall.Errno {
-	srcPath := s.inodePathCache.Get(fin)
-	dstPath := s.inodePathCache.Get(fout)
+func (s *MetaProxyServer) copyFileRangeRewrap(ctx context.Context, eng Engine, mctx Context, fin, fout Ino, offOut, copied uint64, srcAttr, dstAttr *Attr) syscall.Errno {
+	srcPath := s.inodePathCache.Get(ctx, fin)
+	dstPath := s.inodePathCache.Get(ctx, fout)
 	if srcPath == "" || dstPath == "" {
 		return syscall.EACCES // fail-closed: cannot prove file identity to KeyManager
 	}
@@ -1040,7 +1156,7 @@ func (s *MetaProxyServer) copyFileRangeRewrap(ctx context.Context, mctx Context,
 	if err != nil {
 		return syscall.EACCES // fail-closed
 	}
-	volUUID := s.meta.GetFormat().UUID
+	volUUID := eng.GetFormat().UUID
 	fekOf := func(attr *Attr, path string, ino Ino, writeAccess bool) ([]byte, error) {
 		r, err := s.keyManager.GetFileFEK(ctx, &kmpb.GetFileFEKRequest{
 			UserId: userID, VolumeUuid: volUUID, DriveFileId: attr.DriveFileID,
@@ -1060,7 +1176,7 @@ func (s *MetaProxyServer) copyFileRangeRewrap(ctx context.Context, mctx Context,
 	if err != nil {
 		return syscall.EACCES // fail-closed
 	}
-	rewrapper, ok := s.meta.(sliceRangeRewrapper)
+	rewrapper, ok := eng.(sliceRangeRewrapper)
 	if !ok {
 		return syscall.EOPNOTSUPP
 	}

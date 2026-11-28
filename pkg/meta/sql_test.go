@@ -689,6 +689,9 @@ func TestSQLiteBatchCloneMultiRowInsert(t *testing.T) {
 }
 
 func TestMySQLClient(t *testing.T) { //skip mutate
+	if os.Getenv("SKIP_NON_CORE") == "true" {
+		t.Skipf("skip non-core test")
+	}
 	m, err := newSQLMeta("mysql", "root:@/dev", testConfig())
 	if err != nil || m.Name() != "mysql" {
 		t.Fatalf("create meta: %s", err)

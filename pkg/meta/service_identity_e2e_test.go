@@ -26,6 +26,7 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	kmpb "github.com/juicedata/juicefs/pkg/meta/keymanager_pb"
@@ -83,7 +84,7 @@ func newServiceIdentityEnv(t *testing.T) (pb.MetaServiceClient, *userRecordingKe
 	}, 1)
 	require.NoError(t, err)
 
-	srv := NewMetaProxyServer(&fekFakeMeta{
+	m := &fekFakeMeta{
 		attr: &Attr{
 			Typ:         TypeFile,
 			Encrypted:   true,
@@ -92,7 +93,13 @@ func newServiceIdentityEnv(t *testing.T) (pb.MetaServiceClient, *userRecordingKe
 			WrappedFek:  wrapped,
 		},
 		format: format,
-	}, 100)
+	}
+	srv := NewMetaProxyServer(m, 100, passThroughFactory(m))
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		srv.CloseSessions(ctx)
+	})
 	recording := &userRecordingKeyManager{fakeKeyManager: fake}
 	srv.SetKeyManager(WithNodeCredentialRouting(recording, "node-token-e2e"))
 	srv.InodePathCache().Set(testFekInode, "/secret.exr")
@@ -120,11 +127,16 @@ func newServiceIdentityEnv(t *testing.T) (pb.MetaServiceClient, *userRecordingKe
 	}()
 	opts := []grpc.ServerOption{
 		grpc.Creds(credentials.NewTLS(serverTLS)),
+		// Session machinery first, exactly like cmd/meta_proxy.go: RPCs on a
+		// connection without a session fail closed (I1).
+		grpc.StatsHandler(srv.SessionStatsHandler()),
 		grpc.ChainUnaryInterceptor(
+			srv.SessionUnaryInterceptor(),
 			NewServiceIdentityInterceptor(cfg).UnaryInterceptor(),
 			testIdentityInterceptor(),
 		),
 		grpc.ChainStreamInterceptor(
+			srv.SessionStreamInterceptor(),
 			NewServiceIdentityInterceptor(cfg).StreamInterceptor(),
 		),
 	}
