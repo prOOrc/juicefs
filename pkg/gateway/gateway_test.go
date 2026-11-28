@@ -1270,6 +1270,55 @@ func TestPutObjectAtDestination(t *testing.T) {
 	}
 }
 
+// TestPutObjectPartAtDestination (add-gateway-platform-mode): parts are
+// created directly at their `.sys/uploads` path — the previous staging flow
+// created them under `.sys/tmp` (rejected by the platform on encrypted
+// volumes) and renamed them into place. The etag xattr lands on the part file
+// itself and no `.sys/tmp` staging is created.
+func TestPutObjectPartAtDestination(t *testing.T) {
+	n, jfs, bucket := newTestGateway(t, Config{})
+	ctx := context.Background()
+	data := []byte("part payload")
+	object := "companies/acme/parted.bin"
+
+	uploadID, err := n.NewMultipartUpload(ctx, bucket, object, minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("new multipart upload: %s", err)
+	}
+	part, err := n.PutObjectPart(ctx, bucket, object, uploadID, 1, newTestPutObjReader(t, bytes.NewReader(data), data), minio.ObjectOptions{})
+	if err != nil {
+		t.Fatalf("put part: %s", err)
+	}
+	if part.Size != int64(len(data)) {
+		t.Fatalf("part size %d, want %d", part.Size, len(data))
+	}
+	sum := md5.Sum(data)
+	if want := hex.EncodeToString(sum[:]); part.ETag != want {
+		t.Fatalf("part etag %q, want md5 %q", part.ETag, want)
+	}
+
+	// the part file exists at its final `.sys/uploads` path with the etag xattr
+	ppath := n.ppath(bucket, uploadID, "1")
+	if got := readTestObject(t, jfs, ppath); !bytes.Equal(got, data) {
+		t.Fatalf("part content %q, want %q", got, data)
+	}
+	etag, eno := n.fs.GetXattr(mctx, ppath, s3Etag)
+	if eno != 0 {
+		t.Fatalf("get part etag xattr: %s", eno)
+	}
+	if string(etag) != part.ETag {
+		t.Fatalf("part etag xattr %q, want %q", etag, part.ETag)
+	}
+
+	// the upload staging directory stays, but no tmp staging was created
+	if _, errno := n.fs.Stat(mctx, n.upath(bucket, uploadID)); errno != 0 {
+		t.Fatalf("upload staging directory must remain: %s", errno)
+	}
+	if _, errno := n.fs.Stat(mctx, n.tpath(bucket, "tmp")); !fs.IsNotExist(errno) {
+		t.Fatalf("staging tmp directory was created for a part: %s", errno)
+	}
+}
+
 // TestPutObjectReplacesExisting (unencrypted equivalence of the previous
 // rename semantics): Put onto an existing key replaces the object wholesale.
 func TestPutObjectReplacesExisting(t *testing.T) {

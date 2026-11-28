@@ -923,101 +923,26 @@ func (n *jfsObjects) mkdirAllUntil(ctx context.Context, p, root string) error {
 }
 
 func (n *jfsObjects) putObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions, applyObjTaggingFunc func(tmpName string)) (fi os.FileInfo, err error) {
-	// Complete-at-destination (add-gateway-platform-mode): the final object is
-	// created directly at the destination path, mirroring CompleteMultipartUpload
-	// below — on encrypted volumes CreateFileKey resolves KEK/AAD by the creation
-	// path, so the previous staging-under-`.sys/tmp` + rename flow keyed the
-	// object under the synthetic `.sys` company and made it unreadable at the
-	// real destination path. PutObjectPart shares this helper and keeps the
-	// staging flow: parts are created and stay under `.sys/uploads/` (creation
-	// path equals the final path), so their keying is unaffected by the rename.
-	if !strings.HasPrefix(object, sep+metaBucket+sep) {
-		return n.putObjectAtDestination(ctx, bucket, object, r, opts, applyObjTaggingFunc)
-	}
-	uuid := minio.MustGetUUID()
-	tmpname := n.tpath(bucket, "tmp", uuid[:subDirPrefix], uuid)
-	f, eno := n.fs.Create(mctx, tmpname, 0666, n.gConf.Umask)
-	if eno == syscall.ENOENT {
-		if err = n.mkdirAll(ctx, path.Dir(tmpname)); err != nil {
-			logger.Errorf("mkdirAll %s: %s", path.Dir(tmpname), err)
-			return
-		}
-		f, eno = n.fs.Create(mctx, tmpname, 0666, n.gConf.Umask)
-	}
-	if eno != 0 {
-		logger.Errorf("create %s: %s", tmpname, eno)
-		err = eno
-		return
-	}
-	defer func() {
-		if err != nil {
-			_ = n.fs.Delete(mctx, tmpname)
-			if errors.Is(err, syscall.ENOENT) {
-				err = n.objectCommitErr(ctx, err, bucket, object)
-			}
-		}
-	}()
-	var buf = buffPool.Get().(*[]byte)
-	defer buffPool.Put(buf)
-	for {
-		var n int
-		n, err = io.ReadFull(r, *buf)
-		if n == 0 {
-			if err == io.EOF {
-				err = nil
-			}
-			break
-		}
-		_, eno := f.Write(mctx, (*buf)[:n])
-		if eno != 0 {
-			err = eno
-			break
-		}
-	}
-	if err == nil {
-		eno = f.Close(mctx)
-		if eno != 0 {
-			err = eno
-		}
-	} else {
-		_ = f.Close(mctx)
-	}
-	if err != nil {
-		return
-	}
-
-	applyObjTaggingFunc(tmpname)
-	fi, eno = n.fs.Stat(mctx, tmpname)
-	if eno != 0 {
-		err = n.objectCommitErr(ctx, eno, bucket, object)
-		return
-	}
-
-	eno = n.fs.Rename(mctx, tmpname, object, 0)
-	if eno == syscall.ENOENT {
-		if strings.HasPrefix(object, sep+metaBucket+sep) {
-			err = n.objectCommitErr(ctx, eno, bucket, object, path.Base(path.Dir(object)))
-			return
-		}
-		if err = n.mkdirAllInBucket(ctx, bucket, path.Dir(object)); err != nil {
-			logger.Errorf("mkdirAll %s: %s", path.Dir(object), err)
-			err = n.objectCommitErr(ctx, err, bucket, object)
-			return
-		}
-		eno = n.fs.Rename(mctx, tmpname, object, 0)
-	}
-	if eno != 0 {
-		err = n.objectCommitErr(ctx, eno, bucket, object)
-	}
-	return
+	// Complete-at-destination (add-gateway-platform-mode) for every caller:
+	// both PutObject destinations and PutObjectPart part paths are written
+	// straight to their final path (putObjectAtDestination). The previous
+	// staging flow created the file under `.sys/tmp/` and renamed it — on
+	// encrypted volumes CreateFileKey resolves KEK/AAD by the creation path,
+	// so a destination object was keyed under the synthetic `.sys` company and
+	// became unreadable at its real path, and even a part (renamed only inside
+	// `.sys`) was created under `.sys/tmp`, which the platform rejects with
+	// EIO. The rename atomicity of the staging flow is already surrendered by
+	// the Complete-at-destination decision, so no staging remains here.
+	return n.putObjectAtDestination(ctx, bucket, object, r, opts, applyObjTaggingFunc)
 }
 
-// putObjectAtDestination writes a user object straight to its destination path
-// (add-gateway-platform-mode): the file key is derived from the creation path,
-// so the object must never be staged under `.sys/tmp/` and renamed (see
-// putObject). After the destination Create any failure is rolled back by
-// removing the partial object, mirroring CompleteMultipartUpload; ENOENT on
-// the rollback Delete is ignored.
+// putObjectAtDestination writes an object straight to its destination path
+// (add-gateway-platform-mode) — for PutObject destinations and for multipart
+// part paths under `.sys/uploads/` alike: the file key is derived from the
+// creation path, so the file must never be staged under `.sys/tmp/` and
+// renamed (see putObject). After the destination Create any failure is rolled
+// back by removing the partial file, mirroring CompleteMultipartUpload; ENOENT
+// on the rollback Delete is ignored.
 func (n *jfsObjects) putObjectAtDestination(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions, applyObjTaggingFunc func(tmpName string)) (fi os.FileInfo, err error) {
 	f, eno := n.fs.Create(mctx, object, 0666, n.gConf.Umask)
 	if eno == syscall.EEXIST {
@@ -1039,12 +964,18 @@ func (n *jfsObjects) putObjectAtDestination(ctx context.Context, bucket, object 
 		f, eno = n.fs.Create(mctx, object, 0666, n.gConf.Umask)
 	}
 	if eno == syscall.ENOENT {
-		if err = n.mkdirAllInBucket(ctx, bucket, path.Dir(object)); err != nil {
-			logger.Errorf("mkdirAll %s: %s", path.Dir(object), err)
-			err = n.objectCommitErr(ctx, err, bucket, object)
-			return
+		// create the missing parents for a user object inside the bucket. A
+		// `.sys` destination (a multipart part) gets its parents from
+		// NewMultipartUpload — a vanished upload directory means the upload is
+		// gone and must fail, not be resurrected.
+		if !strings.HasPrefix(object, sep+metaBucket+sep) {
+			if err = n.mkdirAllInBucket(ctx, bucket, path.Dir(object)); err != nil {
+				logger.Errorf("mkdirAll %s: %s", path.Dir(object), err)
+				err = n.objectCommitErr(ctx, err, bucket, object)
+				return
+			}
+			f, eno = n.fs.Create(mctx, object, 0666, n.gConf.Umask)
 		}
-		f, eno = n.fs.Create(mctx, object, 0666, n.gConf.Umask)
 	}
 	if eno != 0 {
 		err = n.objectCommitErr(ctx, eno, bucket, object)
