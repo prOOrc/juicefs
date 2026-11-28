@@ -720,77 +720,11 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		}
 		return n.GetObjectInfo(ctx, srcBucket, srcObject, minio.ObjectOptions{})
 	}
-	uuid := minio.MustGetUUID()
-	tmp := n.tpath(dstBucket, "tmp", uuid[:subDirPrefix], uuid)
-	f, eno := n.fs.Create(mctx, tmp, 0666, n.gConf.Umask)
-	if eno == syscall.ENOENT {
-		if err = n.mkdirAll(ctx, path.Dir(tmp)); err != nil {
-			logger.Errorf("mkdirAll %s: %s", path.Dir(tmp), err)
-			err = n.objectCommitErr(ctx, err, dstBucket, dstObject)
-			return
-		}
-		f, eno = n.fs.Create(mctx, tmp, 0666, n.gConf.Umask)
-	}
-	if eno != 0 {
-		err = n.objectCommitErr(ctx, eno, dstBucket, dstObject)
-		logger.Errorf("create %s: %s", tmp, err)
-		return
-	}
-	defer func() {
-		_ = f.Close(mctx)
-		if err != nil {
-			_ = n.fs.Delete(mctx, tmp)
-		}
-	}()
-
-	_, eno = n.fs.CopyFileRange(mctx, src, 0, tmp, 0, 1<<63)
-	if eno != 0 {
-		err = jfsToObjectErr(ctx, eno, srcBucket, srcObject)
-		logger.Errorf("copy %s to %s: %s", src, tmp, err)
-		return
-	}
-
+	var fi os.FileInfo
 	var etag []byte
-	if n.gConf.KeepEtag {
-		etag, _ = n.fs.GetXattr(mctx, src, s3Etag)
-		if len(etag) != 0 {
-			eno = n.fs.SetXattr(mctx, tmp, s3Etag, etag, 0)
-			if eno != 0 {
-				logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", tmp, s3Etag, etag, 0)
-			}
-		}
-	}
-
 	var tagStr string
-	if n.gConf.ObjTag && srcInfo.UserDefined != nil {
-		if tagStr = srcInfo.UserDefined[xhttp.AmzObjectTagging]; tagStr != "" {
-			if eno := n.fs.SetXattr(mctx, tmp, s3Tags, []byte(tagStr), 0); eno != 0 {
-				logger.Errorf("set object tags error, path: %s, value: %s error %s", tmp, tagStr, eno)
-			}
-		}
-	}
-	err = n.setObjMeta(tmp, srcInfo.UserDefined)
+	fi, etag, tagStr, err = n.copyObjectAtDestination(ctx, src, srcBucket, srcObject, dst, dstBucket, dstObject, srcInfo)
 	if err != nil {
-		logger.Errorf("set object metadata error, path: %s error %s", dst, err)
-	}
-	fi, eno := n.fs.Stat(mctx, tmp)
-	if eno != 0 {
-		err = n.objectCommitErr(ctx, eno, dstBucket, dstObject)
-		return
-	}
-
-	eno = n.fs.Rename(mctx, tmp, dst, 0)
-	if eno == syscall.ENOENT {
-		if err = n.mkdirAllInBucket(ctx, dstBucket, path.Dir(dst)); err != nil {
-			logger.Errorf("mkdirAll %s: %s", path.Dir(dst), err)
-			err = n.objectCommitErr(ctx, err, dstBucket, dstObject)
-			return
-		}
-		eno = n.fs.Rename(mctx, tmp, dst, 0)
-	}
-	if eno != 0 {
-		err = n.objectCommitErr(ctx, eno, dstBucket, dstObject)
-		logger.Errorf("rename %s to %s: %s", tmp, dst, err)
 		return
 	}
 	return minio.ObjectInfo{
@@ -805,6 +739,115 @@ func (n *jfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		UserDefined: minio.CleanMetadata(srcInfo.UserDefined),
 		IsLatest:    true,
 	}, nil
+}
+
+// copyObjectAtDestination writes the copied object straight to its
+// destination path (fix-copyobject-kgate) — the file key is derived from the
+// creation path, so the destination must never be staged under `.sys/tmp/`
+// and renamed: on encrypted volumes CreateFileKey resolves KEK/AAD by the
+// creation path, so a destination staged under `.sys/tmp` was keyed under the
+// synthetic `.sys` company and became unreadable after the rename, and the
+// `.sys/tmp` creation path itself is rejected by the platform with EIO (see
+// putObjectAtDestination and CompleteMultipartUpload for the same invariant).
+// The source is stat'ed before the destination is touched: a path-wise
+// CopyFileRange surfaces source errors only after the destination Create, so
+// a vanished source must be detected first to keep an existing destination
+// (including the overwrite case) untouched. After the destination Create any
+// failure is rolled back by removing the partial file, mirroring
+// putObjectAtDestination and CompleteMultipartUpload; ENOENT on the rollback
+// Delete is ignored. Same-key serialization is kept by the writeLocks taken
+// at the CopyObject level.
+func (n *jfsObjects) copyObjectAtDestination(ctx context.Context, src, srcBucket, srcObject, dst, dstBucket, dstObject string, srcInfo minio.ObjectInfo) (fi os.FileInfo, etag []byte, tagStr string, err error) {
+	if _, eno := n.fs.Stat(mctx, src); eno != 0 {
+		err = jfsToObjectErr(ctx, eno, srcBucket, srcObject)
+		return
+	}
+	f, eno := n.fs.Create(mctx, dst, 0666, n.gConf.Umask)
+	if eno == syscall.EEXIST {
+		// S3 Copy replaces an existing object — the rename-based flow
+		// overwrote it silently. A directory at the target path is a real
+		// conflict, exactly as it was for the rename-based flow.
+		var efi os.FileInfo
+		if efi, eno = n.fs.Stat(mctx, dst); eno == 0 && efi.IsDir() {
+			err = n.objectCommitErr(ctx, syscall.EEXIST, dstBucket, dstObject)
+			logger.Errorf("copy %s: destination is a directory", dst)
+			return
+		}
+		eno = n.fs.Delete(mctx, dst)
+		if eno != 0 && !errors.Is(eno, syscall.ENOENT) {
+			err = n.objectCommitErr(ctx, eno, dstBucket, dstObject)
+			logger.Errorf("delete stale object %s before copy: %s", dst, err)
+			return
+		}
+		f, eno = n.fs.Create(mctx, dst, 0666, n.gConf.Umask)
+	}
+	if eno == syscall.ENOENT {
+		// create the missing parents for a user object inside the bucket
+		if err = n.mkdirAllInBucket(ctx, dstBucket, path.Dir(dst)); err != nil {
+			logger.Errorf("mkdirAll %s: %s", path.Dir(dst), err)
+			err = n.objectCommitErr(ctx, err, dstBucket, dstObject)
+			return
+		}
+		f, eno = n.fs.Create(mctx, dst, 0666, n.gConf.Umask)
+	}
+	if eno != 0 {
+		err = n.objectCommitErr(ctx, eno, dstBucket, dstObject)
+		logger.Errorf("create %s: %s", dst, err)
+		return
+	}
+	// rollback removes the destination object after a failed copy: Copy must
+	// not leave a partial object at the destination.
+	rollback := func() {
+		if derr := n.fs.Delete(mctx, dst); derr != 0 && !errors.Is(derr, syscall.ENOENT) {
+			logger.Errorf("delete partial object %s: %s", dst, derr)
+		}
+	}
+	defer func() {
+		if err != nil {
+			rollback()
+		}
+	}()
+
+	_, eno = n.fs.CopyFileRange(mctx, src, 0, dst, 0, 1<<63)
+	if eno != 0 {
+		_ = f.Close(mctx)
+		err = jfsToObjectErr(ctx, eno, srcBucket, srcObject)
+		logger.Errorf("copy %s to %s: %s", src, dst, err)
+		return
+	}
+
+	if n.gConf.KeepEtag {
+		etag, _ = n.fs.GetXattr(mctx, src, s3Etag)
+		if len(etag) != 0 {
+			eno = n.fs.SetXattr(mctx, dst, s3Etag, etag, 0)
+			if eno != 0 {
+				logger.Warnf("set xattr error, path: %s,xattr: %s,value: %s,flags: %d", dst, s3Etag, etag, 0)
+			}
+		}
+	}
+
+	if n.gConf.ObjTag && srcInfo.UserDefined != nil {
+		if tagStr = srcInfo.UserDefined[xhttp.AmzObjectTagging]; tagStr != "" {
+			if eno := n.fs.SetXattr(mctx, dst, s3Tags, []byte(tagStr), 0); eno != 0 {
+				logger.Errorf("set object tags error, path: %s, value: %s error %s", dst, tagStr, eno)
+			}
+		}
+	}
+	if serr := n.setObjMeta(dst, srcInfo.UserDefined); serr != nil {
+		logger.Errorf("set object metadata error, path: %s error %s", dst, serr)
+	}
+
+	if eno = f.Close(mctx); eno != 0 {
+		err = n.objectCommitErr(ctx, eno, dstBucket, dstObject)
+		logger.Errorf("close %s: %s", dst, err)
+		return
+	}
+	fi, eno = n.fs.Stat(mctx, dst)
+	if eno != 0 {
+		err = n.objectCommitErr(ctx, eno, dstBucket, dstObject)
+		return
+	}
+	return fi, etag, tagStr, nil
 }
 
 var buffPool = sync.Pool{
